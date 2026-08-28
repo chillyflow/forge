@@ -229,3 +229,7 @@ their exact failed-then-passed validation assertions. Other scripted fixtures,
 the CLI watch test and the native agent/watch tests still use native monitoring.
 The native timeout test first drains any delayed fixture-creation events with a
 bounded deadline, then requires a real quiet timeout.
+The native event-count test also accepts complete delivery across separate
+batches within the configured cap. Native APIs do not guarantee that two writes
+arrive in one batch: either both paths must arrive or the watcher must explicitly
+report overflow. The single-event byte-cap test still requires an overflow.

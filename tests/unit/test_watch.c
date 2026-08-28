@@ -356,6 +356,8 @@ static yyjson_doc *wait_rescan(forge_watch *watch, size_t maximum) {
         yyjson_doc *doc = poll_batch(watch, 100, maximum);
         if (flag(doc, "rescan_required"))
             return doc;
+        if (yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")))
+            describe_batch("native delivery while awaiting rescan", doc);
         yyjson_doc_free(doc);
     }
     assert(!"Expected filesystem rescan signal");
@@ -553,12 +555,31 @@ static void test_event_byte_and_native_work_limits(void) {
     initial(&f, &watch, &limits);
     fixture_write(&f, "one.txt", "1", 1);
     fixture_write(&f, "two.txt", "2", 1);
-    yyjson_doc *doc = wait_rescan(watch, limits.max_bytes);
-    assert(flag(doc, "reopen_required"));
-    assert(number(doc, "reason_flags") & FORGE_WATCH_RESCAN_EVENT_LIMIT);
-    assert(number(doc, "dropped_events") >= 1);
-    assert(yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")) <= 1);
-    yyjson_doc_free(doc);
+    /* Native APIs may deliver the writes in separate callbacks/polls. Both
+     * complete delivery within the cap and an explicit overflow are valid;
+     * silently losing either path is not. Never require OS batch coalescing. */
+    bool overflow = false, one = false, two = false;
+    uint64_t deadline = fg_now_ms() + 4000;
+    yyjson_doc *doc;
+    while (!overflow && !(one && two) && fg_now_ms() < deadline) {
+        doc = poll_batch(watch, 100, limits.max_bytes);
+        yyjson_val *events = yyjson_obj_get(yyjson_doc_get_root(doc), "events");
+        assert(yyjson_arr_size(events) <= 1);
+        if (flag(doc, "rescan_required")) {
+            describe_batch("bounded native event queue overflow", doc);
+            assert(flag(doc, "reopen_required"));
+            assert(number(doc, "reason_flags") & FORGE_WATCH_RESCAN_EVENT_LIMIT);
+            assert(number(doc, "dropped_events") >= 1);
+            overflow = true;
+        }
+        yyjson_val *event = yyjson_arr_get_first(events);
+        if (event && (yyjson_get_uint(yyjson_obj_get(event, "flags")) & FORGE_WATCH_CREATED)) {
+            one |= !strcmp(fg_json_str(event, "path"), "one.txt");
+            two |= !strcmp(fg_json_str(event, "path"), "two.txt");
+        }
+        yyjson_doc_free(doc);
+    }
+    assert(overflow || (one && two));
     forge_watch_destroy(watch);
     limits = forge_default_watch_limits();
     limits.max_bytes = 1024;
