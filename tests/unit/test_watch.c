@@ -212,6 +212,12 @@ static uint64_t number(yyjson_doc *doc, const char *key) {
     return yyjson_get_uint(yyjson_obj_get(yyjson_doc_get_root(doc), key));
 }
 
+static void describe_batch(const char *label, yyjson_doc *doc) {
+    char *json = yyjson_write(doc, 0, NULL);
+    fprintf(stderr, "%s: %s\n", label, json ? json : "<JSON allocation failed>");
+    free(json);
+}
+
 static size_t initial(forge_watch *watch) {
     yyjson_doc *doc = poll_batch(watch, 0, FG_MAX_JSON);
     assert(flag(doc, "initial_scan_required") && flag(doc, "rescan_required"));
@@ -262,6 +268,8 @@ static void test_initial_timeout_and_files(void) {
         assert(fg_now_ms() < deadline);
         start = fg_now_ms();
         doc = poll_batch(watch, 30, FG_MAX_JSON);
+        if (flag(doc, "initial_scan_required") || flag(doc, "reopen_required"))
+            describe_batch("unexpected initial timeout batch", doc);
         assert(!flag(doc, "initial_scan_required") && !flag(doc, "reopen_required"));
     } while (!flag(doc, "timed_out") || flag(doc, "rescan_required") ||
              yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")));
