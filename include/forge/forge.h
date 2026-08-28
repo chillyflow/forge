@@ -55,8 +55,8 @@ typedef struct {
 typedef struct {
     size_t prompt_tokens, generated_tokens, cached_tokens, prefill_tokens;
     size_t turns, tool_calls, raw_tool_bytes, visible_tool_bytes, files_modified;
-    size_t context_evictions, loop_warnings;
-    double load_ms, prefill_ms, decode_ms, duration_ms;
+    size_t context_evictions, loop_warnings, grammar_fast_tokens, grammar_fallback_tokens;
+    double load_ms, prefill_ms, decode_ms, sampling_ms, duration_ms;
     bool simulated;
 } forge_metrics;
 typedef struct {
@@ -67,7 +67,7 @@ typedef struct {
     int gpu_layers, threads;
     uint32_t seed;
     float temperature;
-    bool reuse_prefix;
+    bool reuse_prefix, grammar_fast_path;
 } forge_model_config;
 typedef struct forge_model forge_model;
 typedef struct forge_agent forge_agent;

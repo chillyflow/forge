@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "llama.h"
+#include <math.h>
 typedef struct {
     struct llama_model *model;
     struct llama_context *ctx;
@@ -10,6 +11,33 @@ typedef struct {
     double load_ms;
     bool can_reuse;
 } llama_state;
+static llama_token sample_token(llama_state *s, struct llama_sampler *sampler,
+                                struct llama_sampler *grammar, bool fast, forge_metrics *stats) {
+    /* For greedy sampling, an allowed global maximum is also the constrained
+     * maximum. Grammar apply does not advance its state; accept does. Stochastic
+     * sampling keeps the full mask to preserve its original distribution. */
+    if (fast && grammar) {
+        const float *logits = llama_get_logits_ith(s->ctx, -1);
+        int32_t count = llama_vocab_n_tokens(s->vocab);
+        if (logits && count > 0) {
+            llama_token best = 0;
+            for (llama_token i = 1; i < count; i++)
+                if (logits[i] > logits[best])
+                    best = i;
+            llama_token_data candidate = {best, 1.0f, 0.0f};
+            llama_token_data_array candidates = {&candidate, 1, -1, false};
+            llama_sampler_apply(grammar, &candidates);
+            if (candidate.logit != -INFINITY) {
+                llama_sampler_accept(sampler, best);
+                stats->grammar_fast_tokens++;
+                return best;
+            }
+        }
+    }
+    if (grammar)
+        stats->grammar_fallback_tokens++;
+    return llama_sampler_sample(sampler, s->ctx, -1);
+}
 static char *format_prompt(llama_state *s, const char *prompt) {
     struct llama_chat_message message = {"user", prompt};
     int32_t n = llama_chat_apply_template(s->template_name, &message, 1, true, NULL, 0);
@@ -118,6 +146,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
     uint64_t begin = fg_now_ms();
     forge_status status = FORGE_OK;
     struct llama_sampler *sampler = NULL;
+    struct llama_sampler *grammar_sampler = NULL;
     fg_buf out = {0};
     for (size_t pos = prefix; pos < (size_t)n;) {
         if (interrupted(cancel, cu, deadline)) {
@@ -139,13 +168,13 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         goto finish;
     }
     if (grammar) {
-        struct llama_sampler *g = llama_sampler_init_grammar(s->vocab, grammar, "root");
-        if (!g) {
+        grammar_sampler = llama_sampler_init_grammar(s->vocab, grammar, "root");
+        if (!grammar_sampler) {
             status =
                 fg_error(e, FORGE_ERR_PARSE, "Generated tool grammar was rejected by llama.cpp");
             goto finish;
         }
-        llama_sampler_chain_add(sampler, g);
+        llama_sampler_chain_add(sampler, grammar_sampler);
     }
     if (m->config.temperature <= 0)
         llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
@@ -162,7 +191,11 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             status = fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled or deadline reached");
             break;
         }
-        llama_token token = llama_sampler_sample(sampler, s->ctx, -1);
+        uint64_t sampling_start = fg_now_ms();
+        llama_token token =
+            sample_token(s, sampler, grammar_sampler,
+                         m->config.grammar_fast_path && m->config.temperature <= 0, stats);
+        stats->sampling_ms += (double)(fg_now_ms() - sampling_start);
         if (llama_vocab_is_eog(s->vocab, token)) {
             ended = true;
             break;

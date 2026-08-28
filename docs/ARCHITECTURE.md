@@ -35,6 +35,13 @@ llama.cpp backend registration has process-wide state upstream. Forge has no
 global mutable session state; concurrent initialization or generation on the
 same model is not supported. The selected model owns one active context.
 
+Greedy generation first checks the highest-logit token against the grammar. If
+allowed, it is the same maximum the full grammar mask would select. Otherwise,
+the full vocabulary is masked and sampled. Every accepted token advances grammar
+state exactly once. Stochastic sampling retains the full mask. `--grammar-first`
+disables this optimization for comparison; sampling time and path counts are
+recorded separately (`decode_ms` includes sampling and streaming overhead).
+
 ## Logical context
 
 Segments have stable IDs, kind, generation, content fingerprint, priority, token

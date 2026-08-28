@@ -36,6 +36,7 @@ static void usage(void) {
          "  --allow-exec         permit UNSANDBOXED commands, including repository code\n"
          "  --json               JSON-lines events\n"
          "  --no-kv-reuse | --no-semantic | --no-compaction  ablations\n"
+         "  --grammar-first      disable greedy grammar fast path (ablation)\n"
          "  --script FILE        explicit simulated test backend (not inference)\n"
          "  --depth N            symbol expansion level 0..3\n");
 }
@@ -127,6 +128,10 @@ int main(int argc, char **argv) {
         }
         if (!strcmp(a, "--no-kv-reuse")) {
             mc.reuse_prefix = false;
+            continue;
+        }
+        if (!strcmp(a, "--grammar-first")) {
+            mc.grammar_fast_path = false;
             continue;
         }
         if (!strcmp(a, "--no-semantic")) {

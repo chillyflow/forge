@@ -4,7 +4,7 @@ forge_limits forge_default_limits(void) {
                           120000, 1800000};
 }
 forge_model_config forge_default_model_config(void) {
-    return (forge_model_config){NULL, NULL, NULL, 16384, 0, 0, 42, 0.0f, true};
+    return (forge_model_config){NULL, NULL, NULL, 16384, 0, 0, 42, 0.0f, true, true};
 }
 static size_t script_count(forge_model *m, const char *text) {
     (void)m;

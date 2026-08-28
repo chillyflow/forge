@@ -17,8 +17,11 @@ import urllib.request
 
 from run import digest
 
-def request(port, path):
-    with urllib.request.urlopen(f'http://127.0.0.1:{port}{path}', timeout=5) as response:
+def request(port, path, method='GET'):
+    query = urllib.request.Request(f'http://127.0.0.1:{port}{path}', method=method,
+                                   data=b'{}' if method == 'POST' else None,
+                                   headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(query, timeout=5) as response:
         return response.read().decode()
 
 def main():
@@ -63,12 +66,12 @@ def main():
     config_path.write_text(json.dumps(config, indent=2))
     env['OPENCODE_CONFIG'] = str(config_path)
     command = [str(server), '--model', str(model), '--alias', 'forge-local', '--ctx-size', '16384',
-               '--gpu-layers', '-1', '--parallel', '1', '--seed', '42', '--temp', '0', '--metrics',
+               '--gpu-layers', '-1', '--parallel', '1', '--seed', '42', '--temp', '0', '--metrics', '--cache-ram', '0',
                '--host', '127.0.0.1', '--port', str(port), '--no-webui']
     records = []
     metadata = {'opencode_version': subprocess.check_output([str(opencode), '--version'], text=True).strip(),
                 'model_file': model.name, 'model_sha256': digest(model), 'server_command': [model.name if x == str(model) else Path(x).name if x == str(server) else x for x in command],
-                'notes': 'Server is warmed across tasks; model load is excluded from per-task wall time. Full OpenCode tool protocol retained; remote tools and subagents disabled.'}
+                'notes': 'Model stays loaded but slot KV is erased before each task; cross-task RAM prompt cache is disabled. Model load is excluded from per-task wall time. Full OpenCode tool protocol retained; remote tools and subagents disabled.'}
     with (args.output / 'server.log').open('w') as log:
         start = time.monotonic()
         process = subprocess.Popen(command, stdout=log, stderr=log, env=env,
@@ -103,6 +106,9 @@ def main():
                         path.write_text(content)
                     subprocess.run(['git', 'init', '-q', str(root)], check=True)
                     before = digest(root / 'repair_test.go')
+                    erased = json.loads(request(port, '/slots/0?action=erase', 'POST'))
+                    if erased.get('id_slot') != 0:
+                        raise RuntimeError('Cannot clear benchmark slot')
                     (output / 'server-before.prom').write_text(request(port, '/metrics'))
                     start = time.monotonic()
                     with (output / 'events.jsonl').open('w') as out, (output / 'stderr.txt').open('w') as err:

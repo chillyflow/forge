@@ -92,9 +92,12 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     U(files_modified);
     U(context_evictions);
     U(loop_warnings);
+    U(grammar_fast_tokens);
+    U(grammar_fallback_tokens);
     R(load_ms);
     R(prefill_ms);
     R(decode_ms);
+    R(sampling_ms);
     R(duration_ms);
 #undef U
 #undef R
