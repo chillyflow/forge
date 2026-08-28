@@ -59,6 +59,8 @@ struct fixture {
     unsigned event_flags;
     uint64_t deadline, release_after_full_attempt, cancel_on_full_attempt;
     size_t after_scan_deliveries;
+    size_t initial_losses;
+    bool cancel_on_initial_loss;
     bool user_cancelled, deadline_callback_observed, repeat_after_scan, index_cancellation_seen;
 };
 
@@ -271,6 +273,13 @@ char *forge_watch_poll(forge_watch *watch, uint64_t timeout, forge_cancel_fn can
     fixture *f = watch->owner;
     f->poll_calls++;
     fake_batch_kind kind = watch->initial ? f->initial_kind : f->next_kind;
+    if (watch->initial && f->initial_losses) {
+        f->initial_losses--;
+        kind = FAKE_REOPEN;
+        const char *updated = "int recovered_startup(void) { return 3; }\n";
+        fixture_write(f, "main.c", updated, strlen(updated));
+        f->user_cancelled = f->cancel_on_initial_loss;
+    }
     if (!watch->initial)
         f->next_kind = FAKE_EMPTY;
     if (kind == FAKE_DEADLINE_PROBE) {
@@ -787,7 +796,10 @@ static void test_creation_poll_and_reopen_cleanup(void) {
         fixture_start(&f);
         f.initial_kind = initial_failures[i];
         assert(!create_monitor(&f, true, 30000) && f.error.code == statuses[i]);
-        assert(f.created == 1 && f.destroyed == 1 && !f.live && !f.change.json);
+        size_t expected_watches = initial_failures[i] == FAKE_REOPEN ? 3u : 1u;
+        assert(f.created == expected_watches && f.destroyed == expected_watches && !f.live &&
+               !f.change.json);
+        assert(index_stats(&f).full_attempts == 0);
         fixture_finish(&f);
     }
     for (size_t i = 1; i < sizeof(initial_failures) / sizeof(*initial_failures); i++) {
@@ -834,6 +846,40 @@ static void test_creation_poll_and_reopen_cleanup(void) {
     forge_watch_destroy(NULL);
 }
 
+static void test_bounded_startup_recovery(void) {
+    fixture f;
+    fixture_start(&f);
+    f.initial_losses = 2;
+    start_monitor(&f, true);
+    assert(f.created == 3 && f.destroyed == 2 && f.live == 1);
+    assert(f.change.full_scan && f.change.native && f.change.reopened);
+    assert(strstr(f.change.json, "\"watch_startup_reopens\":2"));
+    assert(index_stats(&f).full_attempts == 1); /* Index only after restored coverage. */
+    char *description = fg_repo_search(f.repo, "recovered_startup", 10, &f.error);
+    assert(description && strstr(description, "recovered_startup"));
+    free(description);
+    fixture_finish(&f);
+
+    fixture_start(&f);
+    f.initial_kind = FAKE_REOPEN;
+    start_monitor(&f, false);
+    assert(f.created == 3 && f.destroyed == 3 && !f.live);
+    assert(f.change.full_scan && !f.change.native);
+    assert(strstr(f.change.json, "after 3 attempts"));
+    fixture_write(&f, "fixture.bin", "changed", 7);
+    assert(poll_monitor(&f, false) == FORGE_OK);
+    assert(f.change.changed && f.change.full_scan && !f.change.native);
+    fixture_finish(&f);
+
+    fixture_start(&f);
+    f.initial_losses = 1;
+    f.cancel_on_initial_loss = true;
+    assert(!create_monitor(&f, true, 30000) && f.error.code == FORGE_ERR_CANCELLED);
+    assert(f.create_calls == 1 && f.created == 1 && f.destroyed == 1 && !f.live);
+    assert(index_stats(&f).full_attempts == 0 && !f.change.json);
+    fixture_finish(&f);
+}
+
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -847,6 +893,7 @@ int main(void) {
     test_events_queued_during_full_index();
     test_cancellation_and_absolute_deadline();
     test_creation_poll_and_reopen_cleanup();
+    test_bounded_startup_recovery();
     puts("monitor coordinator tests passed (fake watcher; real index and input snapshots)");
     return 0;
 }

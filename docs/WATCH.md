@@ -43,6 +43,20 @@ The initial marker is cleared only after successful serialization and delivery. 
 
 Reopening is required after native overflow, local loss, directory rename/deletion, root replacement, enrollment failure, or host invalidation. Directory rename pairs can be split across native batches or moved outside the workspace. The implementation does not guess how to relabel an incomplete descendant-watch map.
 
+The repository monitor permits at most three native creations when a stream's
+initial batch reports sticky loss, all within the existing absolute deadline.
+Each lost stream is destroyed before its replacement and before the full index.
+Exhaustion fails when native watching is required; otherwise the monitor uses
+the bounded all-input snapshot fallback. Cancellation and malformed/failed polls
+propagate immediately. Change reports include `watch_startup_reopens` (0–2).
+Subsequent loss still requires reopening and a new full scan.
+
+Repeated macOS CI captured a first-batch root-directory rename after the fixture
+had renamed its root (`events[0].flags=96`, `reason_flags=257`, including INITIAL).
+Tests now drain setup notifications and honor bounded reopen requests before
+their mutation stimulus. They still require native delivery of subsequent
+edits and explicit loss for overflow/rename cases; no backend flags are ignored.
+
 `forge_watch_invalidate` lets the host signal loss of continuity, such as suspension or a change outside the host's monitoring assumptions. It uses the same sticky recovery machinery as native overflow. It does not simulate successful native delivery.
 
 ## JSON contract

@@ -2,6 +2,8 @@
 #include "forge/watch.h"
 #include "core/input_snapshot.h"
 
+#define MONITOR_STARTUP_ATTEMPTS 3u
+
 struct fg_repo_monitor {
     forge_repo *repo;
     forge_watch *watch;
@@ -12,6 +14,7 @@ struct fg_repo_monitor {
     bool require_native;
     bool dirty;
     size_t after_scan_events;
+    size_t startup_reopens;
     fg_input_snapshot *fallback_inputs;
 };
 
@@ -90,17 +93,19 @@ static bool write_change(fg_repo_monitor *monitor, yyjson_doc *doc, fg_repo_chan
         return false;
     }
     yyjson_mut_val *root = yyjson_mut_doc_get_root(out);
-    bool ok = yyjson_mut_obj_add_str(out, root, "index_mode",
-                                     change->full_scan    ? "full"
-                                     : change->delta_scan ? "delta"
-                                                          : "none") &&
-              yyjson_mut_obj_add_uint(out, root, "generation", change->generation) &&
-              yyjson_mut_obj_add_bool(out, root, "changed", change->changed) &&
-              yyjson_mut_obj_add_bool(out, root, "watch_available", monitor->watch != NULL) &&
-              yyjson_mut_obj_add_bool(out, root, "watch_reopened", change->reopened) &&
-              yyjson_mut_obj_add_bool(out, root, "followup_scan_required", monitor->dirty) &&
-              yyjson_mut_obj_add_uint(out, root, "after_scan_events", monitor->after_scan_events) &&
-              yyjson_mut_obj_add_str(out, root, "watch_fallback", monitor->fallback);
+    bool ok =
+        yyjson_mut_obj_add_str(out, root, "index_mode",
+                               change->full_scan    ? "full"
+                               : change->delta_scan ? "delta"
+                                                    : "none") &&
+        yyjson_mut_obj_add_uint(out, root, "generation", change->generation) &&
+        yyjson_mut_obj_add_bool(out, root, "changed", change->changed) &&
+        yyjson_mut_obj_add_bool(out, root, "watch_available", monitor->watch != NULL) &&
+        yyjson_mut_obj_add_bool(out, root, "watch_reopened", change->reopened) &&
+        yyjson_mut_obj_add_uint(out, root, "watch_startup_reopens", monitor->startup_reopens) &&
+        yyjson_mut_obj_add_bool(out, root, "followup_scan_required", monitor->dirty) &&
+        yyjson_mut_obj_add_uint(out, root, "after_scan_events", monitor->after_scan_events) &&
+        yyjson_mut_obj_add_str(out, root, "watch_fallback", monitor->fallback);
     change->json = ok ? yyjson_mut_write(out, 0, NULL) : NULL;
     yyjson_mut_doc_free(out);
     if (!change->json)
@@ -110,23 +115,34 @@ static bool write_change(fg_repo_monitor *monitor, yyjson_doc *doc, fg_repo_chan
 /* Consume the new watcher's initial batch BEFORE taking the index baseline.
  * Discarding an initial batch after indexing would lose changes from that scan. */
 static bool consume_initial(fg_repo_monitor *monitor, forge_error *error) {
-    if (!monitor->watch)
-        return true;
-    yyjson_doc *doc = read_batch(monitor, 0, error);
-    if (!doc)
-        return false;
-    bool unusable = bool_field(yyjson_doc_get_root(doc), "reopen_required");
-    yyjson_doc_free(doc);
-    if (unusable) {
+    monitor->startup_reopens = 0;
+    for (size_t attempt = 0; monitor->watch; attempt++) {
+        yyjson_doc *doc = read_batch(monitor, 0, error);
+        if (!doc)
+            return false;
+        bool unusable = bool_field(yyjson_doc_get_root(doc), "reopen_required");
+        yyjson_doc_free(doc);
+        if (!unusable)
+            return true;
         forge_watch_destroy(monitor->watch);
         monitor->watch = NULL;
+        /* A newly started FSEvents stream can deliver a delayed directory
+         * rename from fixture/repository setup. Never clear its sticky loss:
+         * recreate coverage before the initial full index, with finite work. */
+        if (attempt + 1 < MONITOR_STARTUP_ATTEMPTS) {
+            monitor->startup_reopens++;
+            if (!open_watch(monitor, error))
+                return false;
+            continue;
+        }
         if (monitor->require_native) {
-            fg_error(error, FORGE_ERR_LIMIT,
-                     "Native watcher could not establish complete bounded coverage");
+            fg_error(
+                error, FORGE_ERR_LIMIT,
+                "Native watcher could not establish complete bounded coverage after 3 attempts");
             return false;
         }
         snprintf(monitor->fallback, sizeof(monitor->fallback),
-                 "Native watcher could not establish complete bounded coverage");
+                 "Native watcher could not establish complete bounded coverage after 3 attempts");
     }
     return true;
 }
@@ -173,6 +189,7 @@ fg_repo_monitor *fg_repo_monitor_create(forge_repo *repo, const char *root,
     if (!doc)
         fg_error(error, FORGE_ERR_MEMORY, "Cannot encode initial repository scan");
     initial->full_scan = true;
+    initial->reopened = monitor->startup_reopens != 0;
     initial->native = monitor->watch != NULL;
     initial->generation = forge_repo_generation(repo);
     initial->duration_ms = (double)(fg_now_ms() - start);
@@ -225,6 +242,7 @@ forge_status fg_repo_monitor_poll(fg_repo_monitor *monitor, uint64_t wait_ms, bo
     fg_input_snapshot *inputs = NULL;
     forge_status status = FORGE_OK;
     monitor->after_scan_events = 0;
+    monitor->startup_reopens = 0;
     uint64_t before = forge_repo_generation(monitor->repo);
     if (reopen) {
         forge_watch_destroy(monitor->watch);

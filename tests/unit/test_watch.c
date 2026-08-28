@@ -218,17 +218,40 @@ static void describe_batch(const char *label, yyjson_doc *doc) {
     free(json);
 }
 
-static size_t initial(forge_watch *watch) {
-    yyjson_doc *doc = poll_batch(watch, 0, FG_MAX_JSON);
-    if (!flag(doc, "initial_scan_required") || !flag(doc, "rescan_required") ||
-        flag(doc, "reopen_required"))
-        describe_batch("unexpected first watch batch", doc);
-    assert(flag(doc, "initial_scan_required") && flag(doc, "rescan_required"));
-    assert(!flag(doc, "reopen_required"));
-    assert(number(doc, "reason_flags") & FORGE_WATCH_RESCAN_INITIAL);
-    size_t directories = (size_t)number(doc, "directories");
-    yyjson_doc_free(doc);
-    return directories;
+static size_t initial(fixture *f, forge_watch **watch, const forge_watch_limits *limits) {
+    uint64_t deadline = fg_now_ms() + 4000;
+    size_t reopens = 0;
+    bool first = true;
+    while (fg_now_ms() < deadline) {
+        yyjson_doc *doc = poll_batch(*watch, first ? 0 : 30, FG_MAX_JSON);
+        assert(flag(doc, "initial_scan_required") == first);
+        if (first) {
+            assert(flag(doc, "rescan_required"));
+            assert(number(doc, "reason_flags") & FORGE_WATCH_RESCAN_INITIAL);
+        }
+        size_t directories = (size_t)number(doc, "directories");
+        bool reopen = flag(doc, "reopen_required");
+        bool quiet = !first && flag(doc, "timed_out") && !flag(doc, "rescan_required") &&
+                     !flag(doc, "more_pending") &&
+                     !yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events"));
+        if (reopen)
+            describe_batch("reopening initial watch coverage", doc);
+        yyjson_doc_free(doc);
+        if (quiet)
+            return directories;
+        first = false;
+        if (reopen) {
+            /* Honor loss while draining setup notifications, before this
+             * fixture's stimulus. Later edits still require native delivery. */
+            forge_watch_destroy(*watch);
+            *watch = NULL;
+            assert(++reopens <= 2);
+            *watch = create(f, limits);
+            first = true;
+        }
+    }
+    assert(!"Native watcher startup recovery exhausted");
+    return 0;
 }
 
 static void collect(forge_watch *watch, const char *const *paths, size_t count, unsigned required,
@@ -260,20 +283,26 @@ static void test_initial_timeout_and_files(void) {
     fixture_start(&f);
     fixture_write(&f, "existing/fixture.csv", "before", 6);
     forge_watch *watch = create(&f, NULL);
-    assert(initial(watch) == 2);
+    assert(initial(&f, &watch, NULL) == 2);
     /* FSEvents can deliver fixture-creation notifications after the explicit
      * initial batch. Drain them with a bound, then require a real quiet timeout;
      * never assert that a newly created watcher starts with an empty OS queue. */
     uint64_t deadline = fg_now_ms() + 4000, start = 0;
     yyjson_doc *doc = NULL;
+    size_t reopens = 0;
     do {
         yyjson_doc_free(doc);
         assert(fg_now_ms() < deadline);
         start = fg_now_ms();
         doc = poll_batch(watch, 30, FG_MAX_JSON);
-        if (flag(doc, "initial_scan_required") || flag(doc, "reopen_required"))
-            describe_batch("unexpected initial timeout batch", doc);
-        assert(!flag(doc, "initial_scan_required") && !flag(doc, "reopen_required"));
+        assert(!flag(doc, "initial_scan_required"));
+        if (flag(doc, "reopen_required")) {
+            describe_batch("reopening startup drain coverage", doc);
+            assert(++reopens <= 2);
+            forge_watch_destroy(watch);
+            watch = create(&f, NULL);
+            assert(initial(&f, &watch, NULL) == 2);
+        }
     } while (!flag(doc, "timed_out") || flag(doc, "rescan_required") ||
              yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")));
     assert(fg_now_ms() - start >= 20 && fg_now_ms() - start < 1500);
@@ -337,7 +366,7 @@ static void test_subtree_enrollment_and_rename_recovery(void) {
     fixture f;
     fixture_start(&f);
     forge_watch *watch = create(&f, NULL);
-    initial(watch);
+    initial(&f, &watch, NULL);
     fixture_write(&f, "new/nested/fixture.txt", "input", 5);
     yyjson_doc *doc = wait_rescan(watch, FG_MAX_JSON);
     assert(!flag(doc, "reopen_required"));
@@ -357,7 +386,7 @@ static void test_subtree_enrollment_and_rename_recovery(void) {
     yyjson_doc_free(doc);
     forge_watch_destroy(watch);
     watch = create(&f, NULL); /* Reopen before the caller's full index. */
-    assert(initial(watch) == 3);
+    assert(initial(&f, &watch, NULL) == 3);
     const char *moved[] = {"moved/nested/fixture.txt"};
     fixture_write(&f, moved[0], "recovered", 9);
     collect(watch, moved, 1, FORGE_WATCH_MODIFIED, &seen);
@@ -372,7 +401,7 @@ static void test_metadata_exclusions(void) {
     fixture_write(&f, ".forge/cache/data", "x", 1);
     fixture_write(&f, "nested/.git/data", "x", 1);
     forge_watch *watch = create(&f, NULL);
-    assert(initial(watch) == 3);
+    assert(initial(&f, &watch, NULL) == 3);
     fixture_write(&f, ".git/objects/cache", "new", 3);
     fixture_write(&f, ".forge/cache/data", "new", 3);
     yyjson_doc *doc = poll_batch(watch, 80, FG_MAX_JSON);
@@ -391,7 +420,7 @@ static void test_metadata_exclusions(void) {
     fixture_finish(&f);
     fixture_start(&f);
     watch = create(&f, NULL);
-    initial(watch);
+    initial(&f, &watch, NULL);
     fixture_write(&f, ".git", "gitdir: elsewhere", 17);
     const char *git_file[] = {".git"};
     collect(watch, git_file, 1, FORGE_WATCH_CREATED, &seen);
@@ -400,7 +429,7 @@ static void test_metadata_exclusions(void) {
     limits.max_path_bytes = 4;
     limits.max_directories = 1;
     watch = create(&f, &limits);
-    initial(watch);
+    initial(&f, &watch, &limits);
     fixture_write(&f, ".forge/deep/long-metadata-path.bin", "ignored", 7);
     doc = poll_batch(watch, 100, FG_MAX_JSON);
     assert(!flag(doc, "rescan_required"));
@@ -439,7 +468,7 @@ static void test_cancel_deadline_and_invalidation(void) {
     assert(!forge_watch_create(f.root, NULL, delay_check, NULL, 1, &error));
     assert(error.code == FORGE_ERR_LIMIT);
     forge_watch *watch = create(&f, NULL);
-    initial(watch);
+    initial(&f, &watch, NULL);
     fixture_write(&f, "retained.txt", "keep", 4);
     cancel = (cancellation){0, 1};
     char *json = forge_watch_poll(watch, 1000, cancel_after, &cancel, &error);
@@ -507,7 +536,7 @@ static void test_creation_bounds_and_arguments(void) {
     forge_watch_destroy(NULL);
     forge_watch_invalidate(NULL);
     forge_watch *watch = create(&f, NULL);
-    initial(watch);
+    initial(&f, &watch, NULL);
     forge_watch_destroy(watch);
     fixture_finish(&f);
 }
@@ -518,7 +547,7 @@ static void test_event_byte_and_native_work_limits(void) {
     forge_watch_limits limits = forge_default_watch_limits();
     limits.max_events = 1;
     forge_watch *watch = create(&f, &limits);
-    initial(watch);
+    initial(&f, &watch, &limits);
     fixture_write(&f, "one.txt", "1", 1);
     fixture_write(&f, "two.txt", "2", 1);
     yyjson_doc *doc = wait_rescan(watch, limits.max_bytes);
@@ -531,7 +560,7 @@ static void test_event_byte_and_native_work_limits(void) {
     limits = forge_default_watch_limits();
     limits.max_bytes = 1024;
     watch = create(&f, &limits);
-    initial(watch);
+    initial(&f, &watch, &limits);
     char long_name[121];
     memset(long_name, 'a', sizeof(long_name) - 1);
     long_name[sizeof(long_name) - 1] = 0;
@@ -544,7 +573,7 @@ static void test_event_byte_and_native_work_limits(void) {
     limits = forge_default_watch_limits();
     limits.max_native_events = 1;
     watch = create(&f, &limits);
-    initial(watch);
+    initial(&f, &watch, &limits);
     fixture_write(&f, "one.txt", "edited", 6);
     doc = poll_batch(watch, 100, limits.max_bytes);
     assert(flag(doc, "more_pending") || flag(doc, "reopen_required"));
@@ -564,7 +593,7 @@ static void test_depth_and_runtime_enrollment_limits(void) {
         fixture_directory(&f, deepest);
     }
     forge_watch *watch = create(&f, NULL);
-    assert(initial(watch) == 65);
+    assert(initial(&f, &watch, NULL) == 65);
     char file[256];
     assert(snprintf(file, sizeof(file), "%s/input.bin", deepest) > 0);
     fixture_write(&f, file, "\0\1\2", 3);
@@ -594,7 +623,7 @@ static void test_depth_and_runtime_enrollment_limits(void) {
             reason = FORGE_WATCH_RESCAN_PATH_LIMIT;
         }
         watch = create(&f, &limits);
-        initial(watch);
+        initial(&f, &watch, &limits);
         fixture_write(&f, "new/deep/input", "x", 1);
         doc = wait_rescan(watch, FG_MAX_JSON);
         assert(flag(doc, "reopen_required"));
@@ -653,7 +682,7 @@ static void test_link_directories_are_not_followed(void) {
     forge_watch_limits limits = forge_default_watch_limits();
     limits.max_directories = 1;
     forge_watch *watch = create(&inside, &limits);
-    assert(initial(watch) == 1);
+    assert(initial(&inside, &watch, &limits) == 1);
     fixture_write(&outside, "nested/private.txt", "changed", 7);
     yyjson_doc *doc = poll_batch(watch, 80, FG_MAX_JSON);
     yyjson_val *events = yyjson_obj_get(yyjson_doc_get_root(doc), "events"), *event;
@@ -683,7 +712,7 @@ static void test_root_move_and_handle_cleanup(void) {
     fixture_start(&f);
     fixture_write(&f, "nested/file", "x", 1);
     forge_watch *watch = create(&f, NULL);
-    initial(watch);
+    initial(&f, &watch, NULL);
     char moved[FG_PATH_MAX];
     int count = snprintf(moved, sizeof(moved), "%s-moved", f.root);
     assert(count > 0 && (size_t)count < sizeof(moved));
@@ -700,7 +729,7 @@ static void test_root_move_and_handle_cleanup(void) {
 #endif
     for (size_t i = 0; i < 32; i++) {
         watch = create(&f, NULL);
-        initial(watch);
+        initial(&f, &watch, NULL);
         forge_watch_destroy(watch);
         forge_watch_limits limits = forge_default_watch_limits();
         limits.max_directories = 1;
