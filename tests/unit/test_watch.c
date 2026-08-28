@@ -220,6 +220,9 @@ static void describe_batch(const char *label, yyjson_doc *doc) {
 
 static size_t initial(forge_watch *watch) {
     yyjson_doc *doc = poll_batch(watch, 0, FG_MAX_JSON);
+    if (!flag(doc, "initial_scan_required") || !flag(doc, "rescan_required") ||
+        flag(doc, "reopen_required"))
+        describe_batch("unexpected first watch batch", doc);
     assert(flag(doc, "initial_scan_required") && flag(doc, "rescan_required"));
     assert(!flag(doc, "reopen_required"));
     assert(number(doc, "reason_flags") & FORGE_WATCH_RESCAN_INITIAL);
