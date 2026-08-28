@@ -17,7 +17,8 @@ forge_checkpoint_options forge_default_checkpoint_options(void) {
 }
 
 static bool interrupted(const forge_checkpoint_options *options, uint64_t deadline) {
-    return (options->cancelled && options->cancelled(options->userdata)) || fg_now_ms() >= deadline;
+    return (options->cancelled && options->cancelled(options->userdata)) ||
+           (deadline && fg_now_ms() >= deadline);
 }
 
 static forge_status begin(forge_model *model, const forge_checkpoint_options *options,
@@ -199,34 +200,26 @@ failed:
     return NULL;
 }
 
-forge_status forge_checkpoint_restore(forge_model *model, const forge_checkpoint *checkpoint,
-                                      const forge_checkpoint_options *requested,
-                                      forge_checkpoint_stats *stats, forge_error *error) {
-    uint64_t start = fg_now_ms();
-    if (stats)
-        memset(stats, 0, sizeof(*stats));
-    if (!checkpoint)
-        return fg_error(error, FORGE_ERR_ARGUMENT, "Missing checkpoint");
-    forge_checkpoint_options options = requested ? *requested : forge_default_checkpoint_options();
-    uint64_t deadline = 0, restore_start = 0;
-    forge_status status = begin(model, &options, start, &deadline, error);
-    if (status != FORGE_OK)
-        return status;
+static forge_status restore_state(forge_model *model, const forge_checkpoint *checkpoint,
+                                  const forge_checkpoint_options *options, uint64_t deadline,
+                                  forge_checkpoint_stats *stats, forge_error *error) {
+    uint64_t restore_start = 0;
+    forge_status status = FORGE_OK;
     const fg_checkpoint_backend *backend = model->checkpoint;
     if (!same_instance(model, checkpoint)) {
         status = fg_error(error, FORGE_ERR_CONFLICT,
                           "Checkpoint belongs to another or previously destroyed model instance");
         goto done;
     }
-    if (checkpoint->info.repo_generation != options.repo_generation) {
+    if (checkpoint->info.repo_generation != options->repo_generation) {
         status = fg_error(error, FORGE_ERR_CONFLICT, "Checkpoint repository generation differs");
         goto done;
     }
-    if (checkpoint->info.state_bytes > options.max_state_bytes) {
+    if (checkpoint->info.state_bytes > options->max_state_bytes) {
         status = fg_error(error, FORGE_ERR_LIMIT, "Checkpoint exceeds the restore state-byte cap");
         goto done;
     }
-    if (interrupted(&options, deadline)) {
+    if (interrupted(options, deadline)) {
         status = fg_error(error, FORGE_ERR_CANCELLED, "Checkpoint restore cancelled before write");
         goto done;
     }
@@ -237,7 +230,7 @@ forge_status forge_checkpoint_restore(forge_model *model, const forge_checkpoint
                           read, checkpoint->info.state_bytes);
         goto clear;
     }
-    if (interrupted(&options, deadline)) {
+    if (interrupted(options, deadline)) {
         status = fg_error(error, FORGE_ERR_CANCELLED, "Checkpoint restore cancelled during write");
         goto clear;
     }
@@ -246,7 +239,7 @@ forge_status forge_checkpoint_restore(forge_model *model, const forge_checkpoint
                           "Restored checkpoint does not cover the saved token sequence");
         goto clear;
     }
-    if (interrupted(&options, deadline)) {
+    if (interrupted(options, deadline)) {
         status = fg_error(error, FORGE_ERR_CANCELLED, "Checkpoint restore cancelled after write");
         goto clear;
     }
@@ -261,7 +254,143 @@ clear:
 done:
     if (stats && restore_start)
         stats->restore_ms = (double)(fg_now_ms() - restore_start);
+    return status;
+}
+
+forge_status forge_checkpoint_restore(forge_model *model, const forge_checkpoint *checkpoint,
+                                      const forge_checkpoint_options *requested,
+                                      forge_checkpoint_stats *stats, forge_error *error) {
+    uint64_t start = fg_now_ms();
+    if (stats)
+        memset(stats, 0, sizeof(*stats));
+    if (!checkpoint)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Missing checkpoint");
+    forge_checkpoint_options options = requested ? *requested : forge_default_checkpoint_options();
+    uint64_t deadline = 0;
+    forge_status status = begin(model, &options, start, &deadline, error);
+    if (status != FORGE_OK)
+        return status;
+    status = restore_state(model, checkpoint, &options, deadline, stats, error);
     finish(model, stats, start);
+    return status;
+}
+
+size_t fg_checkpoint_allocation_bytes(size_t count, size_t state_bytes) {
+    if (!count || count > 1048576 || !state_bytes ||
+        state_bytes > FORGE_CHECKPOINT_MAX_STATE_BYTES ||
+        count > (SIZE_MAX - sizeof(forge_checkpoint)) / sizeof(int32_t))
+        return 0;
+    size_t bytes = sizeof(forge_checkpoint) + count * sizeof(int32_t);
+    return state_bytes > SIZE_MAX - bytes ? 0 : bytes + state_bytes;
+}
+
+bool fg_checkpoint_matches_prefix(const forge_checkpoint *checkpoint, const int32_t *tokens,
+                                  size_t count) {
+    return checkpoint && checkpoint->info.valid && checkpoint->tokens && tokens &&
+           checkpoint->info.token_end && checkpoint->info.token_end <= 1048576 &&
+           checkpoint->info.token_end <= count &&
+           !memcmp(checkpoint->tokens, tokens, checkpoint->info.token_end * sizeof(*tokens));
+}
+
+forge_checkpoint *fg_checkpoint_capture_live(forge_model *model, const int32_t *tokens,
+                                             size_t count, size_t state_bytes,
+                                             uint64_t repo_generation, uint64_t context_hash,
+                                             forge_cancel_fn cancelled, void *userdata,
+                                             uint64_t deadline, forge_error *error) {
+    const fg_checkpoint_backend *backend = model ? model->checkpoint : NULL;
+    if (!model || !model->operation_active || !tokens ||
+        !fg_checkpoint_allocation_bytes(count, state_bytes)) {
+        fg_error(error, FORGE_ERR_ARGUMENT, "Invalid active checkpoint capture");
+        return NULL;
+    }
+    if (!backend || !backend->state_get || !backend->live_matches) {
+        fg_error(error, FORGE_ERR_UNSUPPORTED, "Backend has no exact live-state capture hook");
+        return NULL;
+    }
+    if (!model->instance_nonce[0] || !model->next_checkpoint_id) {
+        fg_error(error, FORGE_ERR_LIMIT, "Checkpoint instance/ID is unavailable");
+        return NULL;
+    }
+    forge_checkpoint_options options = {0};
+    options.cancelled = cancelled;
+    options.userdata = userdata;
+    if (interrupted(&options, deadline)) {
+        fg_error(error, FORGE_ERR_CANCELLED, "Checkpoint capture cancelled before allocation");
+        return NULL;
+    }
+    if (!backend->live_matches(model, tokens, count)) {
+        fg_error(error, FORGE_ERR_MODEL, "Live sequence does not exactly match capture tokens");
+        return NULL;
+    }
+    for (size_t i = 0; i < count; i++)
+        if (tokens[i] < 0) {
+            fg_error(error, FORGE_ERR_MODEL, "Negative token in live checkpoint capture");
+            return NULL;
+        }
+    forge_checkpoint *checkpoint = calloc(1, sizeof(*checkpoint));
+    if (checkpoint) {
+        checkpoint->tokens = malloc(count * sizeof(*tokens));
+        checkpoint->state = malloc(state_bytes);
+    }
+    if (!checkpoint || !checkpoint->tokens || !checkpoint->state) {
+        fg_error(error, FORGE_ERR_MEMORY, "Live checkpoint allocation failed");
+        goto failed;
+    }
+    memcpy(checkpoint->tokens, tokens, count * sizeof(*tokens));
+    if (interrupted(&options, deadline)) {
+        fg_error(error, FORGE_ERR_CANCELLED, "Checkpoint capture cancelled before state copy");
+        goto failed;
+    }
+    size_t written = backend->state_get(model, checkpoint->state, state_bytes);
+    if (written != state_bytes) {
+        fg_error(error, FORGE_ERR_MODEL, "Incomplete checkpoint capture: %zu of %zu bytes", written,
+                 state_bytes);
+        goto failed;
+    }
+    if (interrupted(&options, deadline)) {
+        fg_error(error, FORGE_ERR_CANCELLED, "Checkpoint capture cancelled during state copy");
+        goto failed;
+    }
+    checkpoint->backend = backend;
+    memcpy(checkpoint->instance_nonce, model->instance_nonce, sizeof(checkpoint->instance_nonce));
+    checkpoint->info = (forge_checkpoint_info){0};
+    checkpoint->info.id = model->next_checkpoint_id;
+    checkpoint->info.repo_generation = repo_generation;
+    checkpoint->info.context_hash = context_hash;
+    checkpoint->info.token_hash = fg_hash(tokens, count * sizeof(*tokens));
+    checkpoint->info.token_end = count;
+    checkpoint->info.state_bytes = state_bytes;
+    checkpoint->info.valid = true;
+    model->next_checkpoint_id =
+        model->next_checkpoint_id == UINT64_MAX ? 0 : model->next_checkpoint_id + 1;
+    return checkpoint;
+failed:
+    forge_checkpoint_destroy(checkpoint);
+    return NULL;
+}
+
+forge_status fg_checkpoint_restore_active(forge_model *model, const forge_checkpoint *checkpoint,
+                                          uint64_t repo_generation, size_t max_state_bytes,
+                                          forge_cancel_fn cancelled, void *userdata,
+                                          uint64_t deadline, forge_checkpoint_stats *stats,
+                                          forge_error *error) {
+    uint64_t start = fg_now_ms();
+    if (stats)
+        memset(stats, 0, sizeof(*stats));
+    if (!model || !model->operation_active || !checkpoint || !max_state_bytes ||
+        max_state_bytes > FORGE_CHECKPOINT_MAX_STATE_BYTES)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Invalid active checkpoint restore");
+    const fg_checkpoint_backend *backend = model->checkpoint;
+    if (!backend || !backend->state_set || !backend->accept_tokens || !backend->clear)
+        return fg_error(error, FORGE_ERR_UNSUPPORTED, "Backend cannot restore checkpoints");
+    forge_checkpoint_options options = {0};
+    options.max_state_bytes = max_state_bytes;
+    options.repo_generation = repo_generation;
+    options.cancelled = cancelled;
+    options.userdata = userdata;
+    forge_status status = restore_state(model, checkpoint, &options, deadline, stats, error);
+    if (stats)
+        stats->duration_ms = (double)(fg_now_ms() - start);
     return status;
 }
 

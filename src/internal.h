@@ -2,6 +2,7 @@
 #define FORGE_INTERNAL_H
 #include "forge/forge.h"
 #include "forge/context.h"
+#include "forge/checkpoint.h"
 #include "yyjson.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,6 +84,11 @@ uint64_t fg_diagnostic_hash(const char *);
 /* Internal checkpoint I/O seam. Real backends provide physical sequence state;
  * unit fixtures may substitute deterministic bytes, never model evidence. */
 typedef struct {
+    void *userdata;
+    void *(*allocate)(void *, size_t, forge_error *);
+    void (*release)(void *, void *, size_t);
+} fg_checkpoint_allocator;
+typedef struct {
     forge_status (*supported)(forge_model *, forge_error *);
     forge_status (*prefill)(forge_model *, const char *, int32_t **, size_t *, forge_metrics *,
                             forge_cancel_fn, void *, uint64_t, forge_error *);
@@ -91,7 +97,29 @@ typedef struct {
     size_t (*state_set)(forge_model *, const uint8_t *, size_t);
     bool (*accept_tokens)(forge_model *, const int32_t *, size_t);
     void (*clear)(forge_model *);
+    /* Optional automatic-cache hooks. probe_prefix performs only template/
+     * token work, allocates all extra buffers through the supplied allocator,
+     * and reports LCP(full tokens, separately templated raw prefix tokens).
+     * live_prefix includes a matching final token; callers subtract it when
+     * logits need recomputation. live_matches requires EXACT sequence coverage. */
+    forge_status (*probe_prefix)(forge_model *, const char *, size_t, const int32_t *, size_t,
+                                 size_t *, const fg_checkpoint_allocator *, forge_cancel_fn, void *,
+                                 uint64_t, forge_error *);
+    size_t (*live_prefix)(forge_model *, const int32_t *, size_t);
+    bool (*live_matches)(forge_model *, const int32_t *, size_t);
 } fg_checkpoint_backend;
+
+typedef struct fg_checkpoint_cache fg_checkpoint_cache;
+typedef struct {
+    fg_checkpoint_cache *cache;
+    const int32_t *tokens;
+    size_t token_count, anchors[FORGE_CHECKPOINT_CACHE_MAX_ANCHORS], anchor_count;
+    size_t capture_attempts, restored_tokens, previous_live_prefix;
+    uint64_t context_hash, deadline;
+    forge_cancel_fn cancelled;
+    void *userdata;
+    bool active, reuse_recorded;
+} fg_checkpoint_cache_operation;
 
 struct forge_model {
     forge_model_config config;
@@ -103,6 +131,8 @@ struct forge_model {
     uint64_t next_checkpoint_id;
     bool operation_active;
     const fg_checkpoint_backend *checkpoint;
+    fg_checkpoint_cache *cache;
+    const forge_checkpoint_cache_request *cache_request;
     size_t (*count)(forge_model *, const char *);
     forge_status (*generate)(forge_model *, const char *, const char *, size_t, forge_token_fn,
                              void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
@@ -115,6 +145,31 @@ bool fg_llama_init(forge_model *, forge_error *);
 forge_status fg_model_generate(forge_model *, const char *, const char *, size_t, forge_token_fn,
                                void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
                                forge_error *);
+forge_status fg_model_generate_with_cache(forge_model *, const char *, const char *, size_t,
+                                          forge_token_fn, void *, char **, forge_metrics *,
+                                          forge_cancel_fn, void *, uint64_t,
+                                          const forge_checkpoint_cache_request *, forge_error *);
+
+/* Internal cache operations run under the generation operation guard. */
+forge_status fg_checkpoint_cache_validate_request(const char *,
+                                                  const forge_checkpoint_cache_request *,
+                                                  forge_error *);
+forge_status fg_checkpoint_cache_begin(forge_model *, const char *, const int32_t *, size_t,
+                                       forge_cancel_fn, void *, uint64_t,
+                                       fg_checkpoint_cache_operation *, forge_error *);
+size_t fg_checkpoint_cache_next(const fg_checkpoint_cache_operation *, size_t, size_t);
+void fg_checkpoint_cache_note_reuse(fg_checkpoint_cache_operation *, size_t);
+forge_status fg_checkpoint_cache_capture(forge_model *, fg_checkpoint_cache_operation *, size_t,
+                                         forge_error *);
+void fg_checkpoint_cache_destroy(fg_checkpoint_cache *);
+size_t fg_checkpoint_allocation_bytes(size_t tokens, size_t state_bytes);
+bool fg_checkpoint_matches_prefix(const forge_checkpoint *, const int32_t *, size_t);
+forge_checkpoint *fg_checkpoint_capture_live(forge_model *, const int32_t *, size_t, size_t,
+                                             uint64_t repo_generation, uint64_t context_hash,
+                                             forge_cancel_fn, void *, uint64_t, forge_error *);
+forge_status fg_checkpoint_restore_active(forge_model *, const forge_checkpoint *, uint64_t, size_t,
+                                          forge_cancel_fn, void *, uint64_t,
+                                          forge_checkpoint_stats *, forge_error *);
 
 typedef struct {
     const char *name, *description, *fields, *grammar;

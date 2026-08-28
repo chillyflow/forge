@@ -429,7 +429,57 @@ static void test_deep_graph_and_id_version_limits(void) {
     forge_context_destroy(copy);
     forge_context_destroy(c);
 }
+static void test_stable_cache_anchor(void) {
+    forge_error error = {0};
+    size_t end = SIZE_MAX;
+    forge_context *c = forge_context_create(4096, 64, count_chars, NULL);
+    assert(c);
+    assert(forge_context_cache_anchor(c, "", &end, &error) == FORGE_ERR_CONFLICT && !end);
+    uint64_t system = forge_context_add(c, FORGE_SEG_SYSTEM, "system caf\xc3\xa9", 10, true, 0, 0);
+    uint64_t tools = forge_context_add(c, FORGE_SEG_TOOLS, "tools", 10, true, system, 0);
+    uint64_t task = forge_context_add(c, FORGE_SEG_TASK, "mutable task", 10, true, 0, 0);
+    assert(system && tools && task);
+    char *prompt = render(c, NULL, NULL);
+    assert(forge_context_cache_anchor(c, prompt, &end, &error) == FORGE_OK && !end);
+    free(prompt);
+    assert(forge_context_set_flags(c, system, true, true) == FORGE_OK);
+    assert(forge_context_set_flags(c, tools, true, true) == FORGE_OK);
+    prompt = render(c, NULL, NULL);
+    assert(forge_context_cache_anchor(c, prompt, &end, &error) == FORGE_OK && end);
+    const char *tail = strstr(prompt, "\n[TASK]");
+    assert(tail && end == (size_t)(tail - prompt));
+    size_t previous = end;
+    char *stable = malloc(previous);
+    assert(stable);
+    memcpy(stable, prompt, previous);
+    assert(forge_context_cache_anchor(c, "different", &end, &error) == FORGE_ERR_CONFLICT && !end);
+    assert(forge_context_cache_anchor(c, "bad\xff", &end, &error) == FORGE_ERR_ARGUMENT && !end);
+    assert(forge_context_update(c, task, "changed task", 1) == FORGE_OK);
+    assert(forge_context_cache_anchor(c, prompt, &end, &error) == FORGE_ERR_CONFLICT);
+    free(prompt);
+    prompt = render(c, NULL, NULL);
+    assert(forge_context_cache_anchor(c, prompt, &end, &error) == FORGE_OK && end == previous);
+    assert(!memcmp(stable, prompt, end));
+    free(stable);
+    free(prompt);
+    forge_context_destroy(c);
+
+    c = forge_context_create(4096, 64, count_chars, NULL);
+    assert(c);
+    task = forge_context_add(c, FORGE_SEG_TASK, "non-prefix dependency", 10, true, 0, 0);
+    system = forge_context_add(c, FORGE_SEG_SYSTEM, "system", 10, true, task, 0);
+    assert(forge_context_set_flags(c, task, true, true) == FORGE_OK);
+    assert(forge_context_set_flags(c, system, true, true) == FORGE_OK);
+    prompt = render(c, NULL, NULL);
+    assert(forge_context_cache_anchor(c, prompt, &end, &error) == FORGE_OK && !end);
+    free(prompt);
+    forge_context_destroy(c);
+}
 int main(void) {
+#ifdef _WIN32
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
     test_shared_dependency_budget();
     test_immutable_and_identical_updates();
     test_transitive_source_invalidation();
@@ -437,6 +487,7 @@ int main(void) {
     test_reject_invalid_snapshots();
     test_empty_unplanned_and_limits();
     test_deep_graph_and_id_version_limits();
+    test_stable_cache_anchor();
     puts("Context DAG and snapshot tests passed");
     return 0;
 }

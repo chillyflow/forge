@@ -182,8 +182,9 @@ Embedding APIs also expose [physical prefix checkpoints](docs/CHECKPOINTS.md),
 [normalized diagnostics](docs/DIAGNOSTICS.md). [Indexed summary inputs and caching](docs/SUMMARIES.md)
 support caller-generated text with checked dependencies; automatic summary
 generation and retrieval integration remain open. Checkpoints are independent
-in-memory copies bound to one loaded model instance. Automatic cache management
-and process-restart session resume are not implemented.
+in-memory copies bound to one loaded model instance. An opt-in bounded cache
+captures eligible prefixes during normal prefill and restores exact matching
+tokens. Process-restart session resume is not implemented.
 
 [Architecture](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md) ·
 [Build details](docs/BUILD.md) · [Roadmap](docs/ROADMAP.md) ·

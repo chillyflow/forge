@@ -323,8 +323,11 @@ static void select_bundle(forge_context *c, const closure *work) {
     for (size_t i = 0; i < work->count; i++)
         c->items[work->nodes[i]].view.selected = true;
 }
-static char *render_selected(const forge_context *c) {
+static char *render_selected_anchor(const forge_context *c, size_t *anchor) {
     fg_buf b = {0};
+    bool eligible = true;
+    if (anchor)
+        *anchor = 0;
     /* Stable roles, then chronological source/action/result history, then
      * volatile working state. Updating MEMORY leaves the history prefix intact. */
     for (int group = 0; group <= 5; group++)
@@ -333,11 +336,60 @@ static char *render_selected(const forge_context *c) {
             int rank = s->view.kind <= FORGE_SEG_TASK     ? (int)s->view.kind
                        : s->view.kind == FORGE_SEG_MEMORY ? 5
                                                           : 4;
-            if (rank == group && s->view.selected)
-                fg_buf_printf(&b, "\n[%s]\n%s\n", labels[s->view.kind], s->owned);
+            if (rank == group && s->view.selected) {
+                if (!fg_buf_printf(&b, "\n[%s]\n%s\n", labels[s->view.kind], s->owned)) {
+                    fg_buf_clear(&b);
+                    return NULL;
+                }
+                if (anchor && group <= 1) {
+                    eligible &= s->view.immutable && s->view.cacheable && !s->view.stale;
+                    /* A prefix depending on non-prefix context is not one of
+                     * this first cache slice's self-contained stable anchors. */
+                    for (size_t j = 0; j < s->dependency_count; j++) {
+                        const forge_segment_view *parent = &c->items[s->dependencies[j]].view;
+                        eligible &= parent->kind <= FORGE_SEG_TOOLS && parent->selected &&
+                                    parent->immutable && parent->cacheable && !parent->stale;
+                    }
+                    if (eligible)
+                        *anchor = b.len;
+                }
+            }
         }
+    if (anchor && !eligible)
+        *anchor = 0;
     return fg_buf_take(&b);
 }
+static char *render_selected(const forge_context *c) {
+    return render_selected_anchor(c, NULL);
+}
+
+forge_status forge_context_cache_anchor(const forge_context *c, const char *prompt,
+                                        size_t *byte_end, forge_error *error) {
+    if (error)
+        memset(error, 0, sizeof(*error));
+    if (byte_end)
+        *byte_end = 0;
+    if (!c || !prompt || !byte_end)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Missing context/cache anchor input");
+    if (!c->planned)
+        return fg_error(error, FORGE_ERR_CONFLICT, "Checkpoint anchor requires a current plan");
+    size_t length = 0;
+    while (length <= FG_MAX_JSON && prompt[length])
+        length++;
+    if (length > FG_MAX_JSON || !fg_utf8_valid(prompt, length))
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Checkpoint prompt is not bounded UTF-8");
+    size_t anchor = 0;
+    char *rendered = render_selected_anchor(c, &anchor);
+    if (!rendered)
+        return fg_error(error, FORGE_ERR_MEMORY, "Cannot verify checkpoint plan rendering");
+    bool same = strlen(rendered) == length && !memcmp(rendered, prompt, length);
+    free(rendered);
+    if (!same)
+        return fg_error(error, FORGE_ERR_CONFLICT, "Checkpoint prompt differs from selected plan");
+    *byte_end = anchor;
+    return FORGE_OK;
+}
+
 char *forge_context_plan(forge_context *c, size_t *tokens, size_t *evicted, forge_error *e) {
     if (tokens)
         *tokens = 0;

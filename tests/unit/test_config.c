@@ -161,6 +161,19 @@ static void config_values(void) {
     char expected[TEST_PATH];
     path_for("models/model # one.gguf", expected);
     assert(paths_equal(config.model.model_path, expected));
+    assert(!config.checkpoint_cache_enabled);
+    assert(parse(&config,
+                 "[inference.checkpoints]\nenabled=true\nmax_bytes=1_048_576\n"
+                 "max_entries=3\nmin_prefix_tokens=48\nmax_captures_per_prompt=1\n",
+                 &error) == FORGE_OK);
+    assert(config.checkpoint_cache_enabled && config.checkpoint_cache.max_bytes == 1048576 &&
+           config.checkpoint_cache.max_entries == 3 &&
+           config.checkpoint_cache.min_prefix_tokens == 48 &&
+           config.checkpoint_cache.max_captures_per_prompt == 1);
+    assert(parse(&config, "inference.checkpoints.max_entries=0\n", &error) == FORGE_ERR_PARSE);
+    assert(config.checkpoint_cache_enabled && config.checkpoint_cache.max_entries == 3);
+    assert(parse(&config, "inference.checkpoints.enabled=false\n", &error) == FORGE_OK);
+    assert(!config.checkpoint_cache_enabled && config.checkpoint_cache.max_entries == 3);
     assert(!strcmp(config.model.chat_template, "chatml"));
     assert(config.model.context_tokens == 16384 && config.limits.context_tokens == 16384);
     assert(config.model.gpu_layers == FORGE_GPU_LAYERS_AUTO);
@@ -214,6 +227,14 @@ static void config_rejections(void) {
         {"inference.gpu_layers = \"AUTO\"", "inference.gpu_layers"},
         {"inference.gpu_layers = \"all\"", "inference.gpu_layers"},
         {"inference.reuse_prefix = 1", "inference.reuse_prefix"},
+        {"inference.checkpoints = true", "inference.checkpoints"},
+        {"inference.checkpoints.enabled = 1", "inference.checkpoints.enabled"},
+        {"inference.checkpoints.max_bytes = 4095", "inference.checkpoints.max_bytes"},
+        {"inference.checkpoints.max_bytes = 1073741825", "inference.checkpoints.max_bytes"},
+        {"inference.checkpoints.max_entries = 65", "inference.checkpoints.max_entries"},
+        {"inference.checkpoints.min_prefix_tokens = 0", "inference.checkpoints.min_prefix_tokens"},
+        {"inference.checkpoints.max_captures_per_prompt = 5",
+         "inference.checkpoints.max_captures_per_prompt"},
         {"inference.grammar_fast_path = \"true\"", "inference.grammar_fast_path"},
         {"inference.temperature = nan", "inference.temperature"},
         {"inference.temperature = inf", "inference.temperature"},

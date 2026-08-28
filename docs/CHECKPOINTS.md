@@ -89,9 +89,10 @@ Defaults are a 256 MiB host state cap and a 120-second cooperative timeout. The
 public limits allow at most 1 GiB per state copy and one hour per operation.
 Zero or larger limits are argument errors. Token arrays are limited to the
 runtime's maximum context of 1,048,576 tokens, independently of the state cap.
-The caller owns aggregate checkpoint memory budgeting and handle destruction;
-the per-handle cap does not bound the existing model/KV allocation or a collection
-of retained handles. There is no automatic capture on ordinary generation.
+For explicit handles, the caller owns aggregate checkpoint memory budgeting and
+destruction. The per-handle cap does not bound the existing model/KV allocation
+or a collection of retained handles. The separate opt-in manager below owns its
+own aggregate budget; `forge_complete()` still never requests automatic capture.
 
 Capture checks the required size before allocating the host buffer and requires
 the serializer to return that exact size. Restore requires an exact byte count
@@ -110,6 +111,69 @@ Only one operation may use a model at a time. A guard rejects same-thread callba
 re-entry; callers must still serialize threads and must not destroy a model from
 an active callback.
 
+## Automatic cache
+
+`forge_checkpoint_cache_configure()` enables a model-owned RAM cache. Defaults
+are 256 MiB total requested allocations, eight retained prefixes, a 128-token
+minimum, and two capture attempts per prompt. Public hard limits are 1 GiB,
+64 entries, and four anchors/capture attempts. Its budget includes the manager,
+entry table, copied namespaces, retained token/state copies, and transient
+template/token probes and pending captures. It excludes allocator overhead,
+ordinary inference buffers, the live model/KV allocation and explicit handles.
+It is not an RSS or VRAM bound. A valid reconfiguration discards the old entries
+and counters; allocation failure leaves the manager disabled. Invalid options
+and unsupported backends leave an existing configuration unchanged.
+
+```c
+forge_checkpoint_cache_options cache = forge_default_checkpoint_cache_options();
+if (forge_checkpoint_cache_configure(model, &cache, &error) == FORGE_OK) {
+    size_t anchor = strlen(prompt); /* A raw UTF-8 byte boundary, not tokens. */
+    forge_checkpoint_cache_request request = {
+        canonical_workspace, logical_context_id, repo_generation, &anchor, 1
+    };
+    forge_status status = forge_complete_with_cache(
+        model, prompt, &request, max_tokens, on_token, userdata, &metrics, &error);
+    /* Inspect status and metrics; a request does not promise a cache hit. */
+}
+```
+
+Requests borrow exact nonempty UTF-8 workspace/context namespaces and increasing
+raw-prompt byte endpoints. The embedding API does not canonicalize paths or
+establish repository freshness. Changing either namespace or repository
+generation invalidates all retained entries. A model-instance nonce also binds
+the manager. This conservative epoch policy does not selectively reuse entries
+across source generations.
+
+The backend tokenizes the complete templated prompt once. Each shorter raw
+prefix is separately templated/tokenized only as a probe; the actual cut is its
+longest exact token-ID prefix shared with the complete prompt. This handles
+assistant-template suffixes and token merges at a byte boundary. No estimated
+or separately added token lengths authorize reuse. The longest eligible saved
+token prefix is restored only if it improves on verified live state. Exact
+full-prompt hits still recompute the last token for logits. Capture copies the
+state at eligible cuts during ordinary prefill; it never prefills each prefix
+again. Entries are independent complete host copies with deterministic LRU
+eviction and stable-ID ties, not a graph of KV deltas.
+
+Missing requests, zero eligible anchors, `reuse_prefix=false`, or a budget that
+cannot fit a probe/state bypass cache work and preserve ordinary generation.
+Failed probes/captures are counted. A failed restore removes that entry; a
+partially written state is cleared before one ordinary prefill fallback, with
+no second-entry restore retry. Cancellation and deadlines propagate, including
+after a non-preemptible backend call. One model operation at a time remains
+required. Configuration, clearing and generation re-entry are rejected while
+an operation is active. Clearing the manager leaves ordinary live state intact.
+
+The agent nominates the selected immutable, cacheable SYSTEM/TOOLS prefix via
+`forge_context_cache_anchor()`. It verifies that the supplied prompt is the
+actual selected context rendering, with valid dependencies. Each agent has a
+fresh context namespace and uses the canonical workspace and current indexed
+generation. Existing monitor/stale-action checks still decide freshness; a
+cache hit cannot authorize an action. The CLI opts in with `--checkpoint-cache`
+or `[inference.checkpoints] enabled = true`; see [configuration](CONFIG.md).
+`complete` nominates its entire raw prompt with generation zero, but each CLI
+process loads a fresh model, so separate invocations do not share checkpoints.
+
 ## Metrics and evidence
 
 Each API call resets its optional stats output. Save reports prompt, cached and
@@ -127,6 +191,23 @@ cleanup, cancellation, post-write timeout, re-entry, oversized prompts,
 unsupported backends and ID exhaustion.
 Its fixture bytes are not a KV cache and are not real-model correctness or
 performance evidence.
+
+`forge_checkpoint_cache_get_stats()` exposes cumulative manager requests,
+lookups, hits/misses, captures, evictions, invalidations, skip/failure reasons,
+restored and subsequently matched tokens, and resident/pending/peak bytes.
+Generation/session metrics contain the call deltas for cache counters and
+probe/capture/restore times. `checkpoint_peak_bytes` is the manager lifetime high
+water mark observed by that call, not the call's incremental allocation or RSS.
+`checkpoint_additional_tokens` counts actual reuse beyond the live prefix that
+was usable before restoration; it is not a speedup claim. Cache timings overlap
+overall inference work and must not be added to the total again.
+
+`tests/unit/test_checkpoint_cache.c` uses simulated host state I/O to test
+token merges, template suffixes, A/B/A selection, live-prefix preference,
+namespace/generation/nonce invalidation, deterministic eviction, allocation
+caps including transient work, restore failure cleanup, cancellation, deadlines
+and re-entry. Context and config/CLI fixtures cover anchor eligibility and
+strict opt-in/override behavior. These fixtures are not physical KV evidence.
 
 `tests/integration/checkpoint_model.c` is an optional real-model test:
 
@@ -166,6 +247,22 @@ identify the exact tested revision, binary/model hashes and four short/source
 A/B results. They are limited correctness checks, not end-to-end performance
 or long-generation evidence.
 
+The same executable has a separate automatic mode:
+
+```text
+forge_checkpoint_model --automatic /path/to/local-model.gguf [gpu_layers] [context] [chat_template]
+```
+
+It requires at least 512 context tokens. A cold instance with all reuse disabled
+produces two reference outputs, then unloads. A new instance generates A/B/A/B
+with the automatic manager and full-prompt anchors, without any explicit save
+call. Both displaced-prefix hits must physically restore, match the cold output
+bytes, account for all prompt tokens, and recompute exactly one final token.
+The fixture then changes repository generation and requires invalidation and
+output parity. Its two JSON records are correctness diagnostics, not a timed
+task benchmark. Only one model is loaded at a time.
+
 No checkpoint disk format, untrusted state import, process-restart resume,
-automatic semantic-boundary selection, eviction manager, or durable logical/
-physical session binding is implemented by this API.
+model-reload restore or durable logical/physical session binding is implemented.
+Agent selection currently covers only the stable SYSTEM/TOOLS boundary, not a
+complete semantic checkpoint hierarchy for all repository/context segments.

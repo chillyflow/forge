@@ -61,6 +61,11 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `inference` | `reuse_prefix` | Boolean; enables existing prompt-prefix reuse. |
 | `inference` | `grammar_fast_path` | Boolean; enables existing greedy grammar fast path. |
 | `inference` | `speculative` | Only `false`; `true` is rejected because speculative decoding is not implemented. |
+| `inference.checkpoints` | `enabled` | Boolean, default `false`; enables the bounded physical prefix cache on supported backends. |
+| `inference.checkpoints` | `max_bytes` | Integer 4,096–1,073,741,824; aggregate manager allocation cap, default 268,435,456. Not RSS/VRAM. |
+| `inference.checkpoints` | `max_entries` | Integer 1–64; default 8 retained prefixes. |
+| `inference.checkpoints` | `min_prefix_tokens` | Integer 1–1,048,576; default 128 actual matched tokens. |
+| `inference.checkpoints` | `max_captures_per_prompt` | Integer 1–4; default 2 capture attempts during normal prefill. |
 | `agent` | `output_reserve` | Positive tokens per turn, strictly smaller than context. |
 | `agent` | `max_turns` | Integer 1–1,000. |
 | `agent` | `max_tokens` | Total generated-token limit, 1–2,147,483,647. |
@@ -77,6 +82,15 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 See `forge.toml.example` and `profiles/*.toml`. There are deliberately no config
 keys for tool permission grants, script fixtures, draft models, thinking modes,
 KV quantization, network sandbox backends or unsupported index languages.
+
+Checkpoint CLI overrides are `--checkpoint-cache`, `--no-checkpoint-cache`,
+`--checkpoint-cache-bytes`, `--checkpoint-cache-entries`,
+`--checkpoint-cache-min-tokens` and `--checkpoint-cache-captures`. Numeric limits
+alone do not enable the cache. `--no-kv-reuse` bypasses both live-prefix and
+automatic checkpoint reuse/capture even when the manager is configured.
+Explicitly enabling it on a scripted or unsupported model fails; it never
+substitutes simulated state for a physical cache. There is no disk persistence
+between CLI runs. See [checkpoint ownership, semantics and metrics](CHECKPOINTS.md).
 
 ## Shell security
 

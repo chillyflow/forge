@@ -126,6 +126,26 @@ class ConfigCliTests(unittest.TestCase):
         ).stderr)
         self.assertIn("Options:", self.cli("--help").stdout)
 
+    def test_physical_checkpoint_configuration_is_explicit_and_never_simulated(self):
+        fixture = self.fixture([{"final": "done"}])
+        self.write(self.workspace / "forge.toml", "[inference.checkpoints]\nenabled=true\n")
+        failed = self.cli("complete", "prompt", "--script", fixture, success=False)
+        self.assertIn("does not support automatic physical checkpoint", failed.stderr)
+        completed = self.cli("complete", "prompt", "--script", fixture, "--no-checkpoint-cache")
+        self.assertEqual(json.loads(completed.stdout), {"final": "done"})
+        failed = self.cli("complete", "prompt", "--script", fixture, "--no-config",
+                          "--checkpoint-cache", success=False)
+        self.assertIn("does not support automatic physical checkpoint", failed.stderr)
+        failed = self.cli("complete", "prompt", "--script", fixture, "--no-checkpoint-cache",
+                          "--checkpoint-cache-entries", "0", success=False)
+        self.assertIn("inference.checkpoints", failed.stderr)
+        completed = self.cli("complete", "prompt", "--script", fixture, "--no-checkpoint-cache",
+                             "--checkpoint-cache-entries", "2", "--checkpoint-cache-bytes", "4096",
+                             "--checkpoint-cache-min-tokens", "1", "--checkpoint-cache-captures", "1")
+        metrics = json.loads(completed.stderr)
+        self.assertTrue(metrics["simulated"])
+        self.assertEqual(metrics["checkpoint_hits"], 0)
+
     def test_unknown_malformed_and_ambiguous_options(self):
         cases = [
             (("hardware-plan", "--unknown"), "Unknown option"),

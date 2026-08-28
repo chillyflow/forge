@@ -39,49 +39,87 @@ static llama_token sample_token(llama_state *s, struct llama_sampler *sampler,
         stats->grammar_fallback_tokens++;
     return llama_sampler_sample(sampler, s->ctx, -1);
 }
-static char *format_prompt(llama_state *s, const char *prompt) {
+static void *token_allocate(const fg_checkpoint_allocator *allocator, size_t bytes,
+                            forge_error *error) {
+    if (allocator)
+        return allocator->allocate(allocator->userdata, bytes, error);
+    void *memory = malloc(bytes);
+    if (!memory)
+        fg_error(error, FORGE_ERR_MEMORY, "Tokenization allocation failed");
+    return memory;
+}
+static void token_release(const fg_checkpoint_allocator *allocator, void *memory, size_t bytes) {
+    if (allocator)
+        allocator->release(allocator->userdata, memory, bytes);
+    else
+        free(memory);
+}
+static char *format_prompt(llama_state *s, const char *prompt,
+                           const fg_checkpoint_allocator *allocator, size_t *allocated,
+                           forge_error *error) {
     struct llama_chat_message message = {"user", prompt};
     int32_t n = llama_chat_apply_template(s->template_name, &message, 1, true, NULL, 0);
-    if (n < 0 || n > 16 * 1024 * 1024)
+    if (n < 0 || n > 16 * 1024 * 1024) {
+        fg_error(error, n < 0 ? FORGE_ERR_MODEL : FORGE_ERR_LIMIT,
+                 "Cannot format bounded chat prompt");
         return NULL;
-    char *text = malloc((size_t)n + 1);
+    }
+    *allocated = (size_t)n + 1;
+    char *text = token_allocate(allocator, *allocated, error);
     if (!text)
         return NULL;
     int32_t got = llama_chat_apply_template(s->template_name, &message, 1, true, text, n + 1);
     if (got < 0 || got > n) {
-        free(text);
+        token_release(allocator, text, *allocated);
+        fg_error(error, FORGE_ERR_MODEL, "Chat template returned inconsistent size");
         return NULL;
     }
     text[got] = 0;
     return text;
 }
-static llama_token *tokenize(llama_state *s, const char *prompt, int32_t *count) {
-    char *text = format_prompt(s, prompt);
+static llama_token *tokenize_allocated(llama_state *s, const char *prompt, int32_t *count,
+                                       const fg_checkpoint_allocator *allocator, size_t *allocated,
+                                       forge_error *error) {
+    size_t text_bytes = 0;
+    char *text = format_prompt(s, prompt, allocator, &text_bytes, error);
     if (!text)
         return NULL;
     size_t len = strlen(text);
     if (len > INT32_MAX) {
-        free(text);
+        token_release(allocator, text, text_bytes);
+        fg_error(error, FORGE_ERR_LIMIT, "Templated prompt is too large");
         return NULL;
     }
     int32_t n = llama_tokenize(s->vocab, text, (int32_t)len, NULL, 0, true, true);
     if (n >= 0 || n == INT32_MIN) {
-        free(text);
+        token_release(allocator, text, text_bytes);
+        fg_error(error, FORGE_ERR_MODEL, "Cannot size prompt tokens");
         return NULL;
     }
     n = -n;
-    llama_token *tokens = malloc((size_t)n * sizeof(*tokens));
+    if (n > 1048576) {
+        token_release(allocator, text, text_bytes);
+        fg_error(error, FORGE_ERR_LIMIT, "Prompt token count exceeds the runtime bound");
+        return NULL;
+    }
+    *allocated = (size_t)n * sizeof(llama_token);
+    llama_token *tokens = token_allocate(allocator, *allocated, error);
     if (!tokens) {
-        free(text);
+        token_release(allocator, text, text_bytes);
         return NULL;
     }
     *count = llama_tokenize(s->vocab, text, (int32_t)len, tokens, n, true, true);
-    free(text);
-    if (*count < 0) {
-        free(tokens);
+    token_release(allocator, text, text_bytes);
+    if (*count < 0 || *count > n) {
+        token_release(allocator, tokens, *allocated);
+        fg_error(error, FORGE_ERR_MODEL, "Cannot tokenize the complete prompt");
         return NULL;
     }
     return tokens;
+}
+static llama_token *tokenize(llama_state *s, const char *prompt, int32_t *count) {
+    size_t bytes = 0;
+    return tokenize_allocated(s, prompt, count, NULL, &bytes, NULL);
 }
 static size_t llama_count(forge_model *m, const char *prompt) {
     int32_t count = 0;
@@ -117,31 +155,35 @@ static void clear_live_state(forge_model *m) {
     llama_memory_clear(llama_get_memory(s->ctx), false);
     s->count = 0;
 }
+static size_t live_prefix(forge_model *m, const int32_t *tokens, size_t count) {
+    llama_state *s = m->backend;
+    size_t prefix = 0;
+    if (m->config.reuse_prefix && s->can_reuse)
+        while (prefix < count && prefix < s->count && tokens[prefix] == s->tokens[prefix])
+            prefix++;
+    llama_memory_t memory = llama_get_memory(s->ctx);
+    if (prefix && (!memory || llama_memory_seq_pos_min(memory, 0) != 0 ||
+                   llama_memory_seq_pos_max(memory, 0) < (llama_pos)(prefix - 1)))
+        prefix = 0;
+    return prefix;
+}
 /* Both generation and explicit checkpoint capture use this exact prefill path.
  * It never samples and only records a token suffix after successful decoding. */
 static forge_status prefill_tokens(forge_model *m, const llama_token *tokens, size_t count,
                                    size_t output_reserve, forge_metrics *stats,
                                    forge_cancel_fn cancel, void *cu, uint64_t deadline,
-                                   forge_error *e) {
+                                   fg_checkpoint_cache_operation *cache, forge_error *e) {
     llama_state *s = m->backend;
     if (!count || count > s->capacity || output_reserve > s->capacity - count)
         return fg_error(e, FORGE_ERR_LIMIT, "Prompt plus output reserve exceeds model context");
     if (interrupted(cancel, cu, deadline))
         return fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled before prefill");
     uint64_t begin = fg_now_ms();
-    size_t prefix = 0;
-    if (m->config.reuse_prefix && s->can_reuse)
-        while (prefix < count && prefix < s->count && tokens[prefix] == s->tokens[prefix])
-            prefix++;
+    size_t prefix = live_prefix(m, tokens, count);
     /* Re-evaluate the final prompt token to obtain valid logits, even on an exact hit. */
     if (prefix == count && prefix)
         prefix--;
-    /* A remembered token list alone does not prove the corresponding KV still
-     * exists (for example after a sliding-window eviction or a failed decode). */
     llama_memory_t memory = llama_get_memory(s->ctx);
-    if (prefix && (llama_memory_seq_pos_min(memory, 0) != 0 ||
-                   llama_memory_seq_pos_max(memory, 0) < (llama_pos)(prefix - 1)))
-        prefix = 0;
     if (!prefix)
         llama_memory_clear(memory, false);
     else if (!llama_memory_seq_rm(memory, 0, (llama_pos)prefix, -1)) {
@@ -153,17 +195,26 @@ static forge_status prefill_tokens(forge_model *m, const llama_token *tokens, si
     stats->cached_tokens += prefix;
     stats->load_ms = s->load_ms;
     forge_status status = FORGE_OK;
+    fg_checkpoint_cache_note_reuse(cache, prefix);
+    if (prefix && (status = fg_checkpoint_cache_capture(m, cache, prefix, e)) != FORGE_OK)
+        goto done;
     for (size_t pos = prefix; pos < count;) {
         if (interrupted(cancel, cu, deadline)) {
             status = fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled or deadline reached");
             goto done;
         }
-        size_t take = FG_MIN(count - pos, 512);
+        size_t end = fg_checkpoint_cache_next(cache, pos, pos + FG_MIN(count - pos, 512));
+        size_t take = end - pos;
         status = decode_batch(s, tokens + pos, take, pos, e);
         if (status != FORGE_OK)
             goto done;
-        pos += take;
+        memcpy(s->tokens + pos, tokens + pos, take * sizeof(*tokens));
+        pos = end;
+        s->count = pos;
         stats->prefill_tokens += take;
+        status = fg_checkpoint_cache_capture(m, cache, pos, e);
+        if (status != FORGE_OK)
+            goto done;
     }
     llama_synchronize(s->ctx);
     if (interrupted(cancel, cu, deadline)) {
@@ -189,8 +240,16 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         return fg_error(e, FORGE_ERR_MODEL,
                         "Cannot tokenize prompt or apply chat template; use --chat-template chatml "
                         "for a compatible model");
+    if (n <= 0 || (size_t)n > s->capacity || max_tokens > s->capacity - (size_t)n) {
+        free(tokens);
+        return fg_error(e, FORGE_ERR_LIMIT, "Prompt plus output reserve exceeds model context");
+    }
+    fg_checkpoint_cache_operation cache = {0};
     forge_status status =
-        prefill_tokens(m, tokens, (size_t)n, max_tokens, stats, cancel, cu, deadline, e);
+        fg_checkpoint_cache_begin(m, prompt, tokens, (size_t)n, cancel, cu, deadline, &cache, e);
+    if (status == FORGE_OK)
+        status = prefill_tokens(m, tokens, (size_t)n, max_tokens, stats, cancel, cu, deadline,
+                                &cache, e);
     free(tokens);
     if (status != FORGE_OK)
         return status;
@@ -314,7 +373,7 @@ static forge_status checkpoint_prefill(forge_model *m, const char *prompt, int32
         return fg_error(e, FORGE_ERR_MODEL,
                         "Cannot tokenize checkpoint prompt or apply chat template");
     forge_status status =
-        prefill_tokens(m, tokens, (size_t)count, 0, stats, cancel, user, deadline, e);
+        prefill_tokens(m, tokens, (size_t)count, 0, stats, cancel, user, deadline, NULL, e);
     if (status == FORGE_OK && !checkpoint_positions(s, (size_t)count))
         status =
             fg_error(e, FORGE_ERR_UNSUPPORTED,
@@ -356,9 +415,43 @@ static bool checkpoint_accept_tokens(forge_model *m, const int32_t *tokens, size
     s->count = count;
     return true;
 }
+static bool checkpoint_live_matches(forge_model *m, const int32_t *tokens, size_t count) {
+    llama_state *s = m->backend;
+    return s->count == count && checkpoint_positions(s, count) &&
+           !memcmp(s->tokens, tokens, count * sizeof(*tokens));
+}
+static forge_status
+checkpoint_probe_prefix(forge_model *m, const char *prompt, size_t end, const int32_t *full_tokens,
+                        size_t full_count, size_t *common, const fg_checkpoint_allocator *allocator,
+                        forge_cancel_fn cancel, void *user, uint64_t deadline, forge_error *error) {
+    *common = 0;
+    if (interrupted(cancel, user, deadline))
+        return fg_error(error, FORGE_ERR_CANCELLED,
+                        "Checkpoint probe cancelled before tokenization");
+    char *prefix = token_allocate(allocator, end + 1, error);
+    if (!prefix)
+        return error && error->code ? error->code : FORGE_ERR_MEMORY;
+    memcpy(prefix, prompt, end);
+    prefix[end] = 0;
+    int32_t count = 0;
+    size_t token_bytes = 0;
+    llama_token *tokens =
+        tokenize_allocated(m->backend, prefix, &count, allocator, &token_bytes, error);
+    token_release(allocator, prefix, end + 1);
+    if (!tokens)
+        return error && error->code ? error->code : FORGE_ERR_MODEL;
+    for (size_t i = 0; i < (size_t)count && i < full_count && tokens[i] == full_tokens[i]; i++)
+        (*common)++;
+    token_release(allocator, tokens, token_bytes);
+    if (interrupted(cancel, user, deadline))
+        return fg_error(error, FORGE_ERR_CANCELLED,
+                        "Checkpoint probe cancelled after tokenization");
+    return FORGE_OK;
+}
 static const fg_checkpoint_backend checkpoint_backend = {
     checkpoint_supported, checkpoint_prefill,       checkpoint_state_size, checkpoint_state_get,
-    checkpoint_state_set, checkpoint_accept_tokens, clear_live_state};
+    checkpoint_state_set, checkpoint_accept_tokens, clear_live_state,      checkpoint_probe_prefix,
+    live_prefix,          checkpoint_live_matches};
 static void llama_destroy(forge_model *m) {
     llama_state *s = m->backend;
     if (s) {

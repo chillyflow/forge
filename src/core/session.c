@@ -116,6 +116,15 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     U(index_cache_evictions);
     U(peak_index_source_bytes);
     U(peak_index_nodes);
+    U(checkpoint_lookups);
+    U(checkpoint_hits);
+    U(checkpoint_misses);
+    U(checkpoint_captures);
+    U(checkpoint_evictions);
+    U(checkpoint_restored_tokens);
+    U(checkpoint_reused_tokens);
+    U(checkpoint_additional_tokens);
+    U(checkpoint_peak_bytes);
     R(load_ms);
     R(prefill_ms);
     R(decode_ms);
@@ -124,6 +133,9 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     R(tool_ms);
     R(validation_ms);
     R(index_ms);
+    R(checkpoint_probe_ms);
+    R(checkpoint_capture_ms);
+    R(checkpoint_restore_ms);
 #undef U
 #undef R
     char *json = yyjson_mut_write(d, YYJSON_WRITE_PRETTY, NULL);

@@ -53,6 +53,11 @@ static void usage(void) {
          "  --allow-exec         permit UNSANDBOXED commands, including repository code\n"
          "  --json               JSON-lines events\n"
          "  --no-kv-reuse | --no-semantic | --no-compaction  ablations\n"
+         "  --checkpoint-cache | --no-checkpoint-cache   opt-in bounded physical cache\n"
+         "  --checkpoint-cache-bytes N        aggregate cache allocation cap\n"
+         "  --checkpoint-cache-entries N      retained prefixes (1..64)\n"
+         "  --checkpoint-cache-min-tokens N   minimum eligible prefix length\n"
+         "  --checkpoint-cache-captures N     captures per prompt (1..4)\n"
          "  --grammar-first      disable greedy grammar fast path (ablation)\n"
          "  --no-auto-validation skip final Go validation (explicit ablation)\n"
          "  --script FILE        explicit simulated test backend (not inference)\n"
@@ -81,17 +86,37 @@ static int option_arity(const char *option) {
                                         "--allow-exec",
                                         "--json",
                                         "--no-kv-reuse",
+                                        "--checkpoint-cache",
+                                        "--no-checkpoint-cache",
                                         "--grammar-first",
                                         "--no-semantic",
                                         "--no-compaction",
                                         "--no-auto-validation",
                                         "--no-config"};
-    static const char *const values[] = {
-        "--workspace", "--profile",        "--config",         "--model",
-        "--script",    "--chat-template",  "--context",        "--output-reserve",
-        "--max-turns", "--max-tokens",     "--max-input",      "--timeout-ms",
-        "--wall-ms",   "--max-tool-bytes", "--max-file-bytes", "--gpu-layers",
-        "--threads",   "--depth",          "--temperature",    "--seed"};
+    static const char *const values[] = {"--workspace",
+                                         "--profile",
+                                         "--config",
+                                         "--model",
+                                         "--script",
+                                         "--chat-template",
+                                         "--context",
+                                         "--output-reserve",
+                                         "--max-turns",
+                                         "--max-tokens",
+                                         "--max-input",
+                                         "--timeout-ms",
+                                         "--wall-ms",
+                                         "--max-tool-bytes",
+                                         "--max-file-bytes",
+                                         "--gpu-layers",
+                                         "--threads",
+                                         "--depth",
+                                         "--temperature",
+                                         "--seed",
+                                         "--checkpoint-cache-bytes",
+                                         "--checkpoint-cache-entries",
+                                         "--checkpoint-cache-min-tokens",
+                                         "--checkpoint-cache-captures"};
     for (size_t i = 0; i < sizeof(flags) / sizeof(flags[0]); i++)
         if (!strcmp(option, flags[i]))
             return 0;
@@ -542,6 +567,10 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             mc.reuse_prefix = false;
             continue;
         }
+        if (!strcmp(a, "--checkpoint-cache") || !strcmp(a, "--no-checkpoint-cache")) {
+            config->checkpoint_cache_enabled = !strcmp(a, "--checkpoint-cache");
+            continue;
+        }
         if (!strcmp(a, "--grammar-first")) {
             mc.grammar_fast_path = false;
             continue;
@@ -612,6 +641,14 @@ static int cli_main(int argc, char **argv, forge_config *config) {
                 ac.limits.max_tool_bytes = n;
             else if (!strcmp(a, "--max-file-bytes"))
                 ac.limits.max_file_bytes = n;
+            else if (!strcmp(a, "--checkpoint-cache-bytes"))
+                config->checkpoint_cache.max_bytes = n;
+            else if (!strcmp(a, "--checkpoint-cache-entries"))
+                config->checkpoint_cache.max_entries = n;
+            else if (!strcmp(a, "--checkpoint-cache-min-tokens"))
+                config->checkpoint_cache.min_prefix_tokens = n;
+            else if (!strcmp(a, "--checkpoint-cache-captures"))
+                config->checkpoint_cache.max_captures_per_prompt = n;
             else if (!strcmp(a, "--gpu-layers") && n <= INT_MAX)
                 mc.gpu_layers = (int)n;
             else if (!strcmp(a, "--threads") && n <= INT_MAX)
@@ -800,10 +837,28 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         yyjson_doc_free(benchmark);
         return failed(&error);
     }
+    if (config->checkpoint_cache_enabled &&
+        forge_checkpoint_cache_configure(ac.model, &config->checkpoint_cache, &error) != FORGE_OK) {
+        forge_model_destroy(ac.model);
+        yyjson_doc_free(benchmark);
+        return failed(&error);
+    }
     if (!strcmp(command, "complete")) {
         forge_metrics metrics;
-        forge_status s = forge_complete(ac.model, argument, ac.limits.output_reserve, tokens, NULL,
-                                        &metrics, &error);
+        forge_status s;
+        if (config->checkpoint_cache_enabled) {
+            char workspace[FG_PATH_MAX];
+            if (!fg_workspace(ac.workspace, workspace, &error)) {
+                forge_model_destroy(ac.model);
+                return failed(&error);
+            }
+            size_t anchor = strlen(argument);
+            forge_checkpoint_cache_request request = {workspace, "cli.complete.v1", 0, &anchor, 1};
+            s = forge_complete_with_cache(ac.model, argument, &request, ac.limits.output_reserve,
+                                          tokens, NULL, &metrics, &error);
+        } else
+            s = forge_complete(ac.model, argument, ac.limits.output_reserve, tokens, NULL, &metrics,
+                               &error);
         puts("");
         char *m = fg_metrics_json(&metrics, s);
         if (m) {

@@ -113,6 +113,7 @@ forge_model *forge_model_load(const forge_model_config *config, forge_error *e) 
 }
 void forge_model_destroy(forge_model *m) {
     if (m) {
+        fg_checkpoint_cache_destroy(m->cache);
         if (m->destroy)
             m->destroy(m);
         if (m->script)
@@ -121,18 +122,60 @@ void forge_model_destroy(forge_model *m) {
         free(m);
     }
 }
+static void cache_metrics(forge_metrics *metrics, const forge_checkpoint_cache_stats *before,
+                          const forge_checkpoint_cache_stats *after) {
+#define CACHE_COUNT(field, source)                                                                 \
+    do {                                                                                           \
+        uint64_t change = after->source - before->source;                                          \
+        metrics->field =                                                                           \
+            change > UINT64_MAX - metrics->field ? UINT64_MAX : metrics->field + change;           \
+    } while (0)
+    CACHE_COUNT(checkpoint_lookups, lookups);
+    CACHE_COUNT(checkpoint_hits, hits);
+    CACHE_COUNT(checkpoint_misses, misses);
+    CACHE_COUNT(checkpoint_captures, captures);
+    CACHE_COUNT(checkpoint_evictions, evictions);
+    CACHE_COUNT(checkpoint_restored_tokens, tokens_restored);
+    CACHE_COUNT(checkpoint_reused_tokens, restored_tokens_reused);
+    CACHE_COUNT(checkpoint_additional_tokens, additional_matched_tokens);
+#undef CACHE_COUNT
+    metrics->checkpoint_peak_bytes = FG_MAX(metrics->checkpoint_peak_bytes, after->peak_bytes);
+    metrics->checkpoint_probe_ms += after->probe_ms - before->probe_ms;
+    metrics->checkpoint_capture_ms += after->capture_ms - before->capture_ms;
+    metrics->checkpoint_restore_ms += after->restore_ms - before->restore_ms;
+}
 forge_status fg_model_generate(forge_model *m, const char *p, const char *g, size_t max_tokens,
                                forge_token_fn cb, void *u, char **out, forge_metrics *stats,
                                forge_cancel_fn cancel, void *cu, uint64_t deadline,
                                forge_error *e) {
+    return fg_model_generate_with_cache(m, p, g, max_tokens, cb, u, out, stats, cancel, cu,
+                                        deadline, NULL, e);
+}
+forge_status fg_model_generate_with_cache(forge_model *m, const char *p, const char *g,
+                                          size_t max_tokens, forge_token_fn cb, void *u, char **out,
+                                          forge_metrics *stats, forge_cancel_fn cancel, void *cu,
+                                          uint64_t deadline,
+                                          const forge_checkpoint_cache_request *request,
+                                          forge_error *e) {
     if (!m || !m->generate || !p || !max_tokens || !out || !stats)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid generation request");
     *out = NULL;
     if (m->operation_active)
         return fg_error(e, FORGE_ERR_CONFLICT, "Another operation is active on this model");
+    forge_status status = fg_checkpoint_cache_validate_request(p, request, e);
+    if (status != FORGE_OK)
+        return status;
     m->operation_active = true;
-    forge_status status =
-        m->generate(m, p, g, max_tokens, cb, u, out, stats, cancel, cu, deadline, e);
+    m->cache_request = request;
+    forge_checkpoint_cache_stats cache_before = {0}, cache_after = {0};
+    forge_checkpoint_cache_get_stats(m, &cache_before);
+    if ((cancel && cancel(cu)) || (deadline && fg_now_ms() >= deadline))
+        status = fg_error(e, FORGE_ERR_CANCELLED, "Generation cancelled before tokenization");
+    else
+        status = m->generate(m, p, g, max_tokens, cb, u, out, stats, cancel, cu, deadline, e);
+    forge_checkpoint_cache_get_stats(m, &cache_after);
+    cache_metrics(stats, &cache_before, &cache_after);
+    m->cache_request = NULL;
     m->operation_active = false;
     return status;
 }
@@ -145,4 +188,17 @@ forge_status forge_complete(forge_model *m, const char *p, size_t n, forge_token
     forge_status s = fg_model_generate(m, p, NULL, n, cb, u, &out, stats, NULL, NULL, 0, e);
     free(out);
     return s;
+}
+forge_status forge_complete_with_cache(forge_model *m, const char *prompt,
+                                       const forge_checkpoint_cache_request *request,
+                                       size_t max_tokens, forge_token_fn cb, void *user,
+                                       forge_metrics *stats, forge_error *error) {
+    if (!stats)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Missing metrics");
+    memset(stats, 0, sizeof(*stats));
+    char *output = NULL;
+    forge_status status = fg_model_generate_with_cache(
+        m, prompt, NULL, max_tokens, cb, user, &output, stats, NULL, NULL, 0, request, error);
+    free(output);
+    return status;
 }

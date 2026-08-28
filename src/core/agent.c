@@ -5,6 +5,7 @@
 struct forge_agent {
     forge_agent_config config;
     char root[FG_PATH_MAX];
+    char cache_context_id[33];
     forge_metrics metrics;
     fg_session session;
     forge_agent_state state;
@@ -54,6 +55,11 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
         return NULL;
     }
     a->config.workspace = a->root;
+    if (!fg_random_hex(a->cache_context_id, 16)) {
+        free(a);
+        fg_error(e, FORGE_ERR_IO, "Cannot create agent checkpoint context identity");
+        return NULL;
+    }
     a->generation_arena = forge_arena_create((size_t)FG_MAX_JSON * 4, e);
     if (!a->generation_arena) {
         free(a);
@@ -431,9 +437,24 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         }
         forge_metrics before = a->metrics;
         token_stream stream = {a, {0}, e, false};
-        status = fg_model_generate(a->config.model, prompt, grammar, max_tokens, stream_token,
-                                   &stream, &response, &a->metrics, a->config.cancelled,
-                                   a->config.userdata, deadline, e);
+        forge_checkpoint_cache_request cache_request = {0};
+        size_t anchor = 0;
+        if (a->config.model->cache) {
+            status = forge_context_cache_anchor(ctx, prompt, &anchor, e);
+            if (status != FORGE_OK) {
+                free(prompt);
+                break;
+            }
+            cache_request.workspace = a->root;
+            cache_request.context_id = a->cache_context_id;
+            cache_request.repo_generation = forge_repo_generation(repo);
+            cache_request.anchor_ends = &anchor;
+            cache_request.anchor_count = anchor ? 1 : 0;
+        }
+        status = fg_model_generate_with_cache(a->config.model, prompt, grammar, max_tokens,
+                                              stream_token, &stream, &response, &a->metrics,
+                                              a->config.cancelled, a->config.userdata, deadline,
+                                              a->config.model->cache ? &cache_request : NULL, e);
         fg_buf_clear(&stream.pending);
         if (stream.failed)
             status = fg_error(e, FORGE_ERR_IO, "Token event could not be recorded");

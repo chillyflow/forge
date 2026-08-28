@@ -12,6 +12,13 @@ temperature = 0.0
 seed = 42
 speculative = false # true is rejected: speculative decoding is not implemented.
 
+[inference.checkpoints]
+enabled = false # Explicit opt-in; retained only in this model process.
+max_bytes = 268435456 # 256 MiB aggregate host allocation cap, not RSS/VRAM.
+max_entries = 8
+min_prefix_tokens = 128
+max_captures_per_prompt = 2
+
 [agent]
 output_reserve = 2048
 max_turns = 50

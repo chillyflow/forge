@@ -354,14 +354,123 @@ cleanup:
     return result;
 }
 
+static int run_automatic(const forge_model_config *config) {
+    const char *case_name = "automatic-source", *variant_name = "setup";
+    forge_error error = {0};
+    forge_model *model = NULL;
+    sample samples[2] = {0};
+    output invalidated = {0};
+    int result = 1;
+    REQUIRE(config->context_tokens >= 512,
+            "Automatic fixture requires at least 512 context tokens");
+    forge_model_config cold_config = *config;
+    cold_config.reuse_prefix = false;
+    model = forge_model_load(&cold_config, &error);
+    REQUIRE(model, "Load uncached reference model");
+    for (size_t i = 0; i < 2; i++) {
+        variant_name = i ? "B" : "A";
+        samples[i].prompt = source_prompt(4, i, &error);
+        REQUIRE(samples[i].prompt, "Create bounded source fixture");
+        REQUIRE(forge_complete(model, samples[i].prompt, OUTPUT_TOKENS, collect, &samples[i].cold,
+                               &samples[i].cold_metrics, &error) == FORGE_OK,
+                "Cold reference generation");
+        REQUIRE(!samples[i].cold_metrics.simulated && !samples[i].cold_metrics.cached_tokens &&
+                    samples[i].cold_metrics.prefill_tokens == samples[i].cold_metrics.prompt_tokens,
+                "Reference must decode the complete actual prompt");
+    }
+    forge_model_destroy(model);
+    model = forge_model_load(config, &error);
+    REQUIRE(model, "Load automatic-cache model");
+    forge_checkpoint_cache_options options = forge_default_checkpoint_cache_options();
+    options.max_entries = 2;
+    options.min_prefix_tokens = 16;
+    options.max_captures_per_prompt = 1;
+    REQUIRE(forge_checkpoint_cache_configure(model, &options, &error) == FORGE_OK,
+            "Enable supported physical cache");
+    forge_checkpoint_cache_request request = {"checkpoint-model-fixture", "automatic-a-b-a", 7,
+                                              NULL, 1};
+    for (size_t round = 0; round < 2; round++)
+        for (size_t i = 0; i < 2; i++) {
+            sample *current = &samples[i];
+            variant_name = i ? "B" : "A";
+            size_t anchor = strlen(current->prompt);
+            request.anchor_ends = &anchor;
+            output *out = round ? &current->repeated : &current->restored;
+            forge_metrics *metrics =
+                round ? &current->repeated_metrics : &current->restored_metrics;
+            REQUIRE(forge_complete_with_cache(model, current->prompt, &request, OUTPUT_TOKENS,
+                                              collect, out, metrics, &error) == FORGE_OK,
+                    "Automatic A/B/A/B generation");
+            REQUIRE(!metrics->simulated && same_output(out, &current->cold),
+                    "Automatic and cold output byte parity");
+            REQUIRE(metrics->cached_tokens + metrics->prefill_tokens == metrics->prompt_tokens,
+                    "Actual prompt accounting");
+            if (round)
+                REQUIRE(metrics->checkpoint_hits == 1 && metrics->prefill_tokens == 1 &&
+                            metrics->checkpoint_restored_tokens == metrics->prompt_tokens &&
+                            metrics->checkpoint_reused_tokens == metrics->prompt_tokens - 1 &&
+                            metrics->checkpoint_additional_tokens > 0,
+                        "A displaced prefix must be restored and reused with one token recomputed");
+            else
+                REQUIRE(metrics->checkpoint_captures == 1 && !metrics->checkpoint_hits,
+                        "Initial prefixes must be captured without an explicit save call");
+        }
+    forge_checkpoint_cache_stats stats = {0};
+    REQUIRE(forge_checkpoint_cache_get_stats(model, &stats) && stats.entries == 2 &&
+                !stats.pending_bytes && stats.peak_bytes <= options.max_bytes,
+            "Aggregate manager accounting remains within the configured cap");
+    size_t anchor = strlen(samples[0].prompt);
+    request.anchor_ends = &anchor;
+    request.repo_generation++;
+    forge_metrics changed = {0};
+    REQUIRE(forge_complete_with_cache(model, samples[0].prompt, &request, OUTPUT_TOKENS, collect,
+                                      &invalidated, &changed, &error) == FORGE_OK,
+            "Generate after source-generation change");
+    REQUIRE(!changed.checkpoint_hits && same_output(&invalidated, &samples[0].cold),
+            "Source-generation change rejects old physical entries");
+    forge_checkpoint_cache_stats after = {0};
+    REQUIRE(forge_checkpoint_cache_get_stats(model, &after) &&
+                after.invalidations > stats.invalidations,
+            "Generation invalidation is observable");
+    for (size_t i = 0; i < 2; i++) {
+        const forge_metrics *m = &samples[i].repeated_metrics;
+        printf("{\"real_model_automatic_checkpoint\":true,\"matched\":true,\"variant\":\"%s\","
+               "\"gpu_layers\":%d,\"context_tokens\":%zu,\"prompt_tokens\":%zu,"
+               "\"cold_prefill_tokens\":%zu,\"cached_tokens\":%zu,\"prefill_tokens\":%zu,"
+               "\"generated_tokens\":%zu,\"cold_generated_tokens\":%zu,"
+               "\"restored_tokens\":%llu,\"additional_matched_tokens\":%llu,"
+               "\"peak_bytes\":%zu,\"max_bytes\":%zu,\"probe_ms\":%.3f,"
+               "\"capture_ms\":%.3f,\"restore_ms\":%.3f,\"generation_invalidated\":true}\n",
+               i ? "B" : "A", config->gpu_layers, config->context_tokens, m->prompt_tokens,
+               samples[i].cold_metrics.prefill_tokens, m->cached_tokens, m->prefill_tokens,
+               m->generated_tokens, samples[i].cold_metrics.generated_tokens,
+               (unsigned long long)m->checkpoint_restored_tokens,
+               (unsigned long long)m->checkpoint_additional_tokens, stats.peak_bytes,
+               options.max_bytes, m->checkpoint_probe_ms,
+               samples[i].restored_metrics.checkpoint_capture_ms, m->checkpoint_restore_ms);
+    }
+    result = 0;
+cleanup:
+    forge_model_destroy(model);
+    free(invalidated.data);
+    release_samples(samples);
+    return result;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "SKIP: supply a local GGUF: checkpoint_model MODEL [GPU_LAYERS] [CONTEXT] "
+        fprintf(stderr, "SKIP: supply a local GGUF: checkpoint_model [--automatic] MODEL "
+                        "[GPU_LAYERS] [CONTEXT] "
                         "[CHAT_TEMPLATE]\n");
         return 77;
     }
+    bool automatic = !strcmp(argv[1], "--automatic");
+    if (automatic) {
+        argv++;
+        argc--;
+    }
     long gpu_layers = 0, context = 1024;
-    if (argc > 5 || (argc > 2 && !integer(argv[2], -1, INT_MAX, &gpu_layers)) ||
+    if (argc < 2 || argc > 5 || (argc > 2 && !integer(argv[2], -1, INT_MAX, &gpu_layers)) ||
         (argc > 3 && !integer(argv[3], 128, 1048576, &context))) {
         fprintf(stderr, "Invalid checkpoint-model test arguments\n");
         return 1;
@@ -374,6 +483,8 @@ int main(int argc, char **argv) {
     config.threads = 1;
     config.reuse_prefix = true;
     config.chat_template = argc > 4 ? argv[4] : NULL;
+    if (automatic)
+        return run_automatic(&config);
     size_t short_tokens = 0, source_tokens = 0;
     int result = run_case(&config, false, 2, &short_tokens);
     if (result)

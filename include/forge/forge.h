@@ -68,6 +68,11 @@ typedef struct {
     size_t stale_generations; /* Model actions discarded after observed concurrent edits. */
     size_t index_cold_parses, index_incremental_parses, index_cache_hits, index_cache_evictions;
     size_t peak_index_source_bytes, peak_index_nodes; /* Retained cache, not process RSS. */
+    uint64_t checkpoint_lookups, checkpoint_hits, checkpoint_misses, checkpoint_captures;
+    uint64_t checkpoint_evictions, checkpoint_restored_tokens, checkpoint_reused_tokens;
+    uint64_t checkpoint_additional_tokens; /* Reused beyond the previously usable live prefix. */
+    size_t checkpoint_peak_bytes; /* Configured manager allocation high-water mark, not RSS. */
+    double checkpoint_probe_ms, checkpoint_capture_ms, checkpoint_restore_ms;
 } forge_metrics;
 typedef struct {
     const char *model_path;

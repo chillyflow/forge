@@ -30,6 +30,7 @@ void forge_config_init(forge_config *config) {
     memset(config, 0, sizeof(*config));
     config->model = forge_default_model_config();
     config->limits = forge_default_limits();
+    config->checkpoint_cache = forge_default_checkpoint_cache_options();
     config->semantic_output = true;
     config->compact_context = true;
 }
@@ -243,6 +244,8 @@ typedef struct {
 
 #define MODEL_OFFSET(member) (offsetof(forge_config, model) + offsetof(forge_model_config, member))
 #define LIMIT_OFFSET(member) (offsetof(forge_config, limits) + offsetof(forge_limits, member))
+#define CACHE_OFFSET(member)                                                                       \
+    (offsetof(forge_config, checkpoint_cache) + offsetof(forge_checkpoint_cache_options, member))
 static const config_field fields[] = {
     {"model", "path", CFG_PATH, 0, 0, 0},
     {"model", "chat_template", CFG_TEMPLATE, 0, 0, 0},
@@ -254,6 +257,16 @@ static const config_field fields[] = {
     {"inference", "reuse_prefix", CFG_BOOL, MODEL_OFFSET(reuse_prefix), 0, 0},
     {"inference", "grammar_fast_path", CFG_BOOL, MODEL_OFFSET(grammar_fast_path), 0, 0},
     {"inference", "speculative", CFG_SPECULATIVE, 0, 0, 0},
+    {"inference.checkpoints", "enabled", CFG_BOOL, offsetof(forge_config, checkpoint_cache_enabled),
+     0, 0},
+    {"inference.checkpoints", "max_bytes", CFG_SIZE, CACHE_OFFSET(max_bytes), 4096,
+     FORGE_CHECKPOINT_CACHE_MAX_BYTES},
+    {"inference.checkpoints", "max_entries", CFG_SIZE, CACHE_OFFSET(max_entries), 1,
+     FORGE_CHECKPOINT_CACHE_MAX_ENTRIES},
+    {"inference.checkpoints", "min_prefix_tokens", CFG_SIZE, CACHE_OFFSET(min_prefix_tokens), 1,
+     1048576},
+    {"inference.checkpoints", "max_captures_per_prompt", CFG_SIZE,
+     CACHE_OFFSET(max_captures_per_prompt), 1, FORGE_CHECKPOINT_CACHE_MAX_ANCHORS},
     {"agent", "output_reserve", CFG_SIZE, LIMIT_OFFSET(output_reserve), 1, 1048575},
     {"agent", "max_turns", CFG_SIZE, LIMIT_OFFSET(max_turns), 1, 1000},
     {"agent", "max_tokens", CFG_SIZE, LIMIT_OFFSET(max_generated_tokens), 1, INT32_MAX},
@@ -269,6 +282,7 @@ static const config_field fields[] = {
 };
 #undef MODEL_OFFSET
 #undef LIMIT_OFFSET
+#undef CACHE_OFFSET
 
 static forge_status apply_field(forge_config *config, const config_field *field, toml_datum_t value,
                                 const char *source, forge_error *e) {
@@ -396,6 +410,8 @@ static const char *child_table(const char *table, const char *key) {
                 return top[i];
     } else if (!strcmp(table, "tools") && !strcmp(key, "shell")) {
         return "tools.shell";
+    } else if (!strcmp(table, "inference") && !strcmp(key, "checkpoints")) {
+        return "inference.checkpoints";
     }
     return NULL;
 }
@@ -601,6 +617,13 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
         return fg_error(e, FORGE_ERR_ARGUMENT, "model.chat_template must contain 1..65536 bytes");
     if ((unsigned)config->shell_network > FORGE_SHELL_NETWORK_ALLOW)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid shell network policy");
+    const forge_checkpoint_cache_options *cache = &config->checkpoint_cache;
+    if (cache->max_bytes < 4096 || cache->max_bytes > FORGE_CHECKPOINT_CACHE_MAX_BYTES ||
+        !cache->max_entries || cache->max_entries > FORGE_CHECKPOINT_CACHE_MAX_ENTRIES ||
+        !cache->min_prefix_tokens || cache->min_prefix_tokens > 1048576 ||
+        !cache->max_captures_per_prompt ||
+        cache->max_captures_per_prompt > FORGE_CHECKPOINT_CACHE_MAX_ANCHORS)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid inference.checkpoints limits");
     clear_error(e);
     return FORGE_OK;
 }

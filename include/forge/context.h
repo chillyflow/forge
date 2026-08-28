@@ -47,6 +47,12 @@ void forge_context_invalidate(forge_context *, uint64_t dependency, uint64_t gen
 void forge_context_bind_source(forge_context *, uint64_t id, uint64_t source);
 void forge_context_pin(forge_context *, uint64_t id, bool pinned);
 char *forge_context_plan(forge_context *, size_t *tokens, size_t *evicted, forge_error *);
+/* Verify that prompt is the whole current selected rendering and nominate the
+ * byte endpoint after its selected system/tools prefix. Every included segment
+ * must be immutable, cacheable and non-stale. Success with *byte_end=0 means no
+ * eligible anchor. This is a raw byte offset, never a physical token position. */
+forge_status forge_context_cache_anchor(const forge_context *, const char *prompt, size_t *byte_end,
+                                        forge_error *);
 size_t forge_context_size(const forge_context *);
 bool forge_context_get(const forge_context *, size_t index, forge_segment_view *);
 /* Versioned, caller-owned JSON snapshots, not inference/KV checkpoints.
