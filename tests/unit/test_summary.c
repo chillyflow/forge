@@ -602,7 +602,9 @@ static void test_snapshot_isolation_and_rejection(void) {
     store(&f, current, "accepted after rejection");
     forge_summary_input_destroy(current);
     options = forge_default_summary_options();
-    options.timeout_ms = 15;
+    /* Preparation shares this per-operation option. Allow it to finish on
+     * coarse Windows clocks/loaded runners before testing the blocked writer. */
+    options.timeout_ms = 500;
     current = prepare(&f, FORGE_SUMMARY_FILE, "p/a.go", NULL, &options);
     assert(sqlite3_exec(other->db, "BEGIN IMMEDIATE", NULL, NULL, NULL) == SQLITE_OK);
     expect_store_error(&f, current, "blocked writer", 14, FORGE_ERR_LIMIT);
