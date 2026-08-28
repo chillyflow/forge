@@ -2,6 +2,7 @@
 #include "forge/config.h"
 #include "forge/validation.h"
 #include "forge/verification.h"
+#include "forge/index.h"
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
@@ -19,7 +20,9 @@ static void usage(void) {
     puts("Forge " FORGE_VERSION " - native local coding agent\n\n"
          "  forge run TASK --model model.gguf [options]\n"
          "  forge complete PROMPT --model model.gguf [options]\n"
-         "  forge index | inspect SYMBOL | references SYMBOL | search TEXT\n"
+         "  forge index [CHANGED_PATH] | inspect SYMBOL | references SYMBOL | search TEXT\n"
+         "  forge watch [--wall-ms N]              update index from native file events\n"
+         "  forge index-info PATH                 report indexed source/AST/symbol hashes\n"
          "  forge validation-plan [CHANGED_PATH]   print staged Go verification plan\n"
          "  forge validate [CHANGED_PATH] --allow-exec   execute staged verification\n"
          "  forge hardware-plan [--model model.gguf] [--json]\n"
@@ -195,7 +198,7 @@ static forge_status hardware_report(const forge_config *config, bool json, forge
                         "not a simulated --script fixture");
     forge_hardware hardware;
     forge_model_requirements requirements = {0};
-    forge_hardware_plan_result plan;
+    forge_hardware_plan_result plan = {0};
     forge_status status = forge_hardware_detect(&hardware, e);
     if (status != FORGE_OK)
         return status;
@@ -345,7 +348,7 @@ static forge_status auto_hardware(forge_config *config, forge_error *e) {
         return fg_error(e, FORGE_ERR_ARGUMENT, "Automatic hardware planning requires a model path");
     forge_hardware hardware;
     forge_model_requirements requirements;
-    forge_hardware_plan_result plan;
+    forge_hardware_plan_result plan = {0};
     forge_status status = forge_hardware_detect(&hardware, e);
     if (status == FORGE_OK)
         status = forge_hardware_model_file(config->model.model_path, &requirements, e);
@@ -397,6 +400,9 @@ static void events(const forge_event *event, void *u) {
         const char *summary = fg_json_str(data, "summary");
         if (summary)
             fprintf(stderr, "  validation result: %s\n", summary);
+    } else if (!strcmp(event->type, "watch_warning")) {
+        const char *reason = fg_json_str(data, "watch_fallback");
+        fprintf(stderr, "  watch unavailable; using source scans: %s\n", reason ? reason : "");
     }
     yyjson_doc_free(d);
 }
@@ -409,6 +415,65 @@ static bool tokens(const char *p, size_t n, void *u) {
 static int failed(const forge_error *e) {
     fprintf(stderr, "forge: %s: %s\n", forge_status_string(e->code), e->message);
     return e->code == FORGE_ERR_ARGUMENT ? 2 : 1;
+}
+static int watch_repository(const char *workspace, uint64_t wall_ms, bool json) {
+    forge_error error = {0};
+    uint64_t start = fg_now_ms();
+    uint64_t deadline = wall_ms > UINT64_MAX - start ? UINT64_MAX : start + wall_ms;
+    forge_repo *repo = forge_repo_open(workspace, &error);
+    if (!repo)
+        return failed(&error);
+    fg_repo_change change = {0};
+    fg_repo_monitor *monitor =
+        fg_repo_monitor_create(repo, workspace, cancelled, NULL, deadline, true, &change, &error);
+    if (!monitor) {
+        forge_repo_close(repo);
+        return failed(&error);
+    }
+    forge_status status = FORGE_OK;
+    int written =
+        json ? puts(change.json)
+             : printf("Watch ready; generation=%llu\n", (unsigned long long)change.generation);
+    if (written < 0 || fflush(stdout) != 0) {
+        status = fg_error(&error, FORGE_ERR_IO, "Cannot write initial watch report");
+        fg_repo_change_free(&change);
+        goto finish_watch;
+    }
+    fg_repo_change_free(&change);
+    while (!stop_requested && fg_now_ms() < deadline) {
+        uint64_t now = fg_now_ms();
+        if (now >= deadline)
+            break;
+        status = fg_repo_monitor_poll(monitor, FG_MIN(UINT64_C(250), deadline - now), false,
+                                      &change, &error);
+        if (status != FORGE_OK) {
+            if (status == FORGE_ERR_CANCELLED && (stop_requested || fg_now_ms() >= deadline))
+                status = FORGE_OK;
+            fg_repo_change_free(&change);
+            break;
+        }
+        if (change.changed || change.full_scan || change.delta_scan || change.reopened) {
+            if (json)
+                written = puts(change.json);
+            else
+                written = printf("%zu file signals; index=%s generation=%llu%s\n", change.events,
+                                 change.full_scan    ? "full"
+                                 : change.delta_scan ? "delta"
+                                                     : "none",
+                                 (unsigned long long)change.generation,
+                                 change.reopened ? " (watch reopened)" : "");
+            if (written < 0 || fflush(stdout) != 0) {
+                status = fg_error(&error, FORGE_ERR_IO, "Cannot write watch report");
+                fg_repo_change_free(&change);
+                break;
+            }
+        }
+        fg_repo_change_free(&change);
+    }
+finish_watch:
+    fg_repo_monitor_destroy(monitor);
+    forge_repo_close(repo);
+    return status == FORGE_OK ? 0 : failed(&error);
 }
 static int cli_main(int argc, char **argv, forge_config *config) {
     forge_error error = {0};
@@ -633,9 +698,16 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         free(s);
         return 0;
     }
-    if (!strcmp(command, "index") || !strcmp(command, "validation-plan") ||
-        !strcmp(command, "inspect") || !strcmp(command, "references") ||
-        !strcmp(command, "search")) {
+    if (!strcmp(command, "watch")) {
+        if (argument) {
+            fg_error(&error, FORGE_ERR_ARGUMENT, "watch does not take a positional argument");
+            return failed(&error);
+        }
+        return watch_repository(ac.workspace, ac.limits.wall_timeout_ms, json);
+    }
+    if (!strcmp(command, "index") || !strcmp(command, "index-info") ||
+        !strcmp(command, "validation-plan") || !strcmp(command, "inspect") ||
+        !strcmp(command, "references") || !strcmp(command, "search")) {
         if (strcmp(command, "index") && strcmp(command, "validation-plan") && !argument) {
             usage();
             return 2;
@@ -643,15 +715,25 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         forge_repo *r = forge_repo_open(ac.workspace, &error);
         if (!r)
             return failed(&error);
-        if (forge_repo_index(r, &error) != FORGE_OK) {
+        bool delta = !strcmp(command, "index") && argument;
+        const char *index_paths[] = {argument};
+        if ((delta ? forge_repo_index_paths(r, index_paths, 1, &error)
+                   : forge_repo_index(r, &error)) != FORGE_OK) {
             forge_repo_close(r);
             return failed(&error);
         }
         char *text = NULL;
         if (!strcmp(command, "index")) {
-            printf("Indexed repository; generation=%llu\n",
-                   (unsigned long long)forge_repo_generation(r));
-        } else if (!strcmp(command, "validation-plan")) {
+            if (json)
+                printf("{\"index_mode\":\"%s\",\"generation\":%llu,\"paths\":%u}\n",
+                       delta ? "delta" : "full", (unsigned long long)forge_repo_generation(r),
+                       delta ? 1u : 0u);
+            else
+                printf("Indexed repository (%s); generation=%llu\n", delta ? "delta" : "full",
+                       (unsigned long long)forge_repo_generation(r));
+        } else if (!strcmp(command, "index-info"))
+            text = forge_repo_index_describe(r, argument, &error);
+        else if (!strcmp(command, "validation-plan")) {
             const char *paths[] = {argument};
             text = forge_repo_validation_plan(r, argument ? paths : NULL, argument ? 1 : 0, &error);
         } else if (!strcmp(command, "inspect"))

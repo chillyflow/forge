@@ -274,6 +274,12 @@ forge_status fg_validation_run(fg_tool_context *c, const char *const *paths, siz
                               e && e->message[0] ? e->message : forge_status_string(status));
                 if (visible)
                     fg_buf_puts(&message, visible);
+                if (require_empty && r.exit_code == 0 && r.out_len)
+                    fg_buf_puts(&message,
+                                "\nThe listed files need gofmt formatting. Format only files "
+                                "you are authorized to edit (for example with gofmt -w), then "
+                                "try validation again. A zero formatter exit code alone does "
+                                "not pass this check.\n");
                 result->summary = fg_buf_take(&message);
                 free(raw);
                 free(visible);
@@ -319,7 +325,9 @@ finish:
     }
     if (result->commands) {
         forge_error index_error = {0};
-        forge_status indexed = forge_repo_index(c->repo, &index_error);
+        forge_status indexed =
+            fg_repo_index_until(c->repo, NULL, 0, true, c->deadline, c->config.cancelled,
+                                c->config.userdata, &index_error);
         if (status == FORGE_OK && indexed != FORGE_OK) {
             status = indexed;
             if (e)
@@ -468,7 +476,8 @@ forge_status forge_verify_workspace(const forge_agent_config *config, const char
     tools.repo = forge_repo_open(tools.root, e);
     if (!tools.repo)
         return e && e->code ? e->code : FORGE_ERR_IO;
-    forge_status status = forge_repo_index(tools.repo, e);
+    forge_status status = fg_repo_index_until(tools.repo, NULL, 0, true, tools.deadline,
+                                              config->cancelled, config->userdata, e);
     if (status != FORGE_OK) {
         forge_repo_close(tools.repo);
         return status;

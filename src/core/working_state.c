@@ -336,7 +336,7 @@ forge_status forge_working_state_observe(forge_working_state *s,
                                          const forge_state_observation *observation,
                                          forge_error *e) {
     if (!s || !observation || !observation->tool_name || !*observation->tool_name ||
-        observation->result < FORGE_OK || observation->result > FORGE_ERR_CONFLICT ||
+        observation->result < FORGE_OK || observation->result > FORGE_ERR_UNSUPPORTED ||
         (observation->changed && !observation->path))
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid working-state observation");
     if (observation->generation < s->generation)

@@ -1,10 +1,13 @@
 import json
 import os
 import pathlib
+import queue
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -51,6 +54,94 @@ class ForgeTests(unittest.TestCase):
     def require_go(self):
         if not shutil.which('go') or not shutil.which('gofmt'):
             self.skipTest('Go and gofmt are needed for real automatic validation')
+
+    def indexed_rows(self, query):
+        with sqlite3.connect(self.root / '.forge' / 'index.db') as connection:
+            rows = connection.execute(query).fetchall()
+        connection.close()
+        return rows
+
+    def test_delta_index_only_refreshes_named_files_and_rolls_back(self):
+        result = self.cli('index', '--json')
+        initial = json.loads(result.stdout)['generation']
+        (self.root / 'calc.go').write_text('package calc\nfunc Renamed() {}\n')
+        (self.root / 'caller.go').write_text('package calc\nfunc UnindexedChange() {}\n')
+        update = json.loads(self.cli('index', 'calc.go', '--json').stdout)
+        self.assertEqual(update, {'index_mode': 'delta', 'generation': initial + 1, 'paths': 1})
+        self.assertEqual(set(row[0] for row in self.indexed_rows('SELECT name FROM symbols')),
+                         {'Renamed', 'Use'})
+        (self.root / 'calc.go').write_text('package calc\nfunc ShouldRollback() {}\n')
+        with sqlite3.connect(self.root / '.forge' / 'index.db') as connection:
+            connection.execute("CREATE TRIGGER deny_update BEFORE DELETE ON files "
+                               "BEGIN SELECT RAISE(ABORT, 'fixture transaction failure'); END")
+        connection.close()
+        self.cli('index', 'calc.go', success=False)
+        self.assertEqual(set(row[0] for row in self.indexed_rows('SELECT name FROM symbols')),
+                         {'Renamed', 'Use'})
+        self.assertEqual(self.indexed_rows("SELECT value FROM meta WHERE key='generation'"),
+                         [(initial + 1,)])
+        with sqlite3.connect(self.root / '.forge' / 'index.db') as connection:
+            connection.execute('DROP TRIGGER deny_update')
+        connection.close()
+        (self.root / 'calc.go').unlink()
+        self.cli('index', 'calc.go')
+        self.assertEqual(self.indexed_rows('SELECT name FROM symbols'), [('Use',)])
+
+    def test_delta_index_respects_git_ignored_and_forced_tracked_paths(self):
+        if not shutil.which('git'):
+            self.skipTest('Git is needed for eligibility rules')
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True, capture_output=True)
+        (self.root / '.gitignore').write_text('ignored.go\n.forge/\n', newline='\n')
+        (self.root / 'ignored.go').write_text('package calc\nfunc IgnoreMe() {}\n')
+        first = json.loads(self.cli('index', '--json').stdout)
+        delta = json.loads(self.cli('index', 'ignored.go', '--json').stdout)
+        self.assertEqual(delta['generation'], first['generation'])
+        self.assertNotIn(('IgnoreMe',), self.indexed_rows('SELECT name FROM symbols'))
+        subprocess.run(['git', '-C', str(self.root), 'add', '-f', '--', 'ignored.go'],
+                       check=True, capture_output=True)
+        delta = json.loads(self.cli('index', 'ignored.go', '--json').stdout)
+        self.assertEqual(delta['generation'], first['generation'] + 1)
+        self.assertIn(('IgnoreMe',), self.indexed_rows('SELECT name FROM symbols'))
+        (self.root / 'ignored.go').unlink()
+        self.cli('index', 'ignored.go')
+        self.assertNotIn(('IgnoreMe',), self.indexed_rows('SELECT name FROM symbols'))
+
+    def test_native_watch_updates_named_source_and_excludes_session_metadata(self):
+        process = subprocess.Popen(
+            [FORGE, 'watch', '--workspace', str(self.root), '--wall-ms', '2500', '--json'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
+        lines = queue.Queue()
+        def read_lines():
+            for line in process.stdout:
+                lines.put(line)
+        reader = threading.Thread(target=read_lines, daemon=True)
+        reader.start()
+        try:
+            ready_line = lines.get(timeout=10)
+            ready = json.loads(ready_line)
+            self.assertEqual(ready['index_mode'], 'full')
+            self.assertTrue(ready['watch_available'])
+            (self.root / 'calc.go').write_text('package calc\nfunc ChangedByEditor() {}\n')
+            (self.root / '.forge' / 'private.go').write_text('package private\n')
+            self.assertEqual(process.wait(timeout=10), 0, process.stderr.read())
+            reader.join(timeout=2)
+            self.assertFalse(reader.is_alive())
+            batches = []
+            while not lines.empty():
+                batches.append(json.loads(lines.get_nowait()))
+            self.assertTrue(any(batch['index_mode'] == 'delta' for batch in batches), batches)
+            observed = [event['path'] for batch in batches for event in batch['events']]
+            self.assertIn('calc.go', observed)
+            self.assertFalse(any(path.startswith('.forge/') for path in observed))
+            self.assertIn(('ChangedByEditor',), self.indexed_rows('SELECT name FROM symbols'))
+            self.assertTrue(any(batch['generation'] > ready['generation'] for batch in batches))
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=10)
+            reader.join(timeout=2)
+            process.stdout.close()
+            process.stderr.close()
 
     def test_typed_memory_preserves_claims_without_forging_evidence(self):
         memory = {'facts': ['The model claims all tests pass.'], 'hypotheses': [],
@@ -253,6 +344,8 @@ class ForgeTests(unittest.TestCase):
         self.assertTrue(metrics['simulated'])
         self.assertEqual(metrics['tool_calls'], 3)
         self.assertGreater(metrics['cached_tokens'], 0)
+        self.assertGreater(metrics['generation_arena_peak_bytes'], 0)
+        self.assertLessEqual(metrics['generation_arena_peak_bytes'], 64 * 1024 * 1024)
         self.assertEqual(metrics['prefill_tokens'] + metrics['cached_tokens'], metrics['prompt_tokens'])
         replay = self.cli('replay', str(session), '--json')
         self.assertEqual([json.loads(x) for x in replay.stdout.splitlines()], events)
@@ -344,6 +437,17 @@ class ForgeTests(unittest.TestCase):
         result_text = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
         metrics = json.loads((session / 'metrics.json').read_text())
         self.assertEqual(metrics['visible_tool_bytes'], len(result_text.encode()))
+
+    def test_read_views_support_empty_files_and_unterminated_lines(self):
+        (self.root / 'empty.txt').write_bytes(b'')
+        (self.root / 'last.txt').write_bytes('one\ncafé'.encode('utf-8'))
+        _, events, _ = self.run_script([
+            {'tool': 'read_file', 'args': {'path': 'empty.txt', 'start': 1, 'end': 2}},
+            {'tool': 'read_file', 'args': {'path': 'last.txt', 'start': 2, 'end': 2}},
+            {'final': 'Read bounded source slices.'},
+        ])
+        outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
+        self.assertEqual(outputs, ['', '2: café\n'])
 
     def test_hardlink_patch_denied(self):
         outside = self.root / 'original.txt'

@@ -18,10 +18,17 @@ until implemented and verified.
 - Context DAG dependencies, immutable/cacheable flags, shared closure budgeting,
   transitive invalidation and validated logical export/import.
 - Stable prompt ordering, real token-prefix KV reuse and cache metrics.
+- Independent, bounded in-memory physical prefix checkpoint handles.
 - Conservative fallback for recurrent/hybrid cache behavior.
 - SQLite file/symbol/reference/import index and Go Tree-sitter parsing.
-- Changed-file reparsing, deletion handling and repository generations.
-- Go JSON diagnostic compaction and bounded generic output summaries.
+- Transactional path-delta indexing, retained Go trees with incremental edits,
+  source/AST/declaration/symbol hashes and bounded cache counters.
+- Native filesystem watching with explicit loss/reopen recovery, snapshot
+  fallback and rejection of responses generated from observed stale inputs.
+- Normalized Go/compiler/Cargo/Rust/pytest diagnostic adapters, exact raw
+  streams and bounded views with explicit missing/ambiguous information.
+- Scoped arenas, allocator hooks, binary slices and owned/mapped file views;
+  generation JSON and file-reading runtime integration.
 - Typed model memory separated from host evidence, token-aware compaction,
   canonical action/diagnostic loop detection and no-op patch conflicts.
 - Go package import/reverse-import planning and automatic six-stage validation.
@@ -38,28 +45,30 @@ until implemented and verified.
 | --- | --- | --- |
 | Context DAG | General dependencies, shared closure, flags, snapshots | Richer relevance/profiler and semantic candidates |
 | Repository graph | Go declarations, occurrences and package import/reverse graph | Resolved calls/types, symbol impact and test mapping |
-| Incremental indexing | Hash-based changed-file reparsing | OS watcher, saved incremental AST edits |
+| Incremental indexing | Native watch/delta updates, retained Go trees, transactional edits and syntax hashes | Additional AST languages, semantic change impact, large-repository performance evidence |
 | Working memory | Typed claims, host outcomes, validation and compaction | Semantic summary dependency cache and resume |
 | Validation scheduler | Six-stage Go verification | Symbol impact and additional languages |
-| Context checkpoints | Persistent active sequential KV prefix | Multiple snapshots, disk KV resume |
-| Observability | Tokens, reuse, durations, bytes, plans | Integrated peak RSS/VRAM collection |
+| Context checkpoints | Active sequential reuse plus independent same-instance host snapshots | Automatic semantic checkpoint policy, aggregate eviction, disk KV resume |
+| Diagnostics | Named bounded adapters with normalized evidence and raw streams | Additional formats and language validation schedulers |
+| Memory | Arena/slice/file-view APIs, action JSON and read-file callers | Broader lifetime migration and measured application memory savings |
+| Observability | Tokens, reuse, durations, bytes, plans, arena/index/watch counters | Full event/profile reporting and integrated peak RSS/VRAM collection |
 | Configuration | TOML profiles/CLI precedence and hardware estimates | Additional models, KV/draft planning and measured fit coverage |
 | Library ABI | Opaque types and ownership rules | Stable ABI guarantee/install package |
 | Benchmark release | Ten fixtures, local measurements, initial OpenCode comparison | 25–50 diverse tasks, repeated robust comparisons |
 
 ## Required remaining work
 
-1. Broaden the initial equal-model/equal-hardware OpenCode comparison, close the
-   observed repair-accuracy gap, and repeat measurements across larger tasks.
+1. Broaden the equal-model/equal-hardware OpenCode comparison, align timing
+   boundaries, preserve failure evidence and repeat measurements on larger tasks.
 2. Resolved repository relationships, structural diff impact and progressive retrieval.
-3. OS change watcher and dependency-aware cached summaries.
-4. Multiple physical checkpoints and persisted session resume.
+3. Dependency-aware cached summaries and larger-repository watcher measurements.
+4. Automatic semantic checkpoint selection/eviction and persisted session resume.
 5. N-gram/draft-model speculation, then source-aware seeding and ablations.
 6. Complete profiles, measured hardware planning and context/memory observability.
 7. Additional language AST/diagnostic adapters with correctness tests.
 8. Strict OS isolation, resource quotas, race-resistant filesystem handles.
-9. Scoped arenas, mapped/sliced sources, asynchronous processes, full event replay,
-   stable packaged `libforge` ABI, allocator hooks and richer backpressure.
+9. Broader scoped-memory adoption, asynchronous processes, full event replay,
+   stable packaged `libforge` ABI and richer backpressure.
 10. Compact tool-protocol comparison, decoding-mode routing, additional model
     classes, a second established harness and all required ablations.
 
@@ -75,8 +84,9 @@ processing against an established local harness using the same GGUF/hardware.
 Its v1.0 gate additionally requires broad platform/language support and published
 task-success/timing evidence. Neither follows from the development version alone.
 
-The [initial comparison](../benchmark/results/2026-08-28/README.md) demonstrates
-lower prompt processing on ten synthetic fixtures, with 9/10 repairs versus
-OpenCode's 10/10. The accuracy gap, small sample and remaining implementation
-items keep this a development preview, not a completed implementation of the
-entire multi-release design.
+The [normalized comparison](../benchmark/results/2026-08-28-normalized/README.md)
+records 10/10 repairs for both Forge and OpenCode, with less evaluated prompt
+work for Forge on that one small run. The older 9/10 run and failed formatting
+attempt remain published under their original inputs/revisions. Small samples,
+different timing boundaries and unfinished requirements keep this a development
+preview, not a completed implementation of the entire multi-release design.

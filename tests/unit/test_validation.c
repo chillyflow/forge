@@ -400,6 +400,10 @@ static void test_conservative_fallbacks(void) {
     assert(command_for(root, "format", ".", "./lib/base.go"));
     assert(command_for(root, "format", ".", "./nested/core/core.go"));
     assert(!command_for(root, "format", ".", "./testdata/input.go"));
+    assert(command_for(root, "compile", ".", "./lib"));
+    assert(command_for(root, "compile", "nested", "./core"));
+    assert(command_for(root, "vet", ".", "./lib"));
+    assert(command_for(root, "vet", "nested", "./core"));
     assert(yyjson_arr_size(stage_commands(root, "broad_tests")) == 2);
     yyjson_doc_free(doc);
     fixture_finish(&f);
@@ -490,6 +494,56 @@ static void test_unreadable_module_boundary(void) {
     yyjson_doc_free(doc);
     fixture_finish(&f);
 }
+static void test_delta_index_transaction_and_graph(void) {
+    fixture f;
+    fixture_start(&f);
+    const char *paths[] = {"base/base.go", "consumer/use.go", "base\\base.go"};
+    assert(forge_repo_index_paths(f.repo, paths, 1, &f.error) == FORGE_ERR_CONFLICT);
+    fixture_write(&f, "go.mod", "module delta.test/module\n");
+    fixture_write(&f, "base/base.go", "package base\nfunc Before() {}\n");
+    fixture_write(&f, "consumer/use.go", "package consumer\nimport _ \"delta.test/module/base\"\n");
+    fixture_write(&f, "unrelated.go", "package root\nfunc Untouched() {}\n");
+    fixture_index(&f);
+    uint64_t generation = forge_repo_generation(f.repo);
+    assert(forge_repo_index_paths(f.repo, paths, 3, &f.error) == FORGE_OK);
+    assert(forge_repo_generation(f.repo) == generation);
+    fixture_write(&f, "base/base.go", "package base\nfunc After() {}\n");
+    fixture_write(&f, "unrelated.go", "package root\nfunc NotScanned() {}\n");
+    assert(forge_repo_index_paths(f.repo, paths, 3, &f.error) == FORGE_OK);
+    assert(forge_repo_generation(f.repo) == generation + 1);
+    char *text = forge_repo_inspect(f.repo, "Untouched", 0, &f.error);
+    assert(text && strstr(text, "unrelated.go"));
+    free(text);
+    text = forge_repo_inspect(f.repo, "After", 0, &f.error);
+    assert(text && strstr(text, "base/base.go"));
+    free(text);
+    yyjson_doc *doc = plan(&f, "base/base.go");
+    assert(array_has(yyjson_obj_get(yyjson_doc_get_root(doc), "reverse_dependents"), "consumer"));
+    yyjson_doc_free(doc);
+    generation = forge_repo_generation(f.repo);
+    const char *invalid[] = {"base/base.go", "missing/../escape.go"};
+    fixture_write(&f, "base/base.go", "package base\nfunc MustNotCommit() {}\n");
+    assert(forge_repo_index_paths(f.repo, invalid, 2, &f.error) == FORGE_ERR_POLICY);
+    assert(forge_repo_generation(f.repo) == generation);
+    text = forge_repo_inspect(f.repo, "After", 0, &f.error);
+    assert(text && strstr(text, "base/base.go"));
+    free(text);
+    assert(forge_repo_index_paths(f.repo, NULL, 0, &f.error) == FORGE_OK && !f.error.code);
+    assert(forge_repo_index_paths(f.repo, paths, 4097, &f.error) == FORGE_ERR_LIMIT);
+    const char *directory[] = {"base"};
+    assert(forge_repo_index_paths(f.repo, directory, 1, &f.error) == FORGE_ERR_ARGUMENT);
+    fixture_remove(&f, "base/base.go");
+    assert(forge_repo_index_paths(f.repo, paths, 3, &f.error) == FORGE_OK);
+    text = forge_repo_inspect(f.repo, "After", 0, &f.error);
+    assert(text && strstr(text, "No matching"));
+    free(text);
+    /* A later full scan still refreshes unrelated data and preserves deltas. */
+    fixture_index(&f);
+    text = forge_repo_inspect(f.repo, "NotScanned", 0, &f.error);
+    assert(text && strstr(text, "unrelated.go"));
+    free(text);
+    fixture_finish(&f);
+}
 int main(void) {
     test_no_go_and_input_validation();
     test_dependency_graph_and_stages();
@@ -498,6 +552,7 @@ int main(void) {
     test_missing_and_duplicate_modules();
     test_batching_and_edge_deduplication();
     test_unreadable_module_boundary();
+    test_delta_index_transaction_and_graph();
     puts("Go validation planner tests passed");
     return 0;
 }

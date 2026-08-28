@@ -103,6 +103,18 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     U(files_opened);
     U(validation_commands);
     U(validation_failures);
+    U(generation_arena_peak_bytes);
+    U(repo_full_scans);
+    U(repo_delta_scans);
+    U(filesystem_events);
+    U(watch_reopens);
+    U(stale_generations);
+    U(index_cold_parses);
+    U(index_incremental_parses);
+    U(index_cache_hits);
+    U(index_cache_evictions);
+    U(peak_index_source_bytes);
+    U(peak_index_nodes);
     R(load_ms);
     R(prefill_ms);
     R(decode_ms);
@@ -110,6 +122,7 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     R(duration_ms);
     R(tool_ms);
     R(validation_ms);
+    R(index_ms);
 #undef U
 #undef R
     char *json = yyjson_mut_write(d, YYJSON_WRITE_PRETTY, NULL);

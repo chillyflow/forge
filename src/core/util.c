@@ -17,9 +17,9 @@ void forge_free(void *p) {
     free(p);
 }
 const char *forge_status_string(forge_status s) {
-    static const char *const names[] = {"ok",        "argument",  "memory",  "io",
-                                        "policy",    "limit",     "model",   "parse",
-                                        "cancelled", "not_found", "conflict"};
+    static const char *const names[] = {"ok",        "argument",  "memory",   "io",
+                                        "policy",    "limit",     "model",    "parse",
+                                        "cancelled", "not_found", "conflict", "unsupported"};
     return (unsigned)s < sizeof(names) / sizeof(*names) ? names[s] : "unknown";
 }
 forge_status fg_error(forge_error *e, forge_status s, const char *fmt, ...) {
@@ -195,19 +195,52 @@ static bool reserved(const char *p) {
            ((!strncmp(lower, "com", 3) || !strncmp(lower, "lpt", 3)) && lower[3] >= '0' &&
             lower[3] <= '9' && !lower[4]);
 }
-bool fg_safe_path(const char *root, const char *relative, bool missing, char out[FG_PATH_MAX],
-                  forge_error *e) {
+bool fg_relative_path(const char *relative, char out[FG_PATH_MAX], forge_error *e) {
     if (!relative || !*relative || relative[0] == '/' || relative[0] == '\\' ||
         strlen(relative) >= FG_PATH_MAX / 2)
+        goto deny;
+    if (!fg_utf8_valid(relative, strlen(relative)))
         goto deny;
     for (const unsigned char *p = (const unsigned char *)relative; *p; p++)
         if (*p < 32 || *p == ':' || *p == '*' || *p == '?' || *p == '"' || *p == '<' || *p == '>' ||
             *p == '|')
             goto deny;
+    const char *p = relative;
+    size_t used = 0;
+    while (*p) {
+        char part[256];
+        size_t n = 0;
+        while (*p && *p != '/' && *p != '\\') {
+            if (n + 1 >= sizeof(part))
+                goto deny;
+            part[n++] = *p++;
+        }
+        part[n] = 0;
+        if (reserved(part))
+            goto deny;
+        if (used)
+            out[used++] = '/';
+        memcpy(out + used, part, n);
+        used += n;
+        if (*p && !*++p)
+            goto deny;
+    }
+    out[used] = 0;
+    return true;
+deny:
+    fg_error(e, FORGE_ERR_POLICY,
+             "Unsafe relative path (absolute, traversal, protected or invalid)");
+    return false;
+}
+bool fg_safe_path(const char *root, const char *relative, bool missing, char out[FG_PATH_MAX],
+                  forge_error *e) {
+    char canonical[FG_PATH_MAX];
+    if (!fg_relative_path(relative, canonical, e))
+        return false;
     if (strlen(root) >= FG_PATH_MAX)
         goto deny;
     strcpy(out, root);
-    const char *p = relative;
+    const char *p = canonical;
     while (*p) {
         char part[256];
         size_t n = 0;

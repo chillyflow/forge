@@ -35,6 +35,13 @@ llama.cpp backend registration has process-wide state upstream. Forge has no
 global mutable session state; concurrent initialization or generation on the
 same model is not supported. The selected model owns one active context.
 
+Explicit [checkpoint handles](CHECKPOINTS.md) own independent host copies of
+that context's sequence state. Capture/restore checks exact token prefixes,
+model-instance identity, repository generation, bounds and physical positions.
+Restored exact hits still recompute the final token for logits. Handles do not
+contain sampler state, resume a partial generation, survive model reload, or
+provide an automatic semantic-boundary cache/eviction policy.
+
 Greedy generation first checks the highest-logit token against the grammar. If
 allowed, it is the same maximum the full grammar mask would select. Otherwise,
 the full vocabulary is masked and sampled. Every accepted token advances grammar
@@ -51,8 +58,14 @@ selected by utility per token, including a recency term. Prompt ordering is
 stable: system, tools, repository map, task, chronological history, then volatile
 working state. Final rendered prompt size is checked with the actual tokenizer.
 
-On a known patch, source-dependent segments for that file and broad source
-queries are invalidated. Command changes trigger an index refresh. Context
+Known patches, launched commands and native external notifications conservatively
+invalidate all source-bound segments: aliases and case-folding prevent a path
+spelling from proving which views depend on the changed object. The context API
+supports selective dependency invalidation, but the runtime needs portable file
+identity before safely narrowing these invalidations. Commands trigger a full
+index refresh. A mutation of unindexed inputs, or a launched command whose
+effects are unknown, still advances the generation when indexed bytes match.
+Context
 compaction retains typed working state and drops lower-value history. Multiple
 dependencies share one budgeted closure; stale inputs invalidate their transitive
 dependents. Immutable system/tool/task segments cannot be mutated. Versioned
@@ -67,8 +80,26 @@ artifact integrity. Download/benchmark provenance uses SHA-256 separately.
 Git file enumeration honors ignored files when Git is available. A conservative
 walk is used outside Git. Files up to 2 MiB in supported text formats are indexed;
 Go is parsed with Tree-sitter. SQLite transactions update changed files only,
-delete vanished files, and bump repository generation only on content changes.
-Every scan currently enumerates/hashes candidates; an OS watcher is future work.
+delete vanished files, and persist repository generations. Full scans enumerate
+and hash candidates. Explicit path batches inspect only named candidates and
+their current Git eligibility after a full baseline. Observed changes to
+unindexed inputs also advance the generation.
+
+A bounded, per-handle source/tree cache supplies an edited copy of the previous
+Go syntax tree to Tree-sitter. Cache publication follows the SQLite commit;
+rollback cannot publish an uncommitted tree. Source, exposed-AST, declaration
+and per-symbol hashes are syntactic fingerprints, not resolved semantic identity.
+Cache counters include failed work and bound retained source bytes/nodes, not
+Tree-sitter's opaque allocation sizes or process RSS. See [INDEX.md](INDEX.md).
+
+The [native watcher](WATCH.md) uses recursive inotify enrollment on Linux,
+FSEvents on macOS, and one recursive ReadDirectoryChangesW root handle on
+Windows. Loss, directory topology and ignore-policy changes trigger full scans
+and reopening where required. The coordinator starts watching before its index
+baseline and drains after full scans; changes observed during a scan require a
+follow-up scan. Agent runs fall back to bounded all-input snapshots if native
+coverage cannot be established. An incomplete fallback fails closed.
+Notifications are not an atomic snapshot or validation evidence.
 
 Declarations, signatures, byte spans, identifier occurrences, and imports are
 stored. Go identifier occurrences are syntactic: shadowed names and identically
@@ -93,9 +124,26 @@ and kill-on-close Job Objects on Windows. It captures stdout/stderr separately,
 drains output after reaching its byte cap, and kills descendants on completion or
 timeout. It passes a limited environment. See the security document for limits.
 
-Go JSON output is compacted to failures, locations, and summary counts. Raw
-captured output is preserved, with a truncation marker if process capture hit a
-limit. Other compiler failures use a generic diagnostic/tail adapter.
+[Diagnostic adapters](DIAGNOSTICS.md) normalize supported Go test/vet/lint,
+compiler text/legacy GCC JSON, Cargo/rustc JSON, Rust test text and pytest text.
+They retain observed locations and labelled values without inventing test
+outcomes or interpreting ambiguous assertion operands. Limits, malformed input
+and omitted records remain explicit. Exact captured streams are kept separately;
+a shortened view never replaces them or proves that a command succeeded.
+
+## Memory and work accounting
+
+[Scoped arenas and slices](MEMORY.md) expose explicit ownership and bounds.
+The agent parses each generated action in a reusable, 64 MiB committed-byte
+arena; data that outlives the turn is copied. `read_file` uses an owned binary
+file view and bounded slices, not a mutable mapping. Other allocation paths
+have not all migrated to arenas.
+
+Session metrics report arena high-water bytes, actual index attempts/cache
+counters, observed filesystem events, watcher reopens and rejected stale
+generations. `index_ms` includes coordinator enrollment/poll/index work and
+direct post-tool indexing; validation work is timed under `validation_ms`.
+Retained source/node counters are not peak RAM or VRAM measurements.
 
 ## State machine and durability
 
@@ -109,6 +157,12 @@ output, command runtime, and total wall time. Repeated action plus repository
 generation and normalized diagnostic signatures trigger a warning and eventually
 stop loops. Identical patches are conflicts. Typed model memory is kept separate
 from observed changes, failures and generation-bound validation evidence.
+
+The coordinator checks before generation, after generated output, before final
+verification and after verification. Observed external changes discard the
+generated action/final and rebuild source context; the discarded inference
+still counts toward token and turn limits. Native notification delivery and
+filesystem reads are not atomic against concurrent writers.
 
 Before accepting a final answer after edits, the host runs the deterministic Go
 validation plan with the same process policy and deadlines. It stops at the first

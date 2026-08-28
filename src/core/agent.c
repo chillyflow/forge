@@ -1,14 +1,30 @@
 #include "internal.h"
 #include "forge/state.h"
+#include "forge/memory.h"
+#include "forge/index.h"
 struct forge_agent {
     forge_agent_config config;
     char root[FG_PATH_MAX];
     forge_metrics metrics;
     fg_session session;
     forge_agent_state state;
-    bool used;
+    bool used, watch_warned;
     forge_working_state *working_state;
+    forge_arena *generation_arena;
 };
+static void *json_alloc(void *context, size_t bytes) {
+    return forge_arena_alloc(context, bytes, NULL);
+}
+static void *json_realloc(void *context, void *old, size_t old_bytes, size_t bytes) {
+    void *next = forge_arena_alloc(context, bytes, NULL);
+    if (next && old)
+        memcpy(next, old, FG_MIN(old_bytes, bytes));
+    return next;
+}
+static void json_free(void *context, void *allocation) {
+    (void)context;
+    (void)allocation; /* The entire generation arena is reset at the next turn. */
+}
 static bool state(forge_agent *a, forge_agent_state value, forge_error *e) {
     a->state = value;
     char data[64];
@@ -38,6 +54,11 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
         return NULL;
     }
     a->config.workspace = a->root;
+    a->generation_arena = forge_arena_create((size_t)FG_MAX_JSON * 4, e);
+    if (!a->generation_arena) {
+        free(a);
+        return NULL;
+    }
     return a;
 }
 static bool event_text(forge_agent *a, const char *type, const char *text, forge_error *e) {
@@ -83,6 +104,57 @@ static bool save_working_state(forge_agent *a, forge_context *ctx, uint64_t memo
         }
     }
     return ok;
+}
+static bool record_change(forge_agent *a, forge_repo *repo, forge_context *ctx,
+                          uint64_t repo_segment, uint64_t memory_id, size_t turn,
+                          const fg_repo_change *change, bool *unknown_changes, forge_error *e) {
+    a->metrics.repo_full_scans += change->full_scan ? 1u : 0u;
+    a->metrics.repo_delta_scans += change->delta_scan ? 1u : 0u;
+    a->metrics.filesystem_events += change->events;
+    a->metrics.watch_reopens += change->reopened ? 1u : 0u;
+    a->metrics.index_ms += change->duration_ms;
+    if (!change->native && !a->watch_warned) {
+        if (!fg_session_emit(&a->session, "watch_warning", change->json, e))
+            return false;
+        a->watch_warned = true;
+    }
+    if ((change->changed || change->full_scan || change->delta_scan) &&
+        !fg_session_emit(&a->session, change->changed ? "file_change" : "repository_scan",
+                         change->json, e))
+        return false;
+    if (!change->changed || !ctx)
+        return true;
+    *unknown_changes = true;
+    /* Native paths are change signals, not portable file identities. Case-folded
+     * volumes and hard-link aliases may use another spelling than a tool call.
+     * All observed batches invalidate bound source views conservatively,
+     * as do known mutations below. */
+    forge_context_invalidate(ctx, 0, change->generation);
+    char *summary = forge_repo_summary(repo, e);
+    if (!summary)
+        return false;
+    forge_status status = forge_context_update(ctx, repo_segment, summary, change->generation);
+    free(summary);
+    if (status != FORGE_OK) {
+        fg_error(e, status, "Cannot refresh repository context");
+        return false;
+    }
+    return forge_working_state_set_validation(
+               a->working_state, change->generation, FORGE_STATE_UNVERIFIED,
+               "Observed filesystem changes require fresh source inspection and validation.",
+               e) == FORGE_OK &&
+           save_working_state(a, ctx, memory_id, turn, true, e);
+}
+static bool reject_stale(forge_agent *a, forge_context *ctx, uint64_t *latest_result,
+                         uint64_t generation, forge_error *e) {
+    a->metrics.stale_generations++;
+    const char *notice = "WORKSPACE_CHANGED: filesystem changes were observed after planning. "
+                         "The proposed action or final answer was not accepted. Inspect current "
+                         "source before trying another edit or final answer.";
+    forge_context_pin(ctx, *latest_result, false);
+    *latest_result = forge_context_add(ctx, FORGE_SEG_RESULT, notice, 90, true, 0, generation);
+    return *latest_result && event_text(a, "stale_generation", notice, e) &&
+           state(a, FORGE_AGENT_RECONTEXTUALIZE, e);
 }
 
 static char *plan_context(forge_agent *a, forge_context *ctx, uint64_t memory_id, size_t turn,
@@ -205,6 +277,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                             : start + a->config.limits.wall_timeout_ms;
     forge_status status = FORGE_OK;
     forge_repo *repo = NULL;
+    fg_repo_monitor *monitor = NULL;
     forge_context *ctx = NULL;
     char *schema = NULL, *grammar = NULL, *summary = NULL;
     char *changed_paths[1024] = {0};
@@ -219,9 +292,19 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         status = e ? e->code : FORGE_ERR_IO;
         goto finish;
     }
-    status = forge_repo_index(repo, e);
-    if (status != FORGE_OK)
+    fg_repo_change initial = {0};
+    monitor = fg_repo_monitor_create(repo, a->root, a->config.cancelled, a->config.userdata,
+                                     deadline, false, &initial, e);
+    if (!monitor) {
+        status = e && e->code ? e->code : FORGE_ERR_IO;
         goto finish;
+    }
+    bool initial_recorded = record_change(a, repo, NULL, 0, 0, 0, &initial, &unknown_changes, e);
+    fg_repo_change_free(&initial);
+    if (!initial_recorded) {
+        status = e && e->code ? e->code : FORGE_ERR_IO;
+        goto finish;
+    }
     uint64_t initial_generation = forge_repo_generation(repo);
     a->working_state = forge_working_state_create(request, e);
     if (!a->working_state || forge_working_state_set_validation(
@@ -273,8 +356,15 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     if (fg_safe_path(a->root, "AGENTS.md", false, instructions, &ignored)) {
         char *text = fg_read_file(instructions, 16384, NULL, &ignored);
         if (text) {
-            forge_context_add(ctx, FORGE_SEG_SOURCE, text, 80, false, 0, 0);
+            uint64_t id =
+                forge_context_add(ctx, FORGE_SEG_SOURCE, text, 80, false, 0, initial_generation);
+            if (id)
+                forge_context_bind_source(ctx, id, fg_hash("AGENTS.md", 9));
             free(text);
+            if (!id) {
+                status = fg_error(e, FORGE_ERR_MEMORY, "Cannot retain repository instructions");
+                goto finish;
+            }
         }
     }
     fg_tool_context tools = {0};
@@ -288,6 +378,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     uint64_t previous_validation_failure = 0;
     size_t repeated_validation = 0;
     for (size_t turn = 1; turn <= a->config.limits.max_turns; turn++) {
+        forge_arena_reset(a->generation_arena);
         a->metrics.turns = turn;
         if ((a->config.cancelled && a->config.cancelled(a->config.userdata)) ||
             fg_now_ms() >= deadline) {
@@ -299,6 +390,14 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             status = fg_error(e, FORGE_ERR_LIMIT, "Generated-token budget exhausted");
             break;
         }
+        fg_repo_change changes = {0};
+        status = fg_repo_monitor_poll(monitor, 0, false, &changes, e);
+        if (status == FORGE_OK && !record_change(a, repo, ctx, repo_segment, memory_id, turn,
+                                                 &changes, &unknown_changes, e))
+            status = e && e->code ? e->code : FORGE_ERR_IO;
+        fg_repo_change_free(&changes);
+        if (status != FORGE_OK)
+            break;
         size_t prompt_tokens = 0, evicted = 0;
         char *prompt = plan_context(a, ctx, memory_id, turn, &prompt_tokens, &evicted, e);
         if (!prompt) {
@@ -325,7 +424,11 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         size_t max_tokens =
             FG_MIN(a->config.limits.output_reserve,
                    a->config.limits.max_generated_tokens - a->metrics.generated_tokens);
-        state(a, FORGE_AGENT_GENERATING, e);
+        if (!state(a, FORGE_AGENT_GENERATING, e)) {
+            free(prompt);
+            status = FORGE_ERR_IO;
+            break;
+        }
         forge_metrics before = a->metrics;
         token_stream stream = {a, {0}, e, false};
         status = fg_model_generate(a->config.model, prompt, grammar, max_tokens, stream_token,
@@ -351,21 +454,60 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             status = FORGE_ERR_IO;
             break;
         }
-        yyjson_doc *d = yyjson_read(response, strlen(response), 0);
+        fg_repo_change during_generation = {0};
+        status = fg_repo_monitor_poll(monitor, 0, false, &during_generation, e);
+        if (status == FORGE_OK && !record_change(a, repo, ctx, repo_segment, memory_id, turn,
+                                                 &during_generation, &unknown_changes, e))
+            status = e && e->code ? e->code : FORGE_ERR_IO;
+        bool stale_response = during_generation.changed;
+        fg_repo_change_free(&during_generation);
+        if (status != FORGE_OK || stale_response) {
+            free(response);
+            if (status != FORGE_OK)
+                break;
+            if (!reject_stale(a, ctx, &latest_result, forge_repo_generation(repo), e)) {
+                status = e && e->code ? e->code : FORGE_ERR_MEMORY;
+                break;
+            }
+            continue;
+        }
+        yyjson_alc json_allocator = {json_alloc, json_realloc, json_free, a->generation_arena};
+        yyjson_read_err parse_error = {0};
+        yyjson_doc *d =
+            yyjson_read_opts(response, strlen(response), 0, &json_allocator, &parse_error);
+        a->metrics.generation_arena_peak_bytes =
+            forge_arena_get_stats(a->generation_arena).peak_committed_bytes;
+        if (!d && parse_error.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION) {
+            free(response);
+            status = fg_error(e, FORGE_ERR_MEMORY, "Generation JSON exceeded its arena budget");
+            break;
+        }
         yyjson_val *o = d ? yyjson_doc_get_root(d) : NULL;
         const char *final = fg_json_str(o, "final"), *tool = fg_json_str(o, "tool");
         yyjson_val *remember = yyjson_obj_get(o, "memory");
         if (final && yyjson_obj_size(o) == 1 &&
             yyjson_get_len(yyjson_obj_get(o, "final")) == strlen(final)) {
-            uint64_t before_final = forge_repo_generation(repo);
-            status = forge_repo_index(repo, e);
+            fg_repo_change final_changes = {0};
+            status = fg_repo_monitor_poll(monitor, 0, true, &final_changes, e);
+            if (status == FORGE_OK && !record_change(a, repo, ctx, repo_segment, memory_id, turn,
+                                                     &final_changes, &unknown_changes, e))
+                status = e && e->code ? e->code : FORGE_ERR_IO;
+            bool stale_final = final_changes.changed;
+            fg_repo_change_free(&final_changes);
             if (status != FORGE_OK) {
                 yyjson_doc_free(d);
                 free(response);
                 break;
             }
-            if (forge_repo_generation(repo) != before_final)
-                unknown_changes = true;
+            if (stale_final) {
+                yyjson_doc_free(d);
+                free(response);
+                if (!reject_stale(a, ctx, &latest_result, forge_repo_generation(repo), e)) {
+                    status = e && e->code ? e->code : FORGE_ERR_MEMORY;
+                    break;
+                }
+                continue;
+            }
             if ((a->config.cancelled && a->config.cancelled(a->config.userdata)) ||
                 fg_now_ms() >= deadline) {
                 status = fg_error(e, FORGE_ERR_CANCELLED,
@@ -433,8 +575,19 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                     forge_context_pin(ctx, latest_result, false);
                     uint64_t action = forge_context_add(ctx, FORGE_SEG_ACTION, response, 20, false,
                                                         0, generation);
-                    latest_result = forge_context_add(ctx, FORGE_SEG_RESULT, verification.summary,
-                                                      95, true, action, generation);
+                    fg_buf feedback = {0};
+                    fg_buf_puts(&feedback,
+                                "FINAL_REJECTED: the host did not accept the proposed final "
+                                "answer. Repair the failed check below using an authorized tool "
+                                "before trying final again. Repeating the same final answer "
+                                "without a change will not pass validation.\n\n");
+                    fg_buf_puts(&feedback, verification.summary);
+                    char *repair_feedback = fg_buf_take(&feedback);
+                    latest_result = repair_feedback
+                                        ? forge_context_add(ctx, FORGE_SEG_RESULT, repair_feedback,
+                                                            95, true, action, generation)
+                                        : 0;
+                    free(repair_feedback);
                     fg_validation_result_free(&verification);
                     yyjson_doc_free(d);
                     free(response);
@@ -443,10 +596,31 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                             fg_error(e, FORGE_ERR_MEMORY, "Cannot retain verification failure");
                         break;
                     }
-                    state(a, FORGE_AGENT_RECONTEXTUALIZE, e);
+                    if (!state(a, FORGE_AGENT_RECONTEXTUALIZE, e)) {
+                        status = FORGE_ERR_IO;
+                        break;
+                    }
                     continue;
                 }
                 fg_validation_result_free(&verification);
+            }
+            fg_repo_change verified_changes = {0};
+            status = fg_repo_monitor_poll(monitor, 0, false, &verified_changes, e);
+            if (status == FORGE_OK && !record_change(a, repo, ctx, repo_segment, memory_id, turn,
+                                                     &verified_changes, &unknown_changes, e))
+                status = e && e->code ? e->code : FORGE_ERR_IO;
+            bool changed_after_verification = verified_changes.changed;
+            fg_repo_change_free(&verified_changes);
+            if (status != FORGE_OK || changed_after_verification) {
+                yyjson_doc_free(d);
+                free(response);
+                if (status != FORGE_OK)
+                    break;
+                if (!reject_stale(a, ctx, &latest_result, forge_repo_generation(repo), e)) {
+                    status = e && e->code ? e->code : FORGE_ERR_MEMORY;
+                    break;
+                }
+                continue;
             }
             if ((a->config.cancelled && a->config.cancelled(a->config.userdata)) ||
                 fg_now_ms() >= deadline) {
@@ -483,8 +657,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             break;
         }
         tools.call_id = ++a->metrics.tool_calls;
-        state(a, FORGE_AGENT_TOOL_REQUEST, e);
-        if (!fg_session_emit(&a->session, "tool_call", response, e)) {
+        if (!state(a, FORGE_AGENT_TOOL_REQUEST, e) ||
+            !fg_session_emit(&a->session, "tool_call", response, e)) {
             yyjson_doc_free(d);
             free(response);
             status = FORGE_ERR_IO;
@@ -506,7 +680,12 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         char *raw = NULL;
         bool changed = false;
         forge_error tool_error = {0};
-        state(a, FORGE_AGENT_TOOL_RUNNING, e);
+        if (!state(a, FORGE_AGENT_TOOL_RUNNING, e)) {
+            yyjson_doc_free(d);
+            free(response);
+            status = FORGE_ERR_IO;
+            break;
+        }
         uint64_t tool_start = fg_now_ms();
         tools.process_ran = false;
         memset(&tools.process, 0, sizeof(tools.process));
@@ -561,7 +740,14 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 outcome = FORGE_ERR_CONFLICT;
         }
         if (changed) {
-            const char *path = fg_json_str(args, "path");
+            char path[FG_PATH_MAX];
+            if (!fg_relative_path(fg_json_str(args, "path"), path, e)) {
+                free(raw);
+                yyjson_doc_free(d);
+                free(response);
+                status = e && e->code ? e->code : FORGE_ERR_ARGUMENT;
+                break;
+            }
             bool known = false;
             for (size_t i = 0; i < changed_count; i++)
                 if (!strcmp(changed_paths[i], path))
@@ -583,7 +769,32 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         if (tools.process_ran)
             unknown_changes = true; /* Commands may change unindexed test/data inputs. */
         if (changed || tools.process_ran) {
-            status = forge_repo_index(repo, e);
+            uint64_t index_start = fg_now_ms();
+            uint64_t previous_generation = forge_repo_generation(repo);
+            const char *path = fg_json_str(args, "path");
+            if (changed && !tools.process_ran) {
+                const char *paths[] = {path};
+                status = fg_repo_index_until(repo, paths, 1, false, deadline, a->config.cancelled,
+                                             a->config.userdata, e);
+                if (status == FORGE_OK)
+                    a->metrics.repo_delta_scans++;
+                else if (status != FORGE_ERR_MEMORY && status != FORGE_ERR_CANCELLED) {
+                    status = fg_repo_index_until(repo, NULL, 0, true, deadline, a->config.cancelled,
+                                                 a->config.userdata, e);
+                    a->metrics.repo_full_scans++;
+                }
+            } else {
+                status = fg_repo_index_until(repo, NULL, 0, true, deadline, a->config.cancelled,
+                                             a->config.userdata, e);
+                a->metrics.repo_full_scans++;
+            }
+            /* A successful patch can target unindexed text; a launched command
+             * can change arbitrary inputs. Do not leave their source views at
+             * the previous generation merely because indexed bytes matched. */
+            if (status == FORGE_OK && forge_repo_generation(repo) == previous_generation)
+                status = fg_repo_note_change_until(repo, deadline, a->config.cancelled,
+                                                   a->config.userdata, e);
+            a->metrics.index_ms += (double)(fg_now_ms() - index_start);
             if (status != FORGE_OK) {
                 free(raw);
                 yyjson_doc_free(d);
@@ -591,14 +802,21 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 break;
             }
             char *current = forge_repo_summary(repo, e);
-            if (current) {
-                forge_context_update(ctx, repo_segment, current, forge_repo_generation(repo));
-                free(current);
+            status = current ? forge_context_update(ctx, repo_segment, current,
+                                                    forge_repo_generation(repo))
+                             : (e && e->code ? e->code : FORGE_ERR_MEMORY);
+            free(current);
+            if (status != FORGE_OK) {
+                fg_error(e, status, "Cannot refresh repository context after tool execution");
+                free(raw);
+                yyjson_doc_free(d);
+                free(response);
+                break;
             }
-            const char *changed_path = fg_json_str(args, "path");
-            forge_context_invalidate(ctx,
-                                     changed_path ? fg_hash(changed_path, strlen(changed_path)) : 0,
-                                     forge_repo_generation(repo));
+            /* Canonical separators alone do not identify case/short-name aliases
+             * on all supported filesystems. Until source bindings carry portable
+             * file identity, invalidate all source-dependent views immediately. */
+            forge_context_invalidate(ctx, 0, forge_repo_generation(repo));
         }
         size_t raw_len = strlen(raw);
         a->metrics.raw_tool_bytes += raw_len;
@@ -692,7 +910,13 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             break;
         }
         free(event);
-        state(a, FORGE_AGENT_TOOL_RESULT, e);
+        if (!state(a, FORGE_AGENT_TOOL_RESULT, e)) {
+            free(visible);
+            yyjson_doc_free(d);
+            free(response);
+            status = FORGE_ERR_IO;
+            break;
+        }
         /* Always retain the latest result and its parent action. */
         forge_context_pin(ctx, latest_result, false);
         uint64_t action = forge_context_add(ctx, FORGE_SEG_ACTION, response, 10, false, 0,
@@ -708,7 +932,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         }
         if (!strcmp(tool, "read_file")) {
             const char *p = fg_json_str(args, "path");
-            forge_context_bind_source(ctx, latest_result, fg_hash(p, strlen(p)));
+            char canonical[FG_PATH_MAX];
+            if (fg_relative_path(p, canonical, NULL))
+                forge_context_bind_source(ctx, latest_result,
+                                          fg_hash(canonical, strlen(canonical)));
         } else if (!strcmp(tool, "search_text") || !strcmp(tool, "find_symbol") ||
                    !strcmp(tool, "get_references"))
             forge_context_bind_source(ctx, latest_result, UINT64_MAX);
@@ -730,13 +957,30 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         free(response);
         if (status != FORGE_OK)
             break;
-        state(a, FORGE_AGENT_RECONTEXTUALIZE, e);
+        if (!state(a, FORGE_AGENT_RECONTEXTUALIZE, e)) {
+            status = FORGE_ERR_IO;
+            break;
+        }
         if (turn == a->config.limits.max_turns)
             status = fg_error(e, FORGE_ERR_LIMIT, "Maximum agent turns reached");
     }
     if (status == FORGE_OK)
         status = fg_error(e, FORGE_ERR_LIMIT, "Maximum turns reached without a final answer");
 finish:
+    if (repo) {
+        forge_index_stats indexes = {0};
+        if (forge_repo_get_index_stats(repo, &indexes)) {
+            a->metrics.repo_full_scans = (size_t)FG_MIN(indexes.full_attempts, SIZE_MAX);
+            a->metrics.repo_delta_scans = (size_t)FG_MIN(indexes.delta_attempts, SIZE_MAX);
+            a->metrics.index_cold_parses = (size_t)FG_MIN(indexes.cold_parses, SIZE_MAX);
+            a->metrics.index_incremental_parses =
+                (size_t)FG_MIN(indexes.incremental_parses, SIZE_MAX);
+            a->metrics.index_cache_hits = (size_t)FG_MIN(indexes.cache_hits, SIZE_MAX);
+            a->metrics.index_cache_evictions = (size_t)FG_MIN(indexes.cache_evictions, SIZE_MAX);
+            a->metrics.peak_index_source_bytes = indexes.peak_cached_source_bytes;
+            a->metrics.peak_index_nodes = indexes.peak_cached_nodes;
+        }
+    }
     if (a->session.events) {
         const char *args[] = {
             "git", "-c", "core.fsmonitor=false", "diff", "--no-ext-diff", "--no-textconv",
@@ -770,7 +1014,10 @@ finish:
             status == FORGE_OK)
             status = FORGE_ERR_IO;
         a->metrics.duration_ms = (double)(fg_now_ms() - start);
-        state(a, status == FORGE_OK ? FORGE_AGENT_DONE : FORGE_AGENT_ERROR, NULL);
+        if (!state(a, status == FORGE_OK ? FORGE_AGENT_DONE : FORGE_AGENT_ERROR,
+                   status == FORGE_OK ? e : NULL) &&
+            status == FORGE_OK)
+            status = FORGE_ERR_IO;
         if (!fg_session_finish(&a->session, &a->metrics, status, status == FORGE_OK ? e : NULL) &&
             status == FORGE_OK)
             status = FORGE_ERR_IO;
@@ -782,6 +1029,7 @@ finish:
     for (size_t i = 0; i < changed_count; i++)
         free(changed_paths[i]);
     forge_context_destroy(ctx);
+    fg_repo_monitor_destroy(monitor);
     forge_repo_close(repo);
     return status;
 }
@@ -803,6 +1051,7 @@ void forge_agent_destroy(forge_agent *a) {
         if (a->session.events)
             fclose(a->session.events);
         forge_working_state_destroy(a->working_state);
+        forge_arena_destroy(a->generation_arena);
         free(a);
     }
 }

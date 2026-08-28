@@ -42,10 +42,46 @@ the input files, so these results do not supersede the historical suite.
 | §27, §30, §43 | Input snapshots include unindexed fixtures; changed/incomplete inputs or missing evidence cannot pass. | [Snapshot contract](INPUT_SNAPSHOTS.md), native and real Go mutation tests. This is not OS isolation. |
 | §41–42, configuration | Transactional TOML profiles/overlays, CLI precedence, hardware detection, GGUF geometry probe and conservative context/layer estimates. | [Configuration](CONFIG.md), unit and 10 CLI tests. Additional model classes, KV/draft choices and fit measurements remain open. |
 
-The complete goal remains unfinished. No physical checkpoint manager,
-speculative decoder, OS watcher, summary cache, scoped arena runtime, full
-multi-language suite or stricter default process sandbox is claimed here.
+That earlier integration did not include physical checkpoint management,
+speculative decoding, native watching, summary caching or scoped arena runtime
+integration. The next addendum covers subsequent work; the full multi-language
+suite and stricter default process sandbox remain unfinished.
 Historical benchmark numbers below remain attached to their original revisions.
+
+## Verified runtime addendum — 2026-08-28
+
+Local verification used Windows 11, MSVC 19.44 and Go 1.27.0. All 20 executed
+CTest groups passed in both Debug core (28.32 s) and Release linked to the pinned
+CUDA backend (30.36 s). The 21st registered test requires a supplied model and
+skips in ordinary CTest. New tests use real SQLite/Tree-sitter, native Windows
+filesystem notifications, explicit watcher doubles for forced edge cases, and
+scripted agent actions; those distinctions are documented in each module.
+
+The optional checkpoint executable was also run separately with the verified
+Qwen3-Coder-30B-A3B Q4_K_M on the RTX 5090 Laptop GPU, all 49 layers offloaded,
+1,024-token context and greedy decoding. All four short/source A/B cases passed
+independent/repeated restores, cold-output byte parity, and foreign-instance
+rejection. Prompts were 15 and 287 tokens; restored generation reevaluated one
+final token versus full cold prefill. These small cases generated one output
+token each. They establish limited checkpoint correctness, not long-generation
+coverage, general task accuracy, an overall speedup or Linux/Metal inference.
+
+Platform CI for this tranche must be identified separately from the earlier
+passed run. Local Windows success does not establish Linux/macOS watch behavior.
+
+| Design area | Implemented addition | Remaining requirements / limits |
+| --- | --- | --- |
+| Physical checkpoints, phases 5/16 | [Independent bounded host-state handles](CHECKPOINTS.md), exact prefix/instance/generation checks, cancellation and failure cleanup. | No automatic semantic capture/selection/eviction, disk format, model-reload restore or session resume. Aggregate memory is caller-owned. |
+| Incremental repository updates | [Retained Go source/trees](INDEX.md), transactional TSInputEdit parsing, syntax/declaration/symbol hashes, explicit path deltas, cache budgets and interruption. | File-level syntactic indexing, not resolved types/calls, semantic diff impact or exact parser RSS accounting. |
+| External changes, phase 30 | [Native Windows/Linux/macOS watching](WATCH.md), explicit loss/reopen handling, post-scan dirty tracking, all-input snapshot fallback, stale-action/final rejection. | Local real-notification evidence is Windows only until this tranche passes platform CI. No atomic input proof or large-repository performance claim. |
+| Immediate mutation invalidation | Unindexed edits advance generation; path separators normalize; known mutations and external signals conservatively invalidate bound source views. | Runtime invalidation is broader than the DAG's selective API until portable alias identity is available. Commands with unknown effects also invalidate conservatively. |
+| Diagnostics | [Bounded normalized Go/compiler/Cargo/Rust/pytest adapters](DIAGNOSTICS.md), explicit uncertainty, omission metadata, deduplication and exact raw-stream retention. | Supported fixture formats, not every compiler/test format or multi-language validation scheduler. |
+| Scoped memory, phases 28/29 | [Arenas, allocator hooks, slices and file views](MEMORY.md), generation JSON arena and owned read-file integration. | Other allocations retain existing lifetimes; mapped data is externally mutable; no whole-process memory-savings claim. |
+| Events and accounting | File-change/stale-generation events, index/cache/watch/arena counters and checked state-event writes. | Full profiler, event families, asynchronous APIs and integrated peak RSS/VRAM remain open. |
+
+The complete design remains unfinished. Required summary caches, resolved
+repository relationships/retrieval, automatic checkpoint management/resume,
+speculation, broad benchmarks, packaging/ABI work and isolation remain in scope.
 
 ## Status and scope rules
 

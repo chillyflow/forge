@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "forge/memory.h"
 #include <errno.h>
 #include <sys/stat.h>
 #ifdef _WIN32
@@ -233,21 +234,22 @@ static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
     }
     if (!fg_safe_path(c->root, path, false, full, e))
         return NULL;
-    size_t len;
-    char *text = fg_read_file(full, c->config.limits.max_file_bytes, &len, e);
-    if (!text)
+    forge_file_view *view =
+        forge_file_view_open(full, c->config.limits.max_file_bytes, FORGE_FILE_VIEW_READ, e);
+    if (!view)
         return NULL;
-    if (memchr(text, 0, len) || !fg_utf8_valid(text, len)) {
-        free(text);
+    forge_slice file = forge_file_view_slice(view);
+    if ((file.len && memchr(file.ptr, 0, file.len)) || !fg_utf8_valid(file.ptr, file.len)) {
+        forge_file_view_close(view);
         fg_error(e, FORGE_ERR_PARSE, "Binary or invalid UTF-8 files are not supported");
         return NULL;
     }
-    const char *p = text;
-    size_t line = 1;
+    size_t line = 1, offset = 0;
     fg_buf b = {0};
-    while (*p && line <= end) {
-        const char *z = strchr(p, '\n');
-        size_t n = z ? (size_t)(z - p) : strlen(p);
+    while (offset < file.len && line <= end) {
+        const char *p = file.ptr + offset;
+        const char *z = memchr(p, '\n', file.len - offset);
+        size_t n = z ? (size_t)(z - p) : file.len - offset;
         if (line >= start) {
             fg_buf_printf(&b, "%zu: ", line);
             fg_buf_add(&b, p, n);
@@ -255,10 +257,10 @@ static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
         }
         if (!z)
             break;
-        p = z + 1;
+        offset += n + 1;
         line++;
     }
-    free(text);
+    forge_file_view_close(view);
     return fg_buf_take(&b);
 }
 static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_error *e) {

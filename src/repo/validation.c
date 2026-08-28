@@ -559,9 +559,13 @@ static bool vp_assign_modules(vp_graph *g) {
     return !g->failed;
 }
 static bool vp_configuration_changes(vp_graph *g) {
-    if (!g->change_count)
+    if (!g->change_count) {
         vp_reason_add(g, "no_changed_paths", "",
-                      "No changed-file set was supplied; request full module verification.");
+                      "No changed-file set was supplied; compile, test and vet all indexed "
+                      "packages before final module verification.");
+        for (size_t i = 0; i < g->package_count; i++)
+            g->packages[i].affected = true;
+    }
     for (size_t i = 0; i < g->change_count; i++) {
         const char *path = g->changes[i].path, *base = vp_base(path);
         bool workspace = !strcmp(base, "go.work") || !strcmp(base, "go.work.sum");

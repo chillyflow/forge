@@ -19,7 +19,8 @@ typedef enum {
     FORGE_ERR_PARSE,
     FORGE_ERR_CANCELLED,
     FORGE_ERR_NOT_FOUND,
-    FORGE_ERR_CONFLICT
+    FORGE_ERR_CONFLICT,
+    FORGE_ERR_UNSUPPORTED
 } forge_status;
 typedef struct {
     forge_status code;
@@ -61,6 +62,12 @@ typedef struct {
     size_t raw_tool_tokens, visible_tool_tokens, files_opened;
     size_t validation_commands, validation_failures;
     double tool_ms, validation_ms;
+    size_t generation_arena_peak_bytes; /* Committed scoped JSON storage, not process RSS. */
+    size_t repo_full_scans, repo_delta_scans, filesystem_events, watch_reopens;
+    double index_ms;          /* Index/monitor work, including wait and native enrollment. */
+    size_t stale_generations; /* Model actions discarded after observed concurrent edits. */
+    size_t index_cold_parses, index_incremental_parses, index_cache_hits, index_cache_evictions;
+    size_t peak_index_source_bytes, peak_index_nodes; /* Retained cache, not process RSS. */
 } forge_metrics;
 typedef struct {
     const char *model_path;
@@ -101,6 +108,13 @@ char *forge_agent_working_state(const forge_agent *, forge_error *);
 void forge_agent_destroy(forge_agent *);
 forge_repo *forge_repo_open(const char *workspace, forge_error *);
 forge_status forge_repo_index(forge_repo *, forge_error *);
+/* Atomically refresh up to 4096 named regular files/tombstones after a full
+ * index. Paths are workspace-relative; separators are canonicalized.
+ * No directory recursion or full-tree scan. Git ignore rules are retained.
+ * Directory/ignore-policy changes and missed notifications need a full index.
+ * Errors leave the persisted index and generation unchanged. */
+forge_status forge_repo_index_paths(forge_repo *, const char *const *paths, size_t count,
+                                    forge_error *);
 /* Returned strings are caller-owned; release with forge_free. */
 char *forge_repo_inspect(forge_repo *, const char *name, int depth, forge_error *);
 char *forge_repo_references(forge_repo *, const char *name, forge_error *);

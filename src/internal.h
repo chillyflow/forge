@@ -32,6 +32,7 @@ bool fg_write_file(const char *, const char *, size_t, forge_error *);
 bool fg_mkdir(const char *, forge_error *);
 bool fg_regular_target(const char *, forge_error *);
 bool fg_workspace(const char *, char[FG_PATH_MAX], forge_error *);
+bool fg_relative_path(const char *, char[FG_PATH_MAX], forge_error *);
 bool fg_safe_path(const char *, const char *, bool, char[FG_PATH_MAX], forge_error *);
 bool fg_path_join(char[FG_PATH_MAX], const char *, const char *);
 bool fg_random_hex(char *, size_t);
@@ -78,18 +79,36 @@ char *fg_metrics_json(const forge_metrics *, forge_status);
 char *fg_compress_output(const char *, size_t, size_t *, forge_error *);
 uint64_t fg_diagnostic_hash(const char *);
 
+/* Internal checkpoint I/O seam. Real backends provide physical sequence state;
+ * unit fixtures may substitute deterministic bytes, never model evidence. */
+typedef struct {
+    forge_status (*supported)(forge_model *, forge_error *);
+    forge_status (*prefill)(forge_model *, const char *, int32_t **, size_t *, forge_metrics *,
+                            forge_cancel_fn, void *, uint64_t, forge_error *);
+    size_t (*state_size)(forge_model *);
+    size_t (*state_get)(forge_model *, uint8_t *, size_t);
+    size_t (*state_set)(forge_model *, const uint8_t *, size_t);
+    bool (*accept_tokens)(forge_model *, const int32_t *, size_t);
+    void (*clear)(forge_model *);
+} fg_checkpoint_backend;
+
 struct forge_model {
     forge_model_config config;
     void *backend;
     yyjson_doc *script;
     size_t script_cursor;
     char *previous_prompt;
+    char instance_nonce[33];
+    uint64_t next_checkpoint_id;
+    bool operation_active;
+    const fg_checkpoint_backend *checkpoint;
     size_t (*count)(forge_model *, const char *);
     forge_status (*generate)(forge_model *, const char *, const char *, size_t, forge_token_fn,
                              void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
                              forge_error *);
     void (*destroy)(forge_model *);
 };
+bool fg_model_instance_init(forge_model *, forge_error *);
 size_t fg_model_count(const char *, void *);
 bool fg_llama_init(forge_model *, forge_error *);
 forge_status fg_model_generate(forge_model *, const char *, const char *, size_t, forge_token_fn,
@@ -129,4 +148,24 @@ void fg_validation_result_free(fg_validation_result *);
 char *fg_tool_execute(fg_tool_context *, const char *, yyjson_val *, bool *, forge_error *);
 char *fg_repo_search(forge_repo *, const char *, size_t, forge_error *);
 char *fg_repo_targets(forge_repo *, const char *, forge_error *);
+forge_status fg_repo_note_change(forge_repo *, forge_error *);
+forge_status fg_repo_note_change_until(forge_repo *, uint64_t deadline, forge_cancel_fn, void *,
+                                       forge_error *);
+forge_status fg_repo_index_until(forge_repo *, const char *const *, size_t, bool, uint64_t deadline,
+                                 forge_cancel_fn, void *, forge_error *);
+typedef struct fg_repo_monitor fg_repo_monitor;
+typedef struct {
+    char *json;
+    bool changed, full_scan, delta_scan, reopened, native;
+    size_t events;
+    uint64_t generation;
+    double duration_ms;
+} fg_repo_change;
+fg_repo_monitor *fg_repo_monitor_create(forge_repo *, const char *, forge_cancel_fn, void *,
+                                        uint64_t deadline, bool require_native, fg_repo_change *,
+                                        forge_error *);
+forge_status fg_repo_monitor_poll(fg_repo_monitor *, uint64_t wait_ms, bool force_full,
+                                  fg_repo_change *, forge_error *);
+void fg_repo_change_free(fg_repo_change *);
+void fg_repo_monitor_destroy(fg_repo_monitor *);
 #endif

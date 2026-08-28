@@ -53,6 +53,9 @@ forge run "Fix the failing storage tests" \
   --gpu-layers -1 --allow-write --allow-exec
 
 forge index --workspace ./my-repository
+forge index pkg/storage/store.go --workspace ./my-repository
+forge index-info pkg/storage/store.go --workspace ./my-repository
+forge watch --workspace ./my-repository --wall-ms 60000 --json
 forge inspect DeleteRecord --depth 1 --workspace ./my-repository
 forge references DeleteRecord --workspace ./my-repository
 forge search "context.WithCancel" --workspace ./my-repository
@@ -83,6 +86,15 @@ not every build tag/platform or the correctness of arbitrary task claims.
 Validation also compares bounded workspace input snapshots, including unindexed
 test fixtures, before accepting success. See [the validation contract](docs/VALIDATION.md).
 `--no-auto-validation` is an explicit ablation.
+
+Repository indexing retains bounded Go syntax trees and applies incremental
+Tree-sitter edits after source changes. `index PATH` updates only named inputs
+after an initial full index; `index-info PATH` exposes committed syntax hashes.
+`watch` continuously updates the index using native filesystem notifications.
+Agent runs also watch for external edits and reject responses generated from
+observed stale inputs. When native coverage is unavailable, agent runs fall
+back to bounded workspace snapshots; the explicit `watch` command fails.
+See [indexing](docs/INDEX.md) and [watching](docs/WATCH.md) for limits.
 
 ### Configuration
 
@@ -160,6 +172,12 @@ The public API has no llama.cpp, SQLite, JSON, or Tree-sitter types. See
 [`examples/embed.c`](examples/embed.c). Model ownership, one-run agent lifetimes,
 policy callbacks, cancellation, and event callbacks are explicit. This is an
 experimental API, not a promise of stable ABI compatibility yet.
+
+Embedding APIs also expose [physical prefix checkpoints](docs/CHECKPOINTS.md),
+[scoped arenas and file slices](docs/MEMORY.md), and
+[normalized diagnostics](docs/DIAGNOSTICS.md). Checkpoints are independent
+in-memory copies bound to one loaded model instance. Automatic cache management
+and process-restart session resume are not implemented.
 
 [Architecture](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md) ·
 [Build details](docs/BUILD.md) · [Roadmap](docs/ROADMAP.md) ·

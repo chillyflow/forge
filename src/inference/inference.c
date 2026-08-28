@@ -6,6 +6,15 @@ forge_limits forge_default_limits(void) {
 forge_model_config forge_default_model_config(void) {
     return (forge_model_config){NULL, NULL, NULL, 16384, 0, 0, 42, 0.0f, true, true};
 }
+bool fg_model_instance_init(forge_model *m, forge_error *e) {
+    if (!m || !fg_random_hex(m->instance_nonce, 16)) {
+        fg_error(e, FORGE_ERR_IO, "Cannot create a unique model instance identity");
+        return false;
+    }
+    m->next_checkpoint_id = 1;
+    m->operation_active = false;
+    return true;
+}
 static size_t script_count(forge_model *m, const char *text) {
     (void)m;
     return (strlen(text) + 3) / 4;
@@ -66,6 +75,10 @@ forge_model *forge_model_load(const forge_model_config *config, forge_error *e) 
         fg_error(e, FORGE_ERR_MEMORY, "Model allocation failed");
         return NULL;
     }
+    if (!fg_model_instance_init(m, e)) {
+        free(m);
+        return NULL;
+    }
     m->config = *config;
     if (config->script_path) {
         char *data = fg_read_file(config->script_path, FG_MAX_JSON, NULL, e);
@@ -112,10 +125,16 @@ forge_status fg_model_generate(forge_model *m, const char *p, const char *g, siz
                                forge_token_fn cb, void *u, char **out, forge_metrics *stats,
                                forge_cancel_fn cancel, void *cu, uint64_t deadline,
                                forge_error *e) {
-    if (!m || !p || !max_tokens || !out || !stats)
+    if (!m || !m->generate || !p || !max_tokens || !out || !stats)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid generation request");
     *out = NULL;
-    return m->generate(m, p, g, max_tokens, cb, u, out, stats, cancel, cu, deadline, e);
+    if (m->operation_active)
+        return fg_error(e, FORGE_ERR_CONFLICT, "Another operation is active on this model");
+    m->operation_active = true;
+    forge_status status =
+        m->generate(m, p, g, max_tokens, cb, u, out, stats, cancel, cu, deadline, e);
+    m->operation_active = false;
+    return status;
 }
 forge_status forge_complete(forge_model *m, const char *p, size_t n, forge_token_fn cb, void *u,
                             forge_metrics *stats, forge_error *e) {
