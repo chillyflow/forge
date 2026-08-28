@@ -115,6 +115,20 @@ in Debug (35.52 s) and CUDA-linked Release (37.99 s). The model-only checkpoint
 test was skipped because no model argument was supplied. These runs are not new
 inference or performance benchmarks.
 
+## Summary cache foundation — 2026-08-28
+
+The reviewed summary foundation adds SHA-256 source/declaration metadata,
+one shared immutable Go import graph for validation and summaries, and bounded
+repository/module/package/file/symbol preparation plus transactional text caching.
+[The summary contract](SUMMARIES.md) records exact evidence, identities and limits.
+Local Windows checks passed all 22 executed test groups in Debug (34.30 s) and
+CUDA-linked Release (36.09 s); the optional model test skipped and no new model
+inference was run. These results cover this isolated summary review, before
+integration with the resumed watcher/edit-journal tranche. The combined Debug
+suite also passed all 22 executed groups (36.60 s). Cross-platform checks and
+combined Release verification remain pending. Automatic summary generation,
+agent/context selection, staged retrieval and measured benefit are still open.
+
 ## Status and scope rules
 
 | Status | Meaning |

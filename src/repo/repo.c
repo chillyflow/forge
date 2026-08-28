@@ -1,5 +1,6 @@
 #include "repo_internal.h"
 #include "forge/validation.h"
+#include "core/digest.h"
 #include <ctype.h>
 #include <sys/stat.h>
 #ifdef _WIN32
@@ -331,7 +332,8 @@ static char *slice(const char *text, TSNode n) {
     return s;
 }
 static bool add_symbol(forge_repo *r, sqlite3_int64 file, const char *text, TSNode node,
-                       TSNode name, const char *kind, uint64_t source_hash, syntax_hashes *hashes) {
+                       TSNode name, const char *kind, uint64_t source_hash,
+                       const char source_digest[65], syntax_hashes *hashes) {
     if (ts_node_is_null(name))
         return true;
     char *n = slice(text, name);
@@ -379,6 +381,17 @@ static bool add_symbol(forge_repo *r, sqlite3_int64 file, const char *text, TSNo
             ok = done(r, s);
             sqlite3_finalize(s);
         }
+        if (ok) {
+            s = prepare(r, "INSERT INTO symbol_digests(symbol_id,sha256,version) VALUES(?,?,1)");
+            if (!s)
+                ok = false;
+            else {
+                sqlite3_bind_int64(s, 1, symbol);
+                sqlite3_bind_text(s, 2, source_digest, -1, SQLITE_TRANSIENT);
+                ok = done(r, s);
+                sqlite3_finalize(s);
+            }
+        }
     }
     free(n);
     return ok;
@@ -393,13 +406,17 @@ static bool visit_node(forge_repo *r, sqlite3_int64 file, const char *text, TSNo
             return false;
         uint32_t start = ts_node_start_byte(node), end = ts_node_end_byte(node);
         uint64_t source_hash = fg_hash(text + start, end - start);
+        char source_digest[65];
+        if (!fg_sha256_hex(text + start, end - start, source_digest))
+            return false;
         uint32_t count = ts_node_child_count(node);
         for (uint32_t i = 0; i < count; i++) {
             if (!(i & 255u) && index_stopped(r))
                 return false;
             const char *field = ts_node_field_name_for_child(node, i);
             if (field && !strcmp(field, "name") &&
-                !add_symbol(r, file, text, node, ts_node_child(node, i), type, source_hash, hashes))
+                !add_symbol(r, file, text, node, ts_node_child(node, i), type, source_hash,
+                            source_digest, hashes))
                 return false;
         }
     }
@@ -660,12 +677,23 @@ static bool index_file(const char *path, void *user) {
         free(text);
         return true;
     }
-    char hash[32];
+    char hash[32], digest[65];
     snprintf(hash, sizeof(hash), "%016llx", (unsigned long long)fg_hash(text, size));
-    sqlite3_stmt *s = prepare(r, "SELECT f.id,f.hash,c.content,g.file_id,x.version FROM files f "
-                                 "LEFT JOIN chunks c ON c.rowid=f.id "
-                                 "LEFT JOIN go_files g ON g.file_id=f.id "
-                                 "LEFT JOIN file_syntax x ON x.file_id=f.id WHERE f.path=?");
+    if (!fg_sha256_hex(text, size, digest)) {
+        free(text);
+        fg_error(r->error, FORGE_ERR_LIMIT, "Indexed source exceeds digest limits");
+        return false;
+    }
+    sqlite3_stmt *s =
+        prepare(r, "SELECT f.id,f.hash,c.content,g.file_id,x.version,d.sha256,d.version,"
+                   "(SELECT count(*) FROM symbols z LEFT JOIN symbol_digests h "
+                   "ON h.symbol_id=z.id WHERE z.file_id=f.id AND "
+                   "(h.version IS NULL OR h.version<>1 OR length(h.sha256)<>64)) "
+                   "FROM files f "
+                   "LEFT JOIN chunks c ON c.rowid=f.id "
+                   "LEFT JOIN go_files g ON g.file_id=f.id "
+                   "LEFT JOIN file_syntax x ON x.file_id=f.id "
+                   "LEFT JOIN file_digests d ON d.file_id=f.id WHERE f.path=?");
     if (!s) {
         free(text);
         return false;
@@ -685,6 +713,11 @@ static bool index_file(const char *path, void *user) {
                         !memcmp(cached->source, old_source, old_size);
         /* Old indexes are upgraded lazily even when source bytes are unchanged. */
         if (is_go && (sqlite3_column_type(s, 3) == SQLITE_NULL || sqlite3_column_int(s, 4) != 1))
+            unchanged = false;
+        const char *old_digest = (const char *)sqlite3_column_text(s, 5);
+        if (!old_digest || strcmp(old_digest, digest) ||
+            sqlite3_column_type(s, 6) != SQLITE_INTEGER || sqlite3_column_int64(s, 6) != 1 ||
+            sqlite3_column_int64(s, 7) != 0)
             unchanged = false;
     } else if (rc != SQLITE_DONE) {
         fg_error(r->error, FORGE_ERR_IO, "Cannot read indexed source: %s", sqlite3_errmsg(r->db));
@@ -746,6 +779,19 @@ static bool index_file(const char *path, void *user) {
         return false;
     }
     id = sqlite3_last_insert_rowid(r->db);
+    s = prepare(r, "INSERT INTO file_digests(file_id,sha256,version) VALUES(?,?,1)");
+    if (!s) {
+        free(text);
+        return false;
+    }
+    sqlite3_bind_int64(s, 1, id);
+    sqlite3_bind_text(s, 2, digest, -1, SQLITE_TRANSIENT);
+    ok = done(r, s);
+    sqlite3_finalize(s);
+    if (!ok) {
+        free(text);
+        return false;
+    }
     s = prepare(r, "INSERT INTO chunks(rowid,path,content) VALUES(?,?,?)");
     if (!s) {
         free(text);
@@ -963,6 +1009,16 @@ forge_repo *forge_repo_open(const char *root, forge_error *e) {
              "CREATE INDEX IF NOT EXISTS symbol_name ON symbols(name);"
              "CREATE TABLE IF NOT EXISTS symbol_hashes(symbol_id INTEGER PRIMARY KEY REFERENCES "
              "symbols(id) ON DELETE CASCADE,source_hash TEXT NOT NULL);"
+             "CREATE TABLE IF NOT EXISTS file_digests(file_id INTEGER PRIMARY KEY REFERENCES "
+             "files(id) ON DELETE CASCADE,sha256 TEXT NOT NULL,version INTEGER NOT NULL);"
+             "CREATE TABLE IF NOT EXISTS symbol_digests(symbol_id INTEGER PRIMARY KEY REFERENCES "
+             "symbols(id) ON DELETE CASCADE,sha256 TEXT NOT NULL,version INTEGER NOT NULL);"
+             "CREATE TABLE IF NOT EXISTS summary_cache(id INTEGER PRIMARY KEY AUTOINCREMENT,"
+             "cache_key TEXT NOT NULL UNIQUE,recipe_hash TEXT NOT NULL,dependency_hash TEXT NOT "
+             "NULL,"
+             "manifest TEXT NOT NULL,content TEXT NOT NULL,content_hash TEXT NOT NULL,"
+             "created_generation INTEGER NOT NULL,validated_generation INTEGER NOT NULL,"
+             "version INTEGER NOT NULL);"
              "CREATE TABLE IF NOT EXISTS file_syntax(file_id INTEGER PRIMARY KEY REFERENCES "
              "files(id) ON DELETE CASCADE,ast_hash TEXT NOT NULL,symbol_hash TEXT NOT NULL,"
              "node_count INTEGER NOT NULL,symbol_count INTEGER NOT NULL,version INTEGER NOT NULL);"
@@ -1112,6 +1168,8 @@ forge_status forge_repo_index(forge_repo *r, forge_error *e) {
     memset(e, 0, sizeof(*e));
     if (!r)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Missing repository");
+    if (r->snapshot_active)
+        return fg_error(e, FORGE_ERR_CONFLICT, "Cannot index during a repository snapshot");
     r->error = e;
     count_add(&r->index_stats.full_attempts, 1);
     repo_state previous;
@@ -1293,6 +1351,8 @@ forge_status forge_repo_index_paths(forge_repo *r, const char *const *requested,
     memset(e, 0, sizeof(*e));
     if (!r || (count && !requested))
         return fg_error(e, FORGE_ERR_ARGUMENT, "Missing repository or paths");
+    if (r->snapshot_active)
+        return fg_error(e, FORGE_ERR_CONFLICT, "Cannot index during a repository snapshot");
     r->error = e;
     count_add(&r->index_stats.delta_attempts, 1);
     if (index_stopped(r))
@@ -1435,11 +1495,119 @@ static void leave_scope(forge_repo *r, index_scope previous) {
     else
         sqlite3_busy_timeout(r->db, previous.busy_timeout);
 }
+typedef struct {
+    index_scope previous;
+    forge_error local, *error, *previous_error;
+    uint64_t steps, max_steps;
+    int interval;
+    forge_status stopped;
+} snapshot_state;
+bool fg_repo_snapshot_stopped(fg_repo_snapshot *scope) {
+    if (!scope || !scope->internal || !scope->repo)
+        return true;
+    snapshot_state *state = scope->internal;
+    if (!state->stopped && index_stopped(scope->repo))
+        state->stopped = state->error->code;
+    if (state->stopped) {
+        if (state->error->code != state->stopped)
+            fg_error(state->error, state->stopped, "Repository snapshot interrupted");
+        return true;
+    }
+    return false;
+}
+static int snapshot_progress(void *userdata) {
+    fg_repo_snapshot *scope = userdata;
+    snapshot_state *state = scope->internal;
+    if (fg_repo_snapshot_stopped(scope))
+        return 1;
+    uint64_t interval = (uint64_t)state->interval;
+    if (state->max_steps && interval >= state->max_steps - state->steps) {
+        state->stopped = FORGE_ERR_LIMIT;
+        fg_error(state->error, FORGE_ERR_LIMIT, "Repository snapshot SQLite work budget exhausted");
+        return 1;
+    }
+    count_add(&state->steps, interval);
+    return 0;
+}
+forge_status fg_repo_snapshot_begin(forge_repo *r, fg_repo_snapshot *scope, bool write,
+                                    uint64_t deadline, forge_cancel_fn cancelled, void *userdata,
+                                    uint64_t max_vm_steps, forge_error *e) {
+    if (e)
+        memset(e, 0, sizeof(*e));
+    if (!r || !scope)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Missing repository snapshot arguments");
+    if (r->snapshot_active || r->index_scope_active || !sqlite3_get_autocommit(r->db))
+        return fg_error(e, FORGE_ERR_CONFLICT, "Repository snapshots cannot be nested");
+    memset(scope, 0, sizeof(*scope));
+    snapshot_state *state = calloc(1, sizeof(*state));
+    if (!state)
+        return fg_error(e, FORGE_ERR_MEMORY, "Cannot allocate repository snapshot");
+    scope->repo = r;
+    scope->internal = state;
+    state->error = e ? e : &state->local;
+    state->previous_error = r->error;
+    r->error = state->error;
+    state->max_steps = max_vm_steps;
+    state->interval = max_vm_steps && max_vm_steps < 1000 ? (int)max_vm_steps : 1000;
+    state->previous = enter_scope(r, deadline, cancelled, userdata);
+    r->snapshot_active = true;
+    sqlite3_progress_handler(r->db, state->interval, snapshot_progress, scope);
+    repo_state persisted = {0};
+    if (fg_repo_snapshot_stopped(scope) ||
+        !sql(r, write ? "BEGIN IMMEDIATE" : "BEGIN", state->error) || !read_state(r, &persisted) ||
+        fg_repo_snapshot_stopped(scope)) {
+        fg_repo_snapshot_stopped(scope);
+        forge_status status = state->error->code;
+        if (!status)
+            status = fg_error(state->error, FORGE_ERR_IO, "Cannot begin repository snapshot");
+        fg_repo_snapshot_end(scope, false, e);
+        return status;
+    }
+    scope->generation = persisted.generation;
+    scope->go_index_incomplete = persisted.incomplete;
+    scope->filesystem_scan = persisted.filesystem;
+    return FORGE_OK;
+}
+forge_status fg_repo_snapshot_end(fg_repo_snapshot *scope, bool commit, forge_error *e) {
+    if (!scope || !scope->internal || !scope->repo)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Repository snapshot is not active");
+    snapshot_state *state = scope->internal;
+    forge_repo *r = scope->repo;
+    if (state->stopped)
+        fg_repo_snapshot_stopped(scope);
+    if (commit && fg_repo_snapshot_stopped(scope))
+        commit = false;
+    if (state->error->code)
+        commit = false;
+    if (commit && !sql(r, "COMMIT", state->error))
+        commit = false;
+    /* Cleanup must remain possible after cancellation or a VM interruption. */
+    sqlite3_progress_handler(r->db, 0, NULL, NULL);
+    if (!commit && !sqlite3_get_autocommit(r->db)) {
+        char *message = NULL;
+        int rc = sqlite3_exec(r->db, "ROLLBACK", NULL, NULL, &message);
+        if (rc != SQLITE_OK && !state->error->code)
+            fg_error(state->error, FORGE_ERR_IO, "Cannot roll back repository snapshot: %s",
+                     message ? message : sqlite3_errmsg(r->db));
+        sqlite3_free(message);
+    }
+    forge_status result = state->error->code;
+    if (e)
+        *e = *state->error;
+    leave_scope(r, state->previous);
+    r->error = state->previous_error;
+    r->snapshot_active = false;
+    free(state);
+    memset(scope, 0, sizeof(*scope));
+    return result;
+}
 forge_status fg_repo_index_until(forge_repo *r, const char *const *paths, size_t count, bool full,
                                  uint64_t deadline, forge_cancel_fn cancelled, void *userdata,
                                  forge_error *e) {
     if (!r)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Missing repository");
+    if (r->snapshot_active)
+        return fg_error(e, FORGE_ERR_CONFLICT, "Cannot index during a repository snapshot");
     index_scope previous = enter_scope(r, deadline, cancelled, userdata);
     forge_status status =
         full ? forge_repo_index(r, e) : forge_repo_index_paths(r, paths, count, e);
@@ -1453,6 +1621,8 @@ forge_status fg_repo_note_change(forge_repo *r, forge_error *e) {
     memset(e, 0, sizeof(*e));
     if (!r)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Missing repository");
+    if (r->snapshot_active)
+        return fg_error(e, FORGE_ERR_CONFLICT, "Cannot change generation during a snapshot");
     r->error = e;
     if (index_stopped(r))
         return e->code;
@@ -1498,6 +1668,8 @@ forge_status fg_repo_note_change_until(forge_repo *r, uint64_t deadline, forge_c
                                        void *userdata, forge_error *e) {
     if (!r)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Missing repository");
+    if (r->snapshot_active)
+        return fg_error(e, FORGE_ERR_CONFLICT, "Cannot change generation during a snapshot");
     index_scope previous = enter_scope(r, deadline, cancelled, userdata);
     forge_status status = fg_repo_note_change(r, e);
     leave_scope(r, previous);
@@ -1533,8 +1705,10 @@ char *forge_repo_index_describe(forge_repo *r, const char *relative_path, forge_
         r, "SELECT f.id,f.language,f.size,f.hash,f.generation,x.ast_hash,x.symbol_hash,"
            "COALESCE(x.node_count,0),COALESCE(x.symbol_count,(SELECT count(*) FROM symbols s "
            "WHERE s.file_id=f.id)),g.parse_error,x.version,(SELECT value FROM meta "
-           "WHERE key='generation') FROM files f LEFT JOIN file_syntax x ON x.file_id=f.id "
-           "LEFT JOIN go_files g ON g.file_id=f.id WHERE f.path=?");
+           "WHERE key='generation'),d.sha256,d.version FROM files f "
+           "LEFT JOIN file_syntax x ON x.file_id=f.id "
+           "LEFT JOIN go_files g ON g.file_id=f.id "
+           "LEFT JOIN file_digests d ON d.file_id=f.id WHERE f.path=?");
     if (!file)
         return NULL;
     sqlite3_bind_text(file, 1, path, -1, SQLITE_TRANSIENT);
@@ -1563,6 +1737,11 @@ char *forge_repo_index_describe(forge_repo *r, const char *relative_path, forge_
         yyjson_mut_obj_add_uint(doc, root, "schema", 1) &&
         yyjson_mut_obj_add_strcpy(doc, root, "path", path) &&
         yyjson_mut_obj_add_str(doc, root, "hash_algorithm", "fnv1a64") &&
+        yyjson_mut_obj_add_str(doc, root, "digest_algorithm", "sha256") &&
+        json_column(doc, root, "source_sha256", file, 12) &&
+        yyjson_mut_obj_add_bool(doc, root, "digest_metadata_complete",
+                                sqlite3_column_type(file, 13) == SQLITE_INTEGER &&
+                                    sqlite3_column_int64(file, 13) == 1) &&
         json_column(doc, root, "language", file, 1) &&
         yyjson_mut_obj_add_uint(doc, root, "source_bytes",
                                 (uint64_t)sqlite3_column_int64(file, 2)) &&
@@ -1584,8 +1763,9 @@ char *forge_repo_index_describe(forge_repo *r, const char *relative_path, forge_
         ok = ok && yyjson_mut_obj_add_null(doc, root, "ast_hash") &&
              yyjson_mut_obj_add_null(doc, root, "symbol_hash");
     sqlite3_stmt *s =
-        prepare(r, "SELECT s.name,s.kind,s.start_byte,s.end_byte,s.line,h.source_hash "
+        prepare(r, "SELECT s.name,s.kind,s.start_byte,s.end_byte,s.line,h.source_hash,d.sha256 "
                    "FROM symbols s LEFT JOIN symbol_hashes h ON h.symbol_id=s.id "
+                   "LEFT JOIN symbol_digests d ON d.symbol_id=s.id "
                    "WHERE s.file_id=? ORDER BY s.start_byte,s.end_byte,s.name,s.kind LIMIT ?");
     if (!s)
         ok = false;
@@ -1602,7 +1782,8 @@ char *forge_repo_index_describe(forge_repo *r, const char *relative_path, forge_
                                          (uint64_t)sqlite3_column_int64(s, 3)) &&
                  yyjson_mut_obj_add_uint(doc, symbol, "line",
                                          (uint64_t)sqlite3_column_int64(s, 4)) &&
-                 json_column(doc, symbol, "source_hash", s, 5);
+                 json_column(doc, symbol, "source_hash", s, 5) &&
+                 json_column(doc, symbol, "source_sha256", s, 6);
         }
         if (ok && rc != SQLITE_DONE) {
             fg_error(e, FORGE_ERR_IO, "Cannot read indexed symbols");

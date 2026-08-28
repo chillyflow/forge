@@ -179,7 +179,9 @@ experimental API, not a promise of stable ABI compatibility yet.
 
 Embedding APIs also expose [physical prefix checkpoints](docs/CHECKPOINTS.md),
 [scoped arenas and file slices](docs/MEMORY.md), and
-[normalized diagnostics](docs/DIAGNOSTICS.md). Checkpoints are independent
+[normalized diagnostics](docs/DIAGNOSTICS.md). [Indexed summary inputs and caching](docs/SUMMARIES.md)
+support caller-generated text with checked dependencies; automatic summary
+generation and retrieval integration remain open. Checkpoints are independent
 in-memory copies bound to one loaded model instance. Automatic cache management
 and process-restart session resume are not implemented.
 

@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "forge/validation.h"
+#include "repo/repo_internal.h"
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
@@ -544,7 +545,38 @@ static void test_delta_index_transaction_and_graph(void) {
     free(text);
     fixture_finish(&f);
 }
+static void test_malformed_shared_graph(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "go.mod", "module graph.test/m\n");
+    fixture_write(&f, "a.go", "package p\nfunc A() {}\n");
+    fixture_index(&f);
+    static const char *const corruptions[] = {
+        "UPDATE files SET path='x' WHERE path='a.go'", "UPDATE go_files SET is_test=4294967296",
+        "UPDATE go_files SET build_constraints=-1", "UPDATE go_files SET parse_error='not a flag'",
+        "UPDATE go_files SET package_name=CAST(x'ff' AS TEXT)"};
+    for (size_t i = 0; i < sizeof(corruptions) / sizeof(*corruptions); i++) {
+        assert(sqlite3_exec(f.repo->db, corruptions[i], NULL, NULL, NULL) == SQLITE_OK);
+        char *text = forge_repo_validation_plan(f.repo, NULL, 0, &f.error);
+        assert(!text && f.error.code == FORGE_ERR_PARSE);
+        assert(sqlite3_get_autocommit(f.repo->db) && !f.repo->snapshot_active);
+        assert(
+            sqlite3_exec(
+                f.repo->db,
+                "UPDATE files SET path='a.go' WHERE path='x'; "
+                "UPDATE go_files SET is_test=0,build_constraints=0,parse_error=0,package_name='p'",
+                NULL, NULL, NULL) == SQLITE_OK);
+    }
+    yyjson_doc *doc = plan(&f, "a.go");
+    assert(command_for(yyjson_doc_get_root(doc), "compile", ".", "."));
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
 int main(void) {
+#ifdef _WIN32
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
     test_no_go_and_input_validation();
     test_dependency_graph_and_stages();
     test_deleted_package_and_reindex();
@@ -553,6 +585,7 @@ int main(void) {
     test_batching_and_edge_deduplication();
     test_unreadable_module_boundary();
     test_delta_index_transaction_and_graph();
+    test_malformed_shared_graph();
     puts("Go validation planner tests passed");
     return 0;
 }

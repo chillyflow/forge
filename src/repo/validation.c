@@ -1,29 +1,18 @@
-#include "repo_internal.h"
+#include "graph.h"
 #include "forge/validation.h"
 #include <ctype.h>
 
-#define VP_MAX_MODULES 256u
-#define VP_MAX_PACKAGES 4096u
-#define VP_MAX_EDGES 65536u
 #define VP_MAX_CHANGES 1024u
 #define VP_MAX_COMMANDS 2048u
 #define VP_BATCH_PACKAGES 32u
 #define VP_BATCH_BYTES 12000u
-#define VP_NONE SIZE_MAX
+#define VP_MAX_VM_STEPS UINT64_C(100000000)
+#define VP_NONE FG_GO_GRAPH_NONE
+#define vp_excluded fg_go_graph_excluded_path
 
-typedef struct {
-    char *directory, *path;
-    bool synthetic;
-} vp_module;
-typedef struct {
-    char *directory, *path, *name;
-    size_t module;
-    bool present, tests, affected, dependent;
-} vp_package;
-typedef struct {
-    size_t from, to, next_from, next_to;
-    bool test_only;
-} vp_edge;
+typedef fg_go_module vp_module;
+typedef fg_go_package vp_package;
+typedef fg_go_edge vp_edge;
 typedef struct {
     char *path;
     bool go, indexed;
@@ -35,47 +24,46 @@ typedef struct {
 typedef struct {
     forge_repo *repo;
     forge_error *error;
-    vp_module *modules;
-    vp_package *packages;
-    vp_edge *edges;
+    fg_repo_snapshot *snapshot;
+    fg_go_graph *graph;
+    const vp_module *modules;
+    const vp_package *packages;
+    const vp_edge *edges;
     vp_change *changes;
+    bool *affected, *dependent;
     size_t module_count, package_count, edge_count, change_count;
-    size_t module_cap, package_cap, edge_cap;
     vp_reason reasons[32];
     size_t reason_count, command_count;
-    size_t *from_head, *to_head;
     bool failed, applicable;
     yyjson_mut_doc *doc;
 } vp_graph;
 
+static bool vp_stopped(vp_graph *g) {
+    if (g->failed)
+        return true;
+    if (g->snapshot && fg_repo_snapshot_stopped(g->snapshot)) {
+        g->failed = true;
+        return true;
+    }
+    return false;
+}
 static bool vp_fail(vp_graph *g, forge_status status, const char *message) {
     if (!g->failed)
         fg_error(g->error, status, "%s", message);
     g->failed = true;
     return false;
 }
-static bool vp_reserve(vp_graph *g, void **data, size_t *cap, size_t count, size_t element,
-                       size_t limit) {
-    if (count > limit)
-        return vp_fail(g, FORGE_ERR_LIMIT, "Go validation graph exceeds its documented limit");
-    if (count <= *cap)
-        return true;
-    size_t next = *cap ? *cap * 2 : 16;
-    next = FG_MIN(next, limit);
-    void *p = realloc(*data, next * element);
-    if (!p)
-        return vp_fail(g, FORGE_ERR_MEMORY, "Go validation allocation failed");
-    *data = p;
-    *cap = next;
-    return true;
-}
+
 static char *vp_copy(vp_graph *g, const char *s) {
     char *copy = fg_strdup(s);
     if (!copy)
         vp_fail(g, FORGE_ERR_MEMORY, "Go validation allocation failed");
     return copy;
 }
+
 static bool vp_reason_add(vp_graph *g, const char *code, const char *path, const char *detail) {
+    if (vp_stopped(g))
+        return false;
     for (size_t i = 0; i < g->reason_count; i++) {
         if (!strcmp(g->reasons[i].code, code)) {
             /* One deterministic example per category, not a diagnostic per file. */
@@ -97,20 +85,17 @@ static bool vp_reason_add(vp_graph *g, const char *code, const char *path, const
     r->path = vp_copy(g, path);
     return r->path != NULL;
 }
+
 static const char *vp_base(const char *path) {
     const char *slash = strrchr(path, '/');
     return slash ? slash + 1 : path;
 }
+
 static bool vp_suffix(const char *text, const char *suffix) {
     size_t n = strlen(text), z = strlen(suffix);
     return n >= z && !strcmp(text + n - z, suffix);
 }
-static bool vp_below(const char *directory, const char *path) {
-    if (!strcmp(directory, "."))
-        return true;
-    size_t n = strlen(directory);
-    return !strncmp(directory, path, n) && (!path[n] || path[n] == '/');
-}
+
 static void vp_directory(const char *path, char out[FG_PATH_MAX]) {
     const char *slash = strrchr(path, '/');
     if (!slash)
@@ -121,6 +106,7 @@ static void vp_directory(const char *path, char out[FG_PATH_MAX]) {
         out[n] = 0;
     }
 }
+
 static char *vp_normalize(vp_graph *g, const char *path) {
     if (!path || !*path || strlen(path) >= FG_PATH_MAX / 2 || path[0] == '/' || path[0] == '\\') {
         vp_fail(g, FORGE_ERR_ARGUMENT, "Changed paths must be workspace-relative file paths");
@@ -182,23 +168,15 @@ static char *vp_normalize(vp_graph *g, const char *path) {
     }
     return vp_copy(g, result);
 }
+
 static int vp_change_compare(const void *a, const void *b) {
     return strcmp(((const vp_change *)a)->path, ((const vp_change *)b)->path);
 }
-static int vp_module_compare(const void *a, const void *b) {
-    return strcmp(((const vp_module *)a)->directory, ((const vp_module *)b)->directory);
-}
+
 static int vp_reason_compare(const void *a, const void *b) {
     return strcmp(((const vp_reason *)a)->code, ((const vp_reason *)b)->code);
 }
-static int vp_edge_compare(const void *a, const void *b) {
-    const vp_edge *x = a, *y = b;
-    if (x->from != y->from)
-        return x->from < y->from ? -1 : 1;
-    if (x->to != y->to)
-        return x->to < y->to ? -1 : 1;
-    return (int)x->test_only - (int)y->test_only;
-}
+
 static bool vp_changes(vp_graph *g, const char *const *paths, size_t count) {
     g->changes = calloc(count ? count : 1, sizeof(*g->changes));
     if (!g->changes)
@@ -222,247 +200,29 @@ static bool vp_changes(vp_graph *g, const char *const *paths, size_t count) {
     g->change_count = used;
     return true;
 }
+
 static sqlite3_stmt *vp_query(vp_graph *g, const char *query) {
+    if (vp_stopped(g))
+        return NULL;
     sqlite3_stmt *s = NULL;
     if (sqlite3_prepare_v2(g->repo->db, query, -1, &s, NULL) != SQLITE_OK)
         vp_fail(g, FORGE_ERR_IO, "Cannot query Go validation index");
     return s;
 }
+
 static bool vp_query_done(vp_graph *g, sqlite3_stmt *s, int rc) {
     sqlite3_finalize(s);
+    if (vp_stopped(g))
+        return false;
     return rc == SQLITE_DONE || vp_fail(g, FORGE_ERR_IO, "Cannot read Go validation index");
 }
-static bool vp_word(const char *p, const char *end, const char *word) {
-    size_t n = strlen(word);
-    return (size_t)(end - p) >= n && !memcmp(p, word, n) &&
-           (p + n == end || isspace((unsigned char)p[n]) || p[n] == '(');
+
+static size_t vp_package_find(vp_graph *g, const char *directory, size_t *unused) {
+    (void)unused;
+    return fg_go_graph_find_package(g->graph, directory);
 }
-static char *vp_module_path(vp_graph *g, const char *text, bool *replacement) {
-    char *result = NULL;
-    bool invalid = false;
-    while (*text) {
-        const char *end = strchr(text, '\n');
-        if (!end)
-            end = text + strlen(text);
-        const char *p = text;
-        while (p < end && isspace((unsigned char)*p))
-            p++;
-        if (vp_word(p, end, "replace"))
-            *replacement = true;
-        if (vp_word(p, end, "module")) {
-            p += 6;
-            while (p < end && isspace((unsigned char)*p))
-                p++;
-            char quote = p < end && (*p == '"' || *p == '`') ? *p++ : 0;
-            const char *start = p;
-            while (p < end && (quote ? *p != quote : !isspace((unsigned char)*p)))
-                p++;
-            size_t n = (size_t)(p - start);
-            if (result || !n || n >= FG_PATH_MAX / 2 || (quote && p == end))
-                invalid = true;
-            if (quote && p < end)
-                p++;
-            while (p < end && isspace((unsigned char)*p))
-                p++;
-            if (p < end && (end - p < 2 || p[0] != '/' || p[1] != '/'))
-                invalid = true;
-            for (size_t i = 0; i < n; i++) {
-                unsigned char c = (unsigned char)start[i];
-                if (!isalnum(c) && !strchr("/.-_~", (int)c))
-                    invalid = true;
-            }
-            if (n && (start[0] == '/' || start[n - 1] == '/'))
-                invalid = true;
-            if (!invalid) {
-                result = malloc(n + 1);
-                if (!result) {
-                    vp_fail(g, FORGE_ERR_MEMORY, "Module-path allocation failed");
-                    return NULL;
-                }
-                memcpy(result, start, n);
-                result[n] = 0;
-                if (strstr(result, "//") || !strcmp(result, ".") || !strcmp(result, "..") ||
-                    !strncmp(result, "./", 2) || !strncmp(result, "../", 3) ||
-                    strstr(result, "/./") || strstr(result, "/../") || vp_suffix(result, "/.") ||
-                    vp_suffix(result, "/.."))
-                    invalid = true;
-            }
-        }
-        text = *end ? end + 1 : end;
-    }
-    if (invalid) {
-        free(result);
-        result = NULL;
-    }
-    return result;
-}
-static bool vp_module_add(vp_graph *g, const char *directory, char *path, bool synthetic) {
-    if (!vp_reserve(g, (void **)&g->modules, &g->module_cap, g->module_count + 1,
-                    sizeof(*g->modules), VP_MAX_MODULES)) {
-        free(path);
-        return false;
-    }
-    vp_module *m = &g->modules[g->module_count++];
-    memset(m, 0, sizeof(*m));
-    m->directory = vp_copy(g, directory);
-    m->path = path;
-    m->synthetic = synthetic;
-    return !g->failed;
-}
-static bool vp_load_modules(vp_graph *g) {
-    sqlite3_stmt *s = vp_query(g, "SELECT path,content FROM chunks WHERE path='go.mod' OR "
-                                  "path LIKE '%/go.mod' OR path='go.work' OR "
-                                  "path LIKE '%/go.work' UNION SELECT b.path,NULL FROM "
-                                  "go_module_boundaries b WHERE NOT EXISTS "
-                                  "(SELECT 1 FROM chunks c WHERE c.path=b.path) ORDER BY 1");
-    if (!s)
-        return false;
-    int rc;
-    while ((rc = sqlite3_step(s)) == SQLITE_ROW) {
-        const char *file = (const char *)sqlite3_column_text(s, 0);
-        const char *text = (const char *)sqlite3_column_text(s, 1);
-        if (!strcmp(vp_base(file), "go.work")) {
-            vp_reason_add(
-                g, "go_workspace", file,
-                "Workspace use/replace directives and modules outside the repository "
-                "are not resolved; verify every indexed module in the active Go environment.");
-            continue;
-        }
-        char directory[FG_PATH_MAX];
-        vp_directory(file, directory);
-        bool replacement = false;
-        char *path = text ? vp_module_path(g, text, &replacement) : NULL;
-        if (!path && !g->failed)
-            vp_reason_add(
-                g, "unresolved_module_path", file,
-                "The module directive could not be resolved; import identities are incomplete.");
-        if (replacement)
-            vp_reason_add(g, "module_replacements", file,
-                          "Module replacements may redirect imports; local replacement aliases and "
-                          "external module contents are not resolved by the syntactic graph.");
-        if (g->failed) {
-            free(path);
-            sqlite3_finalize(s);
-            return false;
-        }
-        if (!vp_module_add(g, directory, path, false)) {
-            sqlite3_finalize(s);
-            return false;
-        }
-    }
-    return vp_query_done(g, s, rc);
-}
-static size_t vp_package_find(vp_graph *g, const char *directory, size_t *position) {
-    size_t lo = 0, hi = g->package_count;
-    while (lo < hi) {
-        size_t mid = lo + (hi - lo) / 2;
-        int cmp = strcmp(g->packages[mid].directory, directory);
-        if (cmp < 0)
-            lo = mid + 1;
-        else
-            hi = mid;
-    }
-    if (position)
-        *position = lo;
-    return lo < g->package_count && !strcmp(g->packages[lo].directory, directory) ? lo : VP_NONE;
-}
-static size_t vp_package_add(vp_graph *g, const char *directory) {
-    size_t position = 0, found = vp_package_find(g, directory, &position);
-    if (found != VP_NONE)
-        return found;
-    if (!vp_reserve(g, (void **)&g->packages, &g->package_cap, g->package_count + 1,
-                    sizeof(*g->packages), VP_MAX_PACKAGES))
-        return VP_NONE;
-    memmove(g->packages + position + 1, g->packages + position,
-            (g->package_count - position) * sizeof(*g->packages));
-    vp_package *p = &g->packages[position];
-    memset(p, 0, sizeof(*p));
-    p->directory = vp_copy(g, directory);
-    p->module = VP_NONE;
-    g->package_count++;
-    return g->failed ? VP_NONE : position;
-}
-static bool vp_excluded(const char *path) {
-    while (*path) {
-        const char *end = strchr(path, '/');
-        if (!end)
-            return path[0] == '.' || path[0] == '_';
-        size_t n = (size_t)(end - path);
-        if (path[0] == '.' || path[0] == '_' || (n == 6 && !memcmp(path, "vendor", 6)) ||
-            (n == 8 && !memcmp(path, "testdata", 8)))
-            return true;
-        path = end + 1;
-    }
-    return false;
-}
-static bool vp_platform_filename(const char *path) {
-    /* Unknown future suffixes remain covered by the documented environment limitation. */
-    static const char *const suffixes[] = {
-        "aix",    "android",  "darwin", "dragonfly", "freebsd", "hurd",    "illumos", "ios",
-        "js",     "linux",    "netbsd", "openbsd",   "plan9",   "solaris", "wasip1",  "windows",
-        "zos",    "386",      "amd64",  "arm",       "arm64",   "loong64", "mips",    "mipsle",
-        "mips64", "mips64le", "ppc64",  "ppc64le",   "riscv64", "s390x",   "wasm"};
-    char name[FG_PATH_MAX];
-    size_t n = strlen(vp_base(path));
-    if (n >= sizeof(name))
-        return true;
-    memcpy(name, vp_base(path), n + 1);
-    n -= vp_suffix(name, "_test.go") ? 8u : 3u;
-    name[n] = 0;
-    const char *suffix = strrchr(name, '_');
-    if (!suffix)
-        return false;
-    for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); i++)
-        if (!strcmp(suffix + 1, suffixes[i]))
-            return true;
-    return false;
-}
-static bool vp_load_packages(vp_graph *g) {
-    sqlite3_stmt *s = vp_query(g, "SELECT f.path,g.package_name,g.is_test,g.build_constraints,"
-                                  "g.parse_error FROM files f LEFT JOIN go_files g ON "
-                                  "g.file_id=f.id WHERE f.language='go' ORDER BY f.path");
-    if (!s)
-        return false;
-    int rc;
-    while ((rc = sqlite3_step(s)) == SQLITE_ROW) {
-        const char *file = (const char *)sqlite3_column_text(s, 0);
-        if (vp_excluded(file))
-            continue;
-        char directory[FG_PATH_MAX];
-        vp_directory(file, directory);
-        size_t index = vp_package_add(g, directory);
-        if (index == VP_NONE) {
-            sqlite3_finalize(s);
-            return false;
-        }
-        vp_package *p = &g->packages[index];
-        p->present = true;
-        bool test = sqlite3_column_int(s, 2) != 0;
-        p->tests |= test;
-        const char *name = (const char *)sqlite3_column_text(s, 1);
-        if (!test && name) {
-            if (p->name && strcmp(p->name, name))
-                vp_reason_add(g, "conflicting_package_names", directory,
-                              "Files in one directory declare different package names; build "
-                              "selection and type correctness require the Go toolchain.");
-            if (!p->name)
-                p->name = vp_copy(g, name);
-        }
-        if (sqlite3_column_type(s, 1) == SQLITE_NULL || sqlite3_column_int(s, 4))
-            vp_reason_add(g, "go_parse_error", file,
-                          "Missing or incomplete Go syntax metadata can omit imports; broad "
-                          "verification is required.");
-        if (sqlite3_column_int(s, 3) || vp_platform_filename(file))
-            vp_reason_add(
-                g, "build_constraints", file,
-                "The graph unions imports across build constraints and platform suffixes; "
-                "commands validate only the active GOOS/GOARCH/tags configuration.");
-        if (g->failed) {
-            sqlite3_finalize(s);
-            return false;
-        }
-    }
-    return vp_query_done(g, s, rc);
+static size_t vp_module_for(vp_graph *g, const char *directory) {
+    return fg_go_graph_module_for(g->graph, directory);
 }
 static bool vp_mark_changes(vp_graph *g) {
     sqlite3_stmt *s = vp_query(g, "SELECT language FROM files WHERE path=?");
@@ -482,15 +242,8 @@ static bool vp_mark_changes(vp_graph *g) {
         char directory[FG_PATH_MAX];
         vp_directory(c->path, directory);
         size_t package = vp_package_find(g, directory, NULL);
-        if (c->go && !vp_excluded(c->path) && package == VP_NONE) {
-            /* A tombstone preserves incoming edges for an entirely deleted package. */
-            package = vp_package_add(g, directory);
-            vp_reason_add(g, "unindexed_or_deleted_package", c->path,
-                          "This Go package has no indexed source; retain incoming imports and "
-                          "validate dependents plus the full module suite.");
-        }
         if (package != VP_NONE)
-            g->packages[package].affected = true;
+            g->affected[package] = true;
         if (c->go && !c->indexed)
             vp_reason_add(
                 g, "unindexed_or_deleted_path", c->path,
@@ -504,67 +257,14 @@ static bool vp_mark_changes(vp_graph *g) {
     sqlite3_finalize(s);
     return true;
 }
-static size_t vp_module_for(vp_graph *g, const char *directory) {
-    size_t found = VP_NONE, length = 0;
-    for (size_t i = 0; i < g->module_count; i++) {
-        size_t n = !strcmp(g->modules[i].directory, ".") ? 0 : strlen(g->modules[i].directory);
-        if (vp_below(g->modules[i].directory, directory) && (found == VP_NONE || n > length)) {
-            found = i;
-            length = n;
-        }
-    }
-    return found;
-}
-static bool vp_assign_modules(vp_graph *g) {
-    for (size_t i = 0; i < g->package_count; i++) {
-        if (vp_module_for(g, g->packages[i].directory) == VP_NONE) {
-            if (!vp_module_add(g, ".", NULL, true))
-                return false;
-            vp_reason_add(
-                g, "missing_go_module", g->packages[i].directory,
-                "Go source has no containing indexed go.mod; GOPATH and modules outside "
-                "the workspace are not resolved. Root verification may require environment setup.");
-            break;
-        }
-    }
-    if (g->module_count > 1)
-        qsort(g->modules, g->module_count, sizeof(*g->modules), vp_module_compare);
-    for (size_t i = 0; i < g->package_count; i++) {
-        vp_package *p = &g->packages[i];
-        p->module = vp_module_for(g, p->directory);
-        if (p->module == VP_NONE)
-            return vp_fail(g, FORGE_ERR_PARSE, "Cannot assign Go package to a module boundary");
-        vp_module *m = &g->modules[p->module];
-        if (m->path) {
-            const char *relative = !strcmp(m->directory, p->directory) ? ""
-                                   : !strcmp(m->directory, ".")
-                                       ? p->directory
-                                       : p->directory + strlen(m->directory) + 1;
-            fg_buf b = {0};
-            fg_buf_puts(&b, m->path);
-            if (*relative)
-                fg_buf_printf(&b, "/%s", relative);
-            p->path = fg_buf_take(&b);
-            if (!p->path)
-                return vp_fail(g, FORGE_ERR_MEMORY, "Package import-path allocation failed");
-        }
-    }
-    for (size_t i = 0; i < g->module_count; i++)
-        for (size_t j = i + 1; j < g->module_count; j++)
-            if (g->modules[i].path && g->modules[j].path &&
-                !strcmp(g->modules[i].path, g->modules[j].path))
-                vp_reason_add(g, "duplicate_module_path", g->modules[i].directory,
-                              "Multiple module roots declare the same import path; retain all "
-                              "matching dependency edges and verify each module separately.");
-    return !g->failed;
-}
+
 static bool vp_configuration_changes(vp_graph *g) {
     if (!g->change_count) {
         vp_reason_add(g, "no_changed_paths", "",
                       "No changed-file set was supplied; compile, test and vet all indexed "
                       "packages before final module verification.");
         for (size_t i = 0; i < g->package_count; i++)
-            g->packages[i].affected = true;
+            g->affected[i] = true;
     }
     for (size_t i = 0; i < g->change_count; i++) {
         const char *path = g->changes[i].path, *base = vp_base(path);
@@ -580,7 +280,7 @@ static bool vp_configuration_changes(vp_graph *g) {
             size_t owner = vp_module_for(g, directory);
             for (size_t j = 0; j < g->package_count; j++)
                 if (workspace || g->packages[j].module == owner)
-                    g->packages[j].affected = true;
+                    g->affected[j] = true;
         } else if (vp_package_find(g, directory, NULL) == VP_NONE || vp_excluded(path)) {
             vp_reason_add(g, "unassigned_changed_path", path,
                           "A changed file has no direct Go package mapping (for example a fixture "
@@ -589,184 +289,32 @@ static bool vp_configuration_changes(vp_graph *g) {
     }
     return !g->failed;
 }
-typedef struct {
-    const char *path;
-    size_t package;
-} vp_import_key;
-static int vp_import_compare(const void *a, const void *b) {
-    const vp_import_key *x = a, *y = b;
-    int cmp = strcmp(x->path, y->path);
-    if (cmp)
-        return cmp;
-    return x->package == y->package ? 0 : x->package < y->package ? -1 : 1;
-}
-static bool vp_edge_add(vp_graph *g, size_t from, size_t to, bool test) {
-    if (!vp_reserve(g, (void **)&g->edges, &g->edge_cap, g->edge_count + 1, sizeof(*g->edges),
-                    VP_MAX_EDGES))
-        return false;
-    vp_edge *e = &g->edges[g->edge_count++];
-    e->from = from;
-    e->to = to;
-    e->test_only = test;
-    e->next_from = e->next_to = VP_NONE;
-    return true;
-}
-static bool vp_load_edges(vp_graph *g) {
-    vp_import_key *keys = calloc(g->package_count ? g->package_count : 1, sizeof(*keys));
-    if (!keys)
-        return vp_fail(g, FORGE_ERR_MEMORY, "Import lookup allocation failed");
-    size_t count = 0;
-    for (size_t i = 0; i < g->package_count; i++) {
-        if (g->packages[i].path) {
-            keys[count].path = g->packages[i].path;
-            keys[count++].package = i;
-        }
-    }
-    qsort(keys, count, sizeof(*keys), vp_import_compare);
-    sqlite3_stmt *s = vp_query(g, "SELECT f.path,i.path,g.is_test FROM imports i JOIN files f ON "
-                                  "f.id=i.file_id LEFT JOIN go_files g ON g.file_id=f.id "
-                                  "ORDER BY f.path,i.path");
-    if (!s) {
-        free(keys);
-        return false;
-    }
-    int rc;
-    while ((rc = sqlite3_step(s)) == SQLITE_ROW) {
-        const char *file = (const char *)sqlite3_column_text(s, 0);
-        const char *import = (const char *)sqlite3_column_text(s, 1);
-        if (vp_excluded(file))
-            continue;
-        char directory[FG_PATH_MAX];
-        vp_directory(file, directory);
-        size_t from = vp_package_find(g, directory, NULL);
-        if (from == VP_NONE)
-            continue;
-        if (!strcmp(import, "C")) {
-            vp_reason_add(g, "cgo_import", file,
-                          "Cgo dependencies, external headers, libraries, and toolchains are not "
-                          "represented in the Go import graph.");
-            continue;
-        }
-        if (strchr(import, '\\') || import[0] == '.') {
-            vp_reason_add(g, "unresolved_import_syntax", file,
-                          "Escaped or relative import paths are not resolved; broad verification "
-                          "is required.");
-            continue;
-        }
-        size_t lo = 0, hi = count;
-        while (lo < hi) {
-            size_t mid = lo + (hi - lo) / 2;
-            if (strcmp(keys[mid].path, import) < 0)
-                lo = mid + 1;
-            else
-                hi = mid;
-        }
-        bool matched = false;
-        for (size_t i = lo; i < count && !strcmp(keys[i].path, import); i++) {
-            matched = true;
-            if (!vp_edge_add(g, from, keys[i].package, sqlite3_column_int(s, 2) != 0))
-                break;
-            if (g->packages[from].module != g->packages[keys[i].package].module)
-                vp_reason_add(g, "cross_module_import", file,
-                              "An import matches another local module by its declared path; actual "
-                              "version/workspace/replacement selection is delegated to Go.");
-        }
-        if (!matched) {
-            for (size_t i = 0; i < g->module_count; i++) {
-                if (g->modules[i].path && vp_below(g->modules[i].path, import)) {
-                    vp_reason_add(g, "unresolved_local_import", file,
-                                  "An import under an indexed module path has no indexed package; "
-                                  "it may be missing, generated, excluded, or replaced.");
-                    break;
-                }
-            }
-        }
-        if (g->failed) {
-            sqlite3_finalize(s);
-            free(keys);
-            return false;
-        }
-    }
-    free(keys);
-    if (!vp_query_done(g, s, rc))
-        return false;
-    if (g->edge_count > 1)
-        qsort(g->edges, g->edge_count, sizeof(*g->edges), vp_edge_compare);
-    size_t used = 0;
-    for (size_t i = 0; i < g->edge_count; i++) {
-        if (used && g->edges[used - 1].from == g->edges[i].from &&
-            g->edges[used - 1].to == g->edges[i].to)
-            g->edges[used - 1].test_only &= g->edges[i].test_only;
-        else
-            g->edges[used++] = g->edges[i];
-    }
-    g->edge_count = used;
-    return true;
-}
+
 static bool vp_reachability(vp_graph *g) {
     size_t n = g->package_count ? g->package_count : 1;
-    g->from_head = malloc(n * sizeof(*g->from_head));
-    g->to_head = malloc(n * sizeof(*g->to_head));
-    size_t *queue = malloc(n * sizeof(*queue)), *indegree = calloc(n, sizeof(*indegree));
-    if (!g->from_head || !g->to_head || !queue || !indegree) {
-        free(queue);
-        free(indegree);
+    size_t *queue = malloc(n * sizeof(*queue));
+    if (!queue)
         return vp_fail(g, FORGE_ERR_MEMORY, "Dependency traversal allocation failed");
-    }
-    for (size_t i = 0; i < n; i++)
-        g->from_head[i] = g->to_head[i] = VP_NONE;
-    for (size_t i = 0; i < g->edge_count; i++) {
-        vp_edge *e = &g->edges[i];
-        e->next_from = g->from_head[e->from];
-        e->next_to = g->to_head[e->to];
-        g->from_head[e->from] = g->to_head[e->to] = i;
-        if (e->from != e->to || !e->test_only)
-            indegree[e->to]++;
-    }
     size_t head = 0, tail = 0;
     for (size_t i = 0; i < g->package_count; i++)
-        if (g->packages[i].affected)
+        if (g->affected[i])
             queue[tail++] = i;
     while (head < tail) {
+        if (vp_stopped(g))
+            break;
         size_t node = queue[head++];
-        for (size_t edge = g->to_head[node]; edge != VP_NONE; edge = g->edges[edge].next_to) {
+        for (size_t edge = g->packages[node].to_head; edge != VP_NONE;
+             edge = g->edges[edge].next_to) {
             size_t from = g->edges[edge].from;
-            if (!g->packages[from].affected && !g->packages[from].dependent) {
-                g->packages[from].dependent = true;
+            if (!g->affected[from] && !g->dependent[from]) {
+                g->dependent[from] = true;
                 queue[tail++] = from;
             }
         }
     }
-    head = tail = 0;
-    for (size_t i = 0; i < g->package_count; i++)
-        if (!indegree[i])
-            queue[tail++] = i;
-    while (head < tail) {
-        size_t node = queue[head++];
-        for (size_t edge = g->from_head[node]; edge != VP_NONE; edge = g->edges[edge].next_from) {
-            vp_edge *e = &g->edges[edge];
-            if (e->from == e->to && e->test_only)
-                continue; /* External tests may legally import their own package. */
-            if (!--indegree[e->to])
-                queue[tail++] = e->to;
-        }
-    }
-    if (tail != g->package_count) {
-        for (size_t i = 0; i < g->package_count; i++) {
-            if (indegree[i]) {
-                vp_reason_add(
-                    g, "possible_import_cycle", g->packages[i].directory,
-                    "The union import graph contains a cycle. Test packages or mutually "
-                    "exclusive build constraints may explain it; let Go determine validity.");
-                break;
-            }
-        }
-    }
     free(queue);
-    free(indegree);
     return !g->failed;
 }
-
 /* JSON helpers use copied strings: the serialized plan never borrows graph memory. */
 static yyjson_mut_val *vp_object(vp_graph *g) {
     yyjson_mut_val *v = yyjson_mut_obj(g->doc);
@@ -884,10 +432,10 @@ static bool vp_package_commands(vp_graph *g, yyjson_mut_val *commands, unsigned 
         yyjson_mut_val *argv = NULL;
         size_t count = 0, bytes = 0;
         for (size_t j = 0; j < g->package_count; j++) {
-            vp_package *p = &g->packages[j];
-            bool selected = stage == 3   ? p->dependent
-                            : stage == 4 ? p->affected || p->dependent
-                                         : p->affected;
+            const vp_package *p = &g->packages[j];
+            bool selected = stage == 3   ? g->dependent[j]
+                            : stage == 4 ? g->affected[j] || g->dependent[j]
+                                         : g->affected[j];
             if (!selected || !p->present || p->module != i)
                 continue;
             const char *directory = g->modules[i].directory;
@@ -947,7 +495,7 @@ static char *vp_serialize(vp_graph *g) {
     yyjson_mut_val *root = vp_object(g);
     yyjson_mut_doc_set_root(g->doc, root);
     vp_number(g, root, "schema_version", 1);
-    vp_number(g, root, "generation", g->repo->generation);
+    vp_number(g, root, "generation", g->snapshot->generation);
     vp_string(g, root, "language", "go");
     vp_string(g, root, "status", "planned");
     vp_string(g, root, "graph_kind", "syntactic_package_imports");
@@ -976,19 +524,19 @@ static char *vp_serialize(vp_graph *g) {
         vp_append(g, modules, m);
     }
     for (size_t i = 0; i < g->package_count; i++) {
-        vp_package *p = &g->packages[i];
+        const vp_package *p = &g->packages[i];
         yyjson_mut_val *value = vp_object(g);
         vp_string(g, value, "directory", p->directory);
         vp_string(g, value, "import_path", p->path);
         vp_string(g, value, "module_directory", g->modules[p->module].directory);
         vp_bool(g, value, "present", p->present);
         vp_bool(g, value, "has_tests", p->tests);
-        vp_bool(g, value, "affected", p->affected);
-        vp_bool(g, value, "dependent", p->dependent);
+        vp_bool(g, value, "affected", g->affected[i]);
+        vp_bool(g, value, "dependent", g->dependent[i]);
         vp_append(g, packages, value);
-        if (p->affected)
+        if (g->affected[i])
             vp_append_string(g, affected, p->directory);
-        if (p->dependent)
+        if (g->dependent[i])
             vp_append_string(g, dependents, p->directory);
     }
     for (size_t i = 0; i < g->edge_count; i++) {
@@ -1039,35 +587,25 @@ static char *vp_serialize(vp_graph *g) {
     }
     return out;
 }
+
 static void vp_free(vp_graph *g) {
-    for (size_t i = 0; i < g->module_count; i++) {
-        free(g->modules[i].directory);
-        free(g->modules[i].path);
-    }
-    for (size_t i = 0; i < g->package_count; i++) {
-        free(g->packages[i].directory);
-        free(g->packages[i].path);
-        free(g->packages[i].name);
-    }
     for (size_t i = 0; i < g->change_count; i++)
         free(g->changes[i].path);
     for (size_t i = 0; i < g->reason_count; i++)
         free(g->reasons[i].path);
-    free(g->modules);
-    free(g->packages);
-    free(g->edges);
     free(g->changes);
-    free(g->from_head);
-    free(g->to_head);
+    free(g->affected);
+    free(g->dependent);
+    fg_go_graph_destroy(g->graph);
     if (g->doc)
         yyjson_mut_doc_free(g->doc);
 }
 char *forge_repo_validation_plan(forge_repo *repo, const char *const *paths, size_t count,
                                  forge_error *error) {
-    if (error) {
-        error->code = FORGE_OK;
-        error->message[0] = 0;
-    }
+    forge_error local = {0};
+    if (!error)
+        error = &local;
+    memset(error, 0, sizeof(*error));
     if (!repo || (count && !paths)) {
         fg_error(error, FORGE_ERR_ARGUMENT, "Repository and changed-path list are required");
         return NULL;
@@ -1076,38 +614,49 @@ char *forge_repo_validation_plan(forge_repo *repo, const char *const *paths, siz
         fg_error(error, FORGE_ERR_LIMIT, "Validation accepts at most 1024 changed paths");
         return NULL;
     }
-    if (!repo->scan) {
-        fg_error(error, FORGE_ERR_CONFLICT,
-                 "Index the repository before requesting a validation plan");
-        return NULL;
-    }
     vp_graph g = {0};
     g.repo = repo;
     g.error = error;
     char *out = NULL;
-    if (!vp_changes(&g, paths, count) || !vp_load_modules(&g) || !vp_load_packages(&g) ||
-        !vp_mark_changes(&g) || !vp_assign_modules(&g))
+    fg_repo_snapshot snapshot = {0};
+    if (!vp_changes(&g, paths, count))
         goto done;
-    if (!g.module_count && !g.package_count && repo->go_index_incomplete &&
-        !vp_module_add(&g, ".", NULL, true))
+    if (fg_repo_snapshot_begin(repo, &snapshot, false, 0, NULL, NULL, VP_MAX_VM_STEPS, error) !=
+        FORGE_OK)
         goto done;
-    g.applicable = g.module_count != 0 || g.package_count != 0;
-    if (g.applicable) {
-        if (repo->go_index_incomplete)
-            vp_reason_add(
-                &g, "incomplete_go_index", "",
-                "Some Go source or module metadata was unreadable, unsafe, binary, or too "
-                "large to index; the graph cannot justify narrow verification alone.");
-        if (repo->filesystem_scan)
-            vp_reason_add(
-                &g, "filesystem_scan", "",
-                "Git enumeration was unavailable; the fallback walker excludes hidden, "
-                "vendor, build, and other generated directories, which may omit Go inputs.");
-        if (!vp_configuration_changes(&g) || !vp_load_edges(&g) || !vp_reachability(&g))
-            goto done;
+    g.snapshot = &snapshot;
+    const char *extra[VP_MAX_CHANGES];
+    for (size_t i = 0; i < g.change_count; i++)
+        extra[i] = g.changes[i].path;
+    g.graph = fg_go_graph_load(&snapshot, extra, g.change_count, error);
+    if (!g.graph)
+        goto done;
+    g.modules = fg_go_graph_modules(g.graph, &g.module_count);
+    g.packages = fg_go_graph_packages(g.graph, &g.package_count);
+    g.edges = fg_go_graph_edges(g.graph, &g.edge_count);
+    g.applicable = fg_go_graph_applicable(g.graph);
+    size_t slots = g.package_count ? g.package_count : 1;
+    g.affected = calloc(slots, sizeof(*g.affected));
+    g.dependent = calloc(slots, sizeof(*g.dependent));
+    if (!g.affected || !g.dependent) {
+        vp_fail(&g, FORGE_ERR_MEMORY, "Validation selection allocation failed");
+        goto done;
     }
+    size_t reason_count = 0;
+    const fg_go_reason *reasons = fg_go_graph_reasons(g.graph, &reason_count);
+    for (size_t i = 0; i < reason_count; i++)
+        if (!vp_reason_add(&g, reasons[i].code, reasons[i].path, reasons[i].detail))
+            goto done;
+    if (!vp_mark_changes(&g))
+        goto done;
+    if (g.applicable && (!vp_configuration_changes(&g) || !vp_reachability(&g)))
+        goto done;
     out = vp_serialize(&g);
 done:
+    if (snapshot.internal && fg_repo_snapshot_end(&snapshot, out != NULL, error) != FORGE_OK) {
+        free(out);
+        out = NULL;
+    }
     vp_free(&g);
     return out;
 }

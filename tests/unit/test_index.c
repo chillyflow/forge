@@ -501,6 +501,16 @@ static void test_multiple_handles_and_metadata_upgrade(void) {
     assert(yyjson_get_bool(yyjson_obj_get(yyjson_doc_get_root(doc), "metadata_complete")));
     assert(symbol_hash(doc, "FirstUpdated"));
     yyjson_doc_free(doc);
+    database(&f, "UPDATE file_digests SET version=4294967297; DELETE FROM symbol_digests");
+    doc = description(&f, "a.go");
+    assert(!yyjson_get_bool(yyjson_obj_get(yyjson_doc_get_root(doc), "digest_metadata_complete")));
+    yyjson_doc_free(doc);
+    full_index(&f);
+    doc = description(&f, "a.go");
+    assert(yyjson_get_bool(yyjson_obj_get(yyjson_doc_get_root(doc), "digest_metadata_complete")));
+    const char *digest = fg_json_str(yyjson_doc_get_root(doc), "source_sha256");
+    assert(digest && strlen(digest) == 64);
+    yyjson_doc_free(doc);
     fixture_finish(&f);
 }
 typedef struct {
