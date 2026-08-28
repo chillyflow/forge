@@ -1121,8 +1121,10 @@ forge_status forge_repo_index(forge_repo *r, forge_error *e) {
     bool previous_incomplete = r->go_index_incomplete;
     r->go_index_incomplete = false;
     r->filesystem_scan = false;
-    const char *args[] = {"git",      "-c",       "core.fsmonitor=false", "ls-files", "-z",
-                          "--cached", "--others", "--exclude-standard",   NULL};
+    /* Sparse-index expansion may otherwise lazily fetch missing tree objects.
+     * Older Git must fail into the native fallback, not retry without this. */
+    const char *args[] = {"git", "--no-lazy-fetch", "-c",       "core.fsmonitor=false", "ls-files",
+                          "-z",  "--cached",        "--others", "--exclude-standard",   NULL};
     fg_process_result result = {0};
     forge_status run = index_process(r, args, 16u * 1024u * 1024u, &result, e);
     bool ok = true;
@@ -1211,7 +1213,8 @@ static bool fallback_path(const char *path) {
 }
 static bool git_path_eligibility(forge_repo *r, index_path *paths, size_t count, forge_error *e) {
     for (size_t start = 0; start < count;) {
-        const char *args[266] = {"git",
+        const char *args[267] = {"git",
+                                 "--no-lazy-fetch",
                                  "--literal-pathspecs",
                                  "-c",
                                  "core.fsmonitor=false",
@@ -1221,7 +1224,7 @@ static bool git_path_eligibility(forge_repo *r, index_path *paths, size_t count,
                                  "--others",
                                  "--exclude-standard",
                                  "--"};
-        size_t end = start, bytes = 0, argc = 10;
+        size_t end = start, bytes = 0, argc = 11;
         /* Keep Windows command-line expansion well below its UTF-16 limit. */
         while (end < count && end - start < 255) {
             size_t n = strlen(paths[end].path) + 4;

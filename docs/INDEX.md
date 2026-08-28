@@ -5,6 +5,11 @@ repository handle. SQLite remains the committed repository index. The cache is
 optional: eviction, reopening the handle, or disabling retention causes a cold
 parse when a file next changes.
 
+Implicit Git enumeration disables fsmonitor and passes `--no-lazy-fetch` so
+sparse-index expansion cannot silently fetch missing objects. This needs Git
+2.45 or newer; unsupported Git uses the documented native fallback on a full
+scan. A failing Git delta requires a full scan, never a less-restricted retry.
+
 This implements incremental parsing at the **file** boundary. It still rebuilds
 that changed file's symbol, reference, import, and metadata rows. It does not
 implement type checking, resolved calls/implements edges, symbol-level database

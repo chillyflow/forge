@@ -20,9 +20,12 @@ static const fg_tool_def definitions[] = {
      "name:string depth:uint", NULL, FORGE_CAP_READ},
     {"get_references", "Find Go identifier occurrences; these are syntactic, not type-resolved.",
      "name:string", NULL, FORGE_CAP_READ},
-    {"git_diff", "Read the current Git diff without external diff drivers.", "", NULL,
-     FORGE_CAP_READ},
-    {"git_status", "Read Git porcelain status.", "", NULL, FORGE_CAP_READ},
+    /* Git may execute configured clean/process filters while inspecting the
+     * worktree. Disabling external diff/textconv is not process isolation. */
+    {"git_diff", "Inspect Git diff; configured filters require process authorization.", "", NULL,
+     FORGE_CAP_PROCESS},
+    {"git_status", "Inspect Git status; configured filters require process authorization.", "",
+     NULL, FORGE_CAP_PROCESS},
     {"list_directory", "List indexed repository paths.", "", NULL, FORGE_CAP_READ},
     {"read_file", "Read inclusive lines: start>=1, end>=start, at most 2001 lines.",
      "path:string start:line end:line", NULL, FORGE_CAP_READ},

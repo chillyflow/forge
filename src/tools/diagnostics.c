@@ -1175,7 +1175,7 @@ static void dg_go_output(dg_context *c, dg_stream *stream, const char *bytes, si
     size_t offset = 0;
     while (offset < length && !c->failed) {
         const char *newline = memchr(bytes + offset, '\n', length - offset);
-        size_t n = newline ? (size_t)(newline - bytes - offset) : length - offset;
+        size_t n = newline ? (size_t)(newline - (bytes + offset)) : length - offset;
         size_t take = FG_MIN(n, DG_LINE_BYTES - stream->pending.len);
         if (take < n)
             c->line_truncated = true;
@@ -1530,7 +1530,7 @@ char *forge_diagnostics_parse(const char *bytes, size_t length,
         size_t offset = 0;
         while (offset < c.parsed_bytes && !c.failed) {
             const char *end = memchr(input + offset, '\n', c.parsed_bytes - offset);
-            size_t n = end ? (size_t)(end - input - offset) : c.parsed_bytes - offset;
+            size_t n = end ? (size_t)(end - (input + offset)) : c.parsed_bytes - offset;
             dg_parse_line(&c, &state, input + offset, n);
             offset += n + (end ? 1u : 0u);
         }

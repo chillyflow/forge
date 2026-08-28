@@ -180,6 +180,9 @@ patches, because path spelling alone does not safely resolve filesystem aliases.
 Known edits to unindexed files and launched commands with unknown effects also
 invalidate the previous generation even if indexed source bytes did not change.
 No empty poll or successful reindex replaces independent validation snapshots.
+Notifications for the agent's own earlier edits can arrive late and trigger a
+conservative extra generation. They are not silently ignored based on path/time
+matching; distinguishing them safely needs stronger mutation identity tracking.
 
 `index_ms` covers coordinator enrollment/poll/index work and direct post-tool
 indexing. Validation has its own timing. Index-attempt/cache metrics come from

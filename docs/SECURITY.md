@@ -20,9 +20,26 @@ and tests are not implicitly trusted. TOML configuration never grants writes or
 execution. An explicit `tools.shell.network=false` prevents CLI execution even
 with `--allow-exec`, since network isolation is not implemented.
 
-Built-in Git inspection is permitted without arbitrary-process authorization.
-Git is resolved from absolute PATH entries outside the workspace; fsmonitor and
-external diff/textconv commands are disabled. The index does not execute hooks.
+`git_diff` and `git_status` require PROCESS approval, just like `run_command`.
+Git can execute configured clean/process filters while inspecting a worktree;
+disabling external diff and textconv does not disable these filters. Approved
+Git tools therefore run with the same host privileges as other approved code.
+
+Session finalization does not launch Git, even with `--allow-exec`: a filter could
+modify files after final validation. The `patch_snapshot` event records
+`not_collected` with reason `explicit_git_diff_required`. Use the explicitly
+approved `git_diff` tool during the agent loop; its stdout/stderr and tool result
+are recorded, and the command invalidates prior validation like other processes.
+A native edit journal for automatic diff artifacts remains future work.
+
+Repository indexing still uses a fixed `git ls-files` invocation, with fsmonitor
+disabled and `--no-lazy-fetch`, to enumerate eligible paths. Git 2.45 or newer is
+needed for that restriction; unsupported Git falls back to native enumeration on
+a full scan, never an unrestricted Git retry. This does not request worktree
+content conversion, but it is not an OS isolation boundary or a general promise
+that untrusted Git metadata is safe. Git is resolved from absolute PATH entries
+outside the workspace. Treat repository Git configuration and the installed
+executable as trusted until the remaining implicit-process policy is closed.
 
 ## What process approval grants
 

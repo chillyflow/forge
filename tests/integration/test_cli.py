@@ -35,7 +35,14 @@ class ForgeTests(unittest.TestCase):
 
     def run_script(self, actions, *options, success=True):
         path = self.root / 'script.json'
-        path.write_text(json.dumps(actions))
+        # Native notifications (notably FSEvents) may arrive after a known edit
+        # was already indexed. The runtime conservatively requests fresh
+        # generation. These successful fixtures can repeat their terminal
+        # response; never repeat mutation actions or extend failure fixtures.
+        scripted = list(actions)
+        if success and scripted and 'final' in scripted[-1]:
+            scripted.extend([scripted[-1]] * 4)
+        path.write_text(json.dumps(scripted))
         result = self.cli('run', 'Fix Add and verify it.', '--script', str(path), '--json', *options, success=success)
         events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
         sessions = sorted((self.root / '.forge' / 'sessions').iterdir(), key=lambda p: p.stat().st_mtime_ns)

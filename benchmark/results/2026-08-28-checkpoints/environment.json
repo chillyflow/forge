@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "purpose": "Real-model checkpoint correctness; not a task-time benchmark",
+  "date": "2026-08-28",
+  "source_commit": "5b6d9d096c6657af86bcf24ade9081003e3fd833",
+  "test_source": "tests/integration/checkpoint_model.c",
+  "executable_sha256": "c9dfc86e65b971cc4c7cff538b6dd9831bbfd487d4b988604e0e1aaf5bf59bc6",
+  "exit_code": 0,
+  "build": {
+    "configuration": "Release",
+    "compiler": "MSVC 19.44",
+    "cmake": "4.4.2",
+    "backend": "llama.cpp b10566 Windows CUDA 13.3 prebuilt",
+    "backend_commit": "bb4caa7540188872173c44d161602d9271386413"
+  },
+  "model": {
+    "filename": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+    "bytes": 18556689568,
+    "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+    "sha256_reverified": true,
+    "repository": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    "revision": "b17cb02dd882d5b6ab62fc777ad2995f19668350"
+  },
+  "hardware": {
+    "os": "Windows 11 x64",
+    "gpu": "NVIDIA GeForce RTX 5090 Laptop GPU",
+    "gpu_total_mib": 24463,
+    "driver": "610.88"
+  },
+  "parameters": {
+    "gpu_layers": -1,
+    "offloaded_layers": 49,
+    "context_tokens": 1024,
+    "temperature": 0,
+    "seed": 42,
+    "threads": 1,
+    "output_token_limit": 16,
+    "chat_template": "model metadata",
+    "cold_reuse_prefix": false
+  },
+  "scope": {
+    "cases": 4,
+    "model_loads": 4,
+    "maximum_simultaneous_models": 1,
+    "maximum_simultaneous_checkpoints": 2,
+    "process_restart_resume": false,
+    "sampler_continuation": false
+  },
+  "timing_notes": [
+    "save_ms measures state serialization, not model loading or full prefill.",
+    "restore_ms measures state restoration; neither field is end-to-end task time.",
+    "Windows GetTickCount64 has coarse resolution; zero does not mean instantaneous.",
+    "These tiny requested completions generated one token each; long continuation correctness is not established."
+  ]
+}

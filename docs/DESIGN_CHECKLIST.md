@@ -66,8 +66,19 @@ final token versus full cold prefill. These small cases generated one output
 token each. They establish limited checkpoint correctness, not long-generation
 coverage, general task accuracy, an overall speedup or Linux/Metal inference.
 
-Platform CI for this tranche must be identified separately from the earlier
-passed run. Local Windows success does not establish Linux/macOS watch behavior.
+The [CI run at 5b6d9d0](https://github.com/chillyflow/forge/actions/runs/33184454391)
+passed Ubuntu, Windows, sanitizers and direct-backend jobs. macOS passed its
+native/unit groups but four scripted CLI fixtures exhausted their terminal
+responses after delayed FSEvents notifications; follow-up verification must
+cover the bounded fixture retry fix. [Checkpoint records and provenance](../benchmark/results/2026-08-28-checkpoints/README.md)
+remain attached to the tested 5b6d9d0 executable.
+
+A subsequent security correction requires PROCESS approval for Git diff/status
+because configured clean/process filters can execute code. Finalization no
+longer launches Git after validation; automatic `patch.diff` collection is
+disabled pending native edit evidence. Implicit index enumeration disables
+fsmonitor and lazy fetch. [Security limits](SECURITY.md) remain open; these
+changes are not an OS sandbox.
 
 | Design area | Implemented addition | Remaining requirements / limits |
 | --- | --- | --- |

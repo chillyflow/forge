@@ -161,6 +161,11 @@ CTest invocation supplies no model and therefore skips this test. Run the
 executable explicitly with a local model for inference evidence; no automatic
 download or scripted substitute is used.
 
+[Recorded Qwen GPU checks](../benchmark/results/2026-08-28-checkpoints/README.md)
+identify the exact tested revision, binary/model hashes and four short/source
+A/B results. They are limited correctness checks, not end-to-end performance
+or long-generation evidence.
+
 No checkpoint disk format, untrusted state import, process-restart resume,
 automatic semantic-boundary selection, eviction manager, or durable logical/
 physical session binding is implemented by this API.

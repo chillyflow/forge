@@ -982,33 +982,13 @@ finish:
         }
     }
     if (a->session.events) {
-        const char *args[] = {
-            "git", "-c", "core.fsmonitor=false", "diff", "--no-ext-diff", "--no-textconv",
-            "--",  NULL};
-        fg_process_result diff = {0};
-        forge_error ignore = {0};
-        bool stopped = (a->config.cancelled && a->config.cancelled(a->config.userdata)) ||
-                       fg_now_ms() >= deadline;
-        const char *patch_status = "not_collected";
-        const char *patch_reason = stopped ? "cancelled_or_deadline" : "git_diff_failed";
-        uint64_t now = fg_now_ms();
-        if (!stopped && now < deadline &&
-            fg_process(a->root, args, FG_MIN(UINT64_C(5000), deadline - now),
-                       a->config.limits.max_tool_bytes, a->config.cancelled, a->config.userdata,
-                       &diff, &ignore) == FORGE_OK &&
-            diff.exit_code == 0 && !diff.timed_out && !diff.cancelled && !diff.truncated) {
-            if (fg_session_artifact_bytes(&a->session, "patch.diff", diff.out ? diff.out : "",
-                                          diff.out_len, &ignore)) {
-                patch_status = "saved";
-                patch_reason = "complete";
-            } else
-                patch_reason = "artifact_write_failed";
-        }
-        fg_process_free(&diff);
-        char patch_event[160];
-        snprintf(patch_event, sizeof(patch_event),
-                 "{\"artifact\":\"patch.diff\",\"status\":\"%s\",\"reason\":\"%s\"}", patch_status,
-                 patch_reason);
+        /* Git diff can run configured clean/process filters even with external
+         * diff/textconv disabled. Never execute it after final verification.
+         * An explicit git_diff tool request follows normal PROCESS policy,
+         * capture, indexing and validation, with its result kept in tool/. */
+        const char *patch_event =
+            "{\"artifact\":\"patch.diff\",\"status\":\"not_collected\",\"reason\":"
+            "\"explicit_git_diff_required\"}";
         if (!fg_session_emit(&a->session, "patch_snapshot", patch_event,
                              status == FORGE_OK ? e : NULL) &&
             status == FORGE_OK)

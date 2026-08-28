@@ -117,7 +117,7 @@ numeric layer settings remain explicit overrides.
 | `get_references` | Go identifier occurrences, not type-resolved references |
 | `apply_patch` | One exact, unique replacement; atomic file replacement |
 | `run_command` | Argument-vector execution, separate stdout/stderr, deadlines |
-| `git_diff`, `git_status` | Git inspection with external diff drivers disabled |
+| `git_diff`, `git_status` | Git inspection requiring process permission; configured filters can execute |
 | `expand_output` | Retrieve a page of recorded raw output |
 
 The registry generates a GBNF grammar. Schema validation runs again before
@@ -126,12 +126,15 @@ dispatch. Malformed or unknown actions never execute.
 ### Sessions
 
 Each run writes `.forge/sessions/<random-id>/` containing `events.jsonl`,
-`metrics.json`, `patch.diff` (tracked files), actual prompts in `context/`, and
+`metrics.json`, actual prompts in `context/`, and
 raw tool results in `tool/`. Structured `working_state.json` separates model notes
 from observed edits and validation. `validation/` contains stage plans, reports,
 and exact captured stream bytes; `context/` includes complete logical snapshots.
 Replay reads events only and **never executes
 recorded tools**. It is an audit replay, not inference replay or session resume.
+Git is not executed during finalization: a configured clean/process filter could
+mutate files after validation. Request `git_diff` explicitly for a recorded tool
+result; automatic `patch.diff` collection remains disabled pending native diffs.
 Sessions contain source and command output: keep them private unless reviewed.
 
 `--script actions.json` is an explicit deterministic **test backend**. Its metrics
