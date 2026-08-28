@@ -602,7 +602,9 @@ static void test_snapshot_isolation_and_rejection(void) {
     store(&f, current, "accepted after rejection");
     forge_summary_input_destroy(current);
     options = forge_default_summary_options();
-    options.timeout_ms = 15;
+    /* Preparation shares this per-operation option. Allow it to finish on
+     * coarse Windows clocks/loaded runners before testing the blocked writer. */
+    options.timeout_ms = 500;
     current = prepare(&f, FORGE_SUMMARY_FILE, "p/a.go", NULL, &options);
     assert(sqlite3_exec(other->db, "BEGIN IMMEDIATE", NULL, NULL, NULL) == SQLITE_OK);
     expect_store_error(&f, current, "blocked writer", 14, FORGE_ERR_LIMIT);
@@ -908,6 +910,49 @@ static void test_generation_failures(void) {
     forge_summary_input_destroy(retry);
     finish(&f);
 }
+static bool deny_summary(const char *tool, forge_capability capability, const char *arguments,
+                         void *userdata) {
+    assert(!strcmp(tool, "summarize_context") && capability == FORGE_CAP_READ);
+    assert(strstr(arguments, "p/a.go"));
+    (*(size_t *)userdata)++;
+    return false;
+}
+static void test_summary_tool_policy_and_budget(void) {
+    fixture f;
+    start(&f);
+    sources(&f);
+    model_fixture state = {0};
+    state.fixture = &f;
+    state.text = "must not be generated";
+    forge_model model = generation_model(&state);
+    forge_metrics metrics = {0};
+    fg_session session = {0};
+    fg_tool_context context = {0};
+    context.repo = f.repo;
+    context.metrics = &metrics;
+    context.session = &session;
+    context.config.model = &model;
+    context.config.limits = forge_default_limits();
+    context.config.summary_producer_id = "explicit simulated policy fixture";
+    size_t denials = 0;
+    context.config.policy = deny_summary;
+    context.config.userdata = &denials;
+    const char *json = "{\"scope\":\"file\",\"path\":\"p/a.go\",\"symbol\":\"\"}";
+    yyjson_doc *args = yyjson_read(json, strlen(json), 0);
+    assert(args);
+    bool changed = true;
+    assert(!fg_tool_execute(&context, "summarize_context", yyjson_doc_get_root(args), &changed,
+                            &f.error));
+    assert(f.error.code == FORGE_ERR_POLICY && !changed && denials == 1 && !state.calls);
+    context.config.policy = NULL;
+    metrics.prompt_tokens = context.config.limits.max_input_tokens;
+    assert(!fg_tool_execute(&context, "summarize_context", yyjson_doc_get_root(args), &changed,
+                            &f.error));
+    assert(f.error.code == FORGE_ERR_LIMIT && !state.calls && !metrics.summary_lookups);
+    assert(scalar(&f, "SELECT count(*) FROM summary_cache") == 0);
+    yyjson_doc_free(args);
+    finish(&f);
+}
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -923,6 +968,7 @@ int main(void) {
     test_model_generation_and_reuse();
     test_generation_dependency_races();
     test_generation_failures();
+    test_summary_tool_policy_and_budget();
     puts("Summary and digest tests passed");
     return 0;
 }

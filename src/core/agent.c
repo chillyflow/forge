@@ -6,6 +6,7 @@ struct forge_agent {
     forge_agent_config config;
     char root[FG_PATH_MAX];
     char cache_context_id[33];
+    char *summary_producer;
     forge_metrics metrics;
     fg_session session;
     forge_agent_state state;
@@ -64,6 +65,22 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
     if (!a->generation_arena) {
         free(a);
         return NULL;
+    }
+    if (config->summary_producer_id) {
+        size_t length = strlen(config->summary_producer_id);
+        if (!length || length > 256 || !strcmp(config->summary_producer_id, "caller") ||
+            !fg_utf8_valid(config->summary_producer_id, length)) {
+            forge_agent_destroy(a);
+            fg_error(e, FORGE_ERR_ARGUMENT, "Invalid summary producer identity");
+            return NULL;
+        }
+        a->summary_producer = fg_strdup(config->summary_producer_id);
+        if (!a->summary_producer) {
+            forge_agent_destroy(a);
+            fg_error(e, FORGE_ERR_MEMORY, "Cannot copy summary producer identity");
+            return NULL;
+        }
+        a->config.summary_producer_id = a->summary_producer;
     }
     return a;
 }
@@ -322,6 +339,18 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     ctx = forge_context_create(a->config.limits.context_tokens, a->config.limits.output_reserve,
                                fg_model_count, a->config.model);
     schema = fg_tool_schema();
+    if (schema) {
+        fg_buf configured = {0};
+        fg_buf_puts(&configured, schema);
+        fg_buf_puts(&configured,
+                    a->config.summary_producer_id
+                        ? "summarize_context is enabled. Use summaries for reusable overviews; "
+                          "a cache miss spends the same inference budget as other generation.\n"
+                        : "summarize_context is disabled: no host producer identity is configured. "
+                          "Use source inspection or retrieval instead.\n");
+        free(schema);
+        schema = fg_buf_take(&configured);
+    }
     grammar = fg_tool_grammar();
     summary = forge_repo_summary(repo, e);
     if (!ctx || !schema || !grammar || !summary) {
@@ -378,6 +407,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     tools.repo = repo;
     tools.session = &a->session;
     tools.deadline = deadline;
+    tools.metrics = &a->metrics;
     strcpy(tools.root, a->root);
     uint64_t signatures[64] = {0}, latest_result = 0, diagnostic_hash = 0;
     size_t signature_count = 0, repeated = 0;
@@ -416,7 +446,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             break;
         }
         a->metrics.context_evictions = evicted;
-        if (prompt_tokens > a->config.limits.max_input_tokens - a->metrics.prompt_tokens) {
+        if (a->metrics.prompt_tokens > a->config.limits.max_input_tokens ||
+            prompt_tokens > a->config.limits.max_input_tokens - a->metrics.prompt_tokens) {
             free(prompt);
             status = fg_error(e, FORGE_ERR_LIMIT, "Input-token budget exhausted");
             break;
@@ -965,7 +996,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 forge_context_bind_source(ctx, latest_result,
                                           fg_hash(canonical, strlen(canonical)));
         } else if (!strcmp(tool, "search_text") || !strcmp(tool, "find_symbol") ||
-                   !strcmp(tool, "get_references") || !strcmp(tool, "retrieve_context"))
+                   !strcmp(tool, "get_references") || !strcmp(tool, "retrieve_context") ||
+                   !strcmp(tool, "summarize_context"))
             forge_context_bind_source(ctx, latest_result, UINT64_MAX);
         forge_state_observation observation = {
             tools.call_id,
@@ -1068,6 +1100,7 @@ void forge_agent_destroy(forge_agent *a) {
             fclose(a->session.events);
         forge_working_state_destroy(a->working_state);
         forge_arena_destroy(a->generation_arena);
+        free(a->summary_producer);
         free(a);
     }
 }

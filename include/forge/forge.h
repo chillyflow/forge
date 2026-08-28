@@ -73,6 +73,8 @@ typedef struct {
     uint64_t checkpoint_additional_tokens; /* Reused beyond the previously usable live prefix. */
     size_t checkpoint_peak_bytes; /* Configured manager allocation high-water mark, not RSS. */
     double checkpoint_probe_ms, checkpoint_capture_ms, checkpoint_restore_ms;
+    size_t summary_lookups, summary_hits, summary_generations, summary_failures;
+    double summary_ms; /* Also included in tool time; not an additional elapsed interval. */
 } forge_metrics;
 typedef struct {
     const char *model_path;
@@ -96,6 +98,10 @@ typedef struct {
     forge_policy_fn policy;
     forge_cancel_fn cancelled;
     void *userdata;
+    /* Optional explicit weights/backend/template identity enables the READ
+     * summarize_context tool. Copied by agent_create; NULL leaves it disabled.
+     * This is a host assertion, not an automatically verified weight digest. */
+    const char *summary_producer_id;
 } forge_agent_config;
 forge_limits forge_default_limits(void);
 forge_model_config forge_default_model_config(void);

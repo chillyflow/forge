@@ -6,7 +6,8 @@ The original prepare/store API accepts caller-generated text without invoking a
 model. `forge_repo_summary_generate` connects that cache to one bounded model
 call on a miss. Both consume indexed snapshots; neither refreshes the index,
 launches a command or reads live source files. The `summarize` CLI refreshes the
-index first. Automatic agent/context selection remains open.
+index first. An opt-in agent tool requests summaries for its context; automatic
+hierarchy construction and summary selection inside the context planner remain open.
 
 ## Lifecycle and identity
 
@@ -146,7 +147,8 @@ Scope defaults to `file`; other scopes are `repository`, `module`, `package` and
 `--summary-full-source` is selected. Ambiguous declarations fail rather than
 guessing; the embedding target supports kind/byte-offset disambiguation.
 `--summary-producer` is the same caller assertion described above, not a checksum
-verification flag. All summary flags require the `summarize` command.
+verification flag. Scope/symbol/full-source flags require the `summarize` command.
+The producer identity can also enable the agent summary tool for `run` or `bench`.
 
 The CLI returns JSON containing the complete summary input/manifest, text,
 generation/cache statistics and inference metrics. It loads the configured model
@@ -157,12 +159,57 @@ not preemptible. Generation uses the smaller of `--output-reserve` and
 `--max-tool-bytes` can lower the summary-text byte cap. Preparation/manifest
 defaults still apply and evidence is not silently clipped. No agent session,
 source mutation, model-requested process or validation command is produced.
-Index discovery can execute Git. This command does not yet select summaries for
-the agent's context planner.
+Index discovery can execute Git. This command does not itself run the agent.
 
 The top-level `model_load_ms` reports each CLI load even on a cache hit. It is
 outside the helper's generation duration and must not be mistaken for zero load
 cost just because that hit has no inference work.
+
+## Agent summary context
+
+`forge run ... --summary-producer ID` enables
+`summarize_context(scope, path, symbol)`. Embedders may set
+`forge_agent_config.summary_producer_id`; the agent copies that identity. The
+default is disabled and the tool schema tells the model whether it is enabled.
+The host identity has the same trust requirements as the generation API. There
+is not yet a TOML setting for this opt-in.
+
+The model chooses a scope/path, with an empty symbol except for symbol scope.
+Aggregate summaries use syntactic outlines. This is lazy, model-requested
+selection, not a background repository-wide summarization pass. It can provide
+a reusable overview without replacing the exact source needed for patches or
+verification. It does not claim resolved language semantics.
+
+The READ policy runs before any cache lookup or inference. A hit never bypasses
+policy. A miss permits at most one generation, with a maximum 512 output tokens,
+the remaining run token budgets, context capacity and a 30-second cooperative
+deadline, shortened by the run deadline. It requires at least 1 KiB of tool
+output capacity. Input bytes obey the smaller of the summary default and agent
+file limit. Summary-text and complete-JSON budgets are checked separately.
+Final JSON is counted as a whole against one quarter of context capacity and is
+rejected if it cannot fit; it is not cut into invalid JSON.
+
+All nested prompt/generated/cached/prefill tokens and inference timings are
+charged to the agent totals, including work consumed by failed attempts. The
+existing hard input/output budgets remain in force. `turns` still counts outer
+agent turns. `summary_lookups`, `summary_hits`, `summary_generations` (attempted
+model calls), `summary_failures` and `summary_ms` expose this path. Summary time
+also falls inside tool time, so those intervals must not be added together.
+
+Each attempted summary lookup records a `summary` event with its inference
+metrics and outcome. Successful cache/generation results retain full prepared
+evidence under `tool/NNNNNN.summary.json`; the model receives compact JSON with
+the unverified summary, scope, indexed generation and dependency/cache hashes.
+These per-operation limits do not bound total session disk usage. A subsequent
+known edit or observed filesystem change invalidates the context result before
+another model action can use it. Current agent invalidation is conservative
+across all source-bound results, even when an unrelated edit could still permit
+a new cache hit on revalidation.
+
+The tool performs no source write or command. Cache publication writes derived
+metadata only; it does not advance source generation. Summaries remain untrusted
+model text. Neither summary content nor a cache hit grants any permission or
+marks validation as successful.
 
 ## Coverage and remaining work
 
@@ -180,7 +227,7 @@ writers, edits/deletion during generation, corruption repair, model re-entry,
 producer profile changes, output limits, cancellation and failed generation.
 CLI tests use an explicitly simulated script backend, without quality claims.
 
-Automatic summary selection, semantic context integration, resolved
-relationships and measured cache benefits remain required work in the full
+Automatic hierarchy/planner summary selection, resolved relationships and broad
+measured cache benefits remain required work in the full
 design. [Staged indexed retrieval](RETRIEVAL.md) now supplies bounded source
 evidence separately; it does not generate or select semantic summaries.

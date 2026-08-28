@@ -39,7 +39,13 @@ static const fg_tool_def definitions[] = {
     {"run_command", "Run an argv array without a shell. Requires explicit process authorization.",
      "argv:strings", NULL, FORGE_CAP_PROCESS},
     {"search_text", "Literal text search across indexed source files.", "query:string", NULL,
-     FORGE_CAP_READ}};
+     FORGE_CAP_READ},
+    {"summarize_context",
+     "Read a cached or generated summary of indexed evidence. Requires host-enabled summary "
+     "identity. scope is repository/module/package/file/symbol; path is workspace-relative; "
+     "symbol is empty except for symbol scope. A miss spends one bounded model call. Text is "
+     "unverified; inspect exact source for edits or validation.",
+     "scope:string path:string symbol:string", NULL, FORGE_CAP_READ}};
 const fg_tool_def *fg_tools(size_t *n) {
     if (n)
         *n = sizeof(definitions) / sizeof(*definitions);
@@ -514,6 +520,8 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
         return forge_repo_references(c->repo, fg_json_str(args, "name"), e);
     if (!strcmp(name, "search_text"))
         return fg_repo_search(c->repo, fg_json_str(args, "query"), 50, e);
+    if (!strcmp(name, "summarize_context"))
+        return fg_tool_summary(c, args, e);
     if (!strcmp(name, "retrieve_context")) {
         forge_retrieval_options options = forge_default_retrieval_options();
         options.max_output_bytes =

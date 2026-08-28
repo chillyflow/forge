@@ -68,7 +68,8 @@ static void usage(void) {
          "  --depth N            symbol expansion or retrieval graph hops, 0..3\n"
          "  --summary-scope NAME repository/module/package/file/symbol (default file)\n"
          "  --summary-symbol NAME exact declaration for symbol scope\n"
-         "  --summary-producer ID declared weights/backend/template identity, required\n"
+         "  --summary-producer ID declared weights/backend/template identity; enables agent "
+         "summaries\n"
          "  --summary-full-source include all aggregate source, within limits\n");
 }
 static bool number(const char *text, size_t *out) {
@@ -674,7 +675,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             ac.workspace = value;
         else if (!strcmp(a, "--summary-producer")) {
             summary_options.producer_id = value;
-            summary_flags = summary_producer = true;
+            summary_producer = true;
         } else if (!strcmp(a, "--summary-symbol")) {
             summary_target.symbol = value;
             summary_flags = true;
@@ -786,6 +787,17 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     if (summary_flags && strcmp(command, "summarize")) {
         fg_error(&error, FORGE_ERR_ARGUMENT, "Summary options require the summarize command");
         return failed(&error);
+    }
+    if (summary_producer) {
+        if ((strcmp(command, "summarize") && strcmp(command, "run") && strcmp(command, "bench")) ||
+            !*summary_options.producer_id || strlen(summary_options.producer_id) > 256 ||
+            !strcmp(summary_options.producer_id, "caller")) {
+            fg_error(
+                &error, FORGE_ERR_ARGUMENT,
+                "A valid summary producer identity is supported only by summarize, run or bench");
+            return failed(&error);
+        }
+        ac.summary_producer_id = summary_options.producer_id;
     }
     if (!strcmp(command, "summarize") &&
         (!summary_producer || !*summary_options.producer_id ||

@@ -122,6 +122,62 @@ class ForgeTests(unittest.TestCase):
         self.assertEqual(repaired['summary']['text'], first['summary']['text'])
         self.assertFalse((metadata / 'sessions').exists())
 
+    def test_agent_summary_cache_accounts_for_nested_inference(self):
+        request = {'tool': 'summarize_context',
+                   'args': {'scope': 'file', 'path': 'calc.go', 'symbol': ''}}
+        original = (self.root / 'calc.go').read_bytes()
+        _, events, session = self.run_script([
+            request, {'description': 'Explicit simulated summary fixture.'}, request,
+            {'final': 'Read the cached summary.'},
+        ], '--summary-producer', 'simulated-agent-summary-v1', '--context', '4096',
+            '--output-reserve', '512', '--no-auto-validation', fallback_watch=True)
+        summaries = [event['data'] for event in events if event['type'] == 'summary']
+        self.assertEqual([item['model_calls'] for item in summaries], [1, 0])
+        self.assertEqual([item['cache_hit'] for item in summaries], [False, True])
+        outputs = [json.loads(event['data']['output']) for event in events
+                   if event['type'] == 'tool_result']
+        self.assertEqual(len(outputs), 2)
+        self.assertEqual(outputs[0]['text'], outputs[1]['text'])
+        self.assertTrue(all(output['summary_unverified'] for output in outputs))
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual((metrics['summary_lookups'], metrics['summary_hits'],
+                          metrics['summary_generations'], metrics['summary_failures']), (2, 1, 1, 0))
+        self.assertEqual(metrics['turns'], 3)
+        primary = [event['data'] for event in events if event['type'] == 'inference']
+        for key in ['prompt_tokens', 'generated_tokens', 'cached_tokens']:
+            self.assertEqual(metrics[key], sum(item[key] for item in primary) +
+                             sum(item['inference'][key] for item in summaries))
+        for item in summaries:
+            evidence = json.loads((session / item['artifact']).read_text())
+            self.assertEqual(evidence['cache_key'], outputs[0]['cache_key'])
+            self.assertIn('return a - b', evidence['prompt'])
+        self.assertEqual((self.root / 'calc.go').read_bytes(), original)
+        self.assertEqual(metrics['files_modified'], 0)
+        self.assertEqual(metrics['validation_commands'], 0)
+
+    def test_agent_summary_disabled_and_failed_generation(self):
+        request = {'tool': 'summarize_context',
+                   'args': {'scope': 'file', 'path': 'calc.go', 'symbol': ''}}
+        _, events, session = self.run_script([request, {'final': 'Summary tool unavailable.'}],
+                                             '--no-auto-validation', fallback_watch=True)
+        results = [event['data'] for event in events if event['type'] == 'tool_result']
+        self.assertEqual(results[0]['status'], 'unsupported')
+        self.assertFalse(any(event['type'] == 'summary' for event in events))
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual(metrics['summary_generations'], 0)
+        _, events, session = self.run_script([
+            request, {'description': 'too much output ' * 400}, {'final': 'The summary hit a limit.'},
+        ], '--summary-producer', 'simulated-agent-summary-v1', '--output-reserve', '256',
+            '--no-auto-validation', fallback_watch=True)
+        summary, = [event['data'] for event in events if event['type'] == 'summary']
+        self.assertEqual(summary['model_calls'], 1)
+        self.assertFalse(summary['published'])
+        self.assertEqual(summary['inference']['status'], 'limit')
+        self.assertEqual(summary['artifact'], '')
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual(metrics['summary_failures'], 1)
+        self.assertEqual(self.indexed_rows('SELECT count(*) FROM summary_cache'), [(0,)])
+
     def test_summary_selectors_and_generation_failure(self):
         self.go_module()
         script = self.root / 'summary-fixture.json'

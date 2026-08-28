@@ -197,7 +197,9 @@ typedef struct {
     bool process_ran;
     bool evidence_failed;      /* An edit event or prepared outcome could not be recorded. */
     fg_process_result process; /* Metadata only; out/err pointers stay NULL. */
+    forge_metrics *metrics;    /* Borrowed cumulative agent budgets for nested summary inference. */
 } fg_tool_context;
+char *fg_tool_summary(fg_tool_context *, yyjson_val *, forge_error *);
 typedef struct {
     bool applicable, passed, inputs_changed;
     size_t commands, stages;

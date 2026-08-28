@@ -184,7 +184,9 @@ Embedding APIs also expose [physical prefix checkpoints](docs/CHECKPOINTS.md),
 [normalized diagnostics](docs/DIAGNOSTICS.md). [Indexed summary inputs and caching](docs/SUMMARIES.md)
 support caller-generated text and bounded model generation with checked dependencies;
 `forge summarize` reuses valid cached text without another inference call. Model
-identity is declared by the host; automatic agent summary selection remains open.
+identity is declared by the host. An opt-in READ tool lets the agent request
+summaries while charging nested inference to its run budgets; automatic planner
+selection and broad quality evidence remain open.
 [Staged retrieval](docs/RETRIEVAL.md)
 combines exact symbols, package imports, literal text and FTS in one indexed
 snapshot with explicit budgets. Checkpoints are independent

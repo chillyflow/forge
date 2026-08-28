@@ -57,7 +57,7 @@ struct fixture {
     size_t watches_created, watches_destroyed, watch_polls;
     size_t plans, outputs, results, accepted;
     bool live_read_checked, stale_read_checked, cancel_after_refresh, cancelled;
-    bool retrieve;
+    bool retrieve, summarize;
     edit_case edit_mode;
     size_t prepared, finished;
 };
@@ -229,14 +229,14 @@ static void check_context(fixture *f, yyjson_val *event_data) {
         if (number(item, "kind") != FORGE_SEG_RESULT)
             continue;
         const char *text = fg_json_str(item, "text");
-        if (text && !strcmp(text, f->retrieve ? f->retrieved_text : f->old_read)) {
+        if (text && !strcmp(text, f->retrieve || f->summarize ? f->retrieved_text : f->old_read)) {
             assert(!original);
             original = item;
         }
     }
     assert(repo && original);
     assert(number(original, "source_hash") ==
-           (f->retrieve ? UINT64_MAX : fg_hash(f->relative, strlen(f->relative))));
+           (f->retrieve || f->summarize ? UINT64_MAX : fg_hash(f->relative, strlen(f->relative))));
     if (turn == 2) {
         assert(!bool_field(original, "stale") && bool_field(original, "selected"));
         assert(bool_field(original, "pinned"));
@@ -274,8 +274,9 @@ static void on_event(const forge_event *event, void *user) {
     else if (!strcmp(event->type, "tool_result")) {
         const char *status = fg_json_str(data, "status");
         assert(status && !strcmp(status, "ok"));
-        if (f->retrieve && !f->results) {
-            assert(!strcmp(fg_json_str(data, "name"), "retrieve_context"));
+        if ((f->retrieve || f->summarize) && !f->results) {
+            assert(!strcmp(fg_json_str(data, "name"),
+                           f->summarize ? "summarize_context" : "retrieve_context"));
             const char *text = fg_json_str(data, "output");
             assert(text && strstr(text, "return 1;") && strstr(text, "indexed_snapshot_only"));
             f->retrieved_text = fg_strdup(text);
@@ -312,7 +313,13 @@ static void write_script(fixture *f, bool read_backslashes, bool patch_backslash
     char *old_json = fg_json_string(old), *replacement_json = fg_json_string(replacement);
     assert(read_json && patch_json && old_json && replacement_json);
     fg_buf script = {0};
-    if (f->retrieve)
+    if (f->summarize)
+        fg_buf_printf(&script,
+                      "[{\"tool\":\"summarize_context\",\"args\":{\"scope\":\"file\","
+                      "\"path\":%s,\"symbol\":\"\"}},"
+                      "{\"description\":\"Simulated fixture: return 1;\"},",
+                      read_json);
+    else if (f->retrieve)
         fg_buf_puts(&script, "[{\"tool\":\"retrieve_context\","
                              "\"args\":{\"query\":\"forge_change_value\"}},");
     else
@@ -419,12 +426,13 @@ static void destroy_fixture(fixture *f) {
     active = NULL;
 }
 static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes,
-                     bool cancel_after_refresh, bool retrieve) {
+                     bool cancel_after_refresh, int evidence_tool) {
     fixture f;
     create_fixture(&f, indexed, read_backslashes, patch_backslashes, cancel_after_refresh);
-    if (retrieve) {
+    if (evidence_tool) {
         assert(indexed);
-        f.retrieve = true;
+        f.retrieve = evidence_tool == 1;
+        f.summarize = evidence_tool == 2;
         write_script(&f, false, patch_backslashes, f.old_read + 3,
                      "int forge_change_value(void) { return 2; }\n");
     }
@@ -442,6 +450,8 @@ static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes
     ac.allow_write = ac.semantic_output = ac.compact_context = true;
     ac.cancelled = is_cancelled;
     ac.userdata = &f;
+    if (f.summarize)
+        ac.summary_producer_id = "explicit simulated summary invalidation fixture";
     f.agent = forge_agent_create(&ac, &error);
     assert(f.agent);
     forge_status status =
@@ -460,6 +470,8 @@ static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes
     assert(metrics->simulated && metrics->tool_calls == 2 && metrics->files_modified == 1);
     assert(metrics->filesystem_events == 0 && metrics->watch_reopens == 0);
     assert(metrics->stale_generations == 0 && metrics->validation_commands == 0);
+    if (f.summarize)
+        assert(metrics->summary_generations == 1 && !metrics->summary_failures);
     assert(f.watch_polls >= 5);
     char *actual = fg_read_file(f.source, 1024, NULL, &error);
     assert(actual);
@@ -619,8 +631,10 @@ int main(void) {
             for (unsigned patch_backslashes = 0; patch_backslashes < 2; patch_backslashes++)
                 run_case(indexed != 0, read_backslashes != 0, patch_backslashes != 0, false, false);
     run_case(false, true, true, true, false);
-    run_case(true, false, true, false, true);
-    run_case(true, false, true, true, true);
+    run_case(true, false, true, false, 1);
+    run_case(true, false, true, true, 1);
+    run_case(true, false, true, false, 2);
+    run_case(true, false, true, true, 2);
     for (edit_case mode = EDIT_CANCEL; mode <= EDIT_CONFLICT; mode++)
         run_edit_error(mode);
     puts("Agent known-change and edit-evidence tests passed (no watch delivery)");
