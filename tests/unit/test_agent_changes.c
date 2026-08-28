@@ -50,13 +50,14 @@ struct forge_watch {
 struct fixture {
     char base[FG_PATH_MAX], root[FG_PATH_MAX], bin[FG_PATH_MAX];
     char source[FG_PATH_MAX], script[FG_PATH_MAX], relative[64], old_read[256];
-    char *old_path;
+    char *old_path, *retrieved_text;
     forge_agent *agent;
     forge_model *model;
     uint64_t read_id, read_generation, refreshed_generation;
     size_t watches_created, watches_destroyed, watch_polls;
     size_t plans, outputs, results, accepted;
     bool live_read_checked, stale_read_checked, cancel_after_refresh, cancelled;
+    bool retrieve;
     edit_case edit_mode;
     size_t prepared, finished;
 };
@@ -228,13 +229,14 @@ static void check_context(fixture *f, yyjson_val *event_data) {
         if (number(item, "kind") != FORGE_SEG_RESULT)
             continue;
         const char *text = fg_json_str(item, "text");
-        if (text && !strcmp(text, f->old_read)) {
+        if (text && !strcmp(text, f->retrieve ? f->retrieved_text : f->old_read)) {
             assert(!original);
             original = item;
         }
     }
     assert(repo && original);
-    assert(number(original, "source_hash") == fg_hash(f->relative, strlen(f->relative)));
+    assert(number(original, "source_hash") ==
+           (f->retrieve ? UINT64_MAX : fg_hash(f->relative, strlen(f->relative))));
     if (turn == 2) {
         assert(!bool_field(original, "stale") && bool_field(original, "selected"));
         assert(bool_field(original, "pinned"));
@@ -272,6 +274,13 @@ static void on_event(const forge_event *event, void *user) {
     else if (!strcmp(event->type, "tool_result")) {
         const char *status = fg_json_str(data, "status");
         assert(status && !strcmp(status, "ok"));
+        if (f->retrieve && !f->results) {
+            assert(!strcmp(fg_json_str(data, "name"), "retrieve_context"));
+            const char *text = fg_json_str(data, "output");
+            assert(text && strstr(text, "return 1;") && strstr(text, "indexed_snapshot_only"));
+            f->retrieved_text = fg_strdup(text);
+            assert(f->retrieved_text);
+        }
         f->results++;
     } else if (!strcmp(event->type, "message")) {
         assert(f->stale_read_checked && !f->cancelled);
@@ -303,11 +312,17 @@ static void write_script(fixture *f, bool read_backslashes, bool patch_backslash
     char *old_json = fg_json_string(old), *replacement_json = fg_json_string(replacement);
     assert(read_json && patch_json && old_json && replacement_json);
     fg_buf script = {0};
+    if (f->retrieve)
+        fg_buf_puts(&script, "[{\"tool\":\"retrieve_context\","
+                             "\"args\":{\"query\":\"forge_change_value\"}},");
+    else
+        fg_buf_printf(&script,
+                      "[{\"tool\":\"read_file\",\"args\":{\"path\":%s,\"start\":1,\"end\":5}},",
+                      read_json);
     fg_buf_printf(&script,
-                  "[{\"tool\":\"read_file\",\"args\":{\"path\":%s,\"start\":1,\"end\":5}},"
                   "{\"tool\":\"apply_patch\",\"args\":{\"path\":%s,\"old_text\":%s,"
                   "\"new_text\":%s}},{\"final\":\"Patch applied.\"}]",
-                  read_json, patch_json, old_json, replacement_json);
+                  patch_json, old_json, replacement_json);
     free(read_json);
     free(patch_json);
     free(old_json);
@@ -379,6 +394,7 @@ static void destroy_fixture(fixture *f) {
     f->model = NULL;
     set_path(f->old_path);
     free(f->old_path);
+    free(f->retrieved_text);
     cleanup c = {session};
     assert(fg_walk(session, "", remove_session_file, &c, NULL));
     const char *session_dirs[] = {"context", "tool", "validation"};
@@ -403,9 +419,15 @@ static void destroy_fixture(fixture *f) {
     active = NULL;
 }
 static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes,
-                     bool cancel_after_refresh) {
+                     bool cancel_after_refresh, bool retrieve) {
     fixture f;
     create_fixture(&f, indexed, read_backslashes, patch_backslashes, cancel_after_refresh);
+    if (retrieve) {
+        assert(indexed);
+        f.retrieve = true;
+        write_script(&f, false, patch_backslashes, f.old_read + 3,
+                     "int forge_change_value(void) { return 2; }\n");
+    }
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
     mc.script_path = f.script;
@@ -595,8 +617,10 @@ int main(void) {
     for (unsigned indexed = 0; indexed < 2; indexed++)
         for (unsigned read_backslashes = 0; read_backslashes < 2; read_backslashes++)
             for (unsigned patch_backslashes = 0; patch_backslashes < 2; patch_backslashes++)
-                run_case(indexed != 0, read_backslashes != 0, patch_backslashes != 0, false);
-    run_case(false, true, true, true);
+                run_case(indexed != 0, read_backslashes != 0, patch_backslashes != 0, false, false);
+    run_case(false, true, true, true, false);
+    run_case(true, false, true, false, true);
+    run_case(true, false, true, true, true);
     for (edit_case mode = EDIT_CANCEL; mode <= EDIT_CONFLICT; mode++)
         run_edit_error(mode);
     puts("Agent known-change and edit-evidence tests passed (no watch delivery)");

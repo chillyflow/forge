@@ -965,7 +965,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 forge_context_bind_source(ctx, latest_result,
                                           fg_hash(canonical, strlen(canonical)));
         } else if (!strcmp(tool, "search_text") || !strcmp(tool, "find_symbol") ||
-                   !strcmp(tool, "get_references"))
+                   !strcmp(tool, "get_references") || !strcmp(tool, "retrieve_context"))
             forge_context_bind_source(ctx, latest_result, UINT64_MAX);
         forge_state_observation observation = {
             tools.call_id,
