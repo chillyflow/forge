@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "purpose": "Bounded summary generation and persistent cache correctness across four CLI model loads",
+  "date": "2026-08-28",
+  "source_commit": "21843880bdc668b3da5d8f021d14c12b6ca68758",
+  "llama_dll_sha256": "0db020c722bd869d9e410224bb4674a6b6e080cf9633b82d2dd92b661a79b693",
+  "build": {
+    "configuration": "Release",
+    "compiler": "MSVC 19.44",
+    "backend": "llama.cpp b10566 Windows CUDA 13.3 prebuilt",
+    "backend_commit": "bb4caa7540188872173c44d161602d9271386413"
+  },
+  "model": {
+    "filename": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+    "bytes": 18556689568,
+    "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+    "sha256_reverified": true,
+    "repository": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    "revision": "b17cb02dd882d5b6ab62fc777ad2995f19668350"
+  },
+  "hardware": {
+    "os": "Windows 11 x64",
+    "gpu": "NVIDIA GeForce RTX 5090 Laptop GPU",
+    "gpu_total_mib": 24463,
+    "driver": "610.88"
+  },
+  "parameters": {
+    "gpu_layers": -1,
+    "offloaded_layers": 49,
+    "temperature": 0,
+    "seed": 42,
+    "threads": 1,
+    "chat_template": "model metadata",
+    "context_tokens": 4096,
+    "output_reserve": 512,
+    "max_generated_tokens": 512,
+    "max_input_tokens": 3584,
+    "wall_ms": 180000,
+    "scope": "file",
+    "target": "answer.go",
+    "recipe": "forge.summary.v2",
+    "maximum_simultaneous_models": 1,
+    "declared_producer_id": "gguf:fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad;llama:bb4caa7540188872173c44d161602d9271386413"
+  },
+  "limits": [
+    "One tiny file, one model and four invocations establish only narrow cache/generation behavior.",
+    "The initial v1 summary named the correct return value but incorrectly claimed bodies were absent; it is not a successful quality trial.",
+    "The declared model identity was externally checked for this trial. The runtime API trusts that host assertion.",
+    "CLI cache hits still load the model. Their zero generation work is not zero end-to-end cost.",
+    "Timings are one-run observations, overlap and have coarse Windows resolution; no speedup or confidence interval is claimed.",
+    "The harness edited fixture files between invocations; the summarize command performed no source mutation, tool or validation command.",
+    "No Linux CUDA or macOS Metal inference or agent context-summary selection is established."
+  ],
+  "executable_sha256": "6fcf1ba9d8b3a5a2b84683d564d4e66952dd9b62252e2c9e284aeb3a6eb58203"
+}
