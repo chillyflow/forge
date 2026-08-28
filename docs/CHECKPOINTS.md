@@ -262,6 +262,11 @@ The fixture then changes repository generation and requires invalidation and
 output parity. Its two JSON records are correctness diagnostics, not a timed
 task benchmark. Only one model is loaded at a time.
 
+[Recorded automatic Qwen checks](../benchmark/results/2026-08-28-automatic-checkpoints/README.md)
+cover the exact integration executable, both displaced-prefix restores and a
+separate read-only agent opt-in smoke. Their limited scope and hashes are kept
+separate from earlier explicit-handle and coding-task measurements.
+
 No checkpoint disk format, untrusted state import, process-restart resume,
 model-reload restore or durable logical/physical session binding is implemented.
 Agent selection currently covers only the stable SYSTEM/TOOLS boundary, not a

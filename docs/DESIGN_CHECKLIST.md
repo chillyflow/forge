@@ -134,6 +134,47 @@ exclusion assertion was not reproduced in these runs; its exact cause remains
 unconfirmed and failure diagnostics remain enabled. Automatic summary generation,
 agent/context selection, staged retrieval and measured benefit are still open.
 
+## Automatic checkpoint manager — 2026-08-28
+
+Source `028082c` adds an opt-in bounded model-owned host cache, exact templated
+token-prefix selection, captures during ordinary prefill, deterministic LRU,
+scope/generation invalidation, and one safe fallback after failed restore.
+The agent nominates its immutable SYSTEM/TOOLS boundary with a fresh context
+identity; configuration/CLI flags and generation/session metrics expose the
+feature. [The contract](CHECKPOINTS.md) separates aggregate manager allocations
+from model/KV memory and explicit handles. Existing APIs/defaults still bypass
+automatic capture unless configured and requested; the no-reuse ablation holds.
+
+The combined local suites passed all 23 executed test groups in Debug (37.09 s)
+and CUDA-linked Release (38.48 s). The ordinary model test skipped without args.
+The [source CI run](https://github.com/chillyflow/forge/actions/runs/33192990295)
+passed four complete jobs and all 100 macOS watcher repeats. Its macOS test suite
+passed the cache/summary/native groups but failed the configuration permission
+fixture after observing one of two expected scripted tool responses. The log
+did not retain the relevant event payload, so a delayed stale-action rejection
+is a hypothesis, not an established cause. That exact-action fixture now uses
+the existing bounded snapshot monitor test executable and asserts both named
+policy denials plus unchanged files. Native runtime behavior is unchanged.
+The [follow-up `c3586a2` CI run](https://github.com/chillyflow/forge/actions/runs/33194306782)
+passed all five jobs, including 100 native macOS watcher suites and 30 macOS
+configuration suites. Locally, 30 configuration repeats passed (27.94 s), then
+all 23 executed groups passed in Debug (36.39 s) and CUDA-linked Release
+(38.85 s). The follow-up changes only test/CI wiring; the model records below
+remain attached to the original `028082c` binaries that produced them.
+
+Separate [recorded model checks](../benchmark/results/2026-08-28-automatic-checkpoints/README.md)
+on that exact executable passed automatic A/B/A/B cold-output parity, final-token
+recomputation, and generation invalidation on Qwen3-Coder with the Windows RTX
+5090 Laptop GPU. Both prompts had 150 tokens and generated one token. A read-only
+agent smoke also passed with one capture and live-prefix reuse, requiring no
+restore. These are limited correctness checks, not an overall speedup, broad
+task benchmark, long-generation or additional-platform inference result.
+
+Full semantic-boundary selection, model-reload/disk restore, durable session
+resume, automatic summary generation, staged retrieval, resolved language graphs,
+speculation, remaining metrics/ABI/isolation work and the broad acceptance suite
+remain open. The full design is not complete.
+
 ## Status and scope rules
 
 | Status | Meaning |
