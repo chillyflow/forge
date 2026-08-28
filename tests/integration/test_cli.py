@@ -410,6 +410,56 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('conflict', results[0])
         self.assertEqual((self.root / 'new.go').read_text(), 'package calc\n')
 
+    def test_edit_artifacts_are_exact_and_git_applicable(self):
+        if not shutil.which('git'):
+            self.skipTest('Git is needed to independently check emitted patches')
+        cases = [
+            ('crlf space.txt', b'old\r\nnext\r\n', b'new\r\nnext\r\n'),
+            ('no-newline.txt', b'old', b'new'),
+            ('empty.txt', b'old\n', b''),
+            ('new-empty.txt', None, b''),
+            ('unicode.txt', 'café\n'.encode(), '雪 🛠\n'.encode()),
+        ]
+        for name, before, after in cases:
+            with self.subTest(name=name):
+                target = self.root / name
+                if before is not None:
+                    target.write_bytes(before)
+                _, events, session = self.run_script([
+                    {'tool': 'apply_patch', 'args': {
+                        'path': name, 'old_text': (before or b'').decode(),
+                        'new_text': after.decode()}},
+                    {'final': 'Recorded the edit.'},
+                ], '--allow-write', '--no-auto-validation')
+                self.assertEqual(target.read_bytes(), after)
+                self.assertEqual((session / 'tool/000001.before').read_bytes(), before or b'')
+                self.assertEqual((session / 'tool/000001.after').read_bytes(), after)
+                intent = json.loads((session / 'tool/000001.edit.json').read_text())
+                outcome = json.loads((session / 'tool/000001.edit-result.json').read_text())
+                self.assertEqual(intent['state'], 'prepared')
+                self.assertEqual(intent['before_exists'], before is not None)
+                self.assertEqual(intent['path'], name)
+                self.assertEqual(outcome['state'], 'applied')
+                self.assertEqual(outcome['status'], 'ok')
+                self.assertEqual([event['type'] for event in events
+                                  if event['type'] in ('edit_prepared', 'edit_result')],
+                                 ['edit_prepared', 'edit_result'])
+                with tempfile.TemporaryDirectory(prefix='forge-apply-proof-') as proof:
+                    checkout = pathlib.Path(proof)
+                    if before is not None:
+                        (checkout / name).write_bytes(before)
+                    patch_path = session / intent['diff_artifact']
+                    # The test explicitly authorizes Git only in this private
+                    # fixture. Agent finalization must never run this command.
+                    for check in (True, False):
+                        command = ['git', '-c', 'core.autocrlf=false', '-c', 'core.fsmonitor=false',
+                                   'apply', '--whitespace=nowarn']
+                        if check:
+                            command.append('--check')
+                        subprocess.run([*command, str(patch_path)], cwd=checkout, check=True,
+                                       capture_output=True, timeout=20)
+                    self.assertEqual((checkout / name).read_bytes(), after)
+
     def test_replay_rejects_corruption(self):
         _, _, session = self.run_script([{'final': 'done'}], '--no-auto-validation')
         (session / 'events.jsonl').write_text('{"sequence":99}\n')

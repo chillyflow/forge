@@ -134,7 +134,8 @@ Replay reads events only and **never executes
 recorded tools**. It is an audit replay, not inference replay or session resume.
 Git is not executed during finalization: a configured clean/process filter could
 mutate files after validation. Request `git_diff` explicitly for a recorded tool
-result; automatic `patch.diff` collection remains disabled pending native diffs.
+result. The [native edit journal](docs/EDITS.md) records exact per-edit content,
+diffs, and outcomes without Git; automatic aggregate `patch.diff` remains pending.
 Sessions contain source and command output: keep them private unless reviewed.
 
 `--script actions.json` is an explicit deterministic **test backend**. Its metrics

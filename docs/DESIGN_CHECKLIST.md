@@ -94,6 +94,27 @@ The complete design remains unfinished. Required summary caches, resolved
 repository relationships/retrieval, automatic checkpoint management/resume,
 speculation, broad benchmarks, packaging/ABI work and isolation remain in scope.
 
+## Resumed verification — 2026-08-28
+
+The [watcher recovery CI run](https://github.com/chillyflow/forge/actions/runs/33189725295)
+passed all five jobs, including 30 consecutive native macOS watcher suites,
+all three core platforms, Linux sanitizers, and the direct llama backend build.
+The monitor now honors initial continuity loss with at most three creations
+before indexing, followed by explicit failure or bounded snapshot fallback.
+This remains notification/correctness evidence, not GPU inference evidence.
+
+The resumed implementation adds [native per-edit evidence](EDITS.md): exclusive
+before/after content, full-file unified diffs, prepared/applied/aborted outcomes,
+bounded reservations, and fail-closed outcome errors. Core/agent-change fixtures
+cover normal and failure paths; CLI fixtures independently check emitted patches
+with Git. This does not complete aggregate diff collection, structural impact
+analysis, arbitrary command-change evidence, or durable crash recovery.
+
+The combined watcher/journal changes passed all 21 executed local test groups
+in Debug (35.52 s) and CUDA-linked Release (37.99 s). The model-only checkpoint
+test was skipped because no model argument was supplied. These runs are not new
+inference or performance benchmarks.
+
 ## Status and scope rules
 
 | Status | Meaning |

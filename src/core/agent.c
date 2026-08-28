@@ -529,9 +529,15 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                     unknown_changes = true;
                 forge_context_invalidate(ctx, 0, generation);
                 char *current = forge_repo_summary(repo, e);
-                if (current) {
-                    forge_context_update(ctx, repo_segment, current, generation);
-                    free(current);
+                status = current ? forge_context_update(ctx, repo_segment, current, generation)
+                                 : (e && e->code ? e->code : FORGE_ERR_MEMORY);
+                free(current);
+                if (status != FORGE_OK) {
+                    fg_error(e, status, "Cannot refresh repository context after validation");
+                    fg_validation_result_free(&verification);
+                    yyjson_doc_free(d);
+                    free(response);
+                    break;
                 }
                 forge_state_validation_status validation_status =
                     verified == FORGE_ERR_POLICY ? FORGE_STATE_DENIED
@@ -688,6 +694,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         }
         uint64_t tool_start = fg_now_ms();
         tools.process_ran = false;
+        tools.evidence_failed = false;
         memset(&tools.process, 0, sizeof(tools.process));
         if (hits >= 2) {
             a->metrics.loop_warnings++;
@@ -940,8 +947,12 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                    !strcmp(tool, "get_references"))
             forge_context_bind_source(ctx, latest_result, UINT64_MAX);
         forge_state_observation observation = {
-            tools.call_id, tool,    outcome == FORGE_OK ? fg_json_str(args, "path") : NULL,
-            outcome,       visible, forge_repo_generation(repo),
+            tools.call_id,
+            tool,
+            outcome == FORGE_OK || changed ? fg_json_str(args, "path") : NULL,
+            outcome,
+            visible,
+            forge_repo_generation(repo),
             changed};
         status = forge_working_state_observe(a->working_state, &observation, e);
         if (status == FORGE_OK && tools.process_ran)
@@ -952,6 +963,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
          * compaction; live chronological tool results already retain new evidence. */
         if (status == FORGE_OK && !save_working_state(a, ctx, memory_id, turn, evicted != 0, e))
             status = e && e->code ? e->code : FORGE_ERR_IO;
+        if (status == FORGE_OK && tools.evidence_failed)
+            status = fg_error(e, FORGE_ERR_IO,
+                              "Edit evidence is incomplete; inspect the recorded intent "
+                              "and target before continuing");
         free(visible);
         yyjson_doc_free(d);
         free(response);

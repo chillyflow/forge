@@ -69,6 +69,7 @@ typedef struct {
     uint64_t sequence, start_ms;
     forge_event_fn callback;
     void *userdata;
+    size_t edit_bytes_reserved, edit_bytes_limit;
 } fg_session;
 bool fg_session_start(fg_session *, const char *, forge_event_fn, void *, forge_error *);
 bool fg_session_emit(fg_session *, const char *, const char *, forge_error *);
@@ -134,6 +135,7 @@ typedef struct {
     size_t validation_id;
     uint64_t deadline;
     bool process_ran;
+    bool evidence_failed;      /* An edit event or prepared outcome could not be recorded. */
     fg_process_result process; /* Metadata only; out/err pointers stay NULL. */
 } fg_tool_context;
 typedef struct {

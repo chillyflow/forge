@@ -11,6 +11,7 @@
 #endif
 #include "internal.h"
 #include "forge/watch.h"
+#include "tools/edit_journal.h"
 #include <assert.h>
 #include <errno.h>
 #ifdef _WIN32
@@ -32,6 +33,16 @@
  * An empty private PATH prevents repository scans/final diffs from launching
  * an installed Git. There is no real model, GPU or native watcher evidence. */
 typedef struct fixture fixture;
+typedef enum {
+    EDIT_NORMAL,
+    EDIT_CANCEL,
+    EDIT_CONCURRENT,
+    EDIT_PREPARE_IO,
+    EDIT_OUTCOME_IO,
+    EDIT_DENIED,
+    EDIT_NOOP,
+    EDIT_CONFLICT
+} edit_case;
 struct forge_watch {
     fixture *owner;
     bool initial, invalidated;
@@ -46,6 +57,8 @@ struct fixture {
     size_t watches_created, watches_destroyed, watch_polls;
     size_t plans, outputs, results, accepted;
     bool live_read_checked, stale_read_checked, cancel_after_refresh, cancelled;
+    edit_case edit_mode;
+    size_t prepared, finished;
 };
 static fixture *active;
 
@@ -134,6 +147,60 @@ static bool bool_field(yyjson_val *object, const char *key) {
     assert(yyjson_is_bool(value));
     return yyjson_get_bool(value);
 }
+static void assert_file(const char *path, const char *expected) {
+    size_t length = 0;
+    char *text = fg_read_file(path, FG_MAX_JSON, &length, NULL);
+    assert(text && length == strlen(expected) && !memcmp(text, expected, length));
+    free(text);
+}
+static void edit_artifact(fixture *f, const char *name, char path[FG_PATH_MAX]) {
+    assert(fg_path_join(path, forge_agent_session(f->agent), name));
+}
+static void check_edit(fixture *f, const char *type, yyjson_val *data) {
+    char path[FG_PATH_MAX];
+    assert(number(data, "tool_call") == 2);
+    if (!strcmp(type, "edit_prepared")) {
+        assert(!f->prepared && !f->finished);
+        assert(!strcmp(fg_json_str(data, "path"), f->relative));
+        assert(!strcmp(fg_json_str(data, "state"), "prepared"));
+        assert(bool_field(data, "before_exists"));
+        const char *before = f->old_read + 3;
+        const char *after = !strcmp(f->relative, "sub/main.c")
+                                ? "int forge_change_value(void) { return 2; }\n"
+                                : "updated data\n";
+        assert_file(f->source, before); /* Callback runs before replacement. */
+        edit_artifact(f, fg_json_str(data, "before_artifact"), path);
+        assert_file(path, before);
+        edit_artifact(f, fg_json_str(data, "after_artifact"), path);
+        assert_file(path, after);
+        edit_artifact(f, fg_json_str(data, "diff_artifact"), path);
+        char *diff = fg_read_file(path, FG_MAX_JSON, NULL, NULL);
+        assert(diff && strstr(diff, "diff --git ") && strstr(diff, after));
+        free(diff);
+        f->prepared++;
+        if (f->edit_mode == EDIT_CANCEL)
+            f->cancelled = true;
+        else if (f->edit_mode == EDIT_CONCURRENT)
+            assert(fg_write_file(f->source, "concurrent data\n", 16, NULL));
+        else if (f->edit_mode == EDIT_OUTCOME_IO) {
+            edit_artifact(f, fg_json_str(data, "outcome_artifact"), path);
+            assert(fg_write_file(path, "exclusive sentinel", 18, NULL));
+        }
+    } else {
+        assert(f->prepared == 1 && !f->finished);
+        bool aborted = f->edit_mode == EDIT_CANCEL || f->edit_mode == EDIT_CONCURRENT;
+        assert(!strcmp(fg_json_str(data, "state"), aborted ? "aborted" : "applied"));
+        const char *expected = f->edit_mode == EDIT_CANCEL       ? "cancelled"
+                               : f->edit_mode == EDIT_CONCURRENT ? "conflict"
+                                                                 : "ok";
+        assert(!strcmp(fg_json_str(data, "status"), expected));
+        if (!aborted)
+            assert_file(f->source, !strcmp(f->relative, "sub/main.c")
+                                       ? "int forge_change_value(void) { return 2; }\n"
+                                       : "updated data\n");
+        f->finished++;
+    }
+}
 static void check_context(fixture *f, yyjson_val *event_data) {
     size_t turn = (size_t)number(event_data, "turn");
     f->plans++;
@@ -200,6 +267,8 @@ static void on_event(const forge_event *event, void *user) {
         check_context(f, data);
     else if (!strcmp(event->type, "model_output"))
         f->outputs++;
+    else if (!strcmp(event->type, "edit_prepared") || !strcmp(event->type, "edit_result"))
+        check_edit(f, event->type, data);
     else if (!strcmp(event->type, "tool_result")) {
         const char *status = fg_json_str(data, "status");
         assert(status && !strcmp(status, "ok"));
@@ -364,6 +433,7 @@ static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes
     assert(f.live_read_checked && f.stale_read_checked && f.plans == 3 && f.results == 2);
     assert(f.outputs == (cancel_after_refresh ? 2u : 3u));
     assert(f.accepted == (cancel_after_refresh ? 0u : 1u));
+    assert(f.prepared == 1 && f.finished == 1);
     const forge_metrics *metrics = forge_agent_metrics(f.agent);
     assert(metrics->simulated && metrics->tool_calls == 2 && metrics->files_modified == 1);
     assert(metrics->filesystem_events == 0 && metrics->watch_reopens == 0);
@@ -376,6 +446,147 @@ static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes
     free(actual);
     destroy_fixture(&f);
 }
+static void on_edit_error(const forge_event *event, void *user) {
+    fixture *f = user;
+    yyjson_doc *doc = yyjson_read(event->json, strlen(event->json), 0);
+    assert(doc);
+    yyjson_val *data = yyjson_obj_get(yyjson_doc_get_root(doc), "data");
+    if (!strcmp(event->type, "edit_prepared") || !strcmp(event->type, "edit_result"))
+        check_edit(f, event->type, data);
+    else if (!strcmp(event->type, "tool_call") && f->edit_mode == EDIT_PREPARE_IO &&
+             !strcmp(fg_json_str(data, "tool"), "apply_patch")) {
+        char path[FG_PATH_MAX];
+        edit_artifact(f, "tool/000002.after", path);
+        assert(fg_write_file(path, "exclusive sentinel", 18, NULL));
+    } else if (!strcmp(event->type, "message"))
+        f->accepted++;
+    else if (!strcmp(event->type, "model_output"))
+        f->outputs++;
+    yyjson_doc_free(doc);
+}
+static void check_edit_budget(fixture *f) {
+    fg_session session = {0};
+    snprintf(session.dir, sizeof(session.dir), "%s", forge_agent_session(f->agent));
+    session.events = tmpfile();
+    assert(session.events);
+    session.edit_bytes_limit = 1;
+    fg_tool_context context = {0};
+    context.session = &session;
+    context.call_id = 900;
+    forge_error error = {0};
+    fg_edit_record record = {0};
+    assert(!fg_edit_prepare(&context, "budget.txt", true, (forge_slice){"before", 6},
+                            (forge_slice){"after", 5}, &record, &error));
+    assert(error.code == FORGE_ERR_LIMIT && !session.edit_bytes_reserved && !record.prepared);
+    session.edit_bytes_limit = 1024u * 1024u;
+    memset(&error, 0, sizeof(error));
+    assert(fg_edit_prepare(&context, "budget.txt", true, (forge_slice){"before", 6},
+                           (forge_slice){"after", 5}, &record, &error));
+    size_t reserved = session.edit_bytes_reserved;
+    assert(reserved && record.prepared);
+    assert(fg_edit_finish(&context, &record, false, FORGE_ERR_CONFLICT, &error));
+    session.edit_bytes_limit = 2 * reserved;
+    assert(!fg_edit_prepare(&context, "budget.txt", true, (forge_slice){"before", 6},
+                            (forge_slice){"after", 5}, &record, &error));
+    assert(error.code == FORGE_ERR_IO && !record.prepared && !context.evidence_failed);
+    assert(session.edit_bytes_reserved == 2 * reserved); /* Failed writes keep their reservation. */
+    context.call_id++;
+    assert(!fg_edit_prepare(&context, "budget.txt", true, (forge_slice){"before", 6},
+                            (forge_slice){"after", 5}, &record, &error));
+    assert(error.code == FORGE_ERR_LIMIT && session.edit_bytes_reserved == 2 * reserved);
+    char path[FG_PATH_MAX];
+    edit_artifact(f, "tool/000900.before", path);
+    assert_file(path, "before");
+    edit_artifact(f, "tool/000901.before", path);
+    assert(!fg_read_file(path, 1024, NULL, NULL));
+    assert(fclose(session.events) == 0);
+    /* A complete manifest is still not proof of preparation when the event
+     * stream refuses its write; no target replacement is authorized. */
+    edit_artifact(f, "tool/000900.before", path);
+    session.events = fopen(path, "rb");
+    assert(session.events);
+    session.edit_bytes_limit = 1024u * 1024u;
+    context.call_id = 902;
+    memset(&error, 0, sizeof(error));
+    assert(!fg_edit_prepare(&context, "budget.txt", true, (forge_slice){"before", 6},
+                            (forge_slice){"after", 5}, &record, &error));
+    assert(error.code == FORGE_ERR_IO && !record.prepared && context.evidence_failed);
+    assert(fclose(session.events) == 0);
+    session.events = tmpfile();
+    assert(session.events);
+    context.call_id = 903;
+    context.evidence_failed = false;
+    memset(&error, 0, sizeof(error));
+    assert(fg_edit_prepare(&context, "budget.txt", true, (forge_slice){"before", 6},
+                           (forge_slice){"after", 5}, &record, &error));
+    assert(fclose(session.events) == 0);
+    session.events = fopen(path, "rb");
+    assert(session.events);
+    assert(!fg_edit_finish(&context, &record, false, FORGE_ERR_CONFLICT, &error));
+    assert(error.code == FORGE_ERR_IO && context.evidence_failed && record.finished);
+    assert(fclose(session.events) == 0);
+}
+static void run_edit_error(edit_case mode) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    f.edit_mode = mode;
+    if (mode == EDIT_NOOP || mode == EDIT_CONFLICT)
+        write_script(&f, false, false, mode == EDIT_CONFLICT ? "not in file" : "original data\n",
+                     "original data\n");
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = (mode == EDIT_CANCEL || mode == EDIT_OUTCOME_IO) ? 3 : 2;
+    ac.limits.wall_timeout_ms = 15000;
+    ac.allow_write = mode != EDIT_DENIED;
+    ac.cancelled = is_cancelled;
+    ac.userdata = &f;
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    forge_status status =
+        forge_agent_run(f.agent, "Exercise edit evidence failure.", on_edit_error, &f, &error);
+    forge_status expected = mode == EDIT_CANCEL       ? FORGE_ERR_CANCELLED
+                            : mode == EDIT_OUTCOME_IO ? FORGE_ERR_IO
+                                                      : FORGE_ERR_LIMIT;
+    if (status != expected)
+        fprintf(stderr, "edit failure case %d: %s\n", (int)mode, error.message);
+    assert(status == expected && f.outputs == 2 && !f.accepted);
+    bool prepared = mode == EDIT_CANCEL || mode == EDIT_CONCURRENT || mode == EDIT_OUTCOME_IO;
+    assert(f.prepared == (prepared ? 1u : 0u));
+    assert(f.finished == (mode == EDIT_CANCEL || mode == EDIT_CONCURRENT ? 1u : 0u));
+    bool applied = mode == EDIT_OUTCOME_IO;
+    assert(forge_agent_metrics(f.agent)->files_modified == (applied ? 1u : 0u));
+    assert_file(f.source, applied                   ? "updated data\n"
+                          : mode == EDIT_CONCURRENT ? "concurrent data\n"
+                                                    : "original data\n");
+    char path[FG_PATH_MAX];
+    if (applied || mode == EDIT_PREPARE_IO) {
+        edit_artifact(&f, applied ? "tool/000002.edit-result.json" : "tool/000002.after", path);
+        assert_file(path, "exclusive sentinel");
+    }
+    if (!prepared) {
+        edit_artifact(&f, "tool/000002.edit.json", path);
+        assert(!fg_read_file(path, 1024, NULL, NULL));
+    }
+    char *state = forge_agent_working_state(f.agent, &error);
+    yyjson_doc *doc = state ? yyjson_read(state, strlen(state), 0) : NULL;
+    assert(doc);
+    yyjson_val *changes = yyjson_obj_get(yyjson_doc_get_root(doc), "observed_changes");
+    assert(yyjson_arr_size(changes) == (applied ? 1u : 0u));
+    if (applied)
+        assert(!strcmp(fg_json_str(yyjson_arr_get(changes, 0), "path"), f.relative));
+    yyjson_doc_free(doc);
+    free(state);
+    if (mode == EDIT_DENIED)
+        check_edit_budget(&f);
+    destroy_fixture(&f);
+}
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -386,6 +597,8 @@ int main(void) {
             for (unsigned patch_backslashes = 0; patch_backslashes < 2; patch_backslashes++)
                 run_case(indexed != 0, read_backslashes != 0, patch_backslashes != 0, false);
     run_case(false, true, true, true);
-    puts("Agent known-change tests passed (8 path/index cases + cancellation; no watch delivery)");
+    for (edit_case mode = EDIT_CANCEL; mode <= EDIT_CONFLICT; mode++)
+        run_edit_error(mode);
+    puts("Agent known-change and edit-evidence tests passed (no watch delivery)");
     return 0;
 }

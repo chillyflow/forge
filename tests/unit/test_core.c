@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "tools/edit_journal.h"
 #include <assert.h>
 #ifndef _WIN32
 #include <signal.h>
@@ -11,6 +12,69 @@
 static size_t count(const char *s, void *u) {
     (void)u;
     return strlen(s);
+}
+static bool cancel_diff(void *user) {
+    size_t *calls = user;
+    return ++*calls >= 2;
+}
+static void test_edit_diffs(void) {
+    const struct {
+        const char *before, *after, *body;
+        bool exists;
+    } cases[] = {
+        {"old\r\n", "new\r\n", "@@ -1,1 +1,1 @@\n-old\r\n+new\r\n", true},
+        {"old", "new",
+         "@@ -1,1 +1,1 @@\n-old\n\\ No newline at end of file\n"
+         "+new\n\\ No newline at end of file\n",
+         true},
+        {"old\n", "", "@@ -1,1 +0,0 @@\n-old\n", true},
+        {"", "new\n", "@@ -0,0 +1,1 @@\n+new\n", true},
+        {"", "new\n", "@@ -0,0 +1,1 @@\n+new\n", false},
+        {"", "", "new file mode 100644\n", false},
+        {"\xc2\xb5\n", "\xe9\x9b\xaa\n", "@@ -1,1 +1,1 @@\n-\xc2\xb5\n+\xe9\x9b\xaa\n", true},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(*cases); i++) {
+        forge_error error = {0};
+        size_t length = 0;
+        char *diff = fg_edit_diff("dir\\space \xc2\xb5.txt", cases[i].exists,
+                                  (forge_slice){cases[i].before, strlen(cases[i].before)},
+                                  (forge_slice){cases[i].after, strlen(cases[i].after)}, &length,
+                                  NULL, NULL, 0, &error);
+        assert(diff && error.code == FORGE_OK && length == strlen(diff));
+        assert(
+            strstr(diff,
+                   "diff --git \"a/dir/space \\302\\265.txt\" \"b/dir/space \\302\\265.txt\"\n") ==
+            diff);
+        assert(strstr(diff, cases[i].body));
+        assert((strstr(diff, "new file mode 100644\n") != NULL) == !cases[i].exists);
+        if (!cases[i].exists && *cases[i].after)
+            assert(strstr(diff, "--- /dev/null\n"));
+        free(diff);
+    }
+    forge_error error = {0};
+    size_t length = 10;
+    forge_slice old = {"old", 3}, next = {"new", 3};
+    assert(!fg_edit_diff("x", true, old, old, &length, NULL, NULL, 0, &error));
+    assert(error.code == FORGE_ERR_CONFLICT && length == 0);
+    assert(!fg_edit_diff("x", false, old, next, &length, NULL, NULL, 0, &error));
+    assert(error.code == FORGE_ERR_ARGUMENT);
+    assert(!fg_edit_diff("../x", true, old, next, &length, NULL, NULL, 0, &error));
+    assert(error.code == FORGE_ERR_ARGUMENT);
+    const forge_slice bad[] = {
+        {"a\0b", 3}, {"\xff", 1}, {NULL, 3}, {"x", 16u * 1024u * 1024u + 1u}};
+    const forge_status expected[] = {FORGE_ERR_PARSE, FORGE_ERR_PARSE, FORGE_ERR_ARGUMENT,
+                                     FORGE_ERR_LIMIT};
+    for (size_t i = 0; i < sizeof(bad) / sizeof(*bad); i++) {
+        assert(!fg_edit_diff("x", true, bad[i], next, &length, NULL, NULL, 0, &error));
+        assert(error.code == expected[i] && length == 0);
+        assert(!fg_edit_diff("x", true, old, bad[i], &length, NULL, NULL, 0, &error));
+        assert(error.code == expected[i] && length == 0);
+    }
+    size_t calls = 0;
+    assert(!fg_edit_diff("x", true, old, next, &length, cancel_diff, &calls, 0, &error));
+    assert(error.code == FORGE_ERR_CANCELLED && calls == 2);
+    assert(!fg_edit_diff("x", true, old, next, &length, NULL, NULL, 1, &error));
+    assert(error.code == FORGE_ERR_CANCELLED);
 }
 static void test_utf8_and_byte_rendering(void) {
     const char text[] = "a\xc2\xa2\xe2\x82\xac\xf0\x9f\x8c\x8d"
@@ -149,6 +213,7 @@ static void test_diagnostic_byte_boundaries(void) {
     free(compressed);
 }
 int main(void) {
+    test_edit_diffs();
     test_utf8_and_byte_rendering();
     test_diagnostic_byte_boundaries();
     fg_buf b = {0};

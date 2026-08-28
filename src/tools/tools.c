@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "forge/memory.h"
+#include "edit_journal.h"
 #include <errno.h>
 #include <sys/stat.h>
 #ifdef _WIN32
@@ -357,6 +358,21 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
     if (ok && exists && chmod(temp, st.st_mode & 0777) != 0)
         ok = false;
 #endif
+    if (!ok) {
+        free(text);
+        fg_buf_clear(&out);
+        remove(temp);
+        fg_error(e, FORGE_ERR_IO, "Cannot write patch staging file");
+        return NULL;
+    }
+    fg_edit_record edit = {0};
+    if (!fg_edit_prepare(c, path, exists, (forge_slice){text, len},
+                         (forge_slice){out.data, out.len}, &edit, e)) {
+        free(text);
+        fg_buf_clear(&out);
+        remove(temp);
+        return NULL;
+    }
     /* Recheck the exact source before atomic replacement to catch ordinary concurrent edits. */
     if (ok && exists) {
         size_t current_len = 0;
@@ -371,6 +387,11 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
     }
     if (ok && !fg_safe_path(c->root, path, true, full, e))
         ok = false;
+    if (ok && ((c->config.cancelled && c->config.cancelled(c->config.userdata)) ||
+               (c->deadline && fg_now_ms() >= c->deadline))) {
+        fg_error(e, FORGE_ERR_CANCELLED, "Patch cancelled before target replacement");
+        ok = false;
+    }
 #ifdef _WIN32
     if (ok)
         ok = MoveFileExA(temp, full,
@@ -384,12 +405,17 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
     fg_buf_clear(&out);
     if (!ok) {
         remove(temp);
-        fg_error(e, FORGE_ERR_CONFLICT, "Atomic patch failed or source changed concurrently");
+        if (!e || !e->code)
+            fg_error(e, FORGE_ERR_CONFLICT, "Atomic patch failed or source changed concurrently");
+        forge_status reason = e && e->code ? e->code : FORGE_ERR_CONFLICT;
+        fg_edit_finish(c, &edit, false, reason, e);
         return NULL;
     }
     *changed = true;
+    if (!fg_edit_finish(c, &edit, true, FORGE_OK, e))
+        return NULL;
     fg_buf result = {0};
-    fg_buf_printf(&result, "Patched %s.\n", path);
+    fg_buf_printf(&result, "Patched %s.\nRecorded edit diff: %s\n", path, edit.diff);
     const char *ext = strrchr(path, '.');
     if (ext && !strcmp(ext, ".go")) {
         char *target = fg_repo_targets(c->repo, path, e);
@@ -440,6 +466,7 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
                       forge_error *e) {
     *changed = false;
     c->process_ran = false;
+    c->evidence_failed = false;
     memset(&c->process, 0, sizeof(c->process));
     if (!fg_tool_validate(name, args, e))
         return NULL;

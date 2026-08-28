@@ -12,7 +12,7 @@ add_library(forge_lib STATIC
   src/core/util.c src/core/text.c src/core/memory.c src/core/process.c src/core/session.c src/core/agent.c
   src/core/config.c src/core/hardware.c src/core/verification.c src/core/input_snapshot.c src/core/working_state.c
   src/context/context.c src/repo/repo.c src/repo/validation.c src/repo/watch.c src/repo/monitor.c src/tools/tools.c
-  src/tools/diagnostics.c src/inference/inference.c src/inference/checkpoint.c)
+  src/tools/diagnostics.c src/tools/edit_journal.c src/inference/inference.c src/inference/checkpoint.c)
 add_library(Forge::forge ALIAS forge_lib)
 set_target_properties(forge_lib PROPERTIES OUTPUT_NAME forge ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 target_include_directories(forge_lib PUBLIC include PRIVATE src)

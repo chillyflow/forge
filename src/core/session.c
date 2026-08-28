@@ -5,6 +5,7 @@ bool fg_session_start(fg_session *s, const char *root, forge_event_fn cb, void *
     s->callback = cb;
     s->userdata = user;
     s->start_ms = fg_now_ms();
+    s->edit_bytes_limit = 256u * 1024u * 1024u;
     char base[FG_PATH_MAX], sessions[FG_PATH_MAX], id[33], file[FG_PATH_MAX];
     if (!fg_path_join(base, root, ".forge") || !fg_mkdir(base, e) ||
         !fg_path_join(sessions, base, "sessions") || !fg_mkdir(sessions, e))

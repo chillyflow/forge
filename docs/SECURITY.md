@@ -30,7 +30,8 @@ modify files after final validation. The `patch_snapshot` event records
 `not_collected` with reason `explicit_git_diff_required`. Use the explicitly
 approved `git_diff` tool during the agent loop; its stdout/stderr and tool result
 are recorded, and the command invalidates prior validation like other processes.
-A native edit journal for automatic diff artifacts remains future work.
+The [native edit journal](EDITS.md) records per-edit content and diffs without
+launching a process. Automatic aggregate diff collection remains future work.
 
 Repository indexing still uses a fixed `git ls-files` invocation, with fsmonitor
 disabled and `--no-lazy-fetch`, to enumerate eligible paths. Git 2.45 or newer is
