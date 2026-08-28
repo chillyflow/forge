@@ -197,8 +197,13 @@ class ConfigCliTests(unittest.TestCase):
         config = self.base / "profiles" / "local.toml"
         self.write(config, "model.path='../models/absent.gguf'\n")
         result = self.cli("hardware-plan", "--config", str(config), success=False)
-        expected = str((config.parent / "../models/absent.gguf").resolve())
-        self.assertIn(expected, result.stderr)
+        expected = (config.parent / "../models/absent.gguf").resolve()
+        prefix = "Model must be a readable regular GGUF file: "
+        self.assertIn(prefix, result.stderr)
+        reported = result.stderr.split(prefix, 1)[1].strip()
+        # macOS /var and Windows short-name temp paths may have different
+        # spellings while resolving to the same defining-file directory.
+        self.assertEqual(pathlib.Path(reported).resolve(), expected)
 
 
 if __name__ == "__main__":
