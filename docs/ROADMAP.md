@@ -65,3 +65,9 @@ The design's v0.1 performance gate remains a real measured reduction in prompt
 processing against an established local harness using the same GGUF/hardware.
 Its v1.0 gate additionally requires broad platform/language support and published
 task-success/timing evidence. Neither follows from the development version alone.
+
+The [initial comparison](../benchmark/results/2026-08-28/README.md) demonstrates
+lower prompt processing on ten synthetic fixtures, with 9/10 repairs versus
+OpenCode's 10/10. The accuracy gap, small sample and remaining implementation
+items keep this a development preview, not a completed implementation of the
+entire multi-release design.

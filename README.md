@@ -113,6 +113,11 @@ The driver creates a fresh checkout for every task/variant, verifies tests
 independently, rejects test modifications, and records model SHA-256 and hardware.
 See [benchmark methodology](benchmark/README.md).
 
+[Published local smoke results](benchmark/results/2026-08-28/README.md): Forge
+solved **9/10** tiny Go tasks versus OpenCode's **10/10**, using the same GGUF and
+GPU. Forge evaluated fewer prompt tokens, but the accuracy gap remains. All
+failures, ablations, settings and timing caveats are included in the report.
+
 ## Embed
 
 ```cmake

@@ -1,5 +1,8 @@
 #include "internal.h"
 #include <assert.h>
+#ifndef _WIN32
+#include <signal.h>
+#endif
 /* Do not compile out assertions in Release builds. */
 #ifdef NDEBUG
 #undef NDEBUG
@@ -73,6 +76,15 @@ int main(void) {
     assert(s && strlen(s) <= 256 && strstr(s, "result at end"));
     free(s);
     fg_buf_clear(&b);
+#ifndef _WIN32
+    void (*old_handler)(int) = signal(SIGCHLD, SIG_IGN);
+    const char *command[] = {"/bin/sh", "-c", "exit 0", NULL};
+    fg_process_result result = {0};
+    assert(fg_process(".", command, 1000, 4096, NULL, NULL, &result, &e) == FORGE_OK);
+    signal(SIGCHLD, old_handler);
+    assert(result.exit_code == -1);
+    fg_process_free(&result);
+#endif
     puts("core tests passed");
     return 0;
 }

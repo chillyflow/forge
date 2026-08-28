@@ -401,9 +401,13 @@ collected:
             break;
     }
     kill(-pid, SIGKILL);
-    if (!done)
-        while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
-        }
+    if (!done) {
+        pid_t waited;
+        do {
+            waited = waitpid(pid, &status, 0);
+        } while (waited < 0 && errno == EINTR);
+        done = waited == pid;
+    }
     ssize_t n;
     while ((n = read(op[0], block, sizeof(block))) > 0)
         capture(&out, block, (size_t)n, max_bytes, &r->truncated);
@@ -411,8 +415,11 @@ collected:
         capture(&err, block, (size_t)n, max_bytes, &r->truncated);
     close(op[0]);
     close(ep[0]);
-    r->exit_code = WIFEXITED(status) ? WEXITSTATUS(status)
-                                     : 128 + (WIFSIGNALED(status) ? WTERMSIG(status) : 0);
+    /* An embedding host may reap children itself or ignore SIGCHLD. Missing
+     * wait status must never become a fabricated successful verification. */
+    r->exit_code = !done               ? -1
+                   : WIFEXITED(status) ? WEXITSTATUS(status)
+                                       : 128 + (WIFSIGNALED(status) ? WTERMSIG(status) : 0);
 #endif
     r->out_len = out.len;
     r->err_len = err.len;
