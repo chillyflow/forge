@@ -22,6 +22,9 @@ jobs:
         run: cmake -S . -B build -DFORGE_WITH_LLAMA=OFF -DCMAKE_BUILD_TYPE=Debug
       - name: Build
         run: cmake --build build --config Debug --parallel 4
+      - name: Repeat native macOS watcher coverage
+        if: runner.os == 'macOS'
+        run: ctest --test-dir build -C Debug -R "^watch$" --repeat until-fail:30 --output-on-failure
       - name: Test
         run: ctest --test-dir build -C Debug --output-on-failure
       - name: Check benchmark tooling

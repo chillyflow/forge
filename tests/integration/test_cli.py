@@ -197,7 +197,7 @@ class ForgeTests(unittest.TestCase):
         for capacity in (8192, 4096):
             with self.subTest(context=capacity):
                 _, _, session = self.run_script(actions, '--context', str(capacity),
-                                                 '--output-reserve', '256')
+                                                 '--output-reserve', '256', '--no-auto-validation')
                 metrics = json.loads((session / 'metrics.json').read_text())
                 self.assertGreater(metrics['context_evictions'], 0)
                 final_prompt = sorted((session / 'context').glob('*.txt'))[-1].read_text()
@@ -378,7 +378,7 @@ class ForgeTests(unittest.TestCase):
             {'tool': 'read_file', 'args': {'path': '../outside', 'start': 1, 'end': 10}},
             {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', 'print(123)']}},
             {'final': 'Operations denied.'},
-        ])
+        ], '--no-auto-validation')
         results = [e['data']['output'] for e in events if e['type'] == 'tool_result']
         self.assertTrue(all('TOOL_ERROR [policy]' in x for x in results))
         self.assertIn('return a - b', (self.root / 'calc.go').read_text())
@@ -411,7 +411,7 @@ class ForgeTests(unittest.TestCase):
         self.assertEqual((self.root / 'new.go').read_text(), 'package calc\n')
 
     def test_replay_rejects_corruption(self):
-        _, _, session = self.run_script([{'final': 'done'}])
+        _, _, session = self.run_script([{'final': 'done'}], '--no-auto-validation')
         (session / 'events.jsonl').write_text('{"sequence":99}\n')
         self.assertNotEqual(self.cli('replay', str(session), success=False).returncode, 0)
 
@@ -434,10 +434,16 @@ class ForgeTests(unittest.TestCase):
             {'tool': 'read_file', 'args': {'start': 1, 'path': 'calc.go', 'end': 3}},
             {'final': 'Loop warning observed.'},
         ]
-        _, events, session = self.run_script(actions)
+        # This fixture tests canonical loop detection without process permission.
+        # Delayed native notifications may legitimately require validation even
+        # for read-only actions, so explicitly finish as unverified here.
+        _, events, session = self.run_script(actions, '--no-auto-validation')
         outputs = [e['data']['output'] for e in events if e['type'] == 'tool_result']
         self.assertIn('LOOP_DETECTED', outputs[-1])
         self.assertEqual(json.loads((session / 'metrics.json').read_text())['loop_warnings'], 1)
+        self.assertFalse(any(event['type'] == 'validation_result' for event in events))
+        self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
+                         'unverified')
 
     def test_no_implicit_simulation(self):
         self.assertNotEqual(self.cli('run', 'task', success=False).returncode, 0)
@@ -451,7 +457,7 @@ class ForgeTests(unittest.TestCase):
         _, events, session = self.run_script([
             {'tool': 'read_file', 'args': {'path': 'calc.go', 'start': 1, 'end': 3}},
             {'final': 'Checked: café, 日本語, 🛠'},
-        ])
+        ], '--no-auto-validation')
         pieces = ''.join(e['data'] for e in events if e['type'] == 'token')
         self.assertIn('café', pieces)
         self.assertIn('日本語', pieces)
@@ -556,7 +562,7 @@ class ForgeTests(unittest.TestCase):
         _, events, _ = self.run_script([
             {'tool': 'read_file', 'args': {'path': 'linked.go', 'start': 1, 'end': 2}},
             {'final': 'Denied.'},
-        ])
+        ], '--no-auto-validation')
         self.assertIn('policy', next(e['data']['output'] for e in events if e['type'] == 'tool_result'))
 
 if __name__ == '__main__':
