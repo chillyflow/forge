@@ -16,8 +16,21 @@ This addendum and implementation are introduced together. Verification used
 MSVC 19.44, Windows 11, Go 1.27.0 and the pinned native dependencies: all 11 CTest
 groups passed in Debug core (16.56 s) and Release with the direct CUDA backend
 linked (18.23 s). These suites include real Go subprocess checks and scripted
-agent tests; linking CUDA does not prove model inference. New cross-platform CI
-and real-model results must be recorded separately.
+agent tests; linking CUDA does not prove model inference.
+
+The [CI run at d60e4c2](https://github.com/chillyflow/forge/actions/runs/33179848895)
+subsequently passed all five jobs: Ubuntu, Windows and macOS core tests, Linux
+ASan/UBSan, and the pinned direct llama backend build/tests. This is not Linux
+NVIDIA or macOS Metal model-inference evidence.
+
+[Recorded Windows model runs](../benchmark/results/2026-08-28-normalized/README.md)
+used the executable built from `742848a` with the verified Qwen3-Coder GGUF:
+Forge and OpenCode each passed 10/10 tasks with unchanged tests and identical
+prepared file hashes. Forge evaluated 31,739 prompt tokens against 73,136.
+Timing boundaries differ; the ten synthetic tasks are not the required broad
+suite, multiple model classes, or two established harnesses. The initial
+unnormalized formatting failure is retained separately. Normalization changes
+the input files, so these results do not supersede the historical suite.
 
 | Source areas | Implemented addition | Evidence / still open |
 | --- | --- | --- |

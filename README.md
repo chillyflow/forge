@@ -140,10 +140,13 @@ The driver creates a fresh checkout for every task/variant, verifies tests
 independently, rejects test modifications, and records model SHA-256 and hardware.
 See [benchmark methodology](benchmark/README.md).
 
-[Published local smoke results](benchmark/results/2026-08-28/README.md): Forge
-solved **9/10** tiny Go tasks versus OpenCode's **10/10**, using the same GGUF and
-GPU. Forge evaluated fewer prompt tokens, but the accuracy gap remains. All
-failures, ablations, settings and timing caveats are included in the report.
+[Latest local smoke results](benchmark/results/2026-08-28-normalized/README.md):
+Forge and OpenCode each solved **10/10** tiny Go tasks with identical prepared
+file hashes, GGUF and GPU. Forge evaluated 31,739 prompt tokens versus 73,136;
+the wall-time boundaries differ, so this is not an overall speed claim.
+The [earlier 9/10 run and ablations](benchmark/results/2026-08-28/README.md)
+remain available. Fixture normalization changed the starting files; do not
+combine the two suites or attribute the difference solely to runtime changes.
 
 ## Embed
 
