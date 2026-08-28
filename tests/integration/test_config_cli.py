@@ -9,6 +9,11 @@ import unittest
 
 
 FORGE = str(pathlib.Path(sys.argv.pop(1)).resolve())
+FALLBACK_FORGE = None
+if "--fallback-forge" in sys.argv:
+    index = sys.argv.index("--fallback-forge")
+    FALLBACK_FORGE = str(pathlib.Path(sys.argv.pop(index + 1)).resolve())
+    sys.argv.pop(index)
 
 
 class ConfigCliTests(unittest.TestCase):
@@ -26,9 +31,9 @@ class ConfigCliTests(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
         return str(path)
 
-    def cli(self, *arguments, success=True):
+    def cli(self, *arguments, success=True, executable=FORGE):
         result = subprocess.run(
-            [FORGE, "--workspace", str(self.workspace), *arguments],
+            [executable, "--workspace", str(self.workspace), *arguments],
             cwd=self.workspace,
             capture_output=True,
             encoding="utf-8",
@@ -181,10 +186,22 @@ class ConfigCliTests(unittest.TestCase):
             ]}},
             {"final": "Operations were denied."},
         ])
-        result = self.cli("run", "Check permissions", "--script", fixture, "--json")
+        # This exact two-action fixture tests permission dispatch, not native
+        # notification timing. A delayed native event may correctly discard a
+        # fixed script response as stale. Keep both denial assertions and use
+        # the real bounded snapshot fallback when supplied by CTest.
+        result = self.cli("run", "Check permissions", "--script", fixture, "--json",
+                          executable=FALLBACK_FORGE or FORGE)
         events = [json.loads(line) for line in result.stdout.splitlines()]
+        if FALLBACK_FORGE:
+            scans = [event["data"] for event in events if event["type"] == "repository_scan"]
+            self.assertTrue(scans, result.stdout + result.stderr)
+            self.assertTrue(all(not scan["watch_available"] for scan in scans))
+            self.assertIn("fallback test fixture", scans[0]["watch_fallback"])
+        names = [event["data"]["name"] for event in events if event["type"] == "tool_result"]
         outputs = [event["data"]["output"] for event in events if event["type"] == "tool_result"]
-        self.assertEqual(len(outputs), 2)
+        self.assertEqual(names, ["apply_patch", "run_command"], result.stdout + result.stderr)
+        self.assertEqual(len(outputs), 2, result.stdout + result.stderr)
         self.assertTrue(all("TOOL_ERROR [policy]" in output for output in outputs))
         self.assertEqual((self.workspace / "note.txt").read_text(), "original")
         self.assertFalse((self.workspace / "unexpected.txt").exists())

@@ -25,6 +25,9 @@ jobs:
       - name: Repeat native macOS watcher coverage
         if: runner.os == 'macOS'
         run: ctest --test-dir build -C Debug -R "^watch$" --repeat until-fail:100 --output-on-failure
+      - name: Repeat macOS configuration contracts
+        if: runner.os == 'macOS'
+        run: ctest --test-dir build -C Debug -R "^config_integration$" --repeat until-fail:30 --output-on-failure
       - name: Test
         run: ctest --test-dir build -C Debug --output-on-failure
       - name: Check benchmark tooling
