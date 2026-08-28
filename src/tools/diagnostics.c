@@ -11,6 +11,7 @@ char *fg_compress_output(const char *raw, size_t budget, size_t *visible, forge_
     size_t pass = 0, fail = 0, skipped = 0;
     uint64_t seen[256] = {0};
     size_t count = 0;
+    bool go_protocol = false;
     while (*p) {
         const char *end = strchr(p, '\n');
         size_t n = end ? (size_t)(end - p) : strlen(p);
@@ -21,17 +22,30 @@ char *fg_compress_output(const char *raw, size_t budget, size_t *visible, forge_
             yyjson_val *o = yyjson_doc_get_root(d);
             const char *action = fg_json_str(o, "Action"), *output = fg_json_str(o, "Output"),
                        *test = fg_json_str(o, "Test"), *pkg = fg_json_str(o, "Package");
-            if (action && !strcmp(action, "pass"))
+            bool go_event =
+                action &&
+                (!strcmp(action, "start") || !strcmp(action, "run") || !strcmp(action, "pause") ||
+                 !strcmp(action, "cont") || !strcmp(action, "output") || !strcmp(action, "pass") ||
+                 !strcmp(action, "skip") || !strcmp(action, "fail") ||
+                 !strcmp(action, "build-output") || !strcmp(action, "build-fail"));
+            go_protocol = go_protocol || go_event;
+            if (go_event && !strcmp(action, "pass"))
                 pass++;
-            if (action && !strcmp(action, "fail")) {
+            if (go_event && (!strcmp(action, "fail") || !strcmp(action, "build-fail"))) {
                 fail++;
                 fg_buf_printf(&result, "FAIL %s %s\n", pkg ? pkg : "", test ? test : "");
             }
-            if (output) {
+            if (go_event && output) {
                 owned = fg_strdup(output);
+                if (!owned) {
+                    yyjson_doc_free(d);
+                    fg_buf_clear(&result);
+                    fg_error(e, FORGE_ERR_MEMORY, "Diagnostic allocation failed");
+                    return NULL;
+                }
                 line = owned;
                 n = strlen(output);
-            } else
+            } else if (go_event)
                 n = 0;
         }
         char *bounded = malloc(n + 1);
@@ -74,7 +88,28 @@ char *fg_compress_output(const char *raw, size_t budget, size_t *visible, forge_
             break;
         p = end + 1;
     }
-    if (!result.len) {
+    if (!go_protocol) {
+        size_t raw_size = strlen(raw);
+        if (raw_size <= budget) {
+            /* A successful status header must not hide useful stdout or generic JSON. */
+            fg_buf_clear(&result);
+            fg_buf_puts(&result, raw);
+        } else {
+            size_t tail = FG_MIN(budget / 3, 1024);
+            size_t prefix_limit = budget > tail + 48 ? budget - tail - 48 : 0;
+            if (result.len > prefix_limit) {
+                result.len = prefix_limit;
+                while (result.len && ((unsigned char)result.data[result.len] & 0xc0) == 0x80)
+                    result.len--;
+                result.data[result.len] = 0;
+            }
+            const char *tail_start = raw + raw_size - tail;
+            while (((unsigned char)*tail_start & 0xc0) == 0x80)
+                tail_start++;
+            fg_buf_puts(&result, "\n[tail; full output saved]\n");
+            fg_buf_puts(&result, tail_start);
+        }
+    } else if (!result.len) {
         size_t n = strlen(raw);
         if (n > budget - 80) {
             fg_buf_puts(&result, "[tail; full output saved]\n");

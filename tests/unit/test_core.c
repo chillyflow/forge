@@ -61,6 +61,18 @@ int main(void) {
     s = fg_compress_output(raw, 1024, NULL, &e);
     assert(s && strstr(s, "TestAdd") && strstr(s, "expected 4") && strstr(s, "pass=1"));
     free(s);
+    raw = "exit_code=0\n{\"answer\":42}\nordinary stdout\n";
+    s = fg_compress_output(raw, 256, NULL, &e);
+    assert(s && !strcmp(s, raw));
+    free(s);
+    fg_buf_puts(&b, "exit_code=0\n");
+    for (size_t i = 0; i < 100; i++)
+        fg_buf_puts(&b, "verbose progress\n");
+    fg_buf_puts(&b, "result at end\n");
+    s = fg_compress_output(b.data, 256, NULL, &e);
+    assert(s && strlen(s) <= 256 && strstr(s, "result at end"));
+    free(s);
+    fg_buf_clear(&b);
     puts("core tests passed");
     return 0;
 }

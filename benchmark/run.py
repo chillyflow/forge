@@ -66,6 +66,7 @@ def main():
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(content)
                 subprocess.run(['git', 'init', '-q', str(root)], check=True)
+                subprocess.run(['git', '-C', str(root), 'config', 'core.autocrlf', 'false'], check=True)
                 subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
                 subprocess.run(['git', '-C', str(root), '-c', 'user.name=Forge benchmark', '-c', 'user.email=benchmark@example.invalid', 'commit', '-qm', 'Fixture baseline'], check=True)
                 before_tests = digest(root / 'repair_test.go')

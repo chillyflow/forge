@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 FORGE = str(pathlib.Path(sys.argv.pop(1)).resolve())
 
@@ -18,8 +19,9 @@ class ForgeTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def cli(self, *args, success=True):
-        result = subprocess.run([FORGE, *args, '--workspace', str(self.root)], capture_output=True, text=True, timeout=35)
+    def cli(self, *args, success=True, **run_options):
+        result = subprocess.run([FORGE, *args, '--workspace', str(self.root)], capture_output=True,
+                                encoding='utf-8', timeout=35, **run_options)
         if success:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
@@ -124,7 +126,7 @@ class ForgeTests(unittest.TestCase):
         metrics = json.loads((session / 'metrics.json').read_text())
         self.assertEqual(metrics['visible_tool_bytes'], len(result_text.encode()))
 
-    def test_hardlink_patch_and_symlink_metadata_denied(self):
+    def test_hardlink_patch_denied(self):
         outside = self.root / 'original.txt'
         outside.write_text('original')
         os.link(outside, self.root / 'linked.txt')
@@ -134,6 +136,50 @@ class ForgeTests(unittest.TestCase):
         ], '--allow-write')
         self.assertIn('policy', next(e['data']['output'] for e in events if e['type'] == 'tool_result'))
         self.assertEqual(outside.read_text(), 'original')
+
+    def test_linked_metadata_denied(self):
+        metadata = self.root / '.forge'
+        metadata.mkdir()
+        original = self.root / 'original.db'
+        original.write_bytes(b'untouched')
+        os.link(original, metadata / 'index.db')
+        self.assertNotEqual(self.cli('index', success=False).returncode, 0)
+        self.assertEqual(original.read_bytes(), b'untouched')
+        (metadata / 'index.db').unlink()
+        try:
+            (metadata / 'index.db-wal').symlink_to(original)
+        except OSError:
+            self.skipTest('Symlink creation is not permitted on this host')
+        self.assertNotEqual(self.cli('index', success=False).returncode, 0)
+        self.assertEqual(original.read_bytes(), b'untouched')
+
+    def test_command_environment_is_allowlisted(self):
+        code = "import os,sys; assert 'FORGE_TEST_PRIVATE_VALUE' not in os.environ; assert sys.stdin.read() == ''; print('isolated')"
+        with patch.dict(os.environ, {'FORGE_TEST_PRIVATE_VALUE': 'non-secret-sentinel'}):
+            _, events, _ = self.run_script([
+                {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', code]}},
+                {'final': 'Checked.'},
+            ], '--allow-exec')
+        output = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
+        self.assertIn('exit_code=0', output)
+        self.assertIn('isolated', output)
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX descriptor inheritance')
+    def test_command_does_not_inherit_parent_descriptors(self):
+        with (self.root / 'private.txt').open('w') as stream:
+            fd = stream.fileno()
+            inode = os.fstat(fd).st_ino
+            code = ("import os\ntry:\n s=os.fstat(" + str(fd) + ")\n"
+                    "except OSError:\n pass\nelse:\n assert s.st_ino != " + str(inode) + "\nprint('closed')")
+            actions = [{'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', code]}}, {'final': 'Checked.'}]
+            path = self.root / 'script.json'
+            path.write_text(json.dumps(actions), encoding='utf-8')
+            result = self.cli('run', 'Check inherited descriptors', '--script', str(path), '--json',
+                              '--allow-exec', pass_fds=(fd,))
+        events = [json.loads(line) for line in result.stdout.splitlines()]
+        output = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
+        self.assertIn('exit_code=0', output)
+        self.assertIn('closed', output)
 
     def test_symlink_reads_denied(self):
         try:

@@ -1,3 +1,6 @@
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
 #include "internal.h"
 #include <errno.h>
 #include <sys/stat.h>
@@ -9,6 +12,9 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <poll.h>
+#if defined(__linux__)
+#include <sys/syscall.h>
+#endif
 #endif
 
 void fg_process_free(fg_process_result *r) {
@@ -118,6 +124,36 @@ static void drain(HANDLE h, fg_buf *b, size_t cap, bool *trunc) {
     }
 }
 #endif
+#ifndef _WIN32
+static bool child_pipe(int descriptors[2]) {
+    if (pipe(descriptors) != 0)
+        return false;
+    for (size_t i = 0; i < 2; i++) {
+        int fd = descriptors[i];
+        if (fd < 3) {
+            descriptors[i] = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+            close(fd);
+        } else if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
+            close(descriptors[0]);
+            close(descriptors[1]);
+            return false;
+        }
+        if (descriptors[i] < 0) {
+            close(descriptors[1 - i]);
+            return false;
+        }
+    }
+    return true;
+}
+static void close_child_descriptors(long maximum) {
+#if defined(__linux__) && defined(SYS_close_range)
+    if (syscall(SYS_close_range, 3u, ~0u, 0u) == 0)
+        return;
+#endif
+    for (long fd = 3; fd < maximum; fd++)
+        close((int)fd);
+}
+#endif
 forge_status fg_process(const char *root, const char *const *argv, uint64_t timeout,
                         size_t max_bytes, forge_cancel_fn cancel, void *user, fg_process_result *r,
                         forge_error *e) {
@@ -137,6 +173,8 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
     SECURITY_ATTRIBUTES sa = {sizeof(sa), NULL, TRUE};
     HANDLE out_r = NULL, out_w = NULL, err_r = NULL, err_w = NULL, job = NULL, null_in = NULL;
     PROCESS_INFORMATION pi = {0};
+    LPPROC_THREAD_ATTRIBUTE_LIST attributes = NULL;
+    bool attributes_ready = false;
     fg_buf command = {0}, env = {0};
     if (!CreatePipe(&out_r, &out_w, &sa, 0) || !CreatePipe(&err_r, &err_w, &sa, 0))
         goto win_fail;
@@ -171,16 +209,32 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
     limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)))
         goto win_fail;
-    STARTUPINFOA si = {0};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdOutput = out_w;
-    si.hStdError = err_w;
-    si.hStdInput = null_in;
+    SIZE_T attribute_bytes = 0;
+    InitializeProcThreadAttributeList(NULL, 1, 0, &attribute_bytes);
+    attributes = malloc(attribute_bytes);
+    if (!attributes || !InitializeProcThreadAttributeList(attributes, 1, 0, &attribute_bytes))
+        goto win_fail;
+    attributes_ready = true;
+    HANDLE inherited[] = {out_w, err_w, null_in};
+    if (!UpdateProcThreadAttribute(attributes, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited,
+                                   sizeof(inherited), NULL, NULL))
+        goto win_fail;
+    STARTUPINFOEXA si = {0};
+    si.StartupInfo.cb = sizeof(si);
+    si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    si.StartupInfo.hStdOutput = out_w;
+    si.StartupInfo.hStdError = err_w;
+    si.StartupInfo.hStdInput = null_in;
+    si.lpAttributeList = attributes;
     if (command.failed || env.failed ||
         !CreateProcessA(executable, command.data, NULL, NULL, TRUE,
-                        CREATE_NO_WINDOW | CREATE_SUSPENDED, env.data, root, &si, &pi))
+                        CREATE_NO_WINDOW | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT,
+                        env.data, root, &si.StartupInfo, &pi))
         goto win_fail;
+    DeleteProcThreadAttributeList(attributes);
+    free(attributes);
+    attributes = NULL;
+    attributes_ready = false;
     if (!AssignProcessToJobObject(job, pi.hProcess)) {
         TerminateProcess(pi.hProcess, 125);
         goto win_fail;
@@ -226,6 +280,9 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
     fg_buf_clear(&env);
     goto collected;
 win_fail:
+    if (attributes_ready)
+        DeleteProcThreadAttributeList(attributes);
+    free(attributes);
     if (pi.hThread)
         CloseHandle(pi.hThread);
     if (pi.hProcess)
@@ -251,15 +308,48 @@ win_fail:
 collected:
 #else
     int op[2], ep[2];
-    if (pipe(op) != 0)
+    if (!child_pipe(op))
         return fg_error(e, FORGE_ERR_IO, "pipe failed");
-    if (pipe(ep) != 0) {
+    if (!child_pipe(ep)) {
         close(op[0]);
         close(op[1]);
         return fg_error(e, FORGE_ERR_IO, "pipe failed");
     }
+    /* Allocate before fork: model backends have worker threads, so the child may
+     * only use async-signal-safe operations until execve. */
+    fg_buf environment = {0};
+    const char *keys[] = {"PATH", "HOME", "TMPDIR"};
+    const char *defaults[] = {"/usr/bin:/bin", "", "/tmp"};
+    size_t offsets[3];
+    for (size_t i = 0; i < 3; i++) {
+        offsets[i] = environment.len;
+        const char *value = getenv(keys[i]);
+        fg_buf_printf(&environment, "%s=%s", keys[i], value ? value : defaults[i]);
+        fg_buf_add(&environment, "", 1);
+    }
+    long maximum_fd = sysconf(_SC_OPEN_MAX);
+    int input = open("/dev/null", O_RDONLY | O_CLOEXEC);
+    if (input >= 0 && input < 3) {
+        int original = input;
+        input = fcntl(original, F_DUPFD_CLOEXEC, 3);
+        close(original);
+    }
+    if (environment.failed || maximum_fd < 0 || maximum_fd > INT_MAX || input < 0) {
+        if (input >= 0)
+            close(input);
+        fg_buf_clear(&environment);
+        close(op[0]);
+        close(op[1]);
+        close(ep[0]);
+        close(ep[1]);
+        return fg_error(e, FORGE_ERR_IO, "Cannot prepare child environment");
+    }
+    char *child_environment[] = {environment.data + offsets[0], environment.data + offsets[1],
+                                 environment.data + offsets[2], "LANG=C.UTF-8", NULL};
     pid_t pid = fork();
     if (pid < 0) {
+        close(input);
+        fg_buf_clear(&environment);
         close(op[0]);
         close(op[1]);
         close(ep[0]);
@@ -267,33 +357,15 @@ collected:
         return fg_error(e, FORGE_ERR_IO, "fork failed");
     }
     if (pid == 0) {
-        setpgid(0, 0);
-        close(op[0]);
-        close(ep[0]);
-        dup2(op[1], STDOUT_FILENO);
-        dup2(ep[1], STDERR_FILENO);
-        close(op[1]);
-        close(ep[1]);
-        int input = open("/dev/null", O_RDONLY);
-        if (input >= 0) {
-            dup2(input, STDIN_FILENO);
-            close(input);
-        }
-        if (chdir(root) != 0)
+        if (setpgid(0, 0) != 0 || dup2(op[1], STDOUT_FILENO) < 0 ||
+            dup2(ep[1], STDERR_FILENO) < 0 || dup2(input, STDIN_FILENO) < 0 || chdir(root) != 0)
             _exit(126);
-        const char *path = getenv("PATH"), *home = getenv("HOME"), *tmp = getenv("TMPDIR");
-        char *path_copy = fg_strdup(path ? path : "/usr/bin:/bin"),
-             *home_copy = fg_strdup(home ? home : ""), *tmp_copy = fg_strdup(tmp ? tmp : "/tmp");
-        extern char **environ;
-        char *empty[] = {NULL};
-        environ = empty;
-        setenv("PATH", path_copy ? path_copy : "/usr/bin:/bin", 1);
-        setenv("HOME", home_copy ? home_copy : "", 1);
-        setenv("TMPDIR", tmp_copy ? tmp_copy : "/tmp", 1);
-        setenv("LANG", "C.UTF-8", 1);
-        execv(executable, (char *const *)argv);
+        close_child_descriptors(maximum_fd);
+        execve(executable, (char *const *)argv, child_environment);
         _exit(127);
     }
+    close(input);
+    fg_buf_clear(&environment);
     setpgid(pid, pid);
     close(op[1]);
     close(ep[1]);

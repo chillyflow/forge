@@ -118,7 +118,7 @@ def main():
                     (output / 'verification.stdout').write_text(verification.stdout)
                     (output / 'verification.stderr').write_text(verification.stderr)
                     events = []
-                    for line in (output / 'events.jsonl').read_text().splitlines():
+                    for line in (output / 'events.jsonl').read_text(encoding='utf-8').splitlines():
                         try:
                             events.append(json.loads(line))
                         except ValueError:

@@ -25,6 +25,9 @@ external diff/textconv commands are disabled. The index does not execute hooks.
 modify files, spawn processes, or access the network. A small inherited
 environment reduces accidental credential exposure but does not prevent a
 process reading credentials from disk. Command approval does not imply isolation.
+Windows child processes inherit only their three standard handles. POSIX children
+close other descriptors before execution; environment allocation happens before
+forking so model worker threads cannot leave allocator locks held in the child.
 
 Use a container, VM, dedicated account, or external sandbox for untrusted repos.
 Never run Forge elevated. Network blocking, seccomp/Landlock, namespaces, and
