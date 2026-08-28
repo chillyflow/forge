@@ -42,3 +42,38 @@ protocol, and report configuration differences.
 
 Disk KV caching, speculation, and OS isolation are not current variants. No
 speedup is assumed before measurement. Review raw artifacts before publishing.
+
+## Established-harness comparison
+
+The optional adapter uses a separately installed OpenCode and matching
+`llama-server`. It runs only the trusted synthetic fixtures, with remote tools,
+subagents, auto-sharing, plugins and model downloads disabled. The loopback server
+has an ephemeral authentication key; it is unrelated to any Hugging Face token.
+The generated OpenCode configuration is private benchmark state, not a file to
+publish. KV is cleared between tasks, while prefix reuse within a task remains
+enabled. Batch sizes and thread counts match Forge's current defaults.
+
+```sh
+python benchmark/opencode.py --opencode /tools/opencode \
+  --server /tools/llama-server --model /models/coder.gguf \
+  --output /tmp/opencode-results
+python benchmark/summarize.py --forge /tmp/forge-results \
+  --opencode /tmp/opencode-results --forge-revision ACTUAL_GIT_COMMIT \
+  --output /tmp/public-numeric-results
+```
+
+The summarizer reads server counters, including metadata/title inference, rather
+than counting only user-visible agent steps. It copies numeric records and a
+small environment allowlist, not raw logs, prompts or generated credentials.
+Task fixtures are deliberately small, and one run is not statistically robust.
+
+`--variants optimized grammar-first` compares the greedy grammar fast path with
+full-vocabulary masking. The fast path still validates every selected token.
+Its counters include end tokens; `generated_tokens` excludes them. `sampling_ms`
+excludes waiting for GPU work in revisions after `cb3254b`, while `decode_ms`
+includes sampling and event callbacks. Do not add those two durations together.
+
+Independent runs with the same seed did not always produce identical action
+traces. Treat the KV ablation as complete task runs, not a matched-token
+microbenchmark. The initial two-task grammar ablation did preserve both action
+traces, including the failing task; its older `sampling_ms` includes GPU waits.

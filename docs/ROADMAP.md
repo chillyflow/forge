@@ -12,6 +12,7 @@ accuracy, security isolation, or superiority over another harness.
 - CUDA source-build option and matching Windows prebuilt-DLL option.
 - Agent state transitions, policy callbacks, cancellation and hard limits.
 - Generated GBNF tools plus strict post-generation JSON schema validation.
+- Exact greedy grammar fast path with a full-mask fallback and ablation flag.
 - Read/search/contextual patch/command/Git/Go symbol/reference/output tools.
 - Native subprocess capture, separate streams, deadlines and descendant cleanup.
 - Context segments, pinned task/system/latest evidence, utility/token budgeting.
@@ -39,11 +40,12 @@ accuracy, security isolation, or superiority over another harness.
 | Observability | Tokens, reuse, durations, bytes, plans | Integrated peak RSS/VRAM collection |
 | Configuration | CLI flags and reference profile | TOML loader and hardware planner |
 | Library ABI | Opaque types and ownership rules | Stable ABI guarantee/install package |
-| Benchmark release | Runnable fixtures and local measurements | 25–50 diverse tasks, robust external comparisons |
+| Benchmark release | Ten fixtures, local measurements, initial OpenCode comparison | 25–50 diverse tasks, repeated robust comparisons |
 
 ## Remaining optimization/research milestones
 
-1. Equal-model/equal-hardware comparisons with established harnesses.
+1. Broaden the initial equal-model/equal-hardware OpenCode comparison, close the
+   observed repair-accuracy gap, and repeat measurements across larger tasks.
 2. Broader Go repository graph and deterministic validation scheduling.
 3. OS change watcher and dependency-aware cached summaries.
 4. Multiple physical checkpoints and persisted session resume.

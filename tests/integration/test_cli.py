@@ -164,18 +164,29 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('exit_code=0', output)
         self.assertIn('isolated', output)
 
-    @unittest.skipIf(os.name == 'nt', 'POSIX descriptor inheritance')
     def test_command_does_not_inherit_parent_descriptors(self):
-        with (self.root / 'private.txt').open('w') as stream:
+        with (self.root / 'inherit-only.txt').open('w') as stream:
             fd = stream.fileno()
-            inode = os.fstat(fd).st_ino
-            code = ("import os\ntry:\n s=os.fstat(" + str(fd) + ")\n"
-                    "except OSError:\n pass\nelse:\n assert s.st_ino != " + str(inode) + "\nprint('closed')")
+            if os.name == 'nt':
+                import msvcrt
+                handle = msvcrt.get_osfhandle(fd)
+                os.set_handle_inheritable(handle, True)
+                startup = subprocess.STARTUPINFO()
+                startup.lpAttributeList = {'handle_list': [handle]}
+                options = {'startupinfo': startup}
+                code = ("import ctypes\nk=ctypes.WinDLL('kernel32'); b=ctypes.create_unicode_buffer(4096)\n"
+                        f"n=k.GetFinalPathNameByHandleW(ctypes.c_void_p({handle}),b,4096,0)\n"
+                        "assert n == 0 or not b.value.endswith('inherit-only.txt')\nprint('closed')")
+            else:
+                inode = os.fstat(fd).st_ino
+                options = {'pass_fds': (fd,)}
+                code = ("import os\ntry:\n s=os.fstat(" + str(fd) + ")\n"
+                        "except OSError:\n pass\nelse:\n assert s.st_ino != " + str(inode) + "\nprint('closed')")
             actions = [{'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', code]}}, {'final': 'Checked.'}]
             path = self.root / 'script.json'
             path.write_text(json.dumps(actions), encoding='utf-8')
             result = self.cli('run', 'Check inherited descriptors', '--script', str(path), '--json',
-                              '--allow-exec', pass_fds=(fd,))
+                              '--allow-exec', **options)
         events = [json.loads(line) for line in result.stdout.splitlines()]
         output = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
         self.assertIn('exit_code=0', output)

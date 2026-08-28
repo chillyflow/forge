@@ -14,6 +14,9 @@ design's research milestones. No model weights are bundled or downloaded by the
 runtime. llama.cpp and GPU dependencies include C++; Forge does not claim its
 entire dependency graph is C.
 
+The tested local model is [Qwen3-Coder-30B-A3B Q4_K_M](docs/MODEL.md), with verified
+download provenance and GPU settings documented separately.
+
 ## Build
 
 CMake 3.24+, a C17/C++17 compiler, Git, and Python 3.10+ for tests. The first build
