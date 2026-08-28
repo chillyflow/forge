@@ -151,6 +151,19 @@ forge_status fg_model_generate(forge_model *m, const char *p, const char *g, siz
     return fg_model_generate_with_cache(m, p, g, max_tokens, cb, u, out, stats, cancel, cu,
                                         deadline, NULL, e);
 }
+forge_status fg_model_generate_active(forge_model *m, const char *prompt, size_t max_tokens,
+                                      forge_token_fn callback, void *userdata, char **output,
+                                      forge_metrics *metrics, forge_cancel_fn cancel,
+                                      void *cancel_userdata, uint64_t deadline, forge_error *e) {
+    if (!m || !m->operation_active || m->cache_request || !m->generate || !prompt || !max_tokens ||
+        !output || !metrics)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid guarded generation request");
+    *output = NULL;
+    if ((cancel && cancel(cancel_userdata)) || (deadline && fg_now_ms() >= deadline))
+        return fg_error(e, FORGE_ERR_CANCELLED, "Generation cancelled before tokenization");
+    return m->generate(m, prompt, NULL, max_tokens, callback, userdata, output, metrics, cancel,
+                       cancel_userdata, deadline, e);
+}
 forge_status fg_model_generate_with_cache(forge_model *m, const char *p, const char *g,
                                           size_t max_tokens, forge_token_fn cb, void *u, char **out,
                                           forge_metrics *stats, forge_cancel_fn cancel, void *cu,

@@ -12,6 +12,7 @@ extern "C" {
 #define FORGE_SUMMARY_MAX_SOURCE_BYTES ((size_t)256 * 1024 * 1024)
 #define FORGE_SUMMARY_MAX_CACHE_ENTRIES ((size_t)4096)
 #define FORGE_SUMMARY_MAX_CACHE_BYTES ((size_t)64 * 1024 * 1024)
+#define FORGE_SUMMARY_MAX_GENERATED_TOKENS ((size_t)8192)
 
 typedef enum {
     FORGE_SUMMARY_REPOSITORY,
@@ -98,6 +99,41 @@ void forge_summary_input_destroy(forge_summary_input *);
  * Input remains immutable and reusable. No inference or quality proof is made. */
 forge_status forge_repo_summary_store(forge_repo *, const forge_summary_input *, const char *text,
                                       size_t length, forge_summary_store_result *, forge_error *);
+
+typedef struct {
+    bool prepared, cache_hit, published;
+    forge_summary_cache_status initial_cache_status;
+    size_t model_calls; /* Zero for a validated hit, at most one otherwise. */
+    forge_summary_store_result store;
+    forge_metrics inference; /* Consumed work is reported even on failure. */
+    double prepare_ms, generate_ms, publish_ms, duration_ms;
+} forge_summary_generation_stats;
+
+/* Prepare a fresh indexed snapshot, reuse a valid hit without inference, or
+ * generate once and publish with the same dependency checks as summary_store.
+ * No SQLite transaction is held during inference. A concurrent valid writer
+ * wins; the returned HIT contains its committed text, not the losing output.
+ *
+ * options and an explicit producer_id other than "caller" are required. The
+ * host must identify the actual model weights/backend/template version in it;
+ * Forge cannot verify that caller assertion. The effective producer ID also
+ * hashes the loaded model configuration and max_generated_tokens. Generation
+ * uses that model's exact prompt counter; options.count_tokens must be NULL.
+ * The timeout/deadline covers the entire operation. Output is byte/token
+ * bounded; reaching the generation cap rejects publication. A valid ending
+ * does not prove semantic correctness. Summaries are untrusted model text.
+ *
+ * The model is exclusively borrowed through preparation/publication and must
+ * outlive returned inputs if they are subsequently passed to summary_store.
+ * Stats are always reset and include attempted inference on errors. No raw
+ * generated text is returned on failure; previously committed cache data is
+ * unaffected by failed generation. Normal prefix reuse may occur, but no new
+ * automatic checkpoint anchors are nominated by this operation. */
+forge_summary_input *forge_repo_summary_generate(forge_repo *, forge_model *,
+                                                 const forge_summary_target *,
+                                                 const forge_summary_options *,
+                                                 size_t max_generated_tokens,
+                                                 forge_summary_generation_stats *, forge_error *);
 
 #ifdef __cplusplus
 }

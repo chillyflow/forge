@@ -4,6 +4,7 @@
 #include "forge/verification.h"
 #include "forge/index.h"
 #include "forge/retrieval.h"
+#include "forge/summary.h"
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
@@ -23,6 +24,7 @@ static void usage(void) {
          "  forge complete PROMPT --model model.gguf [options]\n"
          "  forge index [CHANGED_PATH] | inspect SYMBOL | references SYMBOL | search TEXT\n"
          "  forge retrieve QUERY [--depth 0..3]    staged indexed evidence as JSON\n"
+         "  forge summarize PATH --summary-producer ID --model MODEL   cached model summary\n"
          "  forge watch [--wall-ms N]              update index from native file events\n"
          "  forge index-info PATH                 report indexed source/AST/symbol hashes\n"
          "  forge validation-plan [CHANGED_PATH]   print staged Go verification plan\n"
@@ -63,7 +65,11 @@ static void usage(void) {
          "  --grammar-first      disable greedy grammar fast path (ablation)\n"
          "  --no-auto-validation skip final Go validation (explicit ablation)\n"
          "  --script FILE        explicit simulated test backend (not inference)\n"
-         "  --depth N            symbol expansion or retrieval graph hops, 0..3\n");
+         "  --depth N            symbol expansion or retrieval graph hops, 0..3\n"
+         "  --summary-scope NAME repository/module/package/file/symbol (default file)\n"
+         "  --summary-symbol NAME exact declaration for symbol scope\n"
+         "  --summary-producer ID declared weights/backend/template identity, required\n"
+         "  --summary-full-source include all aggregate source, within limits\n");
 }
 static bool number(const char *text, size_t *out) {
     if (!text || !*text || *text == '-')
@@ -94,6 +100,7 @@ static int option_arity(const char *option) {
                                         "--no-semantic",
                                         "--no-compaction",
                                         "--no-auto-validation",
+                                        "--summary-full-source",
                                         "--no-config"};
     static const char *const values[] = {"--workspace",
                                          "--profile",
@@ -101,6 +108,9 @@ static int option_arity(const char *option) {
                                          "--model",
                                          "--script",
                                          "--chat-template",
+                                         "--summary-scope",
+                                         "--summary-symbol",
+                                         "--summary-producer",
                                          "--context",
                                          "--output-reserve",
                                          "--max-turns",
@@ -502,6 +512,64 @@ finish_watch:
     forge_repo_close(repo);
     return status == FORGE_OK ? 0 : failed(&error);
 }
+static forge_status summarize_repository(const forge_agent_config *config,
+                                         const forge_summary_target *target,
+                                         forge_summary_options *options, uint64_t deadline,
+                                         forge_error *error) {
+    options->deadline_ms = deadline;
+    options->timeout_ms = 0;
+    options->cancelled = cancelled;
+    options->max_input_tokens = config->limits.max_input_tokens;
+    options->max_summary_bytes = FG_MIN(options->max_summary_bytes, config->limits.max_tool_bytes);
+    size_t reserve = FG_MIN(config->limits.output_reserve, config->limits.max_generated_tokens);
+    forge_summary_generation_stats stats = {0};
+    forge_summary_input *input = NULL;
+    forge_repo *repo = forge_repo_open(config->workspace, error);
+    forge_status status =
+        repo ? fg_repo_index_until(repo, NULL, 0, true, deadline, cancelled, NULL, error)
+             : error->code;
+    if (status == FORGE_OK) {
+        input = forge_repo_summary_generate(repo, config->model, target, options, reserve, &stats,
+                                            error);
+        status = input ? FORGE_OK : error->code;
+    }
+    forge_error serialization_error = {0};
+    char *summary = input ? forge_summary_input_json(input, &serialization_error) : NULL;
+    char *metrics = fg_metrics_json(&stats.inference, status);
+    fg_buf report = {0};
+    bool ok = (!input || summary) && metrics &&
+              fg_buf_printf(&report,
+                            "{\"schema_version\":1,\"summary\":%s,\"generation\":{"
+                            "\"prepared\":%s,\"cache_hit\":%s,\"published\":%s,\"model_calls\":%zu,"
+                            "\"initial_cache_status\":%d,\"reused_competing_writer\":%s,"
+                            "\"repaired_corruption\":%s,\"evicted_entries\":%zu,"
+                            "\"prepare_ms\":%.0f,\"generate_ms\":%.0f,\"publish_ms\":%.0f,"
+                            "\"duration_ms\":%.0f},\"inference\":%s}",
+                            summary ? summary : "null", stats.prepared ? "true" : "false",
+                            stats.cache_hit ? "true" : "false", stats.published ? "true" : "false",
+                            stats.model_calls, (int)stats.initial_cache_status,
+                            stats.store.reused ? "true" : "false",
+                            stats.store.repaired_corruption ? "true" : "false",
+                            stats.store.evicted_entries, stats.prepare_ms, stats.generate_ms,
+                            stats.publish_ms, stats.duration_ms, metrics);
+    if (ok && (puts(report.data) < 0 || fflush(stdout) != 0)) {
+        ok = false;
+        fg_error(&serialization_error, FORGE_ERR_IO, "Cannot write summary report");
+    }
+    if (!ok && status == FORGE_OK) {
+        if (serialization_error.code)
+            *error = serialization_error;
+        else
+            fg_error(error, FORGE_ERR_MEMORY, "Cannot serialize summary report");
+        status = error->code;
+    }
+    fg_buf_clear(&report);
+    free(summary);
+    free(metrics);
+    forge_summary_input_destroy(input);
+    forge_repo_close(repo);
+    return status;
+}
 static int cli_main(int argc, char **argv, forge_config *config) {
     forge_error error = {0};
     forge_agent_config ac = {0};
@@ -525,6 +593,10 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     bool json = false;
     bool explicit_model = false, explicit_script = false;
     int depth = 1;
+    forge_summary_target summary_target = {0};
+    summary_target.scope = FORGE_SUMMARY_FILE;
+    forge_summary_options summary_options = forge_default_summary_options();
+    bool summary_flags = false, summary_producer = false;
     char input[8192];
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -565,6 +637,11 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             json = true;
             continue;
         }
+        if (!strcmp(a, "--summary-full-source")) {
+            summary_options.evidence = FORGE_SUMMARY_FULL_SOURCE;
+            summary_flags = true;
+            continue;
+        }
         if (!strcmp(a, "--no-kv-reuse")) {
             mc.reuse_prefix = false;
             continue;
@@ -594,7 +671,24 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             continue; /* Already overlaid, before any CLI settings. */
         if (!strcmp(a, "--workspace"))
             ac.workspace = value;
-        else if (!strcmp(a, "--model")) {
+        else if (!strcmp(a, "--summary-producer")) {
+            summary_options.producer_id = value;
+            summary_flags = summary_producer = true;
+        } else if (!strcmp(a, "--summary-symbol")) {
+            summary_target.symbol = value;
+            summary_flags = true;
+        } else if (!strcmp(a, "--summary-scope")) {
+            const char *const scopes[] = {"repository", "module", "package", "file", "symbol"};
+            size_t scope = 0;
+            while (scope < sizeof(scopes) / sizeof(*scopes) && strcmp(scopes[scope], value))
+                scope++;
+            if (scope == sizeof(scopes) / sizeof(*scopes)) {
+                fg_error(&error, FORGE_ERR_ARGUMENT, "Invalid summary scope: %s", value);
+                return failed(&error);
+            }
+            summary_target.scope = (forge_summary_scope)scope;
+            summary_flags = true;
+        } else if (!strcmp(a, "--model")) {
             mc.model_path = value;
             explicit_model = true;
         } else if (!strcmp(a, "--script")) {
@@ -687,6 +781,19 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         input[strcspn(input, "\r\n")] = 0;
         command = "run";
         argument = input;
+    }
+    if (summary_flags && strcmp(command, "summarize")) {
+        fg_error(&error, FORGE_ERR_ARGUMENT, "Summary options require the summarize command");
+        return failed(&error);
+    }
+    if (!strcmp(command, "summarize") &&
+        (!summary_producer || !*summary_options.producer_id ||
+         !strcmp(summary_options.producer_id, "caller") ||
+         ((summary_target.scope == FORGE_SUMMARY_SYMBOL) != (summary_target.symbol != NULL)))) {
+        fg_error(
+            &error, FORGE_ERR_ARGUMENT,
+            "summarize requires an explicit producer identity and a symbol only for symbol scope");
+        return failed(&error);
     }
     if (!strcmp(command, "replay")) {
         if (!argument) {
@@ -808,7 +915,8 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         forge_repo_close(r);
         return error.code ? failed(&error) : 0;
     }
-    if (strcmp(command, "run") && strcmp(command, "complete") && strcmp(command, "bench")) {
+    if (strcmp(command, "run") && strcmp(command, "complete") && strcmp(command, "bench") &&
+        strcmp(command, "summarize")) {
         fg_error(&error, FORGE_ERR_ARGUMENT, "Unknown command: %s", command);
         return failed(&error);
     }
@@ -848,6 +956,13 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             return failed(&error);
         }
     }
+    uint64_t summary_deadline = 0;
+    if (!strcmp(command, "summarize")) {
+        uint64_t now = fg_now_ms();
+        summary_deadline = ac.limits.wall_timeout_ms > UINT64_MAX - now
+                               ? UINT64_MAX
+                               : now + ac.limits.wall_timeout_ms;
+    }
     if (auto_hardware(config, &error) != FORGE_OK) {
         yyjson_doc_free(benchmark);
         return failed(&error);
@@ -864,6 +979,13 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         forge_model_destroy(ac.model);
         yyjson_doc_free(benchmark);
         return failed(&error);
+    }
+    if (!strcmp(command, "summarize")) {
+        summary_target.path = argument;
+        forge_status status =
+            summarize_repository(&ac, &summary_target, &summary_options, summary_deadline, &error);
+        forge_model_destroy(ac.model);
+        return status == FORGE_OK ? 0 : failed(&error);
     }
     if (!strcmp(command, "complete")) {
         forge_metrics metrics;

@@ -149,6 +149,11 @@ forge_status fg_model_generate_with_cache(forge_model *, const char *, const cha
                                           forge_token_fn, void *, char **, forge_metrics *,
                                           forge_cancel_fn, void *, uint64_t,
                                           const forge_checkpoint_cache_request *, forge_error *);
+/* For compound operations that already own operation_active. Does not release
+ * the guard. No automatic checkpoint request is nominated. */
+forge_status fg_model_generate_active(forge_model *, const char *, size_t, forge_token_fn, void *,
+                                      char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
+                                      forge_error *);
 
 /* Internal cache operations run under the generation operation guard. */
 forge_status fg_checkpoint_cache_validate_request(const char *,

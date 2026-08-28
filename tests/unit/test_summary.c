@@ -16,8 +16,8 @@
 #define test_rmdir rmdir
 #endif
 
-/* Real SQLite, Tree-sitter and shared graph. Text fixtures test storage and
- * invalidation, never model quality. No generation callback or model is used. */
+/* Real SQLite, Tree-sitter and shared graph. Literal text and explicit model
+ * seams test storage/generation control, never actual model quality. */
 typedef struct {
     char root[FG_PATH_MAX];
     forge_repo *repo;
@@ -619,6 +619,290 @@ static void test_snapshot_isolation_and_rejection(void) {
     forge_repo_close(other);
     finish(&f);
 }
+typedef struct {
+    fixture *fixture;
+    forge_repo *writer;
+    const forge_summary_input *competitor;
+    size_t calls, counts;
+    const char *text;
+    size_t text_length;
+    int mutation; /* 1: dependency, 2: unrelated, 3: delete dependency. */
+    bool cancel, cancel_after, fail, exhaust, reenter, bad_counter, wait_deadline;
+} model_fixture;
+static bool generation_cancelled(void *userdata) {
+    return ((model_fixture *)userdata)->cancel;
+}
+static size_t generation_count(forge_model *model, const char *text) {
+    model_fixture *state = model->backend;
+    state->counts++;
+    assert(model->operation_active);
+    if (state->reenter) {
+        forge_metrics metrics;
+        forge_error error = {0};
+        assert(forge_complete(model, "reentry", 1, NULL, NULL, &metrics, &error) ==
+               FORGE_ERR_CONFLICT);
+        assert(model->operation_active);
+        state->reenter = false;
+    }
+    return state->bad_counter ? SIZE_MAX : (strlen(text) + 3) / 4;
+}
+static forge_status generate_fixture(forge_model *model, const char *prompt, const char *grammar,
+                                     size_t max_tokens, forge_token_fn token, void *userdata,
+                                     char **out, forge_metrics *metrics, forge_cancel_fn cancel,
+                                     void *cancel_data, uint64_t deadline, forge_error *error) {
+    model_fixture *state = model->backend;
+    fixture *f = state->fixture;
+    assert(model->operation_active && !model->cache_request && !grammar);
+    assert(!f->repo->snapshot_active && sqlite3_get_autocommit(f->repo->db));
+    assert(strstr(prompt, "Evidence:") && token);
+    state->calls++;
+    metrics->simulated = true;
+    metrics->prompt_tokens = generation_count(model, prompt);
+    metrics->prefill_tokens = metrics->prompt_tokens;
+    metrics->generated_tokens = state->exhaust ? max_tokens : 3;
+    if (state->competitor) {
+        forge_summary_store_result result;
+        assert(forge_repo_summary_store(f->repo, state->competitor, "competing winner", 16, &result,
+                                        error) == FORGE_OK);
+        assert(!result.reused);
+    }
+    if (state->mutation) {
+        const char *path = state->mutation == 2 ? "q/q.go" : "p/a.go";
+        if (state->mutation == 3)
+            remove_source(f, path);
+        else
+            write_source(f, path,
+                         state->mutation == 2 ? "package q\nfunc Unrelated() {}\n"
+                                              : "package p\nfunc Changed() {}\n");
+        assert(forge_repo_index_paths(state->writer, &path, 1, error) == FORGE_OK);
+    }
+    if (state->wait_deadline) {
+        assert(deadline && deadline >= fg_now_ms());
+        while (fg_now_ms() < deadline) {
+#ifdef _WIN32
+            Sleep(1);
+#else
+            struct timespec pause = {0, 1000000};
+            nanosleep(&pause, NULL);
+#endif
+        }
+    }
+    if (state->fail)
+        return fg_error(error, FORGE_ERR_MODEL, "explicit model fixture failure");
+    size_t length = state->text_length ? state->text_length : strlen(state->text);
+    /* Split every byte, including inside UTF-8 characters. */
+    for (size_t i = 0; i < length; i++)
+        if (!token(state->text + i, 1, userdata))
+            return fg_error(error, FORGE_ERR_CANCELLED, "fixture token rejected");
+    *out = malloc(length + 1);
+    assert(*out);
+    memcpy(*out, state->text, length);
+    (*out)[length] = 0;
+    if (state->cancel_after)
+        state->cancel = true;
+    (void)cancel;
+    (void)cancel_data;
+    return FORGE_OK;
+}
+static forge_model generation_model(model_fixture *state) {
+    forge_model model = {0};
+    model.config = forge_default_model_config();
+    model.backend = state;
+    model.count = generation_count;
+    model.generate = generate_fixture;
+    return model;
+}
+static forge_summary_options generation_options(model_fixture *state) {
+    forge_summary_options options = forge_default_summary_options();
+    options.producer_id = "explicit simulated summary producer v1";
+    options.timeout_ms = 0;
+    options.cancelled = generation_cancelled;
+    options.userdata = state;
+    return options;
+}
+static forge_summary_input *generate(fixture *f, forge_model *model,
+                                     const forge_summary_target *target,
+                                     const forge_summary_options *options,
+                                     forge_summary_generation_stats *stats, forge_status expected) {
+    forge_summary_input *input =
+        forge_repo_summary_generate(f->repo, model, target, options, 256, stats, &f->error);
+    if (f->error.code != expected)
+        fprintf(stderr, "generate: wanted %d, got %d: %s\n", expected, f->error.code,
+                f->error.message);
+    assert(f->error.code == expected && (input != NULL) == (expected == FORGE_OK));
+    assert(!model->operation_active);
+    assert_idle(f);
+    return input;
+}
+static void test_model_generation_and_reuse(void) {
+    fixture f;
+    start(&f);
+    sources(&f);
+    model_fixture state = {0};
+    state.fixture = &f;
+    state.text = "model fixture caf\xc3\xa9";
+    state.reenter = true;
+    forge_model model = generation_model(&state);
+    forge_summary_options options = generation_options(&state);
+    forge_summary_generation_stats stats;
+    const forge_summary_target targets[] = {
+        {FORGE_SUMMARY_REPOSITORY, ".", NULL, NULL, false, 0},
+        {FORGE_SUMMARY_MODULE, ".", NULL, NULL, false, 0},
+        {FORGE_SUMMARY_PACKAGE, "p", NULL, NULL, false, 0},
+        {FORGE_SUMMARY_FILE, "p/a.go", NULL, NULL, false, 0},
+        {FORGE_SUMMARY_SYMBOL, "p/a.go", "Alpha", NULL, false, 0}};
+    for (size_t i = 0; i < sizeof(targets) / sizeof(*targets); i++) {
+        forge_summary_input *first = generate(&f, &model, &targets[i], &options, &stats, FORGE_OK);
+        assert(stats.prepared && !stats.cache_hit && stats.model_calls == 1 && stats.published);
+        assert(stats.initial_cache_status == FORGE_SUMMARY_MISS && stats.inference.simulated);
+        assert(view(first).cache_status == FORGE_SUMMARY_HIT &&
+               !strcmp(view(first).text, state.text));
+        size_t calls = state.calls;
+        forge_summary_input *hit = generate(&f, &model, &targets[i], &options, &stats, FORGE_OK);
+        assert(stats.cache_hit && !stats.model_calls && !stats.published && state.calls == calls);
+        assert(!stats.inference.prompt_tokens && !stats.inference.generated_tokens);
+        assert(!strcmp(view(first).cache_key, view(hit).cache_key));
+        assert(view(hit).tokens_known && view(hit).input_tokens == (view(hit).input_bytes + 3) / 4);
+        forge_summary_input_destroy(first);
+        forge_summary_input_destroy(hit);
+    }
+    forge_summary_target target = targets[3];
+    forge_summary_input *saved = generate(&f, &model, &target, &options, &stats, FORGE_OK);
+    uint64_t generation = view(saved).generation;
+    write_source(&f, "q/q.go", "package q\nfunc Another() {}\n");
+    index_repo(&f);
+    forge_summary_input *hit = generate(&f, &model, &target, &options, &stats, FORGE_OK);
+    assert(stats.cache_hit && view(hit).generation == generation + 1);
+    assert(!strcmp(view(saved).cache_key, view(hit).cache_key));
+    forge_summary_input_destroy(hit);
+    db(&f, "UPDATE summary_cache SET content='corrupted'");
+    hit = generate(&f, &model, &target, &options, &stats, FORGE_OK);
+    assert(stats.initial_cache_status == FORGE_SUMMARY_CORRUPT && stats.store.repaired_corruption);
+    forge_summary_input_destroy(hit);
+    db(&f, "DELETE FROM summary_cache");
+    state.competitor = saved;
+    hit = generate(&f, &model, &target, &options, &stats, FORGE_OK);
+    assert(stats.model_calls == 1 && stats.store.reused && stats.published);
+    assert(!strcmp(view(hit).text, "competing winner"));
+    forge_summary_input_destroy(hit);
+    state.competitor = NULL;
+    model.config.seed++;
+    hit = generate(&f, &model, &target, &options, &stats, FORGE_OK);
+    assert(stats.model_calls == 1 && strcmp(view(hit).cache_key, view(saved).cache_key));
+    forge_summary_input_destroy(hit);
+    forge_summary_input_destroy(saved);
+    finish(&f);
+}
+static void test_generation_dependency_races(void) {
+    for (int mutation = 1; mutation <= 3; mutation++) {
+        fixture f;
+        start(&f);
+        sources(&f);
+        model_fixture state = {0};
+        state.fixture = &f;
+        state.text = "generated from the earlier input";
+        state.mutation = mutation;
+        state.writer = forge_repo_open(f.root, &f.error);
+        assert(state.writer);
+        forge_model model = generation_model(&state);
+        forge_summary_options options = generation_options(&state);
+        forge_summary_target target = {FORGE_SUMMARY_FILE, "p/a.go", NULL, NULL, false, 0};
+        forge_summary_generation_stats stats;
+        uint64_t generation = forge_repo_generation(f.repo);
+        forge_summary_input *input = generate(&f, &model, &target, &options, &stats,
+                                              mutation == 2 ? FORGE_OK : FORGE_ERR_CONFLICT);
+        assert(stats.model_calls == 1 && stats.inference.generated_tokens == 3);
+        assert(stats.published == (mutation == 2));
+        assert(scalar(&f, "SELECT count(*) FROM summary_cache") == (mutation == 2 ? 1u : 0u));
+        if (input)
+            assert(view(input).generation == generation + 1);
+        forge_summary_input_destroy(input);
+        forge_repo_close(state.writer);
+        finish(&f);
+    }
+}
+static void test_generation_failures(void) {
+    fixture f;
+    start(&f);
+    sources(&f);
+    for (size_t test = 0; test < 15; test++) {
+        model_fixture state = {0};
+        state.fixture = &f;
+        state.text = "generated fixture";
+        forge_model model = generation_model(&state);
+        forge_summary_options options = generation_options(&state);
+        forge_summary_target target = {FORGE_SUMMARY_FILE, "p/a.go", NULL, NULL, false, 0};
+        forge_summary_generation_stats stats;
+        forge_status expected = FORGE_ERR_LIMIT;
+        if (test == 0) {
+            options.producer_id = "caller";
+            expected = FORGE_ERR_ARGUMENT;
+        } else if (test == 1) {
+            options.count_tokens = count_bytes;
+            expected = FORGE_ERR_ARGUMENT;
+        } else if (test == 2)
+            options.max_input_tokens = 1;
+        else if (test == 3) {
+            state.bad_counter = true;
+            expected = FORGE_ERR_LIMIT;
+        } else if (test == 4)
+            options.max_summary_bytes = 4;
+        else if (test == 5)
+            options.max_summary_tokens = 1;
+        else if (test == 6) {
+            state.text = "a\0b";
+            state.text_length = 3;
+            expected = FORGE_ERR_PARSE;
+        } else if (test == 7) {
+            state.text = "\xff";
+            expected = FORGE_ERR_PARSE;
+        } else if (test == 8) {
+            state.text = "";
+            expected = FORGE_ERR_PARSE;
+        } else if (test == 9) {
+            state.fail = true;
+            expected = FORGE_ERR_MODEL;
+        } else if (test == 10) {
+            state.cancel = true;
+            expected = FORGE_ERR_CANCELLED;
+        } else if (test == 11) {
+            state.cancel_after = true;
+            expected = FORGE_ERR_CANCELLED;
+        } else if (test == 12)
+            state.exhaust = true;
+        else if (test == 13) {
+            options.timeout_ms = 1000;
+            state.wait_deadline = true;
+        } else
+            options.max_cache_bytes = 1;
+        assert(!generate(&f, &model, &target, &options, &stats, expected));
+        assert(!stats.cache_hit && !stats.published && stats.model_calls == state.calls);
+        if (state.calls)
+            assert(stats.inference.generated_tokens > 0 && stats.inference.simulated);
+        assert(scalar(&f, "SELECT count(*) FROM summary_cache") == 0);
+    }
+    model_fixture state = {0};
+    state.fixture = &f;
+    state.text = "must not survive rejected publication";
+    forge_model model = generation_model(&state);
+    forge_summary_options options = generation_options(&state);
+    forge_summary_target target = {FORGE_SUMMARY_FILE, "p/a.go", NULL, NULL, false, 0};
+    forge_summary_generation_stats stats;
+    model.operation_active = true;
+    assert(!forge_repo_summary_generate(f.repo, &model, &target, &options, 256, &stats, &f.error));
+    assert(f.error.code == FORGE_ERR_CONFLICT && model.operation_active && !state.calls);
+    model.operation_active = false;
+    size_t rejected = 0;
+    sqlite3_commit_hook(f.repo->db, reject_summary_commit, &rejected);
+    assert(!generate(&f, &model, &target, &options, &stats, FORGE_ERR_IO));
+    sqlite3_commit_hook(f.repo->db, NULL, NULL);
+    assert(rejected == 1 && stats.model_calls == 1 && !stats.published);
+    assert(scalar(&f, "SELECT count(*) FROM summary_cache") == 0);
+    forge_summary_input *retry = generate(&f, &model, &target, &options, &stats, FORGE_OK);
+    assert(stats.published && !stats.cache_hit);
+    forge_summary_input_destroy(retry);
+    finish(&f);
+}
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -631,6 +915,9 @@ int main(void) {
     test_corruption_and_publication_rollback();
     test_limits_interruptions_and_eviction();
     test_snapshot_isolation_and_rejection();
+    test_model_generation_and_reuse();
+    test_generation_dependency_races();
+    test_generation_failures();
     puts("Summary and digest tests passed");
     return 0;
 }

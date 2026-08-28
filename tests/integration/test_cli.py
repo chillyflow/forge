@@ -82,6 +82,74 @@ class ForgeTests(unittest.TestCase):
         connection.close()
         return rows
 
+    def test_generated_summary_cache_and_dependency_refresh(self):
+        # Explicit simulated backend; this tests CLI/cache control, not quality.
+        metadata = self.root / '.forge'
+        metadata.mkdir()
+        script = metadata / 'summary-fixture.json'
+        script.write_text(json.dumps([{'summary': 'fixture description'}]))
+        args = ('summarize', 'calc.go', '--script', str(script), '--no-config',
+                '--summary-producer', 'simulated-cli-fixture-v1', '--output-reserve', '256')
+        original = (self.root / 'calc.go').read_bytes()
+        first = json.loads(self.cli(*args).stdout)
+        self.assertEqual(first['summary']['text'], '{"summary":"fixture description"}')
+        self.assertTrue(first['inference']['simulated'])
+        self.assertEqual(first['generation']['model_calls'], 1)
+        self.assertTrue(first['generation']['published'])
+        self.assertEqual(first['summary']['cache_status'], 'hit')
+        hit = json.loads(self.cli(*args).stdout)
+        self.assertTrue(hit['generation']['cache_hit'])
+        self.assertEqual(hit['generation']['model_calls'], 0)
+        self.assertEqual(hit['inference']['generated_tokens'], 0)
+        self.assertTrue(hit['inference']['simulated'])
+        self.assertEqual(first['summary']['cache_key'], hit['summary']['cache_key'])
+        (self.root / 'caller.go').write_text('package calc\nfunc Other() {}\n')
+        unrelated = json.loads(self.cli(*args).stdout)
+        self.assertTrue(unrelated['generation']['cache_hit'])
+        self.assertGreater(unrelated['summary']['generation'], hit['summary']['generation'])
+        self.assertEqual(first['summary']['cache_key'], unrelated['summary']['cache_key'])
+        self.assertEqual((self.root / 'calc.go').read_bytes(), original)
+        (self.root / 'calc.go').write_text('package calc\nfunc New() {}\n')
+        changed = json.loads(self.cli(*args).stdout)
+        self.assertFalse(changed['generation']['cache_hit'])
+        self.assertEqual(changed['generation']['model_calls'], 1)
+        self.assertNotEqual(first['summary']['cache_key'], changed['summary']['cache_key'])
+        with sqlite3.connect(metadata / 'index.db') as connection:
+            connection.execute("UPDATE summary_cache SET content='damaged'")
+        connection.close()
+        repaired = json.loads(self.cli(*args).stdout)
+        self.assertTrue(repaired['generation']['repaired_corruption'])
+        self.assertEqual(repaired['summary']['text'], first['summary']['text'])
+        self.assertFalse((metadata / 'sessions').exists())
+
+    def test_summary_selectors_and_generation_failure(self):
+        self.go_module()
+        script = self.root / 'summary-fixture.json'
+        script.write_text(json.dumps(['simulated summary text']))
+        common = ('--script', str(script), '--no-config', '--summary-producer', 'simulated-v1',
+                  '--output-reserve', '256')
+        for scope, path in [('repository', '.'), ('module', '.'), ('package', '.'),
+                            ('file', 'calc.go'), ('symbol', 'calc.go')]:
+            extra = ('--summary-symbol', 'Add') if scope == 'symbol' else ()
+            report = json.loads(self.cli('summarize', path, '--summary-scope', scope,
+                                         '--summary-full-source', *extra, *common).stdout)
+            self.assertEqual(report['summary']['scope'], scope)
+            self.assertEqual(report['summary']['evidence'], 'full_source')
+            self.assertTrue(report['generation']['published'])
+        for bad in [('summarize', 'calc.go'),
+                    ('summarize', 'calc.go', '--summary-producer', 'caller'),
+                    ('summarize', 'calc.go', '--summary-scope', 'invalid'),
+                    ('summarize', 'calc.go', '--summary-scope', 'symbol', *common),
+                    ('summarize', 'calc.go', '--summary-symbol', 'Add', *common),
+                    ('index', '--summary-full-source')]:
+            self.cli(*bad, success=False)
+        failed = json.loads(self.cli('summarize', 'calc.go', *common,
+                                     '--max-tool-bytes', '1', success=False).stdout)
+        self.assertIsNone(failed['summary'])
+        self.assertEqual(failed['generation']['model_calls'], 1)
+        self.assertFalse(failed['generation']['published'])
+        self.assertTrue(failed['inference']['simulated'])
+
     def test_delta_index_only_refreshes_named_files_and_rolls_back(self):
         result = self.cli('index', '--json')
         initial = json.loads(result.stdout)['generation']

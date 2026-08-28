@@ -1033,9 +1033,10 @@ static int cache_authorize(void *userdata, int action, const char *table, const 
     fail(userdata, FORGE_ERR_POLICY, "Summary cache writes may not trigger other mutations");
     return SQLITE_DENY;
 }
-forge_status forge_repo_summary_store(forge_repo *repo, const forge_summary_input *prepared,
-                                      const char *text, size_t length,
-                                      forge_summary_store_result *result, forge_error *e) {
+static forge_status summary_store(forge_repo *repo, const forge_summary_input *prepared,
+                                  const char *text, size_t length,
+                                  forge_summary_store_result *result,
+                                  forge_summary_input **publication, forge_error *e) {
     forge_error local = {0};
     forge_summary_store_result stored = {0};
     if (!e)
@@ -1043,6 +1044,8 @@ forge_status forge_repo_summary_store(forge_repo *repo, const forge_summary_inpu
     memset(e, 0, sizeof(*e));
     if (result)
         memset(result, 0, sizeof(*result));
+    if (publication)
+        *publication = NULL;
     if (!repo || !prepared || !text || !length || strcmp(repo->root, prepared->workspace))
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "Invalid summary publication arguments or workspace");
@@ -1099,9 +1102,191 @@ forge_status forge_repo_summary_store(forge_repo *repo, const forge_summary_inpu
     status = fg_repo_snapshot_end(&snapshot, ok, e);
     if (ok && status == FORGE_OK && result)
         *result = stored;
+    if (ok && status == FORGE_OK && publication) {
+        *publication = current;
+        current = NULL;
+    }
     forge_summary_input_destroy(current);
     free(copy);
     return status;
+}
+forge_status forge_repo_summary_store(forge_repo *repo, const forge_summary_input *prepared,
+                                      const char *text, size_t length,
+                                      forge_summary_store_result *result, forge_error *e) {
+    return summary_store(repo, prepared, text, length, result, NULL, e);
+}
+typedef struct {
+    const forge_summary_options *options;
+    size_t bytes;
+    forge_error error;
+} summary_generation;
+
+static bool generation_stopped(const forge_summary_options *options, forge_error *error) {
+    if (options->cancelled && options->cancelled(options->userdata)) {
+        fg_error(error, FORGE_ERR_CANCELLED, "Summary generation cancelled");
+        return true;
+    }
+    if (options->deadline_ms && fg_now_ms() >= options->deadline_ms) {
+        fg_error(error, FORGE_ERR_LIMIT, "Summary operation deadline reached");
+        return true;
+    }
+    return false;
+}
+static bool summary_token(const char *bytes, size_t length, void *userdata) {
+    summary_generation *generation = userdata;
+    if (generation->error.code || generation_stopped(generation->options, &generation->error))
+        return false;
+    if (length > generation->options->max_summary_bytes - generation->bytes) {
+        fg_error(&generation->error, FORGE_ERR_LIMIT, "Generated summary exceeds its byte budget");
+        return false;
+    }
+    if (length && memchr(bytes, 0, length)) {
+        fg_error(&generation->error, FORGE_ERR_PARSE, "Generated summary contains NUL bytes");
+        return false;
+    }
+    generation->bytes += length;
+    return true;
+}
+static bool generation_identity(const forge_model *model, const char *producer, size_t tokens,
+                                char identity[65], forge_error *error) {
+    fg_sha256 digest;
+    fg_sha256_init(&digest);
+    const char *version = "forge-summary-generation-1";
+    fg_sha256_field(&digest, version, strlen(version));
+    fg_sha256_field(&digest, producer, strlen(producer));
+    const char *chat = model->config.chat_template;
+    if (chat && !bounded_text(chat, 4096, true)) {
+        fg_error(error, FORGE_ERR_ARGUMENT, "Invalid summary model chat template identity");
+        return false;
+    }
+    fg_sha256_field(&digest, chat ? chat : "", chat ? strlen(chat) : 0);
+    /* Float bits are locale-independent. This is configuration identity, not
+     * a claim to discover or authenticate the actual weight/backend bytes. */
+    uint32_t temperature = 0;
+    _Static_assert(sizeof(temperature) == sizeof(model->config.temperature), "32-bit float");
+    memcpy(&temperature, &model->config.temperature, sizeof(temperature));
+    char profile[256];
+    int n =
+        snprintf(profile, sizeof(profile), "%zu:%zu:%d:%d:%u:%08x:%d:%d:%d", tokens,
+                 model->config.context_tokens, model->config.gpu_layers, model->config.threads,
+                 (unsigned)model->config.seed, (unsigned)temperature, model->config.reuse_prefix,
+                 model->config.grammar_fast_path, model->script != NULL);
+    if (n <= 0 || (size_t)n >= sizeof(profile)) {
+        fg_error(error, FORGE_ERR_LIMIT, "Summary producer configuration exceeds its limit");
+        return false;
+    }
+    fg_sha256_field(&digest, profile, (size_t)n);
+    if (!fg_sha256_finish_hex(&digest, identity)) {
+        fg_error(error, FORGE_ERR_LIMIT, "Summary producer digest overflow");
+        return false;
+    }
+    return true;
+}
+forge_summary_input *forge_repo_summary_generate(forge_repo *repo, forge_model *model,
+                                                 const forge_summary_target *target,
+                                                 const forge_summary_options *options,
+                                                 size_t max_tokens,
+                                                 forge_summary_generation_stats *stats,
+                                                 forge_error *error) {
+    forge_error local_error = {0};
+    forge_summary_generation_stats local_stats = {0};
+    if (!error)
+        error = &local_error;
+    memset(error, 0, sizeof(*error));
+    if (!stats)
+        stats = &local_stats;
+    memset(stats, 0, sizeof(*stats));
+    uint64_t begin = fg_now_ms();
+    if (!repo || !model || !model->generate || !model->count || !target || !options ||
+        !bounded_text(options->producer_id, 256, false) ||
+        !strcmp(options->producer_id, "caller") || options->count_tokens) {
+        fg_error(error, FORGE_ERR_ARGUMENT,
+                 "Summary generation requires a model, explicit producer identity and no custom "
+                 "counter");
+        return NULL;
+    }
+    if (!max_tokens || max_tokens > FORGE_SUMMARY_MAX_GENERATED_TOKENS ||
+        max_tokens >= model->config.context_tokens) {
+        fg_error(error, FORGE_ERR_LIMIT, "Invalid summary generation token budget");
+        return NULL;
+    }
+    stats->inference.simulated = model->script != NULL;
+    if (model->operation_active) {
+        fg_error(error, FORGE_ERR_CONFLICT, "Another operation is active on this model");
+        return NULL;
+    }
+    forge_summary_options selected = *options;
+    selected.count_tokens = fg_model_count;
+    selected.count_userdata = model;
+    size_t input_limit = model->config.context_tokens - max_tokens;
+    selected.max_input_tokens =
+        selected.max_input_tokens ? FG_MIN(selected.max_input_tokens, input_limit) : input_limit;
+    if (!options_valid(&selected, error))
+        return NULL;
+    selected.deadline_ms = deadline(&selected);
+    selected.timeout_ms = 0;
+    char identity[65];
+    if (!generation_identity(model, options->producer_id, max_tokens, identity, error))
+        return NULL;
+    selected.producer_id = identity;
+    model->operation_active = true;
+    forge_summary_input *prepared = NULL, *result = NULL;
+    char *output = NULL;
+    if (generation_stopped(&selected, error))
+        goto finish_generation;
+    uint64_t phase = fg_now_ms();
+    prepared = forge_repo_summary_prepare(repo, target, &selected, error);
+    stats->prepare_ms = (double)(fg_now_ms() - phase);
+    if (!prepared)
+        goto finish_generation;
+    stats->prepared = true;
+    stats->initial_cache_status = prepared->view.cache_status;
+    if (generation_stopped(&selected, error))
+        goto finish_generation;
+    if (prepared->view.cache_status == FORGE_SUMMARY_HIT) {
+        stats->cache_hit = true;
+        result = prepared;
+        prepared = NULL;
+        goto finish_generation;
+    }
+    summary_generation generation = {0};
+    generation.options = &selected;
+    stats->model_calls = 1;
+    phase = fg_now_ms();
+    forge_status status = fg_model_generate_active(
+        model, prepared->prompt, max_tokens, summary_token, &generation, &output, &stats->inference,
+        selected.cancelled, selected.userdata, selected.deadline_ms, error);
+    stats->generate_ms = (double)(fg_now_ms() - phase);
+    if (generation.error.code) {
+        *error = generation.error;
+        goto finish_generation;
+    }
+    if (generation_stopped(&selected, error))
+        goto finish_generation;
+    if (status != FORGE_OK) {
+        if (!error->code)
+            fg_error(error, status, "Summary model generation failed");
+        goto finish_generation;
+    }
+    if (stats->inference.generated_tokens >= max_tokens) {
+        fg_error(error, FORGE_ERR_LIMIT, "Summary exhausted its generation token budget");
+        goto finish_generation;
+    }
+    if (!output || !generation.bytes || strlen(output) != generation.bytes ||
+        !fg_utf8_valid(output, generation.bytes)) {
+        fg_error(error, FORGE_ERR_PARSE, "Generated summary is not complete UTF-8 text");
+        goto finish_generation;
+    }
+    phase = fg_now_ms();
+    status = summary_store(repo, prepared, output, generation.bytes, &stats->store, &result, error);
+    stats->publish_ms = (double)(fg_now_ms() - phase);
+    stats->published = status == FORGE_OK;
+finish_generation:
+    free(output);
+    forge_summary_input_destroy(prepared);
+    model->operation_active = false;
+    stats->duration_ms = (double)(fg_now_ms() - begin);
+    return result;
 }
 char *forge_summary_input_json(const forge_summary_input *input, forge_error *e) {
     if (e)
@@ -1125,7 +1310,7 @@ char *forge_summary_input_json(const forge_summary_input *input, forge_error *e)
         yyjson_mut_obj_add_str(doc, root, "scope", scope_name(v->scope)) &&
         yyjson_mut_obj_add_str(doc, root, "evidence", evidence_name(v->evidence)) &&
         yyjson_mut_obj_add_str(doc, root, "cache_status", cache_name(v->cache_status)) &&
-        yyjson_mut_obj_add_str(doc, root, "claims", "syntactic_index; caller_text_unverified") &&
+        yyjson_mut_obj_add_str(doc, root, "claims", "syntactic_index; summary_text_unverified") &&
         yyjson_mut_obj_add_uint(doc, root, "generation", v->generation) &&
         yyjson_mut_obj_add_uint(doc, root, "created_generation", v->created_generation) &&
         yyjson_mut_obj_add_uint(doc, root, "validated_generation", v->validated_generation);

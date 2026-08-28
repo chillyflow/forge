@@ -1,10 +1,12 @@
 # Indexed summary inputs and cache
 
-`forge/summary.h` exposes bounded preparation and storage for repository, Go
-module, Go package, file, and syntactic declaration summaries. This is a library
-API: the caller explicitly generates the summary between preparation and
-publication. It does not invoke a model, refresh the index, launch a command, or
-read live source files. CLI and automatic agent integration remain open.
+`forge/summary.h` exposes bounded preparation, generation and storage for
+repository, Go module, Go package, file, and syntactic declaration summaries.
+The original prepare/store API accepts caller-generated text without invoking a
+model. `forge_repo_summary_generate` connects that cache to one bounded model
+call on a miss. Both consume indexed snapshots; neither refreshes the index,
+launches a command or reads live source files. The `summarize` CLI refreshes the
+index first. Automatic agent/context selection remains open.
 
 ## Lifecycle and identity
 
@@ -82,6 +84,76 @@ close a repository handle concurrently. The index/cache is not a cryptographic
 trust boundary against an adversary who can rewrite the whole database and
 recompute its digests.
 
+## Bounded generation
+
+`forge_repo_summary_generate(repo, model, target, options, max_tokens, stats, error)`
+prepares a fresh snapshot for every call. A validated hit returns without model
+generation. A miss or corrupt cache row permits one inference call outside the
+SQLite transaction, followed by dependency-checked publication. A concurrent
+valid writer wins; the returned input contains that writer's committed text.
+Changed/deleted dependencies reject the generated text, while unrelated indexed
+changes can succeed. The returned input is owned and has `HIT` status.
+
+The caller **must** provide an explicit `producer_id` identifying the actual
+weights, backend and tokenizer/template versions. The default `caller` identity
+is rejected. This is a host assertion, not an automatically verified model-file
+digest; reusing an ID for different weights can reuse inappropriate text. Forge
+also hashes its generation recipe version, selected chat-template string, context
+capacity, sampling/thread/GPU/reuse configuration, simulated-backend flag and
+generation token limit into the effective producer identity. Model path or file
+timestamp alone is not used as weight identity. That effective SHA-256 appears
+in the result; keep the original producer assertion with external run evidence.
+
+The helper uses the model backend's full templated-prompt counter, leaving room
+for the complete output reserve. A caller counter is rejected. The explicit
+script backend still uses its documented simulated token estimates. One shared
+deadline covers preparation, generation and publication; the existing SQLite
+VM budget applies separately to each snapshot. Explicit cancellation is
+`CANCELLED`, deadline exhaustion is `LIMIT`. Individual backend/tokenizer calls
+remain cooperative and cannot be forcibly interrupted.
+
+Streaming output is checked against the byte cap, then the completed text is
+checked for UTF-8, NUL bytes and the stored-text token budget. Reaching the
+generation token cap rejects publication instead of storing a clipped ending.
+A valid ending is not proof of semantic accuracy or sufficient coverage. Errors
+return no generated text and do not publish partial summaries. Stats retain
+attempted inference work even on errors; a hit has zero model calls/tokens.
+Summary text remains untrusted content and never grants a tool permission.
+
+The model is exclusively borrowed through token counting, inference and
+publication. Model operation re-entry is rejected; the model must outlive any
+returned input later passed to `summary_store`, since its counter is borrowed.
+Ordinary live-prefix reuse may occur. No new automatic checkpoint anchors are
+nominated; generation may displace live agent KV state. No durable checkpoint or
+agent resume claim is made.
+
+## CLI
+
+```text
+forge summarize src/example.go --model MODEL --summary-producer VERIFIED_MODEL_AND_BACKEND_ID
+forge summarize . --summary-scope repository --summary-full-source --model MODEL --summary-producer VERIFIED_MODEL_AND_BACKEND_ID
+forge summarize src/example.go --summary-scope symbol --summary-symbol Example --model MODEL --summary-producer VERIFIED_MODEL_AND_BACKEND_ID
+```
+
+Scope defaults to `file`; other scopes are `repository`, `module`, `package` and
+`symbol`. Aggregate scope defaults to outline evidence unless
+`--summary-full-source` is selected. Ambiguous declarations fail rather than
+guessing; the embedding target supports kind/byte-offset disambiguation.
+`--summary-producer` is the same caller assertion described above, not a checksum
+verification flag. All summary flags require the `summarize` command.
+
+The CLI returns JSON containing the complete summary input/manifest, text,
+generation/cache statistics and inference metrics. It loads the configured model
+even for a hit, but invokes no generation on that hit. The wall deadline starts
+before hardware selection/model load and includes index refresh; load itself is
+not preemptible. Generation uses the smaller of `--output-reserve` and
+`--max-tokens` (maximum 8,192); `--max-input` limits the whole prompt.
+`--max-tool-bytes` can lower the summary-text byte cap. Preparation/manifest
+defaults still apply and evidence is not silently clipped. No agent session,
+source mutation, model-requested process or validation command is produced.
+Index discovery can execute Git. This command does not yet select summaries for
+the agent's context planner.
+
 ## Coverage and remaining work
 
 `test_summary.c` uses real SQLite, Tree-sitter and the shared graph with literal
@@ -91,9 +163,14 @@ corruption repair, trigger/commit failure, bounded eviction, token/byte/work
 limits, cancellation, nested snapshots, concurrent indexing and writer locks.
 Index tests cover digest metadata upgrades; validation tests retain the existing
 graph fixtures and reject malformed graph rows. These are storage and
-invalidation tests, not evidence of model summary quality or performance.
+invalidation tests, not evidence of model summary quality or performance. An
+explicit internal model seam additionally exercises one-call generation and
+zero-call hits, all scopes, UTF-8 split across token pieces, competing cache
+writers, edits/deletion during generation, corruption repair, model re-entry,
+producer profile changes, output limits, cancellation and failed generation.
+CLI tests use an explicitly simulated script backend, without quality claims.
 
-Automatic summary generation/selection, semantic context integration, resolved
+Automatic summary selection, semantic context integration, resolved
 relationships and measured cache benefits remain required work in the full
 design. [Staged indexed retrieval](RETRIEVAL.md) now supplies bounded source
 evidence separately; it does not generate or select semantic summaries.
