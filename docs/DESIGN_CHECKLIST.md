@@ -124,9 +124,14 @@ repository/module/package/file/symbol preparation plus transactional text cachin
 Local Windows checks passed all 22 executed test groups in Debug (34.30 s) and
 CUDA-linked Release (36.09 s); the optional model test skipped and no new model
 inference was run. These results cover this isolated summary review, before
-integration with the resumed watcher/edit-journal tranche. The combined Debug
-suite also passed all 22 executed groups (36.60 s). Cross-platform checks and
-combined Release verification remain pending. Automatic summary generation,
+integration with the resumed watcher/edit-journal tranche. The combined suites
+passed all 22 executed groups in Debug (36.60 s) and CUDA-linked Release (39.45 s).
+The [combined `c15c11b` CI run](https://github.com/chillyflow/forge/actions/runs/33191334751)
+passed all five jobs, including 100 consecutive macOS watcher suites. The
+[preceding watcher/journal stress run](https://github.com/chillyflow/forge/actions/runs/33191161222)
+also passed all five jobs with 100 macOS repeats. An earlier isolated metadata
+exclusion assertion was not reproduced in these runs; its exact cause remains
+unconfirmed and failure diagnostics remain enabled. Automatic summary generation,
 agent/context selection, staged retrieval and measured benefit are still open.
 
 ## Status and scope rules
