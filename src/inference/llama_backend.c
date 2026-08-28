@@ -1,0 +1,82 @@
+#include "internal.h"
+#include "llama.h"
+typedef struct {
+    struct llama_model *model;struct llama_context *ctx;const struct llama_vocab *vocab;
+    llama_token *tokens;size_t count,capacity;char *template_name;double load_ms;
+    bool can_reuse;
+} llama_state;
+static char *format_prompt(llama_state *s,const char *prompt){
+    struct llama_chat_message message={"user",prompt};
+    int32_t n=llama_chat_apply_template(s->template_name,&message,1,true,NULL,0);
+    if(n<0 || n>16*1024*1024)return NULL;char *text=malloc((size_t)n+1);if(!text)return NULL;
+    int32_t got=llama_chat_apply_template(s->template_name,&message,1,true,text,n+1);
+    if(got<0 || got>n){free(text);return NULL;}text[got]=0;return text;
+}
+static llama_token *tokenize(llama_state *s,const char *prompt,int32_t *count){
+    char *text=format_prompt(s,prompt);if(!text)return NULL;size_t len=strlen(text);if(len>INT32_MAX){free(text);return NULL;}
+    int32_t n=llama_tokenize(s->vocab,text,(int32_t)len,NULL,0,true,true);if(n>=0 || n==INT32_MIN){free(text);return NULL;}n=-n;
+    llama_token *tokens=malloc((size_t)n*sizeof(*tokens));if(!tokens){free(text);return NULL;}
+    *count=llama_tokenize(s->vocab,text,(int32_t)len,tokens,n,true,true);free(text);if(*count<0){free(tokens);return NULL;}return tokens;
+}
+static size_t llama_count(forge_model *m,const char *prompt){int32_t count=0;llama_token *t=tokenize(m->backend,prompt,&count);free(t);return count>0?(size_t)count:SIZE_MAX/4;}
+static bool interrupted(forge_cancel_fn cancel,void *u,uint64_t deadline){return (cancel && cancel(u)) || (deadline && fg_now_ms()>=deadline);}
+static forge_status decode_batch(llama_state *s,const llama_token *tokens,size_t count,size_t pos,forge_error *e){
+    struct llama_batch b=llama_batch_init((int32_t)count,0,1);if(!b.token)return fg_error(e,FORGE_ERR_MEMORY,"llama batch allocation failed");
+    b.n_tokens=(int32_t)count;for(size_t i=0;i<count;i++){b.token[i]=tokens[i];b.pos[i]=(llama_pos)(pos+i);b.n_seq_id[i]=1;b.seq_id[i][0]=0;b.logits[i]=(int8_t)(i+1==count);}
+    int rc=llama_decode(s->ctx,b);llama_batch_free(b);if(rc)return fg_error(e,FORGE_ERR_MODEL,"llama_decode failed (%d)",rc);return FORGE_OK;
+}
+static forge_status llama_generate(forge_model *m,const char *prompt,const char *grammar,size_t max_tokens,
+    forge_token_fn cb,void *u,char **output,forge_metrics *stats,forge_cancel_fn cancel,void *cu,uint64_t deadline,forge_error *e){
+    llama_state *s=m->backend;int32_t n=0;llama_token *tokens=tokenize(s,prompt,&n);
+    if(!tokens)return fg_error(e,FORGE_ERR_MODEL,"Cannot tokenize prompt or apply chat template; use --chat-template chatml for a compatible model");
+    if((size_t)n+max_tokens>llama_n_ctx(s->ctx)){free(tokens);return fg_error(e,FORGE_ERR_LIMIT,"Prompt plus output reserve exceeds model context");}
+    size_t prefix=0;if(m->config.reuse_prefix && s->can_reuse)while(prefix<(size_t)n && prefix<s->count && tokens[prefix]==s->tokens[prefix])prefix++;
+    /* Re-evaluate the final prompt token to obtain valid logits, even on an exact hit. */
+    if(prefix==(size_t)n && prefix)prefix--;
+    if(!prefix)llama_memory_clear(llama_get_memory(s->ctx),false);
+    else if(!llama_memory_seq_rm(llama_get_memory(s->ctx),0,(llama_pos)prefix,-1)){llama_memory_clear(llama_get_memory(s->ctx),false);prefix=0;}
+    s->count=prefix;stats->prompt_tokens+=(size_t)n;stats->cached_tokens+=prefix;stats->prefill_tokens+=(size_t)n-prefix;stats->load_ms=s->load_ms;
+    uint64_t begin=fg_now_ms();forge_status status=FORGE_OK;struct llama_sampler *sampler=NULL;fg_buf out={0};
+    for(size_t pos=prefix;pos<(size_t)n;){
+        if(interrupted(cancel,cu,deadline)){status=fg_error(e,FORGE_ERR_CANCELLED,"Inference cancelled or deadline reached");goto finish;}
+        size_t take=FG_MIN((size_t)n-pos,512);status=decode_batch(s,tokens+pos,take,pos,e);if(status!=FORGE_OK)goto finish;pos+=take;
+    }
+    stats->prefill_ms+=(double)(fg_now_ms()-begin);memcpy(s->tokens,tokens,(size_t)n*sizeof(*tokens));s->count=(size_t)n;
+    sampler=llama_sampler_chain_init(llama_sampler_chain_default_params());if(!sampler){status=fg_error(e,FORGE_ERR_MEMORY,"Sampler allocation failed");goto finish;}
+    if(grammar){struct llama_sampler *g=llama_sampler_init_grammar(s->vocab,grammar,"root");if(!g){status=fg_error(e,FORGE_ERR_PARSE,"Generated tool grammar was rejected by llama.cpp");goto finish;}llama_sampler_chain_add(sampler,g);}
+    if(m->config.temperature<=0)llama_sampler_chain_add(sampler,llama_sampler_init_greedy());
+    else{llama_sampler_chain_add(sampler,llama_sampler_init_top_k(20));llama_sampler_chain_add(sampler,llama_sampler_init_top_p(0.8f,1));llama_sampler_chain_add(sampler,llama_sampler_init_temp(m->config.temperature));llama_sampler_chain_add(sampler,llama_sampler_init_dist(m->config.seed));}
+    begin=fg_now_ms();bool ended=false;
+    for(size_t i=0;i<max_tokens;i++){
+        if(interrupted(cancel,cu,deadline)){status=fg_error(e,FORGE_ERR_CANCELLED,"Inference cancelled or deadline reached");break;}
+        llama_token token=llama_sampler_sample(sampler,s->ctx,-1);if(llama_vocab_is_eog(s->vocab,token)){ended=true;break;}
+        int32_t cap=128;char small[128],*piece=small;int32_t length=llama_token_to_piece(s->vocab,token,piece,cap,0,false);
+        if(length<0){cap=-length;piece=malloc((size_t)cap);if(!piece){status=FORGE_ERR_MEMORY;break;}length=llama_token_to_piece(s->vocab,token,piece,cap,0,false);}
+        if(length<0 || !fg_buf_add(&out,piece,(size_t)FG_MAX(length,0))){if(piece!=small)free(piece);status=fg_error(e,FORGE_ERR_MEMORY,"Token output failed");break;}
+        stats->generated_tokens++;
+        if(cb && !cb(piece,(size_t)length,u)){if(piece!=small)free(piece);status=fg_error(e,FORGE_ERR_CANCELLED,"Token callback cancelled");break;}
+        if(piece!=small)free(piece);
+        status=decode_batch(s,&token,1,s->count,e);if(status!=FORGE_OK)break;s->tokens[s->count++]=token;
+    }
+    stats->decode_ms+=(double)(fg_now_ms()-begin);
+    if(status==FORGE_OK && grammar && !ended){yyjson_doc *d=yyjson_read(out.data?out.data:"",out.len,0);if(!d)status=fg_error(e,FORGE_ERR_LIMIT,"Generation limit reached before a complete action");yyjson_doc_free(d);}
+finish:
+    if(sampler)llama_sampler_free(sampler);free(tokens);
+    if(status!=FORGE_OK){llama_memory_clear(llama_get_memory(s->ctx),false);s->count=0;fg_buf_clear(&out);return status;}
+    *output=fg_buf_take(&out);return *output?FORGE_OK:fg_error(e,FORGE_ERR_MEMORY,"Output allocation failed");
+}
+static void llama_destroy(forge_model *m){llama_state *s=m->backend;if(s){if(s->ctx)llama_free(s->ctx);if(s->model)llama_model_free(s->model);free(s->tokens);free(s->template_name);free(s);}}
+bool fg_llama_init(forge_model *m,forge_error *e){
+    uint64_t start=fg_now_ms();llama_state *s=calloc(1,sizeof(*s));if(!s){fg_error(e,FORGE_ERR_MEMORY,"Backend allocation failed");return false;}m->backend=s;m->destroy=llama_destroy;
+    /* Backend registration is owned by llama.cpp. Forge has no mutable global session state. */
+    ggml_backend_load_all();llama_backend_init();
+    struct llama_model_params mp=llama_model_default_params();mp.n_gpu_layers=m->config.gpu_layers;
+    s->model=llama_model_load_from_file(m->config.model_path,mp);if(!s->model){fg_error(e,FORGE_ERR_MODEL,"Failed to load GGUF model");return false;}
+    s->vocab=llama_model_get_vocab(s->model);struct llama_context_params cp=llama_context_default_params();cp.n_ctx=(uint32_t)m->config.context_tokens;cp.n_batch=512;cp.n_ubatch=256;
+    if(m->config.threads>0){cp.n_threads=m->config.threads;cp.n_threads_batch=m->config.threads;}
+    s->ctx=llama_init_from_model(s->model,cp);if(!s->ctx){fg_error(e,FORGE_ERR_MODEL,"Failed to allocate inference context; reduce --context or --gpu-layers");return false;}
+    s->capacity=llama_n_ctx(s->ctx);s->tokens=malloc(s->capacity*sizeof(*s->tokens));
+    const char *tmpl=m->config.chat_template?m->config.chat_template:llama_model_chat_template(s->model,NULL);s->template_name=fg_strdup(tmpl?tmpl:"chatml");
+    if(!s->tokens || !s->template_name){fg_error(e,FORGE_ERR_MEMORY,"Inference state allocation failed");return false;}
+    s->can_reuse=!llama_model_is_recurrent(s->model) && !llama_model_is_hybrid(s->model);s->load_ms=(double)(fg_now_ms()-start);m->count=llama_count;m->generate=llama_generate;return true;
+}

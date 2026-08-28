@@ -1,0 +1,40 @@
+name: native-ci
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure
+        run: cmake -S . -B build -DFORGE_WITH_LLAMA=OFF -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build --config Debug --parallel 4
+      - name: Test
+        run: ctest --test-dir build -C Debug --output-on-failure
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DFORGE_WITH_LLAMA=OFF -DFORGE_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+      - run: cmake --build build --parallel 4
+      - run: ctest --test-dir build --output-on-failure
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+  llama-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile the pinned direct backend
+        run: cmake -S . -B build -DFORGE_WITH_LLAMA=ON -DGGML_CUDA=OFF -DGGML_NATIVE=OFF -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --parallel 4
+      - run: ctest --test-dir build --output-on-failure
