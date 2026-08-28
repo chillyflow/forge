@@ -159,6 +159,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             goto finish;
         pos += take;
     }
+    llama_synchronize(s->ctx);
     stats->prefill_ms += (double)(fg_now_ms() - begin);
     memcpy(s->tokens, tokens, (size_t)n * sizeof(*tokens));
     s->count = (size_t)n;
@@ -191,6 +192,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             status = fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled or deadline reached");
             break;
         }
+        llama_synchronize(s->ctx);
         uint64_t sampling_start = fg_now_ms();
         llama_token token =
             sample_token(s, sampler, grammar_sampler,

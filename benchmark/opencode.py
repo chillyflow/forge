@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import secrets
 import subprocess
 import tempfile
 import time
@@ -17,12 +18,16 @@ import urllib.request
 
 from run import digest
 
-def request(port, path, method='GET'):
+def request(port, path, method='GET', key=''):
     query = urllib.request.Request(f'http://127.0.0.1:{port}{path}', method=method,
                                    data=b'{}' if method == 'POST' else None,
-                                   headers={'Content-Type': 'application/json'})
+                                   headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {key}'})
     with urllib.request.urlopen(query, timeout=5) as response:
         return response.read().decode()
+
+def counters(text):
+    return {parts[0]: float(parts[1]) for line in text.splitlines()
+            if line and not line.startswith('#') and len(parts := line.split()) == 2}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -51,11 +56,13 @@ def main():
                 'OPENCODE_DISABLE_CLAUDE_CODE', 'OPENCODE_DISABLE_MODELS_FETCH']:
         env[key] = 'true'
     env['OPENCODE_AUTO_SHARE'] = 'false'
+    local_key = secrets.token_urlsafe(32)
+    env['LLAMA_API_KEY'] = local_key
     config = {
         '$schema': 'https://opencode.ai/config.json', 'share': 'disabled', 'autoupdate': False,
         'enabled_providers': ['llama.cpp'], 'model': 'llama.cpp/forge-local', 'small_model': 'llama.cpp/forge-local',
         'provider': {'llama.cpp': {'npm': '@ai-sdk/openai-compatible', 'name': 'Local benchmark',
-            'options': {'baseURL': f'http://127.0.0.1:{port}/v1', 'apiKey': 'local'},
+            'options': {'baseURL': f'http://127.0.0.1:{port}/v1', 'apiKey': local_key},
             'models': {'forge-local': {'name': 'Qwen3 Coder', 'limit': {'context': 16384, 'output': 2048}}}}},
         'permission': {'read': 'allow', 'edit': 'allow', 'glob': 'allow', 'grep': 'allow', 'bash': 'allow',
                        'task': 'deny', 'webfetch': 'deny', 'websearch': 'deny', 'external_directory': 'deny',
@@ -65,12 +72,15 @@ def main():
     config_path = args.output / 'opencode.json'
     config_path.write_text(json.dumps(config, indent=2))
     env['OPENCODE_CONFIG'] = str(config_path)
+    slot_path = args.output / 'slots'
+    slot_path.mkdir(exist_ok=True)
     command = [str(server), '--model', str(model), '--alias', 'forge-local', '--ctx-size', '16384',
                '--gpu-layers', '-1', '--parallel', '1', '--seed', '42', '--temp', '0', '--metrics', '--cache-ram', '0',
-               '--host', '127.0.0.1', '--port', str(port), '--no-webui']
+               '--host', '127.0.0.1', '--port', str(port), '--no-webui', '--slot-save-path', str(slot_path),
+               '--batch-size', '512', '--ubatch-size', '256', '--threads', '4', '--threads-batch', '4']
     records = []
     metadata = {'opencode_version': subprocess.check_output([str(opencode), '--version'], text=True).strip(),
-                'model_file': model.name, 'model_sha256': digest(model), 'server_command': [model.name if x == str(model) else Path(x).name if x == str(server) else x for x in command],
+                'model_file': model.name, 'model_sha256': digest(model), 'server_command': [model.name if x == str(model) else Path(x).name if x in (str(server), str(slot_path)) else x for x in command],
                 'notes': 'Model stays loaded but slot KV is erased before each task; cross-task RAM prompt cache is disabled. Model load is excluded from per-task wall time. Full OpenCode tool protocol retained; remote tools and subagents disabled.'}
     with (args.output / 'server.log').open('w') as log:
         start = time.monotonic()
@@ -106,10 +116,11 @@ def main():
                         path.write_text(content)
                     subprocess.run(['git', 'init', '-q', str(root)], check=True)
                     before = digest(root / 'repair_test.go')
-                    erased = json.loads(request(port, '/slots/0?action=erase', 'POST'))
+                    erased = json.loads(request(port, '/slots/0?action=erase', 'POST', local_key))
                     if erased.get('id_slot') != 0:
                         raise RuntimeError('Cannot clear benchmark slot')
-                    (output / 'server-before.prom').write_text(request(port, '/metrics'))
+                    before_metrics = request(port, '/metrics', key=local_key)
+                    (output / 'server-before.prom').write_text(before_metrics)
                     start = time.monotonic()
                     with (output / 'events.jsonl').open('w') as out, (output / 'stderr.txt').open('w') as err:
                         try:
@@ -119,7 +130,8 @@ def main():
                         except subprocess.TimeoutExpired:
                             code = 124
                     elapsed = time.monotonic() - start
-                    (output / 'server-after.prom').write_text(request(port, '/metrics'))
+                    after_metrics = request(port, '/metrics', key=local_key)
+                    (output / 'server-after.prom').write_text(after_metrics)
                     verification = subprocess.run(task['verify'], cwd=root, capture_output=True, text=True, timeout=120, env=env)
                     (output / 'verification.stdout').write_text(verification.stdout)
                     (output / 'verification.stderr').write_text(verification.stderr)
@@ -134,6 +146,17 @@ def main():
                     record = {'task': task['id'], 'passed': code == 0 and verification.returncode == 0 and unchanged,
                               'returncode': code, 'tests_unchanged': unchanged, 'wall_seconds': elapsed,
                               'step_usage': [s.get('tokens', {}) for s in steps]}
+                    old, new = counters(before_metrics), counters(after_metrics)
+                    delta = {k: new[k] - old.get(k, 0) for k in new}
+                    record['metrics'] = {
+                        'prefill_tokens': int(delta['llamacpp:prompt_tokens_total']),
+                        'cached_tokens': int(delta['llamacpp:prompt_tokens_cached_total']),
+                        'generated_tokens': int(delta['llamacpp:tokens_predicted_total']),
+                        'prefill_ms': delta['llamacpp:prompt_seconds_total'] * 1000,
+                        'decode_ms': delta['llamacpp:tokens_predicted_seconds_total'] * 1000,
+                        'tool_calls': sum(e.get('type') == 'tool_use' for e in events),
+                    }
+                    record['metrics']['prompt_tokens'] = record['metrics']['prefill_tokens'] + record['metrics']['cached_tokens']
                     records.append(record)
                     (output / 'result.json').write_text(json.dumps(record, indent=2))
                     (args.output / 'results.json').write_text(json.dumps(records, indent=2))
