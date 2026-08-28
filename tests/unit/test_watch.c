@@ -432,6 +432,9 @@ static void test_metadata_exclusions(void) {
     initial(&f, &watch, &limits);
     fixture_write(&f, ".forge/deep/long-metadata-path.bin", "ignored", 7);
     doc = poll_batch(watch, 100, FG_MAX_JSON);
+    if (flag(doc, "rescan_required") ||
+        yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")))
+        describe_batch("unexpected metadata exclusion batch", doc);
     assert(!flag(doc, "rescan_required"));
     assert(yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")) == 0);
     yyjson_doc_free(doc);
