@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "source_commit": "4cfd2585ceafe3be0c5b815b7b9635e242ceeeb8",
+  "fixture": {
+    "git_repository": "standalone initialized repository",
+    "files": {
+      "go.mod": "module example.test/fixture\n\ngo 1.22\n",
+      "answer.go": "package fixture\n\nfunc Answer() int { return 37 }\n"
+    },
+    "unchanged_after_run": true
+  },
+  "request": "Call retrieve_context exactly once with query Answer, then answer with only the integer returned by Answer based on the indexed excerpt. Do not use other tools, modify files, or run commands.",
+  "tool_calls": [
+    {
+      "tool": "retrieve_context",
+      "args": {
+        "query": "Answer"
+      }
+    }
+  ],
+  "retrieval": {
+    "schema_version": 1,
+    "generation": 1,
+    "query": "Answer",
+    "indexed_snapshot_only": true,
+    "go_index_incomplete": false,
+    "filesystem_scan": false,
+    "graph_basis": "syntactic_go_package_imports",
+    "graph_loaded": true,
+    "graph_incomplete": false,
+    "graph_reason_count": 0,
+    "graph_includes_dependents": true,
+    "truncated": false,
+    "stages": [
+      {
+        "stage": "exact_symbol",
+        "attempted": true,
+        "candidates": 1,
+        "accepted": 1,
+        "duplicates": 0,
+        "omitted_output_budget": 0,
+        "reason": "exhausted"
+      },
+      {
+        "stage": "package_graph",
+        "attempted": true,
+        "candidates": 1,
+        "accepted": 0,
+        "duplicates": 1,
+        "omitted_output_budget": 0,
+        "reason": "exhausted"
+      },
+      {
+        "stage": "literal",
+        "attempted": true,
+        "candidates": 1,
+        "accepted": 0,
+        "duplicates": 1,
+        "omitted_output_budget": 0,
+        "reason": "exhausted"
+      },
+      {
+        "stage": "fts5",
+        "attempted": true,
+        "candidates": 1,
+        "accepted": 0,
+        "duplicates": 1,
+        "omitted_output_budget": 0,
+        "reason": "exhausted"
+      }
+    ],
+    "results": [
+      {
+        "stage": "exact_symbol",
+        "path": "answer.go",
+        "kind": "function_declaration",
+        "name": "Answer",
+        "source_sha256": "c347074bb42e8786fcd5a71a6f3f73ffb69bed6b840108afeaf02d82caa992cf",
+        "snippet": "func Answer() int { return 37 }",
+        "excerpt_truncated": false,
+        "line": 3,
+        "start_byte": 17,
+        "end_byte": 48,
+        "symbol_end_byte": 48
+      }
+    ]
+  },
+  "final": "37",
+  "inference": [
+    {
+      "prompt_tokens": 844,
+      "cached_tokens": 0,
+      "generated_tokens": 12,
+      "simulated": false
+    },
+    {
+      "prompt_tokens": 1208,
+      "cached_tokens": 607,
+      "generated_tokens": 6,
+      "simulated": false
+    }
+  ],
+  "metrics": {
+    "schema_version": 1,
+    "status": "ok",
+    "simulated": false,
+    "prompt_tokens": 2052,
+    "generated_tokens": 18,
+    "cached_tokens": 607,
+    "prefill_tokens": 1445,
+    "turns": 2,
+    "tool_calls": 1,
+    "raw_tool_bytes": 1139,
+    "visible_tool_bytes": 1139,
+    "files_modified": 0,
+    "context_evictions": 0,
+    "loop_warnings": 0,
+    "grammar_fast_tokens": 18,
+    "grammar_fallback_tokens": 2,
+    "raw_tool_tokens": 351,
+    "visible_tool_tokens": 351,
+    "files_opened": 0,
+    "validation_commands": 0,
+    "validation_failures": 0,
+    "generation_arena_peak_bytes": 65648,
+    "repo_full_scans": 2,
+    "repo_delta_scans": 0,
+    "filesystem_events": 0,
+    "watch_reopens": 0,
+    "stale_generations": 0,
+    "index_cold_parses": 0,
+    "index_incremental_parses": 0,
+    "index_cache_hits": 0,
+    "index_cache_evictions": 0,
+    "peak_index_source_bytes": 0,
+    "peak_index_nodes": 0,
+    "checkpoint_lookups": 2,
+    "checkpoint_hits": 0,
+    "checkpoint_misses": 2,
+    "checkpoint_captures": 1,
+    "checkpoint_evictions": 0,
+    "checkpoint_restored_tokens": 0,
+    "checkpoint_reused_tokens": 0,
+    "checkpoint_additional_tokens": 0,
+    "checkpoint_peak_bytes": 53200555,
+    "load_ms": 11766.0,
+    "prefill_ms": 1312.0,
+    "decode_ms": 203.0,
+    "sampling_ms": 31.0,
+    "duration_ms": 1734.0,
+    "tool_ms": 0.0,
+    "validation_ms": 0.0,
+    "index_ms": 157.0,
+    "checkpoint_probe_ms": 0.0,
+    "checkpoint_capture_ms": 63.0,
+    "checkpoint_restore_ms": 0.0
+  },
+  "initial_failed_setup": {
+    "ignored_by_parent_git": true,
+    "indexed_generation": 0,
+    "retrieval_results": [],
+    "final": "0",
+    "process_exit_code": 0,
+    "correctness_passed": false,
+    "correction": "Initialize the fixture as a standalone Git repository and preflight forge retrieve Answer before the rerun."
+  },
+  "correctness_passed": true
+}

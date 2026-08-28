@@ -175,6 +175,39 @@ resume, automatic summary generation, staged retrieval, resolved language graphs
 speculation, remaining metrics/ABI/isolation work and the broad acceptance suite
 remain open. The full design is not complete.
 
+## Staged indexed retrieval — 2026-08-28
+
+Source `608dc7c`, integrated with the published checkpoint test/evidence follow-up
+at `4cfd258`, adds exact Go symbol, package-import neighborhood, literal and ranked
+FTS5 retrieval in one indexed snapshot. The embedding API, model-free CLI and
+READ-capability agent tool share source digest checks, deterministic ordering,
+work/result/output limits and complete-JSON token budgeting. The graph remains
+syntactic Go imports; it is not resolved call/type impact. [The retrieval
+contract](RETRIEVAL.md) describes partial results, unsupported semantics and
+source-only behavior.
+
+All 23 executed local groups passed in Debug (37.77 s) and CUDA-linked Release
+(43.85 s); the optional model group skipped without arguments. The [source CI
+run](https://github.com/chillyflow/forge/actions/runs/33195295216) passed all five
+jobs, including 100 native macOS watcher suites, 30 macOS configuration suites,
+Linux sanitizers and the pinned backend build. The preceding published `d87d781`
+[CI run](https://github.com/chillyflow/forge/actions/runs/33195185940) also passed
+all five jobs.
+
+A separate [real-model smoke](../benchmark/results/2026-08-28-retrieval/README.md)
+on the recorded `4cfd258` executable returned the correct integer from one
+retrieved Go declaration without write/process tool calls or validation commands.
+The initial fixture inherited parent Git ignore rules, returned an empty index
+and produced the wrong answer; that failed setup is retained. The standalone
+repository rerun passed after a model-free index preflight. This is narrow
+correctness evidence, not retrieval quality, task success rates or speedup.
+
+Automatic summary generation/context selection, resolved language relationships,
+semantic checkpoint hierarchy/resume, speculation, profiling/ABI/isolation work
+and the full multi-model/platform acceptance suite remain required. The full
+design is not complete. Older audit tables below describe their stated baseline;
+these dated implementation addenda supersede only the named portions.
+
 ## Status and scope rules
 
 | Status | Meaning |

@@ -93,6 +93,7 @@ Index tests cover digest metadata upgrades; validation tests retain the existing
 graph fixtures and reject malformed graph rows. These are storage and
 invalidation tests, not evidence of model summary quality or performance.
 
-Automatic summary generation/selection, semantic context integration, staged
-symbol/graph/lexical/FTS retrieval, resolved relationships and measured cache
-benefits remain required work in the full design.
+Automatic summary generation/selection, semantic context integration, resolved
+relationships and measured cache benefits remain required work in the full
+design. [Staged indexed retrieval](RETRIEVAL.md) now supplies bounded source
+evidence separately; it does not generate or select semantic summaries.

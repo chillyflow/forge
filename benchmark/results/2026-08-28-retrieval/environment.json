@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "purpose": "Staged retrieval real-model read-only correctness smoke, not a task benchmark",
+  "date": "2026-08-28",
+  "source_commit": "4cfd2585ceafe3be0c5b815b7b9635e242ceeeb8",
+  "agent_executable_sha256": "1f668dfa68c41e0e8ead8ae1de5b65ae4404cfacba7c7b7c0f8191840394a5e0",
+  "llama_dll_sha256": "0db020c722bd869d9e410224bb4674a6b6e080cf9633b82d2dd92b661a79b693",
+  "build": {
+    "configuration": "Release",
+    "compiler": "MSVC 19.44",
+    "backend": "llama.cpp b10566 Windows CUDA 13.3 prebuilt",
+    "backend_commit": "bb4caa7540188872173c44d161602d9271386413"
+  },
+  "model": {
+    "filename": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+    "bytes": 18556689568,
+    "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+    "sha256_reverified": true,
+    "repository": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    "revision": "b17cb02dd882d5b6ab62fc777ad2995f19668350"
+  },
+  "hardware": {
+    "os": "Windows 11 x64",
+    "gpu": "NVIDIA GeForce RTX 5090 Laptop GPU",
+    "gpu_total_mib": 24463,
+    "driver": "610.88"
+  },
+  "parameters": {
+    "gpu_layers": -1,
+    "offloaded_layers": 49,
+    "temperature": 0,
+    "seed": 42,
+    "threads": 1,
+    "chat_template": "model metadata",
+    "context_tokens": 4096,
+    "output_reserve": 512,
+    "max_generated_tokens": 2048,
+    "max_input_tokens": 18000,
+    "max_turns": 4,
+    "wall_ms": 180000,
+    "checkpoint_cache": "enabled with defaults",
+    "automatic_validation": false,
+    "maximum_simultaneous_models": 1
+  },
+  "limits": [
+    "One exact-symbol fixture does not establish retrieval quality, broad coding ability or speedup.",
+    "The initial fixture inherited its parent repository ignore rules, indexed no files and produced the wrong answer 0. Only the standalone Git fixture rerun passed.",
+    "The unchanged-source check and tool trace show no write/process tool or validation command. Repository Git discovery still executes Git.",
+    "Manager peak bytes are not process RSS or VRAM; timings overlap and Windows timing is coarse.",
+    "No Linux CUDA or macOS Metal inference was run for this smoke."
+  ]
+}

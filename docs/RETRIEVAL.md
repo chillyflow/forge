@@ -118,3 +118,8 @@ snapshot reads, output/UTF-8/token/VM limits, cancellation, malformed metadata,
 concurrent writer commits and same-handle re-entry. CLI fixtures cover JSON
 retrieval and an explicitly scripted read-only tool call. These are correctness
 fixtures, not model-quality or broad coding-task benchmark evidence.
+
+The [2026-08-28 model smoke](../benchmark/results/2026-08-28-retrieval/README.md)
+records one real Qwen3-Coder exact-symbol read and correct final answer on a
+standalone Git fixture. Its initial ignored-directory setup failed and is
+retained in the evidence notes. This does not establish retrieval quality.
