@@ -104,6 +104,12 @@ generation token limit into the effective producer identity. Model path or file
 timestamp alone is not used as weight identity. That effective SHA-256 appears
 in the result; keep the original producer assertion with external run evidence.
 
+Default recipe `forge.summary.v2` names the selected evidence mode explicitly
+and requests concise source-supported behavior rather than metadata/digest
+recitation. This followed a real-model trial whose correct return-value claim
+was accompanied by an incorrect claim that file bodies were absent. A changed
+recipe/prompt gets a new key; prior cached text is not silently reclassified.
+
 The helper uses the model backend's full templated-prompt counter, leaving room
 for the complete output reserve. A caller counter is rejected. The explicit
 script backend still uses its documented simulated token estimates. One shared
@@ -153,6 +159,10 @@ defaults still apply and evidence is not silently clipped. No agent session,
 source mutation, model-requested process or validation command is produced.
 Index discovery can execute Git. This command does not yet select summaries for
 the agent's context planner.
+
+The top-level `model_load_ms` reports each CLI load even on a cache hit. It is
+outside the helper's generation duration and must not be mistaken for zero load
+cost just because that hit has no inference work.
 
 ## Coverage and remaining work
 
