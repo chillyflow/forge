@@ -59,6 +59,7 @@ forge watch --workspace ./my-repository --wall-ms 60000 --json
 forge inspect DeleteRecord --depth 1 --workspace ./my-repository
 forge references DeleteRecord --workspace ./my-repository
 forge search "context.WithCancel" --workspace ./my-repository
+forge retrieve DeleteRecord --depth 1 --workspace ./my-repository
 forge validation-plan pkg/storage/store.go --workspace ./my-repository
 forge validate pkg/storage/store.go --workspace ./my-repository --allow-exec
 forge hardware-plan --model /models/coder.gguf --json
@@ -113,6 +114,7 @@ numeric layer settings remain explicit overrides.
 | `read_file` | Bounded line ranges with line numbers |
 | `list_directory` | Sorted indexed file map |
 | `search_text` | Literal source search, bounded results |
+| `retrieve_context` | Exact symbol → package graph → literal → FTS5, with snapshot provenance and budgets |
 | `find_symbol` | Go declaration/signature/body expansion |
 | `get_references` | Go identifier occurrences, not type-resolved references |
 | `apply_patch` | One exact, unique replacement; atomic file replacement |
@@ -181,7 +183,9 @@ Embedding APIs also expose [physical prefix checkpoints](docs/CHECKPOINTS.md),
 [scoped arenas and file slices](docs/MEMORY.md), and
 [normalized diagnostics](docs/DIAGNOSTICS.md). [Indexed summary inputs and caching](docs/SUMMARIES.md)
 support caller-generated text with checked dependencies; automatic summary
-generation and retrieval integration remain open. Checkpoints are independent
+generation and summary selection remain open. [Staged retrieval](docs/RETRIEVAL.md)
+combines exact symbols, package imports, literal text and FTS in one indexed
+snapshot with explicit budgets. Checkpoints are independent
 in-memory copies bound to one loaded model instance. An opt-in bounded cache
 captures eligible prefixes during normal prefill and restores exact matching
 tokens. Process-restart session resume is not implemented.

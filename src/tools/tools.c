@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "forge/memory.h"
+#include "forge/retrieval.h"
 #include "edit_journal.h"
 #include <errno.h>
 #include <sys/stat.h>
@@ -30,6 +31,11 @@ static const fg_tool_def definitions[] = {
     {"list_directory", "List indexed repository paths.", "", NULL, FORGE_CAP_READ},
     {"read_file", "Read inclusive lines: start>=1, end>=start, at most 2001 lines.",
      "path:string start:line end:line", NULL, FORGE_CAP_READ},
+    {"retrieve_context",
+     "Retrieve indexed evidence: exact Go symbol, package imports, literal text, then full-text "
+     "search. JSON includes source hashes, excerpts, stage order and explicit limits; graph is "
+     "syntactic, not resolved calls/types.",
+     "query:string", NULL, FORGE_CAP_READ},
     {"run_command", "Run an argv array without a shell. Requires explicit process authorization.",
      "argv:strings", NULL, FORGE_CAP_PROCESS},
     {"search_text", "Literal text search across indexed source files.", "query:string", NULL,
@@ -484,7 +490,9 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
     }
     if (!allowed) {
         fg_error(e, FORGE_ERR_POLICY, "%s denied: explicit %s approval is required", name,
-                 def->capability == FORGE_CAP_WRITE ? "write" : "unsandboxed process");
+                 def->capability == FORGE_CAP_WRITE     ? "write"
+                 : def->capability == FORGE_CAP_PROCESS ? "unsandboxed process"
+                                                        : "read");
         return NULL;
     }
     if ((c->config.cancelled && c->config.cancelled(c->config.userdata)) ||
@@ -506,6 +514,20 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
         return forge_repo_references(c->repo, fg_json_str(args, "name"), e);
     if (!strcmp(name, "search_text"))
         return fg_repo_search(c->repo, fg_json_str(args, "query"), 50, e);
+    if (!strcmp(name, "retrieve_context")) {
+        forge_retrieval_options options = forge_default_retrieval_options();
+        options.max_output_bytes =
+            FG_MIN(options.max_output_bytes, c->config.limits.max_tool_bytes);
+        options.deadline_ms = c->deadline;
+        options.cancelled = c->config.cancelled;
+        options.userdata = c->config.userdata;
+        if (c->config.model && c->config.model->count) {
+            options.count_tokens = fg_model_count;
+            options.count_userdata = c->config.model;
+            options.max_output_tokens = c->config.limits.context_tokens / 4;
+        }
+        return forge_repo_retrieve(c->repo, fg_json_str(args, "query"), &options, NULL, e);
+    }
     if (!strcmp(name, "list_directory"))
         return forge_repo_summary(c->repo, e);
     if (!strcmp(name, "expand_output")) {

@@ -11,7 +11,7 @@ include(cmake/Dependencies.cmake)
 add_library(forge_lib STATIC
   src/core/util.c src/core/text.c src/core/digest.c src/core/memory.c src/core/process.c src/core/session.c src/core/agent.c
   src/core/config.c src/core/hardware.c src/core/verification.c src/core/input_snapshot.c src/core/working_state.c
-  src/context/context.c src/repo/repo.c src/repo/graph.c src/repo/summary.c src/repo/validation.c src/repo/watch.c src/repo/monitor.c src/tools/tools.c
+  src/context/context.c src/repo/repo.c src/repo/graph.c src/repo/summary.c src/repo/retrieval.c src/repo/validation.c src/repo/watch.c src/repo/monitor.c src/tools/tools.c
   src/tools/diagnostics.c src/tools/edit_journal.c src/inference/inference.c src/inference/checkpoint.c src/inference/checkpoint_cache.c)
 add_library(Forge::forge ALIAS forge_lib)
 set_target_properties(forge_lib PROPERTIES OUTPUT_NAME forge ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
@@ -120,7 +120,7 @@ if(FORGE_BUILD_TESTS)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   target_link_libraries(forge_index_unit PRIVATE forge_sqlite forge_treesitter)
   target_link_libraries(forge_summary_unit PRIVATE forge_sqlite forge_treesitter)
-  set_tests_properties(summary PROPERTIES TIMEOUT 90)
+  set_tests_properties(summary index PROPERTIES TIMEOUT 90)
   add_executable(forge_checkpoint_model tests/integration/checkpoint_model.c)
   target_link_libraries(forge_checkpoint_model PRIVATE Forge::forge)
   if(FORGE_LLAMA_PREBUILT)
@@ -132,7 +132,7 @@ if(FORGE_BUILD_TESTS)
   set_tests_properties(checkpoint_cache context PROPERTIES TIMEOUT 90)
   set_tests_properties(agent_watch PROPERTIES SKIP_RETURN_CODE 77)
   add_test(NAME integration COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_cli.py $<TARGET_FILE:forge> --fallback-forge $<TARGET_FILE:forge_fallback_fixture>)
-  add_test(NAME config_integration COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_config_cli.py $<TARGET_FILE:forge>)
+  add_test(NAME config_integration COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_config_cli.py $<TARGET_FILE:forge> --fallback-forge $<TARGET_FILE:forge_fallback_fixture>)
   add_test(NAME output_integration COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_output.py $<TARGET_FILE:forge>)
   add_test(NAME git_policy_integration COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_git_policy.py $<TARGET_FILE:forge>)
   add_test(NAME benchmark_fixtures COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/test_benchmark.py)

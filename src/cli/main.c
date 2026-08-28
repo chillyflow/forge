@@ -3,6 +3,7 @@
 #include "forge/validation.h"
 #include "forge/verification.h"
 #include "forge/index.h"
+#include "forge/retrieval.h"
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
@@ -21,6 +22,7 @@ static void usage(void) {
          "  forge run TASK --model model.gguf [options]\n"
          "  forge complete PROMPT --model model.gguf [options]\n"
          "  forge index [CHANGED_PATH] | inspect SYMBOL | references SYMBOL | search TEXT\n"
+         "  forge retrieve QUERY [--depth 0..3]    staged indexed evidence as JSON\n"
          "  forge watch [--wall-ms N]              update index from native file events\n"
          "  forge index-info PATH                 report indexed source/AST/symbol hashes\n"
          "  forge validation-plan [CHANGED_PATH]   print staged Go verification plan\n"
@@ -61,7 +63,7 @@ static void usage(void) {
          "  --grammar-first      disable greedy grammar fast path (ablation)\n"
          "  --no-auto-validation skip final Go validation (explicit ablation)\n"
          "  --script FILE        explicit simulated test backend (not inference)\n"
-         "  --depth N            symbol expansion level 0..3\n");
+         "  --depth N            symbol expansion or retrieval graph hops, 0..3\n");
 }
 static bool number(const char *text, size_t *out) {
     if (!text || !*text || *text == '-')
@@ -744,18 +746,31 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     }
     if (!strcmp(command, "index") || !strcmp(command, "index-info") ||
         !strcmp(command, "validation-plan") || !strcmp(command, "inspect") ||
-        !strcmp(command, "references") || !strcmp(command, "search")) {
+        !strcmp(command, "references") || !strcmp(command, "search") ||
+        !strcmp(command, "retrieve")) {
         if (strcmp(command, "index") && strcmp(command, "validation-plan") && !argument) {
             usage();
             return 2;
+        }
+        bool retrieving = !strcmp(command, "retrieve");
+        uint64_t retrieval_deadline = 0;
+        if (retrieving) {
+            uint64_t now = fg_now_ms();
+            retrieval_deadline = ac.limits.wall_timeout_ms > UINT64_MAX - now
+                                     ? UINT64_MAX
+                                     : now + ac.limits.wall_timeout_ms;
         }
         forge_repo *r = forge_repo_open(ac.workspace, &error);
         if (!r)
             return failed(&error);
         bool delta = !strcmp(command, "index") && argument;
         const char *index_paths[] = {argument};
-        if ((delta ? forge_repo_index_paths(r, index_paths, 1, &error)
-                   : forge_repo_index(r, &error)) != FORGE_OK) {
+        forge_status indexed =
+            retrieving
+                ? fg_repo_index_until(r, NULL, 0, true, retrieval_deadline, cancelled, NULL, &error)
+            : delta ? forge_repo_index_paths(r, index_paths, 1, &error)
+                    : forge_repo_index(r, &error);
+        if (indexed != FORGE_OK) {
             forge_repo_close(r);
             return failed(&error);
         }
@@ -777,7 +792,14 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             text = forge_repo_inspect(r, argument, depth, &error);
         else if (!strcmp(command, "references"))
             text = forge_repo_references(r, argument, &error);
-        else
+        else if (!strcmp(command, "retrieve")) {
+            forge_retrieval_options options = forge_default_retrieval_options();
+            options.graph_depth = (size_t)depth;
+            options.max_output_bytes = FG_MIN(options.max_output_bytes, ac.limits.max_tool_bytes);
+            options.cancelled = cancelled;
+            options.deadline_ms = retrieval_deadline;
+            text = forge_repo_retrieve(r, argument, &options, NULL, &error);
+        } else
             text = fg_repo_search(r, argument, 50, &error);
         if (text) {
             puts(text);

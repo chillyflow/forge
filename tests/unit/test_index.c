@@ -1,5 +1,6 @@
 #include "repo/repo_internal.h"
 #include "forge/index.h"
+#include "forge/retrieval.h"
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
@@ -729,7 +730,328 @@ static void test_git_delta_eligibility(void) {
     delta_index(&f, "tracked.go");
     fixture_finish(&f);
 }
+static yyjson_doc *retrieved(fixture *f, const char *query, forge_retrieval_options *options,
+                             forge_retrieval_stats *stats) {
+    char *json = forge_repo_retrieve(f->repo, query, options, stats, &f->error);
+    if (!json)
+        fprintf(stderr, "retrieve: %s\n", f->error.message);
+    assert(json && f->error.code == FORGE_OK);
+    if (stats)
+        assert(stats->output_bytes == strlen(json));
+    yyjson_doc *doc = yyjson_read(json, strlen(json), 0);
+    free(json);
+    assert(doc);
+    return doc;
+}
+static yyjson_val *retrieval_result(yyjson_doc *doc, const char *path) {
+    yyjson_val *results = yyjson_obj_get(yyjson_doc_get_root(doc), "results");
+    for (size_t i = 0; i < yyjson_arr_size(results); i++) {
+        yyjson_val *row = yyjson_arr_get(results, i);
+        if (!strcmp(yyjson_get_str(yyjson_obj_get(row, "path")), path))
+            return row;
+    }
+    return NULL;
+}
+static void test_retrieval_stages(void) {
+    fixture f;
+    fixture_start(&f);
+    write_source(&f, "go.mod", "module example.test/root\n\ngo 1.22\n");
+    write_source(&f, "service/service.go",
+                 "package service\nimport \"example.test/root/lib\"\n"
+                 "func Target() int { return lib.Value }\n");
+    write_source(&f, "service/peer.go", "package service\nfunc Helper() {}\n");
+    write_source(&f, "lib/lib.go", "package lib\nconst Value = 42\n");
+    write_source(&f, "client/c.go",
+                 "package client\nimport \"example.test/root/service\"\n"
+                 "func Caller() int { return service.Target() }\n");
+    write_source(&f, "notes.md", "Target is documented with exact case.\n");
+    write_source(&f, "docs/fts.md", "TARGET appears in uppercase text.\n");
+    full_index(&f);
+    forge_retrieval_options o = forge_default_retrieval_options();
+    forge_retrieval_stats value;
+    yyjson_doc *doc = retrieved(&f, "Target", &o, &value);
+    yyjson_val *root = yyjson_doc_get_root(doc), *results = yyjson_obj_get(root, "results");
+    assert(value.results == 6 && yyjson_arr_size(results) == 6);
+    assert(yyjson_get_bool(yyjson_obj_get(root, "graph_loaded")));
+    assert(value.generation == forge_repo_generation(f.repo));
+    assert(!value.tokens_known);
+    const char *expected_paths[] = {"service/service.go", "service/peer.go", "client/c.go",
+                                    "lib/lib.go",         "notes.md",        "docs/fts.md"};
+    const char *expected_stages[] = {"exact_symbol",  "package_graph", "package_graph",
+                                     "package_graph", "literal",       "fts5"};
+    for (size_t i = 0; i < 6; i++) {
+        yyjson_val *row = yyjson_arr_get(results, i);
+        assert(!strcmp(yyjson_get_str(yyjson_obj_get(row, "path")), expected_paths[i]));
+        assert(!strcmp(yyjson_get_str(yyjson_obj_get(row, "stage")), expected_stages[i]));
+        assert(strlen(yyjson_get_str(yyjson_obj_get(row, "source_sha256"))) == 64);
+    }
+    assert(yyjson_get_uint(
+               yyjson_obj_get(retrieval_result(doc, "client/c.go"), "graph_distance")) == 1);
+    assert(yyjson_is_null(yyjson_obj_get(retrieval_result(doc, "docs/fts.md"), "line")));
+    assert(strstr(yyjson_get_str(yyjson_obj_get(retrieval_result(doc, "docs/fts.md"), "snippet")),
+                  "TARGET"));
+    yyjson_val *trace = yyjson_obj_get(root, "stages");
+    assert(yyjson_arr_size(trace) == 4);
+    assert(yyjson_get_uint(yyjson_obj_get(yyjson_arr_get(trace, 1), "duplicates")) == 1);
+    yyjson_doc_free(doc);
+    o.include_dependents = false;
+    doc = retrieved(&f, "Target", &o, NULL);
+    assert(!strcmp(yyjson_get_str(yyjson_obj_get(retrieval_result(doc, "client/c.go"), "stage")),
+                   "literal"));
+    yyjson_doc_free(doc);
+    o.graph_depth = 0;
+    doc = retrieved(&f, "Target", &o, &value);
+    assert(value.results == 4 && !retrieval_result(doc, "lib/lib.go"));
+    assert(!yyjson_get_bool(yyjson_obj_get(yyjson_doc_get_root(doc), "graph_loaded")));
+    assert(yyjson_is_null(yyjson_obj_get(yyjson_doc_get_root(doc), "graph_incomplete")));
+    yyjson_doc_free(doc);
+    o.graph_depth = 1;
+    o.seed_file = "lib/lib.go";
+    doc = retrieved(&f, "phrase-not-present", &o, &value);
+    assert(value.results == 1 && retrieval_result(doc, "lib/lib.go"));
+    yyjson_doc_free(doc);
+    o.seed_file = NULL;
+    o.graph_depth = 0;
+    write_source(&f, "service/service.go", "package service\nfunc Changed() {}\n");
+    doc = retrieved(&f, "Target", &o, NULL);
+    assert(strstr(
+        yyjson_get_str(yyjson_obj_get(retrieval_result(doc, "service/service.go"), "snippet")),
+        "lib.Value"));
+    yyjson_doc_free(doc); /* No live file read or implicit index refresh. */
+    delta_index(&f, "service/service.go");
+    doc = retrieved(&f, "Target", &o, NULL);
+    assert(!retrieval_result(doc, "service/service.go"));
+    yyjson_doc_free(doc);
+    doc = retrieved(&f, "\" OR path:foo NEAR ( *", &o, NULL);
+    yyjson_doc_free(doc); /* Literal words, never caller-controlled MATCH syntax. */
+    doc = retrieved(&f, "*():\"", &o, &value);
+    assert(!value.results);
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+static size_t retrieval_bytes(const char *text, void *userdata) {
+    (void)userdata;
+    return strlen(text); /* Explicit byte counter fixture, not model-token evidence. */
+}
+static bool retrieval_cancel(void *userdata) {
+    (void)userdata;
+    return true;
+}
+static bool deny_retrieval(const char *tool, forge_capability capability, const char *arguments,
+                           void *userdata) {
+    (void)userdata;
+    assert(!strcmp(tool, "retrieve_context") && capability == FORGE_CAP_READ);
+    assert(arguments && strstr(arguments, "Target"));
+    return false;
+}
+static size_t retrieval_bad_count(const char *text, void *userdata) {
+    (void)text;
+    (void)userdata;
+    return 0;
+}
+static void test_retrieval_budgets_and_errors(void) {
+    fixture f;
+    fixture_start(&f);
+    const char *source = "package p\nfunc Target() { /* UTF-8: \xc3\xa9\xc3\xa5 */ }\n";
+    write_source(&f, "a.go", source);
+    write_source(&f, "b.go", source);
+    write_source(&f, "c.go", source);
+    full_index(&f);
+    forge_retrieval_options o = forge_default_retrieval_options();
+    o.graph_depth = 0;
+    forge_retrieval_stats value;
+    yyjson_doc *doc = retrieved(&f, "Target", &o, &value);
+    assert(value.results == 3);
+    size_t complete_bytes = value.output_bytes;
+    yyjson_doc_free(doc);
+    fg_tool_context tools = {0};
+    tools.repo = f.repo;
+    tools.config.limits = forge_default_limits();
+    const char *argument_text = "{\"query\":\"Target\"}";
+    yyjson_doc *arguments = yyjson_read(argument_text, strlen(argument_text), 0);
+    assert(arguments);
+    bool changed = true;
+    char *tool_result = fg_tool_execute(&tools, "retrieve_context", yyjson_doc_get_root(arguments),
+                                        &changed, &f.error);
+    assert(tool_result && !changed && !f.repo->snapshot_active);
+    free(tool_result);
+    tools.config.policy = deny_retrieval;
+    assert(!fg_tool_execute(&tools, "retrieve_context", yyjson_doc_get_root(arguments), &changed,
+                            &f.error));
+    assert(f.error.code == FORGE_ERR_POLICY && strstr(f.error.message, "read approval"));
+    yyjson_doc_free(arguments);
+    o.max_output_bytes = complete_bytes - 1;
+    doc = retrieved(&f, "Target", &o, &value);
+    assert(value.results == 2 && value.truncated && value.output_bytes <= o.max_output_bytes);
+    assert(retrieval_result(doc, "a.go") && !retrieval_result(doc, "c.go"));
+    yyjson_doc_free(doc);
+    o.max_output_bytes = FORGE_RETRIEVAL_MAX_OUTPUT_BYTES;
+    o.max_output_tokens = complete_bytes - 1;
+    o.count_tokens = retrieval_bytes;
+    doc = retrieved(&f, "Target", &o, &value);
+    assert(value.results == 2 && value.tokens_known && value.output_tokens == value.output_bytes);
+    assert(value.output_tokens <= o.max_output_tokens);
+    yyjson_doc_free(doc);
+    o.max_output_tokens = 0;
+    o.max_results = 1;
+    doc = retrieved(&f, "Target", &o, &value);
+    assert(value.results == 1 && value.truncated && retrieval_result(doc, "a.go"));
+    yyjson_doc_free(doc);
+    o.max_results = 16;
+    o.max_candidates = 1;
+    doc = retrieved(&f, "Target", &o, &value);
+    assert(value.candidates == 1 && value.results == 1 && value.truncated);
+    yyjson_doc_free(doc);
+    o.max_candidates = 256;
+    o.max_source_bytes = 1;
+    doc = retrieved(&f, "Target", &o, &value);
+    assert(!value.results && value.truncated && !value.source_bytes);
+    yyjson_doc_free(doc);
+    o.max_source_bytes = 16384;
+    o.max_snippet_bytes = 5;
+    doc = retrieved(&f, "Target", &o, &value);
+    yyjson_val *row = retrieval_result(doc, "a.go");
+    assert(strlen(yyjson_get_str(yyjson_obj_get(row, "snippet"))) <= 5 && value.truncated);
+    yyjson_doc_free(doc);
+    o.max_snippet_bytes = 2;
+    doc = retrieved(&f, "\xc3\xa9\xc3\xa5", &o, &value);
+    row = retrieval_result(doc, "a.go");
+    const char *snippet = yyjson_get_str(yyjson_obj_get(row, "snippet"));
+    assert(snippet && strlen(snippet) <= 2 && fg_utf8_valid(snippet, strlen(snippet)));
+    yyjson_doc_free(doc);
+    o.max_output_bytes = 1;
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, &value, &f.error));
+    assert(f.error.code == FORGE_ERR_LIMIT && !value.results && !value.output_bytes);
+    o = forge_default_retrieval_options();
+    o.count_tokens = retrieval_bad_count;
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, &value, &f.error));
+    assert(f.error.code == FORGE_ERR_MODEL && !value.output_bytes);
+    o.count_tokens = NULL;
+    o.cancelled = retrieval_cancel;
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, &value, &f.error));
+    assert(f.error.code == FORGE_ERR_CANCELLED && !value.results);
+    o.cancelled = NULL;
+    o.deadline_ms = fg_now_ms();
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_LIMIT); /* Shared snapshot deadline contract. */
+    o.deadline_ms = 0;
+    o.seed_file = "missing.go";
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_NOT_FOUND);
+    o.seed_file = "../escape.go";
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_POLICY);
+    o.seed_file = "\xc0";
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_ARGUMENT);
+    o.seed_file = NULL;
+    o.max_output_tokens = 1;
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_ARGUMENT);
+    o.max_output_tokens = 0;
+    assert(!forge_repo_retrieve(f.repo, NULL, &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_ARGUMENT);
+    fg_buf words = {0};
+    for (unsigned i = 0; i < 33; i++)
+        assert(fg_buf_puts(&words, "word "));
+    assert(!forge_repo_retrieve(f.repo, words.data, &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_LIMIT);
+    fg_buf_clear(&words);
+    for (size_t i = 0; i < 128; i++) {
+        char path[64];
+        snprintf(path, sizeof(path), "many/file%zu.go", i);
+        write_source(&f, path, "package many\nfunc Other() {}\n");
+    }
+    full_index(&f);
+    o.graph_depth = 0;
+    o.max_vm_steps = 1;
+    assert(!forge_repo_retrieve(f.repo, "NoSuchPhrase", &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_LIMIT);
+    o.max_vm_steps = 50000000;
+    doc = retrieved(&f, "Target", &o, NULL);
+    yyjson_doc_free(doc); /* Failed calls restore the handle's snapshot callbacks. */
+    fixture_finish(&f);
+}
+static void test_retrieval_corrupt_metadata(void) {
+    fixture f;
+    fixture_start(&f);
+    write_source(&f, "a.go", "package p\nfunc Target() {}\n");
+    full_index(&f);
+    const char *changes[] = {"UPDATE chunks SET content=CAST(content AS BLOB)",
+                             "UPDATE file_digests SET version=4294967297",
+                             "UPDATE file_digests SET version=CAST('1' AS BLOB)",
+                             "UPDATE chunks SET path='other.go'",
+                             "UPDATE chunks SET content='tampered'",
+                             "UPDATE symbols SET start_byte=-1",
+                             "UPDATE symbols SET line=1"};
+    const char *repairs[] = {"UPDATE chunks SET content=CAST(content AS TEXT)",
+                             "UPDATE file_digests SET version=1",
+                             "UPDATE file_digests SET version=1",
+                             "UPDATE chunks SET path='a.go'",
+                             "UPDATE chunks SET content='package p\nfunc Target() {}\n'",
+                             "UPDATE symbols SET start_byte=10",
+                             "UPDATE symbols SET line=2"};
+    for (size_t i = 0; i < sizeof(changes) / sizeof(*changes); i++) {
+        database(&f, changes[i]);
+        forge_retrieval_stats value;
+        assert(!forge_repo_retrieve(f.repo, "Target", NULL, &value, &f.error));
+        assert(f.error.code == FORGE_ERR_PARSE && !value.results);
+        database(&f, repairs[i]);
+        yyjson_doc *doc = retrieved(&f, "Target", NULL, NULL);
+        yyjson_doc_free(doc);
+    }
+    database(&f, "DELETE FROM file_digests");
+    assert(!forge_repo_retrieve(f.repo, "Target", NULL, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_CONFLICT);
+    fixture_finish(&f);
+}
+typedef struct {
+    forge_repo *reader, *writer;
+    bool called;
+} retrieval_concurrent;
+static size_t retrieval_concurrent_count(const char *text, void *userdata) {
+    retrieval_concurrent *state = userdata;
+    if (!state->called) {
+        state->called = true;
+        forge_error error = {0};
+        assert(!forge_repo_retrieve(state->reader, "Target", NULL, NULL, &error));
+        assert(error.code == FORGE_ERR_CONFLICT);
+        assert(forge_repo_index(state->writer, &error) == FORGE_OK);
+    }
+    return strlen(text);
+}
+static void test_retrieval_snapshot_consistency(void) {
+    fixture f;
+    fixture_start(&f);
+    write_source(&f, "a.go", "package p\nfunc Target() {}\n");
+    full_index(&f);
+    uint64_t before = forge_repo_generation(f.repo);
+    forge_repo *writer = forge_repo_open(f.root, &f.error);
+    assert(writer);
+    write_source(&f, "a.go", "package p\nfunc Changed() {}\n");
+    retrieval_concurrent state = {f.repo, writer, false};
+    forge_retrieval_options o = forge_default_retrieval_options();
+    o.graph_depth = 0;
+    o.count_tokens = retrieval_concurrent_count;
+    o.count_userdata = &state;
+    forge_retrieval_stats value;
+    yyjson_doc *doc = retrieved(&f, "Target", &o, &value);
+    assert(state.called && value.generation == before && value.results == 1);
+    assert(
+        strstr(yyjson_get_str(yyjson_obj_get(retrieval_result(doc, "a.go"), "snippet")), "Target"));
+    yyjson_doc_free(doc);
+    o.count_tokens = NULL;
+    doc = retrieved(&f, "Changed", &o, &value);
+    assert(value.generation > before && value.results == 1);
+    yyjson_doc_free(doc);
+    forge_repo_close(writer);
+    fixture_finish(&f);
+}
 int main(void) {
+#ifdef _WIN32
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
     test_edit_parity();
     test_hashes_and_reopen();
     test_deletion_recreation_and_skips();
@@ -740,6 +1062,10 @@ int main(void) {
     test_observed_change_transactions();
     test_description_bounds();
     test_git_delta_eligibility();
+    test_retrieval_stages();
+    test_retrieval_budgets_and_errors();
+    test_retrieval_corrupt_metadata();
+    test_retrieval_snapshot_consistency();
     puts("Incremental repository index tests passed");
     return 0;
 }

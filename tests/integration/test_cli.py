@@ -254,6 +254,36 @@ class ForgeTests(unittest.TestCase):
         self.assertEqual(failure['commands'][0]['stage'], 'format')
         self.assertEqual(failure['commands'][0]['exit_code'], 0)
 
+    def test_staged_retrieval_cli_and_read_only_tool(self):
+        (self.root / 'notes.md').write_text('ADD is documented in uppercase.\n', encoding='utf-8')
+        report = json.loads(self.cli('retrieve', 'Add', '--depth', '0', '--json').stdout)
+        self.assertTrue(report['indexed_snapshot_only'])
+        self.assertEqual([stage['stage'] for stage in report['stages']],
+                         ['exact_symbol', 'package_graph', 'literal', 'fts5'])
+        self.assertEqual(report['results'][0]['stage'], 'exact_symbol')
+        self.assertEqual(report['results'][0]['path'], 'calc.go')
+        self.assertIn('return a - b', report['results'][0]['snippet'])
+        self.assertEqual(next(row for row in report['results'] if row['path'] == 'notes.md')['stage'],
+                         'fts5')
+        failed = self.cli('retrieve', 'Add', '--max-tool-bytes', '1', success=False)
+        self.assertIn('budget', failed.stderr)
+        self.cli('retrieve', success=False)
+        original = (self.root / 'calc.go').read_bytes()
+        _, events, session = self.run_script([
+            {'tool': 'retrieve_context', 'args': {'query': 'Add'}},
+            {'final': 'Inspected indexed evidence.'},
+        ], '--no-auto-validation', '--context', '4096', '--output-reserve', '256',
+           '--max-tool-bytes', '8192', fallback_watch=True)
+        outputs = [event['data'] for event in events if event['type'] == 'tool_result']
+        self.assertEqual([output['name'] for output in outputs], ['retrieve_context'])
+        tool_report = json.loads(outputs[0]['output'])
+        self.assertEqual(tool_report['results'][0]['stage'], 'exact_symbol')
+        self.assertEqual((self.root / 'calc.go').read_bytes(), original)
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertTrue(metrics['simulated'])
+        self.assertEqual(metrics['files_modified'], 0)
+        self.assertEqual(metrics['validation_commands'], 0)
+
     def test_agent_repairs_after_automatic_verification_failure(self):
         self.require_go()
         self.go_module('a - b')
