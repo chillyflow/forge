@@ -12,6 +12,11 @@ import unittest
 from unittest.mock import patch
 
 FORGE = str(pathlib.Path(sys.argv.pop(1)).resolve())
+FALLBACK_FORGE = None
+if '--fallback-forge' in sys.argv:
+    index = sys.argv.index('--fallback-forge')
+    FALLBACK_FORGE = str(pathlib.Path(sys.argv.pop(index + 1)).resolve())
+    sys.argv.pop(index)
 
 class ForgeTests(unittest.TestCase):
     def setUp(self):
@@ -23,9 +28,9 @@ class ForgeTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def cli(self, *args, success=True, **run_options):
+    def cli(self, *args, success=True, executable=FORGE, **run_options):
         run_options.setdefault('timeout', 90)
-        result = subprocess.run([FORGE, *args, '--workspace', str(self.root)], capture_output=True,
+        result = subprocess.run([executable, *args, '--workspace', str(self.root)], capture_output=True,
                                 encoding='utf-8', **run_options)
         if success:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -33,18 +38,27 @@ class ForgeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
-    def run_script(self, actions, *options, success=True):
+    def run_script(self, actions, *options, success=True, fallback_watch=False):
         path = self.root / 'script.json'
-        # Native notifications (notably FSEvents) may arrive after a known edit
+        # Strict validation-order fixtures use the real bounded snapshot
+        # fallback. Other scripts retain native monitoring. Native
+        # notifications (notably FSEvents) may arrive after a known edit
         # was already indexed. The runtime conservatively requests fresh
         # generation. These successful fixtures can repeat their terminal
         # response; never repeat mutation actions or extend failure fixtures.
+        fallback = FALLBACK_FORGE if fallback_watch else None
         scripted = list(actions)
-        if success and scripted and 'final' in scripted[-1]:
+        if not fallback and success and scripted and 'final' in scripted[-1]:
             scripted.extend([scripted[-1]] * 4)
         path.write_text(json.dumps(scripted))
-        result = self.cli('run', 'Fix Add and verify it.', '--script', str(path), '--json', *options, success=success)
+        result = self.cli('run', 'Fix Add and verify it.', '--script', str(path), '--json',
+                          *options, success=success, executable=fallback or FORGE)
         events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+        if fallback:
+            scans = [event['data'] for event in events if event['type'] == 'repository_scan']
+            self.assertTrue(scans, result.stdout + result.stderr)
+            self.assertTrue(all(not scan['watch_available'] for scan in scans))
+            self.assertIn('fallback test fixture', scans[0]['watch_fallback'])
         sessions = sorted((self.root / '.forge' / 'sessions').iterdir(), key=lambda p: p.stat().st_mtime_ns)
         return result, events, sessions[-1]
 
@@ -249,7 +263,7 @@ class ForgeTests(unittest.TestCase):
             {'final': 'This premature success claim must not be accepted.'},
             {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a + b + 1', 'new_text': 'return a + b'}},
             {'final': 'The corrected result passed verification.'},
-        ], '--allow-write', '--allow-exec')
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
         reports = [e['data'] for e in events if e['type'] == 'validation_result']
         self.assertEqual([report['passed'] for report in reports], [False, True])
         self.assertEqual([e['data'] for e in events if e['type'] == 'message'],
@@ -268,7 +282,7 @@ class ForgeTests(unittest.TestCase):
         _, events, session = self.run_script([
             {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a + b'}},
             {'final': 'Claimed success without process permission.'},
-        ], '--allow-write', success=False)
+        ], '--allow-write', success=False, fallback_watch=True)
         self.assertFalse(any(e['type'] == 'message' for e in events))
         self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
                          'denied')
@@ -294,7 +308,7 @@ class ForgeTests(unittest.TestCase):
             {'tool': 'apply_patch', 'args': {
                 'path': 'fixture.txt', 'old_text': 'bad', 'new_text': 'good'}},
             {'final': 'Restored the fixture and verified it.'},
-        ], '--allow-exec', '--allow-write')
+        ], '--allow-exec', '--allow-write', fallback_watch=True)
         reports = [event['data'] for event in events if event['type'] == 'validation_result']
         self.assertEqual([report['passed'] for report in reports], [False, True])
         self.assertTrue(all(report['inputs_checked'] for report in reports))

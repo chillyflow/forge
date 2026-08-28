@@ -252,10 +252,19 @@ static void test_initial_timeout_and_files(void) {
     fixture_write(&f, "existing/fixture.csv", "before", 6);
     forge_watch *watch = create(&f, NULL);
     assert(initial(watch) == 2);
-    uint64_t start = fg_now_ms();
-    yyjson_doc *doc = poll_batch(watch, 30, FG_MAX_JSON);
-    assert(flag(doc, "timed_out") && !flag(doc, "rescan_required"));
-    assert(!flag(doc, "initial_scan_required"));
+    /* FSEvents can deliver fixture-creation notifications after the explicit
+     * initial batch. Drain them with a bound, then require a real quiet timeout;
+     * never assert that a newly created watcher starts with an empty OS queue. */
+    uint64_t deadline = fg_now_ms() + 4000, start = 0;
+    yyjson_doc *doc = NULL;
+    do {
+        yyjson_doc_free(doc);
+        assert(fg_now_ms() < deadline);
+        start = fg_now_ms();
+        doc = poll_batch(watch, 30, FG_MAX_JSON);
+        assert(!flag(doc, "initial_scan_required") && !flag(doc, "reopen_required"));
+    } while (!flag(doc, "timed_out") || flag(doc, "rescan_required") ||
+             yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")));
     assert(fg_now_ms() - start >= 20 && fg_now_ms() - start < 1500);
     yyjson_doc_free(doc);
     const char *paths[] = {"z.txt", "a.txt", "unicode-\xC2\xB5-\xE9\x9B\xAA.bin"};

@@ -203,3 +203,15 @@ stale-response rejection; scripted output is not an inference correctness test.
 `test_agent_changes.c` supplies a silent watcher double and verifies immediate
 post-patch invalidation, including unindexed files and slash/backslash aliases,
 without relying on eventual native delivery.
+
+CTest also builds an uninstalled `forge_fallback_fixture` CLI. Only native
+watcher creation is replaced with an explicit unsupported result; the actual
+bounded filesystem snapshot monitor, index, tools and validation still run.
+Three CLI fixtures that require a precise failure/repair/validation order use
+this binary. A delayed native notification can legitimately discard a scripted
+final before it reaches validation, so native timing cannot establish that
+ordering. These fixtures assert the fallback was actually selected and retain
+their exact failed-then-passed validation assertions. Other scripted fixtures,
+the CLI watch test and the native agent/watch tests still use native monitoring.
+The native timeout test first drains any delayed fixture-creation events with a
+bounded deadline, then requires a real quiet timeout.
