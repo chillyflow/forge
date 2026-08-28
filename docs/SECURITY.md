@@ -14,6 +14,12 @@ callback. Arbitrary processes require `--allow-exec` or that callback. A callbac
 replaces the CLI flag decision, so embedders can permit or deny each operation.
 There is no hidden fallback that runs denied commands through another tool.
 
+Automatic validation and `forge validate` use this same PROCESS decision for every
+stage. The Go compile check can execute `init` and `TestMain`; formatting checks
+and tests are not implicitly trusted. TOML configuration never grants writes or
+execution. An explicit `tools.shell.network=false` prevents CLI execution even
+with `--allow-exec`, since network isolation is not implemented.
+
 Built-in Git inspection is permitted without arbitrary-process authorization.
 Git is resolved from absolute PATH entries outside the workspace; fsmonitor and
 external diff/textconv commands are disabled. The index does not execute hooks.

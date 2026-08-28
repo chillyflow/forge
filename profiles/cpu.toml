@@ -1,0 +1,14 @@
+# CPU settings for an explicitly installed model. This is a context/placement
+# preset, not proof that a particular model fits host memory.
+
+[model]
+context = 4096
+
+[inference]
+gpu_layers = 0
+threads = 0 # The backend chooses when no explicit thread count is supplied.
+temperature = 0.0
+seed = 42
+
+[agent]
+output_reserve = 1024

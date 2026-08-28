@@ -35,6 +35,9 @@ bool fg_workspace(const char *, char[FG_PATH_MAX], forge_error *);
 bool fg_safe_path(const char *, const char *, bool, char[FG_PATH_MAX], forge_error *);
 bool fg_path_join(char[FG_PATH_MAX], const char *, const char *);
 bool fg_random_hex(char *, size_t);
+bool fg_utf8_valid(const char *, size_t);
+size_t fg_utf8_prefix(const char *, size_t length, size_t maximum);
+size_t fg_utf8_forward(const char *, size_t length, size_t offset);
 typedef bool (*fg_walk_fn)(const char *, void *);
 bool fg_walk(const char *, const char *, fg_walk_fn, void *, forge_error *);
 char *fg_json_string(const char *);
@@ -46,12 +49,18 @@ typedef struct {
     size_t out_len, err_len;
     int exit_code;
     bool timed_out, truncated, cancelled;
+    bool started; /* True only after successful OS process creation/fork. */
     double duration_ms;
 } fg_process_result;
 forge_status fg_process(const char *root, const char *const *argv, uint64_t timeout,
                         size_t max_bytes, forge_cancel_fn, void *, fg_process_result *,
                         forge_error *);
 void fg_process_free(fg_process_result *);
+char *fg_process_render(const fg_process_result *);
+char *fg_render_bytes(const char *, size_t);
+forge_status fg_process_at(const char *workspace_root, const char *cwd, const char *const *argv,
+                           uint64_t timeout, size_t max_bytes, forge_cancel_fn, void *,
+                           fg_process_result *, forge_error *);
 
 typedef struct {
     char dir[FG_PATH_MAX];
@@ -63,9 +72,11 @@ typedef struct {
 bool fg_session_start(fg_session *, const char *, forge_event_fn, void *, forge_error *);
 bool fg_session_emit(fg_session *, const char *, const char *, forge_error *);
 bool fg_session_artifact(fg_session *, const char *, const char *, forge_error *);
+bool fg_session_artifact_bytes(fg_session *, const char *, const char *, size_t, forge_error *);
 bool fg_session_finish(fg_session *, const forge_metrics *, forge_status, forge_error *);
 char *fg_metrics_json(const forge_metrics *, forge_status);
 char *fg_compress_output(const char *, size_t, size_t *, forge_error *);
+uint64_t fg_diagnostic_hash(const char *);
 
 struct forge_model {
     forge_model_config config;
@@ -93,14 +104,28 @@ const fg_tool_def *fg_tools(size_t *);
 char *fg_tool_schema(void);
 char *fg_tool_grammar(void);
 bool fg_tool_validate(const char *, yyjson_val *, forge_error *);
+uint64_t fg_tool_signature(const char *, yyjson_val *, uint64_t generation,
+                           uint64_t diagnostic_hash);
 typedef struct {
     forge_agent_config config;
     forge_repo *repo;
     fg_session *session;
     char root[FG_PATH_MAX];
     size_t call_id;
+    size_t validation_id;
     uint64_t deadline;
+    bool process_ran;
+    fg_process_result process; /* Metadata only; out/err pointers stay NULL. */
 } fg_tool_context;
+typedef struct {
+    bool applicable, passed, inputs_changed;
+    size_t commands, stages;
+    uint64_t generation;
+    char *json, *summary;
+} fg_validation_result;
+forge_status fg_validation_run(fg_tool_context *, const char *const *, size_t, forge_metrics *,
+                               fg_validation_result *, forge_error *);
+void fg_validation_result_free(fg_validation_result *);
 char *fg_tool_execute(fg_tool_context *, const char *, yyjson_val *, bool *, forge_error *);
 char *fg_repo_search(forge_repo *, const char *, size_t, forge_error *);
 char *fg_repo_targets(forge_repo *, const char *, forge_error *);

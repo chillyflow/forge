@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,10 +21,13 @@ class ForgeTests(unittest.TestCase):
         self.temp.cleanup()
 
     def cli(self, *args, success=True, **run_options):
+        run_options.setdefault('timeout', 90)
         result = subprocess.run([FORGE, *args, '--workspace', str(self.root)], capture_output=True,
-                                encoding='utf-8', timeout=35, **run_options)
+                                encoding='utf-8', **run_options)
         if success:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        else:
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
     def run_script(self, actions, *options, success=True):
@@ -33,6 +37,196 @@ class ForgeTests(unittest.TestCase):
         events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
         sessions = sorted((self.root / '.forge' / 'sessions').iterdir(), key=lambda p: p.stat().st_mtime_ns)
         return result, events, sessions[-1]
+
+    def go_module(self, expression='a + b'):
+        (self.root / 'caller.go').unlink(missing_ok=True)
+        (self.root / 'go.mod').write_text('module example.test/calc\n\ngo 1.22\n', newline='\n')
+        (self.root / 'calc.go').write_text(
+            f'package calc\n\nfunc Add(a, b int) int {{\n\treturn {expression}\n}}\n', newline='\n')
+        (self.root / 'calc_test.go').write_text(
+            'package calc\n\nimport "testing"\n\nfunc TestAdd(t *testing.T) {\n'
+            '\tif got := Add(2, 3); got != 5 {\n'
+            '\t\tt.Fatalf("got %d, want 5", got)\n\t}\n}\n', newline='\n')
+
+    def require_go(self):
+        if not shutil.which('go') or not shutil.which('gofmt'):
+            self.skipTest('Go and gofmt are needed for real automatic validation')
+
+    def test_typed_memory_preserves_claims_without_forging_evidence(self):
+        memory = {'facts': ['The model claims all tests pass.'], 'hypotheses': [],
+                  'decisions': ['Use addition.'], 'relevant_files': ['calc.go'],
+                  'remaining': ['Run independent verification.']}
+        _, _, session = self.run_script([
+            {'memory': memory},
+            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a + b'}},
+            {'final': 'Edited without verifying.'},
+        ], '--allow-write', '--no-auto-validation')
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['facts'], memory['facts'])
+        self.assertEqual(state['decisions'], memory['decisions'])
+        self.assertTrue(state['model_fields_stale'])
+        self.assertEqual(state['validation']['status'], 'unverified')
+        self.assertEqual(state['observed_changes'][0]['path'], 'calc.go')
+        _, _, rejected = self.run_script([
+            {'memory': {**memory, 'validation': {'status': 'passed'}}},
+        ], success=False)
+        self.assertEqual(json.loads((rejected / 'working_state.json').read_text())['validation']['status'],
+                         'unverified')
+
+    def test_compaction_keeps_structured_decisions(self):
+        (self.root / 'large.txt').write_text(''.join(f'line {i}: ' + 'x' * 100 + '\n' for i in range(500)))
+        memory = {'facts': ['Sentinel fact survives compaction.'], 'hypotheses': [],
+                  'decisions': ['Keep the original task.'], 'relevant_files': ['large.txt'],
+                  'remaining': ['Inspect remaining lines.']}
+        actions = [{'memory': memory}]
+        actions += [{'tool': 'read_file', 'args': {'path': 'large.txt', 'start': i + 1, 'end': i + 20}}
+                    for i in range(0, 400, 20)]
+        actions.append({'final': 'Inspection finished.'})
+        for capacity in (8192, 4096):
+            with self.subTest(context=capacity):
+                _, _, session = self.run_script(actions, '--context', str(capacity),
+                                                 '--output-reserve', '256')
+                metrics = json.loads((session / 'metrics.json').read_text())
+                self.assertGreater(metrics['context_evictions'], 0)
+                final_prompt = sorted((session / 'context').glob('*.txt'))[-1].read_text()
+                self.assertIn('Sentinel fact survives compaction.', final_prompt)
+                self.assertIn('Keep the original task.', final_prompt)
+                snapshots = [(path, json.loads(path.read_text()))
+                             for path in sorted((session / 'context').glob('[0-9][0-9][0-9][0-9].json'))]
+                path, compacted = next((path, snapshot) for path, snapshot in snapshots
+                                       if snapshot['planned_evicted'])
+                memory_segment = next(segment for segment in compacted['segments']
+                                      if segment['kind'] == 4)
+                view = json.loads(memory_segment['text'])
+                self.assertEqual(view['facts'], memory['facts'])
+                # The first compacted prompt already contains the last completed
+                # tool outcome; it must not lag until the following turn.
+                if view['recent_outcomes']:
+                    self.assertEqual(view['recent_outcomes'][0]['tool_call_id'],
+                                     int(path.stem) - 2)
+
+    def test_validation_plan_and_permission_denial(self):
+        self.go_module()
+        plan = json.loads(self.cli('validation-plan', 'calc.go', '--json').stdout)
+        self.assertEqual([stage['name'] for stage in plan['stages']],
+                         ['format', 'compile', 'affected_tests', 'dependent_tests', 'vet', 'broad_tests'])
+        result = self.cli('validate', 'calc.go', '--json', success=False)
+        events = [json.loads(line) for line in result.stdout.splitlines()]
+        report = next(e['data'] for e in events if e['type'] == 'validation_result')
+        self.assertFalse(report['passed'])
+        self.assertEqual(report['status'], 'policy')
+        self.assertEqual(report['commands_run'], 0)
+        self.assertFalse(any(e['type'] == 'validation_command_start' for e in events))
+
+    def test_real_staged_validation_and_format_failure(self):
+        self.require_go()
+        self.go_module()
+        result = self.cli('validate', 'calc.go', '--allow-exec', '--json')
+        events = [json.loads(line) for line in result.stdout.splitlines()]
+        report = next(e['data'] for e in events if e['type'] == 'validation_result')
+        self.assertTrue(report['passed'])
+        self.assertGreaterEqual(report['commands_run'], 4)
+        self.assertEqual(report['commands'][0]['stage'], 'format')
+        self.assertEqual(report['commands'][-1]['stage'], 'broad_tests')
+        self.assertTrue(all(command['exit_code'] == 0 for command in report['commands']))
+        for command in report['commands']:
+            self.assertTrue((pathlib.Path(report['session']) / command['stdout_artifact']).exists())
+            self.assertTrue((pathlib.Path(report['session']) / command['stderr_artifact']).exists())
+        with (self.root / 'calc.go').open('a') as stream:
+            stream.write('\nfunc Ugly( )int{return 0}\n')
+        failed = self.cli('validate', 'calc.go', '--allow-exec', '--json', success=False)
+        failure_events = [json.loads(line) for line in failed.stdout.splitlines()]
+        failure = next(e['data'] for e in failure_events if e['type'] == 'validation_result')
+        self.assertFalse(failure['passed'])
+        self.assertEqual(failure['commands_run'], 1)
+        self.assertEqual(failure['commands'][0]['stage'], 'format')
+        self.assertEqual(failure['commands'][0]['exit_code'], 0)
+
+    def test_agent_repairs_after_automatic_verification_failure(self):
+        self.require_go()
+        self.go_module('a - b')
+        original_test = (self.root / 'calc_test.go').read_bytes()
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a + b + 1'}},
+            {'final': 'This premature success claim must not be accepted.'},
+            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a + b + 1', 'new_text': 'return a + b'}},
+            {'final': 'The corrected result passed verification.'},
+        ], '--allow-write', '--allow-exec')
+        reports = [e['data'] for e in events if e['type'] == 'validation_result']
+        self.assertEqual([report['passed'] for report in reports], [False, True])
+        self.assertEqual([e['data'] for e in events if e['type'] == 'message'],
+                         ['The corrected result passed verification.'])
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'passed')
+        self.assertEqual(state['observed_changes'][0]['observations'], 2)
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual(metrics['files_modified'], 1)
+        self.assertEqual(metrics['validation_failures'], 1)
+        self.assertGreater(metrics['validation_commands'], 4)
+        self.assertEqual((self.root / 'calc_test.go').read_bytes(), original_test)
+
+    def test_agent_cannot_finish_edits_when_validation_is_denied(self):
+        self.go_module('a - b')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a + b'}},
+            {'final': 'Claimed success without process permission.'},
+        ], '--allow-write', success=False)
+        self.assertFalse(any(e['type'] == 'message' for e in events))
+        self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
+                         'denied')
+
+    def test_unindexed_command_changes_require_fresh_validation(self):
+        self.require_go()
+        self.go_module()
+        (self.root / 'fixture.txt').write_text('good', encoding='utf-8')
+        (self.root / 'fixture_test.go').write_text(
+            'package calc\n\nimport (\n\t"os"\n\t"testing"\n)\n\n'
+            'func TestFixture(t *testing.T) {\n'
+            '\tdata, err := os.ReadFile("fixture.txt")\n'
+            '\tif err != nil || string(data) != "good" {\n'
+            '\t\tt.Fatalf("fixture must be good: %q (%v)", data, err)\n\t}\n}\n',
+            encoding='utf-8', newline='\n')
+        original_source = (self.root / 'calc.go').read_bytes()
+        original_test = (self.root / 'fixture_test.go').read_bytes()
+        _, events, session = self.run_script([
+            {'tool': 'run_command', 'args': {
+                'argv': [sys.executable, '-c',
+                         "from pathlib import Path; Path('fixture.txt').write_text('bad')"]}},
+            {'final': 'This command-only change must not bypass validation.'},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'fixture.txt', 'old_text': 'bad', 'new_text': 'good'}},
+            {'final': 'Restored the fixture and verified it.'},
+        ], '--allow-exec', '--allow-write')
+        reports = [event['data'] for event in events if event['type'] == 'validation_result']
+        self.assertEqual([report['passed'] for report in reports], [False, True])
+        self.assertTrue(all(report['inputs_checked'] for report in reports))
+        self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
+                         ['Restored the fixture and verified it.'])
+        self.assertEqual((self.root / 'calc.go').read_bytes(), original_source)
+        self.assertEqual((self.root / 'fixture_test.go').read_bytes(), original_test)
+        self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
+                         'passed')
+
+    def test_passing_tests_that_mutate_inputs_do_not_pass_validation(self):
+        self.require_go()
+        self.go_module()
+        (self.root / 'fixture.bin').write_bytes(b'before')
+        (self.root / 'mutation_test.go').write_text(
+            'package calc\n\nimport (\n\t"os"\n\t"testing"\n)\n\n'
+            'func TestMutation(t *testing.T) {\n'
+            '\tif err := os.WriteFile("fixture.bin", []byte("after"), 0600); err != nil {\n'
+            '\t\tt.Fatal(err)\n\t}\n}\n', encoding='utf-8', newline='\n')
+        failed = self.cli('validate', '--allow-exec', '--json', success=False)
+        events = [json.loads(line) for line in failed.stdout.splitlines()]
+        report = next(event['data'] for event in events if event['type'] == 'validation_result')
+        self.assertFalse(report['passed'])
+        self.assertTrue(report['inputs_changed'])
+        self.assertTrue(report['inputs_checked'])
+        self.assertEqual(report['status'], 'conflict')
+        self.assertNotEqual(report['input_hash_before'], report['input_hash_after'])
+        self.assertTrue(all(command['exit_code'] == 0 for command in report['commands']))
+        self.assertEqual((self.root / 'fixture.bin').read_bytes(), b'after')
+
 
     def test_index_and_incremental_update(self):
         self.assertIn('generation=1', self.cli('index').stdout)
@@ -53,7 +247,7 @@ class ForgeTests(unittest.TestCase):
             {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', "from pathlib import Path; assert 'return a + b' in Path('calc.go').read_text(); print('PASS')"]}},
             {'final': 'Fixed Add; verification passed.'},
         ]
-        _, events, session = self.run_script(actions, '--allow-write', '--allow-exec')
+        _, events, session = self.run_script(actions, '--allow-write', '--allow-exec', '--no-auto-validation')
         self.assertIn('return a + b', (self.root / 'calc.go').read_text())
         metrics = json.loads((session / 'metrics.json').read_text())
         self.assertTrue(metrics['simulated'])
@@ -80,7 +274,8 @@ class ForgeTests(unittest.TestCase):
             {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', 'import time; print("started", flush=True); time.sleep(10)']}},
             {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', 'print("x" * 20000)']}},
             {'final': 'Done.'},
-        ], '--allow-exec', '--timeout-ms', '300', '--max-tool-bytes', '1024', '--no-semantic')
+        ], '--allow-exec', '--timeout-ms', '300', '--max-tool-bytes', '1024', '--no-semantic',
+           '--no-auto-validation')
         results = [e['data']['output'] for e in events if e['type'] == 'tool_result']
         self.assertIn('timeout=true', results[0])
         self.assertIn('truncated=true', results[1])
@@ -96,7 +291,7 @@ class ForgeTests(unittest.TestCase):
             {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'not present', 'new_text': 'bad'}},
             {'tool': 'apply_patch', 'args': {'path': 'new.go', 'old_text': '', 'new_text': 'package calc\n'}},
             {'final': 'Done.'},
-        ], '--allow-write')
+        ], '--allow-write', '--no-auto-validation')
         results = [e['data']['output'] for e in events if e['type'] == 'tool_result']
         self.assertIn('conflict', results[0])
         self.assertEqual((self.root / 'new.go').read_text(), 'package calc\n')
@@ -105,6 +300,30 @@ class ForgeTests(unittest.TestCase):
         _, _, session = self.run_script([{'final': 'done'}])
         (session / 'events.jsonl').write_text('{"sequence":99}\n')
         self.assertNotEqual(self.cli('replay', str(session), success=False).returncode, 0)
+
+    def test_identical_patch_is_a_conflict_and_can_recover(self):
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a - b'}},
+            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a + b'}},
+            {'final': 'Fixed the expression.'},
+        ], '--allow-write', '--no-auto-validation')
+        outputs = [e['data']['output'] for e in events if e['type'] == 'tool_result']
+        self.assertIn('TOOL_ERROR [conflict]', outputs[0])
+        self.assertIn('No edit performed', outputs[0])
+        self.assertIn('Patched calc.go', outputs[1])
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['files_modified'], 1)
+
+    def test_loop_detection_uses_canonical_arguments(self):
+        actions = [
+            {'tool': 'read_file', 'args': {'path': 'calc.go', 'start': 1, 'end': 3}},
+            {'tool': 'read_file', 'args': {'end': 3, 'start': 1, 'path': 'calc.go'}},
+            {'tool': 'read_file', 'args': {'start': 1, 'path': 'calc.go', 'end': 3}},
+            {'final': 'Loop warning observed.'},
+        ]
+        _, events, session = self.run_script(actions)
+        outputs = [e['data']['output'] for e in events if e['type'] == 'tool_result']
+        self.assertIn('LOOP_DETECTED', outputs[-1])
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['loop_warnings'], 1)
 
     def test_no_implicit_simulation(self):
         self.assertNotEqual(self.cli('run', 'task', success=False).returncode, 0)
@@ -159,10 +378,22 @@ class ForgeTests(unittest.TestCase):
             _, events, _ = self.run_script([
                 {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', code]}},
                 {'final': 'Checked.'},
-            ], '--allow-exec')
+            ], '--allow-exec', '--no-auto-validation')
         output = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
         self.assertIn('exit_code=0', output)
         self.assertIn('isolated', output)
+
+    def test_binary_command_output_is_preserved(self):
+        code = "import sys; sys.stdout.buffer.write(b'begin\\x00after\\xff\\n'); sys.stderr.buffer.write(b'error\\x00tail')"
+        _, events, session = self.run_script([
+            {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c', code]}},
+            {'final': 'Recorded output.'},
+        ], '--allow-exec', '--no-auto-validation')
+        self.assertEqual((session / 'tool' / '000001.stdout').read_bytes(), b'begin\x00after\xff\n')
+        self.assertEqual((session / 'tool' / '000001.stderr').read_bytes(), b'error\x00tail')
+        output = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
+        self.assertIn(r'begin\x00after\xff', output)
+        self.assertIn(r'error\x00tail', output)
 
     def test_command_does_not_inherit_parent_descriptors(self):
         with (self.root / 'inherit-only.txt').open('w') as stream:
@@ -186,7 +417,7 @@ class ForgeTests(unittest.TestCase):
             path = self.root / 'script.json'
             path.write_text(json.dumps(actions), encoding='utf-8')
             result = self.cli('run', 'Check inherited descriptors', '--script', str(path), '--json',
-                              '--allow-exec', **options)
+                              '--allow-exec', '--no-auto-validation', **options)
         events = [json.loads(line) for line in result.stdout.splitlines()]
         output = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
         self.assertIn('exit_code=0', output)

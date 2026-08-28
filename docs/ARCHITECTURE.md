@@ -48,13 +48,16 @@ Segments have stable IDs, kind, generation, content fingerprint, priority, token
 cost, and dependencies. System/tool/task/working-state segments are pinned.
 The latest tool result is pinned with its parent action. Remaining segments are
 selected by utility per token, including a recency term. Prompt ordering is
-stable: system, tools, repository map, task, working state, then chronological
-history. Final rendered prompt size is checked with the actual tokenizer.
+stable: system, tools, repository map, task, chronological history, then volatile
+working state. Final rendered prompt size is checked with the actual tokenizer.
 
 On a known patch, source-dependent segments for that file and broad source
 queries are invalidated. Command changes trigger an index refresh. Context
-compaction retains bounded working state and drops lower-value history. It is
-not a general semantic DAG optimizer or model-generated summary engine.
+compaction retains typed working state and drops lower-value history. Multiple
+dependencies share one budgeted closure; stale inputs invalidate their transitive
+dependents. Immutable system/tool/task segments cannot be mutated. Versioned
+logical snapshots preserve text, metadata, selection and dependencies and can be
+restored using the same token counter. They do not contain physical KV state.
 
 The noncryptographic FNV fingerprint is for cache invalidation, not security or
 artifact integrity. Download/benchmark provenance uses SHA-256 separately.
@@ -70,8 +73,10 @@ Every scan currently enumerates/hashes candidates; an OS watcher is future work.
 Declarations, signatures, byte spans, identifier occurrences, and imports are
 stored. Go identifier occurrences are syntactic: shadowed names and identically
 named symbols can appear together. No type checker, cross-package name resolver,
-or sound call graph is claimed. Other supported text languages have literal
-search, not AST symbol navigation.
+or sound call graph is claimed. A conservative package import graph includes test
+imports, nested modules and reverse dependents for staged validation. Unresolved
+inputs trigger explicit fallback reasons and broad checks. Other supported text
+languages have literal search, not AST symbol navigation.
 
 ## Tools and execution
 
@@ -101,6 +106,13 @@ sequence continuity and does not call the agent or process runner.
 
 Limits cover turns, input/generated tokens, per-turn output, file sizes, captured
 output, command runtime, and total wall time. Repeated action plus repository
-generation signatures trigger a warning and eventually stop loops. `run` ending
-successfully means the model produced a final answer, not proof that the task is
-correct. `bench` also checks an explicit independent verification command.
+generation and normalized diagnostic signatures trigger a warning and eventually
+stop loops. Identical patches are conflicts. Typed model memory is kept separate
+from observed changes, failures and generation-bound validation evidence.
+
+Before accepting a final answer after edits, the host runs the deterministic Go
+validation plan with the same process policy and deadlines. It stops at the first
+failure and returns diagnostics for repair; mutation during validation invalidates
+the result. Other languages and explicit `--no-auto-validation` runs have no such
+automatic proof. Even passing Go checks does not prove arbitrary task correctness.
+`bench` additionally runs its explicit independent verification command.

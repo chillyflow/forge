@@ -11,7 +11,9 @@ static const fg_tool_def definitions[] = {
      "Replace one exact unique text span; empty old_text creates a new file. Parent directory must "
      "exist.",
      "path:string old_text:string new_text:string", NULL, FORGE_CAP_WRITE},
-    {"expand_output", "Read a page of recorded tool output by numeric tool id.",
+    {"expand_output",
+     "Read up to 8192 bytes of recorded UTF-8 tool text by id. A byte offset inside a character "
+     "advances to the next character.",
      "id:uint offset:uint", NULL, FORGE_CAP_READ},
     {"find_symbol", "Inspect a Go symbol. depth 0=signature, 1=body, 2=neighbors, 3=file.",
      "name:string depth:uint", NULL, FORGE_CAP_READ},
@@ -21,8 +23,8 @@ static const fg_tool_def definitions[] = {
      FORGE_CAP_READ},
     {"git_status", "Read Git porcelain status.", "", NULL, FORGE_CAP_READ},
     {"list_directory", "List indexed repository paths.", "", NULL, FORGE_CAP_READ},
-    {"read_file", "Read text lines, inclusive, with 1-based line numbers.",
-     "path:string start:uint end:uint", NULL, FORGE_CAP_READ},
+    {"read_file", "Read inclusive lines: start>=1, end>=start, at most 2001 lines.",
+     "path:string start:line end:line", NULL, FORGE_CAP_READ},
     {"run_command", "Run an argv array without a shell. Requires explicit process authorization.",
      "argv:strings", NULL, FORGE_CAP_PROCESS},
     {"search_text", "Literal text search across indexed source files.", "query:string", NULL,
@@ -36,8 +38,13 @@ char *fg_tool_schema(void) {
     fg_buf b = {0};
     fg_buf_puts(
         &b,
-        "Return exactly ONE JSON object: {\"tool\":\"NAME\",\"args\":{...}}, {\"memory\":\"working "
-        "state\"}, or {\"final\":\"answer\"}. Use fields in listed order. No markdown.\n");
+        "Return exactly ONE JSON object: {\"tool\":\"NAME\",\"args\":{...}}, "
+        "{\"memory\":{\"facts\":[],\"hypotheses\":[],\"decisions\":[],\"relevant_files\":[],"
+        "\"remaining\":[]}}, or {\"final\":\"answer\"}. Memory fields are arrays of strings, "
+        "at most 32 strings each, 512 bytes per string, 8192 bytes total; preserve useful facts "
+        "when replacing memory. Model memory cannot mark host verification passed. "
+        "A legacy {\"memory\":\"notes\"} is also accepted. Use fields in listed order. No "
+        "markdown.\n");
     for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++)
         fg_buf_printf(&b, "%s(%s): %s\n", definitions[i].name, definitions[i].fields,
                       definitions[i].description);
@@ -65,9 +72,24 @@ char *fg_tool_grammar(void) {
     fg_buf_puts(&b, "\n");
     fg_buf_puts(&b, "memory ::= ");
     literal(&b, "{\"memory\":");
-    fg_buf_puts(&b, " ws string ws ");
+    fg_buf_puts(&b, " ws (string | workingstate) ws ");
     literal(&b, "}");
     fg_buf_puts(&b, "\n");
+    fg_buf_puts(&b, "workingstate ::= ");
+    literal(&b, "{");
+    const char *memory_fields[] = {"facts", "hypotheses", "decisions", "relevant_files",
+                                   "remaining"};
+    for (size_t i = 0; i < sizeof(memory_fields) / sizeof(*memory_fields); i++) {
+        fg_buf field = {0};
+        fg_buf_printf(&field, "%s\"%s\":", i ? "," : "", memory_fields[i]);
+        fg_buf_puts(&b, " ws ");
+        literal(&b, field.data);
+        fg_buf_clear(&field);
+        fg_buf_puts(&b, " ws memoryitems");
+    }
+    fg_buf_puts(&b, " ws ");
+    literal(&b, "}");
+    fg_buf_puts(&b, "\nmemoryitems ::= \"[\" ws (string (ws \",\" ws string){0,31})? ws \"]\"\n");
     for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++) {
         fg_buf_printf(&b, "call%zu ::= ", i);
         fg_buf prefix = {0};
@@ -94,19 +116,22 @@ char *fg_tool_grammar(void) {
             fg_buf_printf(&keylit, "%s\"%s\":", first ? "" : ",", key);
             literal(&b, keylit.data);
             fg_buf_clear(&keylit);
-            fg_buf_printf(
-                &b, " ws %s",
-                !strcmp(type, "uint") ? "uint" : (!strcmp(type, "strings") ? "strings" : "string"));
+            fg_buf_printf(&b, " ws %s",
+                          !strcmp(type, "line") ? "line"
+                          : !strcmp(type, "uint")
+                              ? "uint"
+                              : (!strcmp(type, "strings") ? "strings" : "string"));
             first = false;
         }
         fg_buf_puts(&b, " ws ");
         literal(&b, "}}");
         fg_buf_puts(&b, "\n");
     }
-    fg_buf_puts(
-        &b, "ws ::= [ \\t\\n\\r]*\nuint ::= \"0\" | [1-9] [0-9]{0,8}\nstrings ::= \"[\" ws string "
-            "(ws \",\" ws string){0,63} ws \"]\"\nstring ::= \"\\\"\" char* \"\\\"\"\nchar ::= "
-            "[^\"\\\\\\x00-\\x1F] | \"\\\\\" ([\"\\\\/bfnrt] | \"u\" [0-9a-fA-F]{4})\n");
+    fg_buf_puts(&b,
+                "ws ::= [ \\t\\n\\r]*\nline ::= [1-9] [0-9]{0,8}\nuint ::= \"0\" | line\nstrings "
+                "::= \"[\" ws string "
+                "(ws \",\" ws string){0,63} ws \"]\"\nstring ::= \"\\\"\" char* \"\\\"\"\nchar ::= "
+                "[^\"\\\\\\x00-\\x1F] | \"\\\\\" ([\"\\\\/bfnrt] | \"u\" [0-9a-fA-F]{4})\n");
     return fg_buf_take(&b);
 }
 bool fg_tool_validate(const char *name, yyjson_val *args, forge_error *e) {
@@ -141,6 +166,8 @@ bool fg_tool_validate(const char *name, yyjson_val *args, forge_error *e) {
                  yyjson_get_len(v) <= 2u * 1024u * 1024u;
         else if (!strcmp(type, "uint"))
             ok = yyjson_is_uint(v) && yyjson_get_uint(v) <= 999999999;
+        else if (!strcmp(type, "line"))
+            ok = yyjson_is_uint(v) && yyjson_get_uint(v) >= 1 && yyjson_get_uint(v) <= 999999999;
         else if (yyjson_is_arr(v) && yyjson_arr_size(v) > 0 && yyjson_arr_size(v) <= 64) {
             ok = true;
             size_t i, max;
@@ -162,6 +189,38 @@ bool fg_tool_validate(const char *name, yyjson_val *args, forge_error *e) {
     }
     return true;
 }
+uint64_t fg_tool_signature(const char *name, yyjson_val *args, uint64_t generation,
+                           uint64_t diagnostic_hash) {
+    fg_buf canonical = {0};
+    fg_buf_printf(&canonical, "%s:%llu:%llu", name, (unsigned long long)generation,
+                  (unsigned long long)diagnostic_hash);
+    /* Registry field order makes JSON whitespace/key order irrelevant to loops. */
+    for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++) {
+        if (strcmp(name, definitions[i].name))
+            continue;
+        const char *field = definitions[i].fields;
+        while (*field) {
+            char key[32];
+            size_t n = 0;
+            while (*field && *field != ':')
+                key[n++] = *field++;
+            key[n] = 0;
+            while (*field && *field != ' ')
+                field++;
+            if (*field)
+                field++;
+            char *value = yyjson_val_write(yyjson_obj_get(args, key), 0, NULL);
+            if (!value)
+                canonical.failed = true;
+            fg_buf_printf(&canonical, "|%s=%s", key, value ? value : "null");
+            free(value);
+        }
+        break;
+    }
+    uint64_t hash = canonical.failed ? 0 : fg_hash(canonical.data, canonical.len);
+    fg_buf_clear(&canonical);
+    return hash;
+}
 static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
     char full[FG_PATH_MAX];
     const char *path = fg_json_str(args, "path");
@@ -178,9 +237,9 @@ static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
     char *text = fg_read_file(full, c->config.limits.max_file_bytes, &len, e);
     if (!text)
         return NULL;
-    if (memchr(text, 0, len)) {
+    if (memchr(text, 0, len) || !fg_utf8_valid(text, len)) {
         free(text);
-        fg_error(e, FORGE_ERR_PARSE, "Binary files are not supported");
+        fg_error(e, FORGE_ERR_PARSE, "Binary or invalid UTF-8 files are not supported");
         return NULL;
     }
     const char *p = text;
@@ -266,7 +325,10 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
     if (exists && out.len == len && !memcmp(out.data, text, len)) {
         free(text);
         fg_buf_clear(&out);
-        return fg_strdup("No change: replacement is identical.");
+        fg_error(e, FORGE_ERR_CONFLICT,
+                 "No edit performed: old_text and new_text are identical. Supply different "
+                 "replacement text; encode line breaks as \\n when changing multiple statements.");
+        return NULL;
     }
     char temp[FG_PATH_MAX], random[17];
     if (!fg_random_hex(random, 8) ||
@@ -336,34 +398,44 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
 }
 static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
     fg_process_result r = {0};
-    uint64_t left = c->deadline > fg_now_ms() ? c->deadline - fg_now_ms() : 1;
+    uint64_t now = fg_now_ms();
+    if ((c->config.cancelled && c->config.cancelled(c->config.userdata)) ||
+        (c->deadline && now >= c->deadline)) {
+        fg_error(e, FORGE_ERR_CANCELLED, "Command cancelled or absolute deadline reached");
+        return NULL;
+    }
+    uint64_t left = c->deadline ? c->deadline - now : c->config.limits.command_timeout_ms;
     forge_status status =
         fg_process(c->root, argv, FG_MIN(left, c->config.limits.command_timeout_ms),
                    c->config.limits.max_tool_bytes, c->config.cancelled, c->config.userdata, &r, e);
-    if (status != FORGE_OK)
+    /* A launched command may have changed files even if capture later fails. */
+    c->process_ran = r.started;
+    c->process = r;
+    c->process.out = c->process.err = NULL;
+    if (status != FORGE_OK) {
+        fg_process_free(&r);
         return NULL;
+    }
     char artifact[64];
     snprintf(artifact, sizeof(artifact), "tool/%06zu.stdout", c->call_id);
-    if (!fg_session_artifact(c->session, artifact, r.out, e)) {
+    if (!fg_session_artifact_bytes(c->session, artifact, r.out, r.out_len, e)) {
         fg_process_free(&r);
         return NULL;
     }
     snprintf(artifact, sizeof(artifact), "tool/%06zu.stderr", c->call_id);
-    if (!fg_session_artifact(c->session, artifact, r.err, e)) {
+    if (!fg_session_artifact_bytes(c->session, artifact, r.err, r.err_len, e)) {
         fg_process_free(&r);
         return NULL;
     }
-    fg_buf result = {0};
-    fg_buf_printf(&result,
-                  "exit_code=%d timeout=%s cancelled=%s truncated=%s\nstdout:\n%s\nstderr:\n%s",
-                  r.exit_code, r.timed_out ? "true" : "false", r.cancelled ? "true" : "false",
-                  r.truncated ? "true" : "false", r.out, r.err);
+    char *result = fg_process_render(&r);
     fg_process_free(&r);
-    return fg_buf_take(&result);
+    return result;
 }
 char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bool *changed,
                       forge_error *e) {
     *changed = false;
+    c->process_ran = false;
+    memset(&c->process, 0, sizeof(c->process));
     if (!fg_tool_validate(name, args, e))
         return NULL;
     const fg_tool_def *def = NULL;
@@ -381,6 +453,12 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
     if (!allowed) {
         fg_error(e, FORGE_ERR_POLICY, "%s denied: explicit %s approval is required", name,
                  def->capability == FORGE_CAP_WRITE ? "write" : "unsandboxed process");
+        return NULL;
+    }
+    if ((c->config.cancelled && c->config.cancelled(c->config.userdata)) ||
+        (c->deadline && fg_now_ms() >= c->deadline)) {
+        fg_error(e, FORGE_ERR_CANCELLED,
+                 "Tool cancelled or deadline reached after policy approval");
         return NULL;
     }
     if (!strcmp(name, "read_file"))
@@ -410,16 +488,24 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
         snprintf(file, sizeof(file), "tool/%06zu.raw", id);
         fg_path_join(path, c->session->dir, file);
         size_t len;
-        char *raw = fg_read_file(path, c->config.limits.max_tool_bytes * 3, &len, e);
+        char *raw = fg_read_file(path, c->config.limits.max_tool_bytes * 8 + 1024, &len, e);
         if (!raw)
             return NULL;
+        if (memchr(raw, 0, len) || !fg_utf8_valid(raw, len)) {
+            free(raw);
+            fg_error(e, FORGE_ERR_PARSE,
+                     "Recorded output is not valid UTF-8 text; inspect the exact stream artifacts");
+            return NULL;
+        }
         if (offset > len) {
             free(raw);
             fg_error(e, FORGE_ERR_ARGUMENT, "Output offset out of range");
             return NULL;
         }
         fg_buf b = {0};
-        fg_buf_add(&b, raw + offset, FG_MIN(len - offset, 8192));
+        offset = fg_utf8_forward(raw, len, offset);
+        size_t take = fg_utf8_prefix(raw + offset, len - offset, 8192);
+        fg_buf_add(&b, raw + offset, take);
         free(raw);
         return fg_buf_take(&b);
     }

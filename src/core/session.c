@@ -11,8 +11,8 @@ bool fg_session_start(fg_session *s, const char *root, forge_event_fn cb, void *
         return false;
     if (!fg_random_hex(id, 16) || !fg_path_join(s->dir, sessions, id) || !fg_mkdir(s->dir, e))
         return false;
-    const char *folders[] = {"tool", "context"};
-    for (size_t i = 0; i < 2; i++)
+    const char *folders[] = {"tool", "context", "validation"};
+    for (size_t i = 0; i < sizeof(folders) / sizeof(*folders); i++)
         if (!fg_path_join(file, s->dir, folders[i]) || !fg_mkdir(file, e))
             return false;
     if (!fg_path_join(file, s->dir, "events.jsonl"))
@@ -63,12 +63,16 @@ bool fg_session_emit(fg_session *s, const char *type, const char *payload, forge
     return ok;
 }
 bool fg_session_artifact(fg_session *s, const char *name, const char *text, forge_error *e) {
+    return fg_session_artifact_bytes(s, name, text, strlen(text), e);
+}
+bool fg_session_artifact_bytes(fg_session *s, const char *name, const char *bytes, size_t length,
+                               forge_error *e) {
     char path[FG_PATH_MAX];
     if (!fg_path_join(path, s->dir, name)) {
         fg_error(e, FORGE_ERR_LIMIT, "Artifact path too long");
         return false;
     }
-    return fg_write_file(path, text, strlen(text), e);
+    return fg_write_file(path, bytes, length, e);
 }
 char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     yyjson_mut_doc *d = yyjson_mut_doc_new(NULL);
@@ -94,11 +98,18 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     U(loop_warnings);
     U(grammar_fast_tokens);
     U(grammar_fallback_tokens);
+    U(raw_tool_tokens);
+    U(visible_tool_tokens);
+    U(files_opened);
+    U(validation_commands);
+    U(validation_failures);
     R(load_ms);
     R(prefill_ms);
     R(decode_ms);
     R(sampling_ms);
     R(duration_ms);
+    R(tool_ms);
+    R(validation_ms);
 #undef U
 #undef R
     char *json = yyjson_mut_write(d, YYJSON_WRITE_PRETTY, NULL);
@@ -107,15 +118,19 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
 }
 bool fg_session_finish(fg_session *s, const forge_metrics *m, forge_status status, forge_error *e) {
     char *json = fg_metrics_json(m, status);
+    bool ok = json != NULL;
     if (!json)
-        return false;
-    bool ok = fg_session_artifact(s, "metrics.json", json, e);
+        fg_error(e, FORGE_ERR_MEMORY, "Metrics allocation failed");
+    if (ok)
+        ok = fg_session_artifact(s, "metrics.json", json, e);
     if (ok)
         ok = fg_session_emit(s, status == FORGE_OK ? "done" : "error", json, e);
     free(json);
     if (s->events) {
-        if (fclose(s->events) != 0)
+        if (fclose(s->events) != 0) {
+            fg_error(e, FORGE_ERR_IO, "Event log close failed");
             ok = false;
+        }
         s->events = NULL;
     }
     return ok;

@@ -20,7 +20,8 @@ silently replaced by the test backend.
 Dependencies are cached below `build/_deps`. For offline configuration, populate
 those caches first or use CMake's `FETCHCONTENT_SOURCE_DIR_YYJSON`,
 `FETCHCONTENT_SOURCE_DIR_SQLITE`, `FETCHCONTENT_SOURCE_DIR_TREESITTER`,
-`FETCHCONTENT_SOURCE_DIR_TSGO`, and `FETCHCONTENT_SOURCE_DIR_LLAMA` overrides.
+`FETCHCONTENT_SOURCE_DIR_TSGO`, `FETCHCONTENT_SOURCE_DIR_TOMLC17`, and
+`FETCHCONTENT_SOURCE_DIR_LLAMA` overrides.
 
 ## Windows with prebuilt CUDA libraries
 
@@ -50,8 +51,9 @@ weights remain separate. Use a driver compatible with the selected CUDA runtime.
 ## Model choice
 
 The initial development target is Qwen3-Coder-30B-A3B-Instruct Q4_K_M with a
-16,384-token context and 2,048-token output reserve. See `profiles/qwen3-coder.json`.
-The profile is a documented reference configuration, not an auto-loaded config.
+16,384-token context and 2,048-token output reserve. The JSON file
+`profiles/qwen3-coder.json` records provenance; `--profile profiles/qwen3-coder.toml`
+loads runtime settings. Supply an existing model with `--model` or a project config.
 
 GGUF source: [Unsloth](https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF)
 at revision `b17cb02dd882d5b6ab62fc777ad2995f19668350`.

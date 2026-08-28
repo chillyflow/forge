@@ -58,6 +58,9 @@ typedef struct {
     size_t context_evictions, loop_warnings, grammar_fast_tokens, grammar_fallback_tokens;
     double load_ms, prefill_ms, decode_ms, sampling_ms, duration_ms;
     bool simulated;
+    size_t raw_tool_tokens, visible_tool_tokens, files_opened;
+    size_t validation_commands, validation_failures;
+    double tool_ms, validation_ms;
 } forge_metrics;
 typedef struct {
     const char *model_path;
@@ -77,6 +80,7 @@ typedef struct {
     forge_model *model; /* Borrowed; model must outlive agent. One active run per model. */
     forge_limits limits;
     bool allow_write, allow_exec, semantic_output, compact_context;
+    bool skip_validation; /* Explicit ablation; ordinary runs verify changed Go workspaces. */
     forge_policy_fn policy;
     forge_cancel_fn cancelled;
     void *userdata;
@@ -92,6 +96,8 @@ forge_status forge_agent_run(forge_agent *, const char *request, forge_event_fn,
                              forge_error *);
 const forge_metrics *forge_agent_metrics(const forge_agent *);
 const char *forge_agent_session(const forge_agent *);
+/* Caller owns the host/model-separated state JSON; available after a run. */
+char *forge_agent_working_state(const forge_agent *, forge_error *);
 void forge_agent_destroy(forge_agent *);
 forge_repo *forge_repo_open(const char *workspace, forge_error *);
 forge_status forge_repo_index(forge_repo *, forge_error *);

@@ -14,6 +14,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.0'
+          cache: false
       - name: Configure
         run: cmake -S . -B build -DFORGE_WITH_LLAMA=OFF -DCMAKE_BUILD_TYPE=Debug
       - name: Build
@@ -26,6 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.0'
+          cache: false
       - name: Configure
         run: cmake -S . -B build -DFORGE_WITH_LLAMA=OFF -DFORGE_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - run: cmake --build build --parallel 4
@@ -36,6 +44,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.0'
+          cache: false
       - name: Compile the pinned direct backend
         run: cmake -S . -B build -DFORGE_WITH_LLAMA=ON -DGGML_CUDA=OFF -DGGML_NATIVE=OFF -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --parallel 4

@@ -1,0 +1,27 @@
+# Copy to forge.toml in your workspace, then set an existing local GGUF path.
+# Relative model paths are based on the file containing the path.
+# No model is downloaded. Configuration never grants tool permissions.
+
+[model]
+path = "models/qwen.gguf"
+context = 16384
+
+[inference]
+gpu_layers = "auto"
+temperature = 0.0
+seed = 42
+speculative = false # true is rejected: speculative decoding is not implemented.
+
+[agent]
+output_reserve = 2048
+max_turns = 50
+max_tokens = 100000
+
+[tools.shell]
+timeout = 120 # seconds; the CLI --timeout-ms override uses milliseconds.
+network = false # This forbids shell execution, including --allow-exec.
+# There is no network sandbox. Set true only if you accept network-capable,
+# unsandboxed subprocesses, then separately authorize them with --allow-exec.
+
+[index]
+languages = ["go"] # Other languages are rejected by the current Go index.

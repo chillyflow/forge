@@ -9,8 +9,9 @@ sequential KV prefixes, selects context under a token budget, and executes
 grammar-constrained tools. Go source navigation uses Tree-sitter and SQLite.
 
 **Development preview, not a production sandbox or a proven performance win.**
-The [roadmap](docs/ROADMAP.md) distinguishes implemented behavior from the larger
-design's research milestones. No model weights are bundled or downloaded by the
+The [full design checklist](docs/DESIGN_CHECKLIST.md) and [roadmap](docs/ROADMAP.md)
+distinguish implemented behavior from unfinished design requirements.
+No model weights are bundled or downloaded by the
 runtime. llama.cpp and GPU dependencies include C++; Forge does not claim its
 entire dependency graph is C.
 
@@ -19,7 +20,8 @@ download provenance and GPU settings documented separately.
 
 ## Build
 
-CMake 3.24+, a C17/C++17 compiler, Git, and Python 3.10+ for tests. The first build
+CMake 3.24+, a C17/C++17 compiler, Git, and Python 3.10+ for tests. Go and gofmt
+are needed for Go validation; CI exercises real checks with Go 1.27.0. The first build
 fetches pinned native dependencies. Subsequent builds can run offline.
 
 ```sh
@@ -54,6 +56,9 @@ forge index --workspace ./my-repository
 forge inspect DeleteRecord --depth 1 --workspace ./my-repository
 forge references DeleteRecord --workspace ./my-repository
 forge search "context.WithCancel" --workspace ./my-repository
+forge validation-plan pkg/storage/store.go --workspace ./my-repository
+forge validate pkg/storage/store.go --workspace ./my-repository --allow-exec
+forge hardware-plan --model /models/coder.gguf --json
 
 forge stats /path/to/repo/.forge/sessions/SESSION
 forge context /path/to/repo/.forge/sessions/SESSION
@@ -69,6 +74,25 @@ Ctrl+C requests cancellation; GPU kernels are not preempted mid-dispatch.
 `--allow-exec` permits **unsandboxed executable code with your user privileges**,
 including network access. Use a disposable checkout/container for untrusted
 repositories. Read the [security model](docs/SECURITY.md) before enabling execution.
+
+Go workspaces with edits or launched commands undergo formatting checks, compilation, affected
+and reverse-dependent tests, vet, and broad verification before an agent's final
+answer is accepted. Failures return to the agent for repair; denied execution
+does not become a successful verification. This checks the active Go environment,
+not every build tag/platform or the correctness of arbitrary task claims.
+Validation also compares bounded workspace input snapshots, including unindexed
+test fixtures, before accepting success. See [the validation contract](docs/VALIDATION.md).
+`--no-auto-validation` is an explicit ablation.
+
+### Configuration
+
+Forge loads an optional workspace `forge.toml`. `--profile FILE` supplies a base
+profile, `--config FILE` chooses the project configuration, and CLI values win.
+`--no-config` disables automatic discovery. See [configuration](docs/CONFIG.md)
+and [the example](forge.toml.example). Files never grant tool permissions.
+`network=false` refuses process execution because this runtime has no network
+sandbox. `--gpu-layers auto` uses measured hardware and bounded GGUF estimates;
+numeric layer settings remain explicit overrides.
 
 ### Tools
 
@@ -91,7 +115,10 @@ dispatch. Malformed or unknown actions never execute.
 
 Each run writes `.forge/sessions/<random-id>/` containing `events.jsonl`,
 `metrics.json`, `patch.diff` (tracked files), actual prompts in `context/`, and
-raw tool results in `tool/`. Replay reads events only and **never executes
+raw tool results in `tool/`. Structured `working_state.json` separates model notes
+from observed edits and validation. `validation/` contains stage plans, reports,
+and exact captured stream bytes; `context/` includes complete logical snapshots.
+Replay reads events only and **never executes
 recorded tools**. It is an audit replay, not inference replay or session resume.
 Sessions contain source and command output: keep them private unless reviewed.
 

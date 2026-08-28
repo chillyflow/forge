@@ -18,9 +18,12 @@
 #endif
 
 void fg_process_free(fg_process_result *r) {
+    if (!r)
+        return;
     free(r->out);
     free(r->err);
     memset(r, 0, sizeof(*r));
+    r->exit_code = -1;
 }
 static void capture(fg_buf *b, const char *p, size_t n, size_t cap, bool *truncated) {
     size_t take = FG_MIN(n, cap - b->len);
@@ -28,12 +31,76 @@ static void capture(fg_buf *b, const char *p, size_t n, size_t cap, bool *trunca
         *truncated = true;
     fg_buf_add(b, p, take);
 }
-static bool executable_path(const char *root, const char *name, char path[FG_PATH_MAX]) {
+/* fg_workspace resolves symlinks on POSIX. On Windows, resolve the opened
+ * directory as well: lexical _fullpath alone does not normalize junction
+ * ancestors or short-name aliases for a workspace/PATH containment decision. */
+static bool process_directory(const char *directory, char out[FG_PATH_MAX], forge_error *e) {
+    if (!fg_workspace(directory, out, e))
+        return false;
+#ifdef _WIN32
+    if (strlen(out) == 2 && out[1] == ':')
+        strcat(out, "\\");
+    HANDLE handle = CreateFileA(out, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (handle == INVALID_HANDLE_VALUE) {
+        fg_error(e, FORGE_ERR_IO, "Cannot resolve process directory: %s", directory);
+        return false;
+    }
+    char final[FG_PATH_MAX];
+    DWORD length = GetFinalPathNameByHandleA(handle, final, sizeof(final),
+                                             FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    CloseHandle(handle);
+    if (!length || length >= sizeof(final)) {
+        fg_error(e, FORGE_ERR_IO, "Cannot resolve process directory: %s", directory);
+        return false;
+    }
+    if (!strncmp(final, "\\\\?\\UNC\\", 8)) {
+        out[0] = out[1] = '\\';
+        strcpy(out + 2, final + 8);
+    } else if (!strncmp(final, "\\\\?\\", 4)) {
+        strcpy(out, final + 4);
+    } else {
+        strcpy(out, final);
+    }
+#endif
+    return true;
+}
+
+static bool path_separator(char c) {
+    return c == '/'
+#ifdef _WIN32
+           || c == '\\'
+#endif
+        ;
+}
+
+static bool path_in_workspace(const char *root, const char *path) {
+    size_t length = strlen(root);
+#ifdef _WIN32
+    bool prefix = !_strnicmp(path, root, length);
+#else
+    bool prefix = !strncmp(path, root, length);
+#endif
+    return prefix && (!path[length] || path_separator(path[length]) ||
+                      (length && path_separator(root[length - 1])));
+}
+
+static bool executable_path(const char *root, const char *cwd, const char *name,
+                            char path[FG_PATH_MAX]) {
     if (strchr(name, '/') || strchr(name, '\\')) {
         if (strlen(name) >= FG_PATH_MAX)
             return false;
-        strcpy(path, name);
-        return true;
+        /* Explicit paths retain the existing caller-approved execution policy.
+         * A relative path is relative to the child cwd on both platforms. */
+        bool absolute = name[0] == '/';
+#ifdef _WIN32
+        absolute = absolute || name[0] == '\\' || (strlen(name) > 1 && name[1] == ':');
+#endif
+        if (absolute) {
+            strcpy(path, name);
+            return true;
+        }
+        return fg_path_join(path, cwd, name);
     }
     const char *env = getenv("PATH");
     if (!env)
@@ -60,17 +127,8 @@ static bool executable_path(const char *root, const char *name, char path[FG_PAT
 #else
             bool absolute = dir[0] == '/';
 #endif
-            if (absolute && fg_workspace(dir, canonical, NULL)) {
-                size_t root_len = strlen(root);
-#ifdef _WIN32
-                bool in_root = !_strnicmp(canonical, root, root_len) &&
-                               (!canonical[root_len] || canonical[root_len] == '/' ||
-                                canonical[root_len] == '\\');
-#else
-                bool in_root = !strncmp(canonical, root, root_len) &&
-                               (!canonical[root_len] || canonical[root_len] == '/');
-#endif
-                if (!in_root && fg_path_join(path, canonical, name)) {
+            if (absolute && process_directory(dir, canonical, NULL)) {
+                if (!path_in_workspace(root, canonical) && fg_path_join(path, canonical, name)) {
 #ifdef _WIN32
                     if (!strchr(name, '.') && strlen(path) + 4 < FG_PATH_MAX)
                         strcat(path, ".exe");
@@ -154,20 +212,52 @@ static void close_child_descriptors(long maximum) {
         close((int)fd);
 }
 #endif
+/* Relative process budgets are finite and use the same maximum as the native
+ * configuration. Reject accidental negative-to-unsigned conversions as well. */
+#define FG_PROCESS_MAX_TIMEOUT_MS UINT64_C(86400000)
+
+static forge_status before_process_spawn(uint64_t start, uint64_t timeout, forge_cancel_fn cancel,
+                                         void *user, fg_process_result *r, forge_error *e) {
+    if (cancel && cancel(user)) {
+        r->cancelled = true;
+        r->duration_ms = (double)(fg_now_ms() - start);
+        return fg_error(e, FORGE_ERR_CANCELLED, "Command cancelled before launch");
+    }
+    if (fg_now_ms() - start >= timeout) {
+        r->timed_out = true;
+        r->duration_ms = (double)(fg_now_ms() - start);
+        return fg_error(e, FORGE_ERR_LIMIT, "Command timeout expired before launch");
+    }
+    return FORGE_OK;
+}
+
 forge_status fg_process(const char *root, const char *const *argv, uint64_t timeout,
                         size_t max_bytes, forge_cancel_fn cancel, void *user, fg_process_result *r,
                         forge_error *e) {
-    if (!root || !argv || !argv[0] || !*argv[0] || !max_bytes || !timeout)
+    return fg_process_at(root, root, argv, timeout, max_bytes, cancel, user, r, e);
+}
+
+forge_status fg_process_at(const char *workspace_root, const char *cwd, const char *const *argv,
+                           uint64_t timeout, size_t max_bytes, forge_cancel_fn cancel, void *user,
+                           fg_process_result *r, forge_error *e) {
+    if (r) {
+        memset(r, 0, sizeof(*r));
+        r->exit_code = -1;
+    }
+    if (!r || !workspace_root || !*workspace_root || !cwd || !*cwd || !argv || !argv[0] ||
+        !*argv[0] || !max_bytes || !timeout || timeout > FG_PROCESS_MAX_TIMEOUT_MS)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid process request");
-    char executable[FG_PATH_MAX], canonical_root[FG_PATH_MAX];
-    if (!fg_workspace(root, canonical_root, e))
+    uint64_t start = fg_now_ms();
+    forge_status prelaunch = before_process_spawn(start, timeout, cancel, user, r, e);
+    if (prelaunch != FORGE_OK)
+        return prelaunch;
+    char executable[FG_PATH_MAX], canonical_root[FG_PATH_MAX], canonical_cwd[FG_PATH_MAX];
+    if (!process_directory(workspace_root, canonical_root, e) ||
+        !process_directory(cwd, canonical_cwd, e))
         return FORGE_ERR_IO;
-    if (!executable_path(canonical_root, argv[0], executable))
+    if (!executable_path(canonical_root, canonical_cwd, argv[0], executable))
         return fg_error(e, FORGE_ERR_NOT_FOUND,
                         "Executable not found outside workspace PATH entries: %s", argv[0]);
-    memset(r, 0, sizeof(*r));
-    r->exit_code = -1;
-    uint64_t start = fg_now_ms();
     fg_buf out = {0}, err = {0};
 #ifdef _WIN32
     SECURITY_ATTRIBUTES sa = {sizeof(sa), NULL, TRUE};
@@ -175,6 +265,7 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
     PROCESS_INFORMATION pi = {0};
     LPPROC_THREAD_ATTRIBUTE_LIST attributes = NULL;
     bool attributes_ready = false;
+    DWORD failure_code = 0;
     fg_buf command = {0}, env = {0};
     if (!CreatePipe(&out_r, &out_w, &sa, 0) || !CreatePipe(&err_r, &err_w, &sa, 0))
         goto win_fail;
@@ -226,11 +317,15 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
     si.StartupInfo.hStdError = err_w;
     si.StartupInfo.hStdInput = null_in;
     si.lpAttributeList = attributes;
+    prelaunch = before_process_spawn(start, timeout, cancel, user, r, e);
+    if (prelaunch != FORGE_OK)
+        goto win_fail;
     if (command.failed || env.failed ||
         !CreateProcessA(executable, command.data, NULL, NULL, TRUE,
                         CREATE_NO_WINDOW | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT,
-                        env.data, root, &si.StartupInfo, &pi))
+                        env.data, canonical_cwd, &si.StartupInfo, &pi))
         goto win_fail;
+    r->started = true;
     DeleteProcThreadAttributeList(attributes);
     free(attributes);
     attributes = NULL;
@@ -239,7 +334,8 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
         TerminateProcess(pi.hProcess, 125);
         goto win_fail;
     }
-    ResumeThread(pi.hThread);
+    if (ResumeThread(pi.hThread) == (DWORD)-1)
+        goto win_fail;
     CloseHandle(pi.hThread);
     pi.hThread = NULL;
     CloseHandle(out_w);
@@ -265,9 +361,9 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
         }
     }
     WaitForSingleObject(pi.hProcess, 2000);
-    DWORD code = 0;
-    GetExitCodeProcess(pi.hProcess, &code);
-    r->exit_code = (int)code;
+    DWORD code = STILL_ACTIVE;
+    if (GetExitCodeProcess(pi.hProcess, &code) && code != STILL_ACTIVE)
+        r->exit_code = (int)code;
     /* Closing the job also stops orphaned descendants before draining their pipes. */
     CloseHandle(job);
     job = NULL;
@@ -280,6 +376,7 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
     fg_buf_clear(&env);
     goto collected;
 win_fail:
+    failure_code = GetLastError();
     if (attributes_ready)
         DeleteProcThreadAttributeList(attributes);
     free(attributes);
@@ -303,8 +400,10 @@ win_fail:
     fg_buf_clear(&env);
     fg_buf_clear(&out);
     fg_buf_clear(&err);
+    if (prelaunch != FORGE_OK)
+        return prelaunch;
     return fg_error(e, FORGE_ERR_IO, "Unable to start command (Windows error %lu)",
-                    (unsigned long)GetLastError());
+                    (unsigned long)failure_code);
 collected:
 #else
     int op[2], ep[2];
@@ -346,6 +445,16 @@ collected:
     }
     char *child_environment[] = {environment.data + offsets[0], environment.data + offsets[1],
                                  environment.data + offsets[2], "LANG=C.UTF-8", NULL};
+    prelaunch = before_process_spawn(start, timeout, cancel, user, r, e);
+    if (prelaunch != FORGE_OK) {
+        close(input);
+        fg_buf_clear(&environment);
+        close(op[0]);
+        close(op[1]);
+        close(ep[0]);
+        close(ep[1]);
+        return prelaunch;
+    }
     pid_t pid = fork();
     if (pid < 0) {
         close(input);
@@ -356,9 +465,11 @@ collected:
         close(ep[1]);
         return fg_error(e, FORGE_ERR_IO, "fork failed");
     }
+    r->started = true;
     if (pid == 0) {
         if (setpgid(0, 0) != 0 || dup2(op[1], STDOUT_FILENO) < 0 ||
-            dup2(ep[1], STDERR_FILENO) < 0 || dup2(input, STDIN_FILENO) < 0 || chdir(root) != 0)
+            dup2(ep[1], STDERR_FILENO) < 0 || dup2(input, STDIN_FILENO) < 0 ||
+            chdir(canonical_cwd) != 0)
             _exit(126);
         close_child_descriptors(maximum_fd);
         execve(executable, (char *const *)argv, child_environment);
@@ -427,7 +538,10 @@ collected:
     r->err = fg_buf_take(&err);
     r->duration_ms = (double)(fg_now_ms() - start);
     if (!r->out || !r->err) {
-        fg_process_free(r);
+        free(r->out);
+        free(r->err);
+        r->out = r->err = NULL;
+        r->out_len = r->err_len = 0;
         return fg_error(e, FORGE_ERR_MEMORY, "Process output allocation failed");
     }
     return FORGE_OK;

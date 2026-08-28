@@ -5,9 +5,14 @@ FetchContent_Declare(sqlite URL https://sqlite.org/2026/sqlite-amalgamation-3530
   URL_HASH SHA3_256=628a44cfe82c66aed1ccbbe85a562d2e33ebe64b3288981ed76285612227934e)
 FetchContent_Declare(treesitter URL https://github.com/tree-sitter/tree-sitter/archive/da6fe9beb4f7f67beb75914ca8e0d48ae48d6406.tar.gz)
 FetchContent_Declare(tsgo URL https://github.com/tree-sitter/tree-sitter-go/archive/1547678a9da59885853f5f5cc8a99cc203fa2e2c.tar.gz)
+# tomlc17 is the maintained successor to tomlc99. Pin both source and archive
+# digest; Forge validates its small schema on top of the upstream TOML parser.
+FetchContent_Declare(tomlc17
+  URL https://codeload.github.com/cktan/tomlc17/tar.gz/64a063b8636a4b48d142f978270f5e53e605e240
+  URL_HASH SHA256=7c6b268f1185d6c5f0ea9ae617370a81352a44060d0b1655aa6038266f72a6d1)
 # SOURCE_SUBDIR deliberately skips upstream build systems: only these C sources
 # are needed. FetchContent still supports user-supplied offline source paths.
-foreach(dep yyjson sqlite treesitter tsgo)
+foreach(dep yyjson sqlite treesitter tsgo tomlc17)
   FetchContent_GetProperties(${dep})
   if(NOT ${dep}_POPULATED)
     # Populate is used for CMake 3.24 compatibility with dependencies lacking
@@ -20,6 +25,11 @@ foreach(dep yyjson sqlite treesitter tsgo)
 endforeach()
 add_library(forge_json STATIC ${yyjson_SOURCE_DIR}/src/yyjson.c)
 target_include_directories(forge_json PUBLIC ${yyjson_SOURCE_DIR}/src)
+add_library(forge_toml STATIC ${tomlc17_SOURCE_DIR}/src/tomlc17.c)
+target_include_directories(forge_toml PUBLIC ${tomlc17_SOURCE_DIR}/src)
+if(MSVC)
+  target_compile_definitions(forge_toml PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
 add_library(forge_sqlite STATIC ${sqlite_SOURCE_DIR}/sqlite3.c)
 target_include_directories(forge_sqlite PUBLIC ${sqlite_SOURCE_DIR})
 target_compile_definitions(forge_sqlite PRIVATE SQLITE_ENABLE_FTS5 SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION)

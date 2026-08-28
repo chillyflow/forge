@@ -1,0 +1,18 @@
+# Optional native profile; select with --profile profiles/qwen3-coder.toml.
+# Supply a local model with --model or workspace forge.toml. This profile does
+# not download a model, select a hidden fixture, or guarantee memory fit.
+# Publisher: https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct
+
+[model]
+context = 16384
+
+[inference]
+gpu_layers = "auto"
+temperature = 0.0
+seed = 42
+reuse_prefix = true
+grammar_fast_path = true
+speculative = false
+
+[agent]
+output_reserve = 2048
