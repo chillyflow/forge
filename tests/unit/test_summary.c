@@ -235,6 +235,10 @@ static void test_scopes_and_cache(void) {
         assert(a.cache_status == FORGE_SUMMARY_MISS && !a.text && a.dependencies);
         assert(!strcmp(a.cache_key, b.cache_key) && !strcmp(a.prompt, b.prompt));
         assert(a.generation == generation && !a.tokens_known);
+        bool full_source = scopes[i] >= FORGE_SUMMARY_FILE;
+        assert((strstr(a.prompt, "Selected evidence mode: full source.") != NULL) == full_source);
+        assert((strstr(a.prompt, "source bodies and non-Go content are omitted.") != NULL) ==
+               !full_source);
         assert(fg_sha256_valid_hex(a.recipe_hash) && fg_sha256_valid_hex(a.dependency_hash));
         const char *text = "Fixture summary: caf\xc3\xa9 \xf0\x9f\x98\x80";
         assert(!store(&f, first, text).reused);
@@ -271,6 +275,7 @@ static void test_scopes_and_cache(void) {
     different = prepare(&f, FORGE_SUMMARY_PACKAGE, "p", NULL, &options);
     assert(view(different).cache_status == FORGE_SUMMARY_MISS);
     assert(strstr(view(different).prompt, "return q.Value()"));
+    assert(strstr(view(different).prompt, "Selected evidence mode: full source."));
     forge_summary_input_destroy(different);
     finish(&f);
 }

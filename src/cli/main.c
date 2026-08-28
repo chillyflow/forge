@@ -515,7 +515,7 @@ finish_watch:
 static forge_status summarize_repository(const forge_agent_config *config,
                                          const forge_summary_target *target,
                                          forge_summary_options *options, uint64_t deadline,
-                                         forge_error *error) {
+                                         double model_load_ms, forge_error *error) {
     options->deadline_ms = deadline;
     options->timeout_ms = 0;
     options->cancelled = cancelled;
@@ -537,21 +537,22 @@ static forge_status summarize_repository(const forge_agent_config *config,
     char *summary = input ? forge_summary_input_json(input, &serialization_error) : NULL;
     char *metrics = fg_metrics_json(&stats.inference, status);
     fg_buf report = {0};
-    bool ok = (!input || summary) && metrics &&
-              fg_buf_printf(&report,
-                            "{\"schema_version\":1,\"summary\":%s,\"generation\":{"
-                            "\"prepared\":%s,\"cache_hit\":%s,\"published\":%s,\"model_calls\":%zu,"
-                            "\"initial_cache_status\":%d,\"reused_competing_writer\":%s,"
-                            "\"repaired_corruption\":%s,\"evicted_entries\":%zu,"
-                            "\"prepare_ms\":%.0f,\"generate_ms\":%.0f,\"publish_ms\":%.0f,"
-                            "\"duration_ms\":%.0f},\"inference\":%s}",
-                            summary ? summary : "null", stats.prepared ? "true" : "false",
-                            stats.cache_hit ? "true" : "false", stats.published ? "true" : "false",
-                            stats.model_calls, (int)stats.initial_cache_status,
-                            stats.store.reused ? "true" : "false",
-                            stats.store.repaired_corruption ? "true" : "false",
-                            stats.store.evicted_entries, stats.prepare_ms, stats.generate_ms,
-                            stats.publish_ms, stats.duration_ms, metrics);
+    bool ok =
+        (!input || summary) && metrics &&
+        fg_buf_printf(&report,
+                      "{\"schema_version\":1,\"model_load_ms\":%.0f,\"summary\":%s,\"generation\":{"
+                      "\"prepared\":%s,\"cache_hit\":%s,\"published\":%s,\"model_calls\":%zu,"
+                      "\"initial_cache_status\":%d,\"reused_competing_writer\":%s,"
+                      "\"repaired_corruption\":%s,\"evicted_entries\":%zu,"
+                      "\"prepare_ms\":%.0f,\"generate_ms\":%.0f,\"publish_ms\":%.0f,"
+                      "\"duration_ms\":%.0f},\"inference\":%s}",
+                      model_load_ms, summary ? summary : "null", stats.prepared ? "true" : "false",
+                      stats.cache_hit ? "true" : "false", stats.published ? "true" : "false",
+                      stats.model_calls, (int)stats.initial_cache_status,
+                      stats.store.reused ? "true" : "false",
+                      stats.store.repaired_corruption ? "true" : "false",
+                      stats.store.evicted_entries, stats.prepare_ms, stats.generate_ms,
+                      stats.publish_ms, stats.duration_ms, metrics);
     if (ok && (puts(report.data) < 0 || fflush(stdout) != 0)) {
         ok = false;
         fg_error(&serialization_error, FORGE_ERR_IO, "Cannot write summary report");
@@ -969,7 +970,9 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     }
     mc = config->model;
     ac.limits = config->limits;
+    uint64_t model_load_begin = fg_now_ms();
     ac.model = forge_model_load(&mc, &error);
+    double model_load_ms = (double)(fg_now_ms() - model_load_begin);
     if (!ac.model) {
         yyjson_doc_free(benchmark);
         return failed(&error);
@@ -982,8 +985,8 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     }
     if (!strcmp(command, "summarize")) {
         summary_target.path = argument;
-        forge_status status =
-            summarize_repository(&ac, &summary_target, &summary_options, summary_deadline, &error);
+        forge_status status = summarize_repository(&ac, &summary_target, &summary_options,
+                                                   summary_deadline, model_load_ms, &error);
         forge_model_destroy(ac.model);
         return status == FORGE_OK ? 0 : failed(&error);
     }
