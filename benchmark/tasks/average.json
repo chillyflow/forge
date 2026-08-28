@@ -1,0 +1,15 @@
+{
+  "id": "average",
+  "prompt": "Average returns a floating point mean, and returns zero for an empty slice. Inspect the source, fix the bug, and run go test -json ./... to verify. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module forgebench\n\ngo 1.24\n",
+    "repair.go": "package repair\n\nfunc Average(xs []int) float64 { sum:=0; for _,v:=range xs { sum+=v }; return float64(sum/len(xs)) }\n",
+    "repair_test.go": "package repair\n\nimport \"testing\"\nfunc TestRepair(t *testing.T) { if Average([]int{1,2})!=1.5 { t.Fatal(\"fraction truncated\") }; if Average(nil)!=0 { t.Fatal(\"empty input\") } }\n"
+  }
+}

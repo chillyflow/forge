@@ -108,5 +108,43 @@ class ForgeTests(unittest.TestCase):
         self.assertNotEqual(self.cli('run', 'task', success=False).returncode, 0)
         self.assertNotEqual(self.cli('run', 'task', '--context', '-1', success=False).returncode, 0)
 
+    def test_memory_only_exhaustion_is_not_success(self):
+        result, _, _ = self.run_script([{'memory': 'Still investigating.'}], '--max-turns', '1', success=False)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_streams_unicode_and_preserves_evidence(self):
+        _, events, session = self.run_script([
+            {'tool': 'read_file', 'args': {'path': 'calc.go', 'start': 1, 'end': 3}},
+            {'final': 'Checked: café, 日本語, 🛠'},
+        ])
+        pieces = ''.join(e['data'] for e in events if e['type'] == 'token')
+        self.assertIn('café', pieces)
+        self.assertIn('日本語', pieces)
+        result_text = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual(metrics['visible_tool_bytes'], len(result_text.encode()))
+
+    def test_hardlink_patch_and_symlink_metadata_denied(self):
+        outside = self.root / 'original.txt'
+        outside.write_text('original')
+        os.link(outside, self.root / 'linked.txt')
+        _, events, _ = self.run_script([
+            {'tool': 'apply_patch', 'args': {'path': 'linked.txt', 'old_text': 'original', 'new_text': 'modified'}},
+            {'final': 'Denied.'},
+        ], '--allow-write')
+        self.assertIn('policy', next(e['data']['output'] for e in events if e['type'] == 'tool_result'))
+        self.assertEqual(outside.read_text(), 'original')
+
+    def test_symlink_reads_denied(self):
+        try:
+            (self.root / 'linked.go').symlink_to(self.root / 'calc.go')
+        except OSError:
+            self.skipTest('Symlink creation is not permitted on this host')
+        _, events, _ = self.run_script([
+            {'tool': 'read_file', 'args': {'path': 'linked.go', 'start': 1, 'end': 2}},
+            {'final': 'Denied.'},
+        ])
+        self.assertIn('policy', next(e['data']['output'] for e in events if e['type'] == 'tool_result'))
+
 if __name__ == '__main__':
     unittest.main()

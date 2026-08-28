@@ -10,10 +10,14 @@
 #include <limits.h>
 #include <time.h>
 #define FG_PATH_MAX 4096
-#define FG_MAX_JSON (16u*1024u*1024u)
-#define FG_MIN(a,b) ((a)<(b)?(a):(b))
-#define FG_MAX(a,b) ((a)>(b)?(a):(b))
-typedef struct { char *data; size_t len, cap; bool failed; } fg_buf;
+#define FG_MAX_JSON (16u * 1024u * 1024u)
+#define FG_MIN(a, b) ((a) < (b) ? (a) : (b))
+#define FG_MAX(a, b) ((a) > (b) ? (a) : (b))
+typedef struct {
+    char *data;
+    size_t len, cap;
+    bool failed;
+} fg_buf;
 bool fg_buf_add(fg_buf *, const char *, size_t);
 bool fg_buf_puts(fg_buf *, const char *);
 bool fg_buf_printf(fg_buf *, const char *, ...);
@@ -27,9 +31,9 @@ char *fg_read_file(const char *, size_t, size_t *, forge_error *);
 bool fg_write_file(const char *, const char *, size_t, forge_error *);
 bool fg_mkdir(const char *, forge_error *);
 bool fg_regular_target(const char *, forge_error *);
-bool fg_workspace(const char *, char [FG_PATH_MAX], forge_error *);
-bool fg_safe_path(const char *, const char *, bool, char [FG_PATH_MAX], forge_error *);
-bool fg_path_join(char [FG_PATH_MAX], const char *, const char *);
+bool fg_workspace(const char *, char[FG_PATH_MAX], forge_error *);
+bool fg_safe_path(const char *, const char *, bool, char[FG_PATH_MAX], forge_error *);
+bool fg_path_join(char[FG_PATH_MAX], const char *, const char *);
 bool fg_random_hex(char *, size_t);
 typedef bool (*fg_walk_fn)(const char *, void *);
 bool fg_walk(const char *, const char *, fg_walk_fn, void *, forge_error *);
@@ -45,12 +49,16 @@ typedef struct {
     double duration_ms;
 } fg_process_result;
 forge_status fg_process(const char *root, const char *const *argv, uint64_t timeout,
-    size_t max_bytes, forge_cancel_fn, void *, fg_process_result *, forge_error *);
+                        size_t max_bytes, forge_cancel_fn, void *, fg_process_result *,
+                        forge_error *);
 void fg_process_free(fg_process_result *);
 
 typedef struct {
-    char dir[FG_PATH_MAX]; FILE *events; uint64_t sequence, start_ms;
-    forge_event_fn callback; void *userdata;
+    char dir[FG_PATH_MAX];
+    FILE *events;
+    uint64_t sequence, start_ms;
+    forge_event_fn callback;
+    void *userdata;
 } fg_session;
 bool fg_session_start(fg_session *, const char *, forge_event_fn, void *, forge_error *);
 bool fg_session_emit(fg_session *, const char *, const char *, forge_error *);
@@ -66,14 +74,16 @@ struct forge_model {
     size_t script_cursor;
     char *previous_prompt;
     size_t (*count)(forge_model *, const char *);
-    forge_status (*generate)(forge_model *, const char *, const char *, size_t,
-        forge_token_fn, void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t, forge_error *);
+    forge_status (*generate)(forge_model *, const char *, const char *, size_t, forge_token_fn,
+                             void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
+                             forge_error *);
     void (*destroy)(forge_model *);
 };
 size_t fg_model_count(const char *, void *);
 bool fg_llama_init(forge_model *, forge_error *);
 forge_status fg_model_generate(forge_model *, const char *, const char *, size_t, forge_token_fn,
-    void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t, forge_error *);
+                               void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
+                               forge_error *);
 
 typedef struct {
     const char *name, *description, *fields, *grammar;
