@@ -112,6 +112,15 @@ Monitor and stale-action checks still decide whether subsequent actions may be
 accepted. Existing `find_symbol`, `get_references` and `search_text` remain
 available as narrower tools.
 
+Retrieved context results are bound to repository source state. A later known
+edit or observed change marks them stale before the next prompt, just like
+symbol/search results. Review found this binding missing in the initial
+integration. A regression in the existing agent-change suite fails on that
+version and passes with source `a619d86`, including patch invalidation with zero
+watcher events and cancellation after refresh. Its [CI run](https://github.com/chillyflow/forge/actions/runs/33197360420)
+passed all five jobs, 100 macOS watcher suites and 30 macOS configuration suites.
+This is conservative invalidation, not selective dependency-DAG retention.
+
 `tests/unit/test_index.c` exercises the new API using real SQLite FTS5 and
 Tree-sitter fixtures: stage order, graph direction/seed behavior, source-only
 snapshot reads, output/UTF-8/token/VM limits, cancellation, malformed metadata,

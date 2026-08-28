@@ -208,6 +208,32 @@ and the full multi-model/platform acceptance suite remain required. The full
 design is not complete. Older audit tables below describe their stated baseline;
 these dated implementation addenda supersede only the named portions.
 
+## Generated summaries — 2026-08-28
+
+Source `2184388` adds bounded `forge_repo_summary_generate` and `forge summarize`.
+Each call prepares a fresh snapshot; a validated hit invokes no generation, and
+a miss permits one model call outside a SQLite transaction. Publication checks
+dependencies again and returns a competing valid writer's text when applicable.
+Model operation re-entry, UTF-8, bytes, tokens, shared deadline, cancellation and
+failure accounting are tested. [The summary contract](SUMMARIES.md) documents
+caller-asserted model identity and the remaining agent integration gap.
+
+All 23 executed local groups passed in Debug (40.09 s) and CUDA-linked Release
+(39.91 s), with the optional model group skipped. The [source CI run](https://github.com/chillyflow/forge/actions/runs/33197412564)
+passed all five jobs including 100 native macOS watcher and 30 config suites.
+An observed 15 ms fixture-preparation timeout was subsequently corrected with a
+test-only 500 ms writer-lock window. The operation must still reject the blocked
+publication; no runtime timeout was relaxed.
+
+Separate [real Qwen evidence](../benchmark/results/2026-08-28-summaries/README.md)
+on the hashed `2184388` executable records a correct `37` summary, identical
+zero-generation reload/unrelated-edit hits, then a new summary/key describing
+`53` after the fixture changes. CLI hits still load the model. An earlier v1
+summary's incorrect coverage claim is retained, and v2 identifies supplied
+source coverage explicitly. These are narrow checks, not broad semantic quality
+or performance evidence. Automatic agent/planner summary selection and the
+remaining full-design acceptance requirements are not complete.
+
 ## Status and scope rules
 
 | Status | Meaning |

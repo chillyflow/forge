@@ -227,6 +227,21 @@ writers, edits/deletion during generation, corruption repair, model re-entry,
 producer profile changes, output limits, cancellation and failed generation.
 CLI tests use an explicitly simulated script backend, without quality claims.
 
+Source `2184388` passed all 23 executed local groups in Debug (40.09 s) and
+CUDA-linked Release (39.91 s); the optional model group skipped without its
+arguments. Its [CI run](https://github.com/chillyflow/forge/actions/runs/33197412564)
+passed all five jobs, including 100 macOS watcher and 30 configuration suites.
+A separate [recorded real-model check](../benchmark/results/2026-08-28-summaries/README.md)
+verified one file's cold generation, zero-generation reload/unrelated-edit hits,
+and regeneration after changing its return value. It retains an initial v1
+coverage-wording failure. This is not a broad quality or speedup benchmark.
+
+A later test-only change gives the writer-lock fixture 500 ms instead of 15 ms:
+the smaller limit could expire while preparing its input on Windows, before the
+lock behavior was tested. The lock must still time out without publication;
+runtime budgets are unchanged. The published API/CLI evidence remains attached
+to `2184388`; the later agent tool requires its own verification.
+
 Automatic hierarchy/planner summary selection, resolved relationships and broad
 measured cache benefits remain required work in the full
 design. [Staged indexed retrieval](RETRIEVAL.md) now supplies bounded source
