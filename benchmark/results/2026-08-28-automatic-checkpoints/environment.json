@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "purpose": "Automatic physical checkpoint correctness and agent opt-in smoke, not a task benchmark",
+  "date": "2026-08-28",
+  "source_commit": "028082cfc9e55134b9d2da374a65a41f54b00f38",
+  "checkpoint_executable_sha256": "f3c12e959c818209013ba410906b19e4d155e9a38d66662891f38fd06baf8d69",
+  "agent_executable_sha256": "bc9bb30f3aa80efec92aea086a9b9d55313be9f98b4da4b353dc0181c0077b63",
+  "llama_dll_sha256": "0db020c722bd869d9e410224bb4674a6b6e080cf9633b82d2dd92b661a79b693",
+  "build": {
+    "configuration": "Release",
+    "compiler": "MSVC 19.44",
+    "backend": "llama.cpp b10566 Windows CUDA 13.3 prebuilt",
+    "backend_commit": "bb4caa7540188872173c44d161602d9271386413"
+  },
+  "model": {
+    "filename": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+    "bytes": 18556689568,
+    "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+    "sha256_reverified": true,
+    "repository": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    "revision": "b17cb02dd882d5b6ab62fc777ad2995f19668350"
+  },
+  "hardware": {
+    "os": "Windows 11 x64",
+    "gpu": "NVIDIA GeForce RTX 5090 Laptop GPU",
+    "gpu_total_mib": 24463,
+    "driver": "610.88"
+  },
+  "parameters": {
+    "gpu_layers": -1,
+    "offloaded_layers": 49,
+    "temperature": 0,
+    "seed": 42,
+    "threads": 1,
+    "chat_template": "model metadata",
+    "automatic_test_context_tokens": 1024,
+    "automatic_test_output_token_limit": 16,
+    "automatic_test_max_entries": 2,
+    "automatic_test_min_prefix_tokens": 16,
+    "automatic_test_capture_limit": 1,
+    "automatic_test_max_bytes": 268435456,
+    "agent_context_tokens": 4096,
+    "agent_output_reserve": 512,
+    "agent_cache_options": "defaults",
+    "maximum_simultaneous_models": 1
+  },
+  "limits": [
+    "Two 150-token prompts and one output token each establish only small-case restore correctness.",
+    "The agent smoke captured a stable prefix but needed no restore because live reuse was sufficient.",
+    "Windows GetTickCount64 is coarse; a zero time is below the observed resolution, not instantaneous.",
+    "Manager peak bytes exclude allocator overhead, model and live KV allocations; they are not RSS or VRAM.",
+    "No overall speedup, broad task-quality, durable resume, Linux CUDA or macOS Metal inference claim is made."
+  ]
+}
