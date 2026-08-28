@@ -22,6 +22,34 @@ def digest(path):
             h.update(data)
     return h.hexdigest()
 
+FIXTURE_PREPARATION = 'utf8-lf-gofmt-v1'
+
+def materialize(root, task):
+    """Prepare identical, formatted inputs before timing and test-file hashing."""
+    root = root.resolve()
+    paths = []
+    for relative, content in task['files'].items():
+        if not isinstance(relative, str) or not isinstance(content, str):
+            raise ValueError('Fixture paths and contents must be strings')
+        path = (root / relative).resolve()
+        if not path.is_relative_to(root) or path == root:
+            raise ValueError('Unsafe fixture path')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8', newline='\n')
+        paths.append(path)
+    go_files = sorted(path.relative_to(root).as_posix() for path in paths if path.suffix == '.go')
+    if go_files:
+        gofmt = shutil.which('gofmt')
+        if not gofmt:
+            raise RuntimeError('gofmt must be on PATH for Go fixture preparation')
+        for start in range(0, len(go_files), 32):
+            subprocess.run([gofmt, '-w', *('./' + name for name in go_files[start:start + 32])],
+                           cwd=root, check=True, capture_output=True, timeout=30)
+    hashes = {path.relative_to(root).as_posix(): digest(path) for path in sorted(paths)}
+    encoded = json.dumps(hashes, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    return {'fixture_preparation': FIXTURE_PREPARATION,
+            'fixture_sha256': hashlib.sha256(encoded).hexdigest(), 'fixture_files': hashes}
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--forge', type=Path, required=True)
@@ -36,13 +64,14 @@ def main():
     forge, model = args.forge.resolve(), args.model.resolve()
     if not forge.is_file() or not model.is_file():
         parser.error('forge and model must exist')
-    if not shutil.which('go'):
-        parser.error('Go must be on PATH')
+    if not shutil.which('go') or not shutil.which('gofmt'):
+        parser.error('Go and gofmt must be on PATH')
     args.output.mkdir(parents=True, exist_ok=True)
     flags = {'optimized': [], 'no-kv': ['--no-kv-reuse'], 'no-semantic': ['--no-semantic'], 'no-compaction': ['--no-compaction'], 'grammar-first': ['--grammar-first']}
     records = []
     metadata = {'schema_version': 1, 'model_file': model.name, 'model_sha256': digest(model), 'gpu_layers': args.gpu_layers,
                 'forge_binary_sha256': digest(forge),
+                'fixture_preparation': FIXTURE_PREPARATION,
                 'context_tokens': int(args.context), 'platform': platform.platform(), 'forge_version': subprocess.check_output([str(forge), '--version'], text=True).strip(),
                 'go_version': subprocess.check_output(['go', 'version'], text=True).strip()}
     try:
@@ -60,12 +89,7 @@ def main():
             output.mkdir(exist_ok=True)
             with tempfile.TemporaryDirectory(prefix='forge-bench-') as temporary:
                 root = Path(temporary).resolve()
-                for relative, content in task['files'].items():
-                    path = (root / relative).resolve()
-                    if not path.is_relative_to(root):
-                        raise ValueError('Unsafe fixture path')
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_text(content)
+                fixture = materialize(root, task)
                 subprocess.run(['git', 'init', '-q', str(root)], check=True)
                 subprocess.run(['git', '-C', str(root), 'config', 'core.autocrlf', 'false'], check=True)
                 subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
@@ -93,7 +117,7 @@ def main():
                 unchanged_tests = (root / 'repair_test.go').exists() and digest(root / 'repair_test.go') == before_tests
                 record = {'task': task['id'], 'variant': variant, 'returncode': code, 'wall_seconds': elapsed,
                           'passed': code == 0 and verdict.get('passed', False) and unchanged_tests,
-                          'tests_unchanged': unchanged_tests, 'metrics': metrics}
+                          'tests_unchanged': unchanged_tests, 'metrics': metrics, **fixture}
                 records.append(record)
                 (output / 'result.json').write_text(json.dumps(record, indent=2))
                 (args.output / 'results.json').write_text(json.dumps(records, indent=2))

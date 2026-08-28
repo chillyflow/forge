@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import socket
 import secrets
@@ -16,7 +17,7 @@ import tempfile
 import time
 import urllib.request
 
-from run import digest
+from run import digest, materialize, FIXTURE_PREPARATION
 
 def request(port, path, method='GET', key=''):
     query = urllib.request.Request(f'http://127.0.0.1:{port}{path}', method=method,
@@ -80,8 +81,18 @@ def main():
                '--batch-size', '512', '--ubatch-size', '256', '--threads', '4', '--threads-batch', '4']
     records = []
     metadata = {'opencode_version': subprocess.check_output([str(opencode), '--version'], text=True).strip(),
+                'fixture_preparation': FIXTURE_PREPARATION,
+                'platform': platform.platform(), 'context_tokens': 16384, 'gpu_layers': '-1',
+                'go_version': subprocess.check_output(['go', 'version'], text=True).strip(),
+                'server_binary_sha256': digest(server), 'opencode_binary_sha256': digest(opencode),
                 'model_file': model.name, 'model_sha256': digest(model), 'server_command': [model.name if x == str(model) else Path(x).name if x in (str(server), str(slot_path)) else x for x in command],
                 'notes': 'Model stays loaded but slot KV is erased before each task; cross-task RAM prompt cache is disabled. Model load is excluded from per-task wall time. Full OpenCode tool protocol retained; remote tools and subagents disabled.'}
+    try:
+        metadata['gpu'] = subprocess.check_output(
+            ['nvidia-smi', '--query-gpu=name,driver_version,memory.total', '--format=csv,noheader'],
+            text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        metadata['gpu'] = None
     with (args.output / 'server.log').open('w') as log:
         start = time.monotonic()
         process = subprocess.Popen(command, stdout=log, stderr=log, env=env,
@@ -108,12 +119,7 @@ def main():
                 output.mkdir(exist_ok=True)
                 with tempfile.TemporaryDirectory(prefix='forge-opencode-') as temporary:
                     root = Path(temporary).resolve()
-                    for relative, content in task['files'].items():
-                        path = (root / relative).resolve()
-                        if not path.is_relative_to(root):
-                            raise ValueError('Unsafe fixture path')
-                        path.parent.mkdir(parents=True, exist_ok=True)
-                        path.write_text(content)
+                    fixture = materialize(root, task)
                     subprocess.run(['git', 'init', '-q', str(root)], check=True)
                     before = digest(root / 'repair_test.go')
                     erased = json.loads(request(port, '/slots/0?action=erase', 'POST', local_key))
@@ -145,7 +151,7 @@ def main():
                     unchanged = (root / 'repair_test.go').exists() and digest(root / 'repair_test.go') == before
                     record = {'task': task['id'], 'passed': code == 0 and verification.returncode == 0 and unchanged,
                               'returncode': code, 'tests_unchanged': unchanged, 'wall_seconds': elapsed,
-                              'step_usage': [s.get('tokens', {}) for s in steps]}
+                              'step_usage': [s.get('tokens', {}) for s in steps], **fixture}
                     old, new = counters(before_metrics), counters(after_metrics)
                     delta = {k: new[k] - old.get(k, 0) for k in new}
                     record['metrics'] = {

@@ -31,6 +31,19 @@ def aggregate(records):
             'wall_seconds': sum(r['wall_seconds'] for r in records),
             **{key: sum(r['metrics'][key] for r in records) for key in keys}}
 
+def verify_fixtures(forge, baseline):
+    """Reject comparisons that share task names but not prepared input bytes."""
+    by_task = {record['task']: record for record in baseline}
+    if len(by_task) != len(baseline):
+        raise ValueError('Duplicate baseline task')
+    for record in forge:
+        other = by_task.get(record['task'])
+        if other is None:
+            raise ValueError('Task sets differ')
+        for key in ('fixture_preparation', 'fixture_sha256', 'fixture_files'):
+            if record.get(key) != other.get(key):
+                raise ValueError(f'Prepared fixture differs for {record["task"]}: {key}')
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -42,6 +55,9 @@ def main():
     forge_env, other_env = read(args.forge / 'environment.json'), read(args.opencode / 'environment.json')
     if forge_env['model_sha256'] != other_env['model_sha256']:
         parser.error('Model SHA-256 differs')
+    for key in ('fixture_preparation', 'context_tokens', 'gpu', 'go_version'):
+        if key in other_env and forge_env.get(key) != other_env[key]:
+            parser.error(f'Benchmark environment differs: {key}')
     forge = read(args.forge / 'results.json')
     baseline = read(args.opencode / 'results.json')
     for record in baseline:
@@ -64,12 +80,21 @@ def main():
     groups = {variant: [r for r in forge if r['variant'] == variant] for variant in {r['variant'] for r in forge}}
     if any({r['task'] for r in group} != task_set for group in groups.values()):
         parser.error('Task sets differ')
+    if any(len(group) != len(task_set) for group in groups.values()):
+        parser.error('Duplicate Forge task within a variant')
+    try:
+        verify_fixtures(forge, baseline)
+    except ValueError as error:
+        parser.error(str(error))
     if any(r['metrics'].get('simulated') for r in forge):
         parser.error('Cannot publish simulated benchmark as inference')
     args.output.mkdir(parents=True, exist_ok=True)
-    environment = {key: forge_env[key] for key in ['model_file', 'model_sha256', 'platform', 'gpu', 'context_tokens', 'go_version', 'forge_binary_sha256'] if key in forge_env}
+    environment = {key: forge_env[key] for key in ['model_file', 'model_sha256', 'platform', 'gpu', 'context_tokens', 'go_version', 'forge_binary_sha256', 'fixture_preparation'] if key in forge_env}
     environment.update(forge_revision=args.forge_revision, opencode_version=other_env['opencode_version'],
                        server_command=other_env['server_command'], baseline_conditions=other_env['notes'])
+    for key in ('server_binary_sha256', 'opencode_binary_sha256'):
+        if key in other_env:
+            environment[key] = other_env[key]
     write(args.output / 'environment.json', environment)
     write(args.output / 'forge.json', forge)
     write(args.output / 'opencode.json', baseline)
@@ -77,7 +102,7 @@ def main():
     totals['OpenCode'] = aggregate(baseline)
     write(args.output / 'summary.json', totals)
     lines = ['# Local Go repair measurements', '',
-             'Ten tiny synthetic tasks, one run per configuration. All failures are retained.',
+             f'{len(task_set)} synthetic tasks, one run per configuration. All failures are retained.',
              'These results do not establish general repository performance or statistical significance.', '',
              '| Harness | Passed | Logical prompt tokens | Evaluated prompt tokens | Generated tokens |',
              '| --- | ---: | ---: | ---: | ---: |']
@@ -93,6 +118,10 @@ def main():
               '- Native Forge generation time includes grammar sampling and token event I/O; server generation time measures a different boundary.',
               '- Test-file hashes must remain unchanged, and independent `go test -json ./...` must pass.',
               '- See `environment.json` for exact model, hardware and revisions; numeric per-task records are included.', '']
+    if forge_env.get('fixture_preparation'):
+        lines += ['Both harnesses used the same prepared file hashes under '
+                  f'{forge_env["fixture_preparation"]}. Initial formatting differs from '
+                  'older unnormalized runs; do not combine their totals.', '']
     (args.output / 'README.md').write_text('\n'.join(lines), encoding='utf-8')
     for name, values in totals.items():
         print(name, values)

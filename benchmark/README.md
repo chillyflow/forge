@@ -15,7 +15,13 @@ python benchmark/run.py --forge ../build/forge --model /models/coder.gguf \
   --output /tmp/forge-bench
 ```
 
-The Go executable must be on PATH. Fixtures use only the standard library.
+Go and gofmt must be on PATH. Fixtures use only the standard library.
+Both runners use shared `utf8-lf-gofmt-v1` preparation: write UTF-8/LF files and
+format Go inputs before timing, Git baseline creation and immutable-test hashing.
+Each result records the preparation version and per-file/aggregate SHA-256.
+This avoids turning pre-existing fixture formatting into an agent failure.
+Older published runs used the original unformatted fixtures and must not be
+treated as measurements of these normalized inputs.
 The runner executes code; use trusted manifests and an isolated machine.
 Do not point native `forge bench` at a valuable checkout without reviewing the
 prompt and verifier.
