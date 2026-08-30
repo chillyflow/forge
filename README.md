@@ -20,9 +20,13 @@ download provenance and GPU settings documented separately.
 
 ## Build
 
-CMake 3.24+, a C17/C++17 compiler, Git, and Python 3.10+ for tests. Go and gofmt
+CMake 3.24+, a C17/C++17 compiler, Git 2.45+, and Python 3.10+ for tests. Go and gofmt
 are needed for Go validation; CI exercises real checks with Go 1.27.0. The first build
 fetches pinned native dependencies. Subsequent builds can run offline.
+
+Git 2.45+ is required for the `--no-lazy-fetch` flag used during repository
+enumeration. Older Git is supported but silently falls back to a full filesystem
+scan, which does not exclude `.gitignore` paths; see `docs/INDEX.md`.
 
 ```sh
 # CPU inference (Linux/macOS)

@@ -179,6 +179,9 @@ class ForgeTests(unittest.TestCase):
     def test_delta_index_respects_git_ignored_and_forced_tracked_paths(self):
         if not shutil.which('git'):
             self.skipTest('Git is needed for eligibility rules')
+        if subprocess.run(['git', '--no-lazy-fetch', 'version'],
+                          capture_output=True).returncode != 0:
+            self.skipTest('Git 2.45+ is needed for --no-lazy-fetch eligibility rules')
         subprocess.run(['git', 'init', '-q', str(self.root)], check=True, capture_output=True)
         (self.root / '.gitignore').write_text('ignored.go\n.forge/\n', newline='\n')
         (self.root / 'ignored.go').write_text('package calc\nfunc IgnoreMe() {}\n')
