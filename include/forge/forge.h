@@ -92,6 +92,20 @@ typedef struct {
     forge_model *model; /* Borrowed; model must outlive agent. One active run per model. */
     forge_limits limits;
     bool allow_write, allow_exec, semantic_output, compact_context;
+    /* §32 reasoning channel. `thought` offers optional reasoning before each action;
+     * `thought_in_history` retains it verbatim in stored ACTION segments so it
+     * re-enters later prompts. It is OFF in a default-initialized forge_config
+     * and should stay off unless you need it: measured, retention costs accuracy
+     * and prompt tokens once reasoning is actually elicited, and loses no
+     * evidence, because the raw response reaches the session log before any
+     * stripping. Clearing it keeps thought purely decode-side: it steers only
+     * the generation that produced it. `thought_routed` changes the wire format
+     * field to bounded plain text followed by a lazily constrained action object;
+     * the host normalizes that prefix into the same thought field before validation.
+     * `thought_required` rejects an empty or absent thought. It does not force a
+     * routed model to emit one. Setting either while `thought` is false is rejected:
+     * forge_agent_create fails with FORGE_ERR_ARGUMENT. */
+    bool thought, thought_required, thought_in_history, thought_routed;
     bool skip_validation; /* Explicit ablation; ordinary runs verify changed Go workspaces. */
     forge_policy_fn policy;
     forge_cancel_fn cancelled;

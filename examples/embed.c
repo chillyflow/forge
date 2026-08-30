@@ -23,6 +23,8 @@ int main(int argc, char **argv) {
     config.limits = forge_default_limits();
     config.semantic_output = true;
     config.compact_context = true;
+    config.thought = true;
+    config.thought_in_history = false; /* Decode-side only; see docs/ARCHITECTURE.md. */
     /* Read-only by default. Supply a policy callback to approve writes/processes. */
     forge_agent *agent = forge_agent_create(&config, &error);
     forge_status status = agent ? forge_agent_run(agent, argv[3], event, NULL, &error) : error.code;

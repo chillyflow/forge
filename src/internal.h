@@ -134,9 +134,9 @@ struct forge_model {
     fg_checkpoint_cache *cache;
     const forge_checkpoint_cache_request *cache_request;
     size_t (*count)(forge_model *, const char *);
-    forge_status (*generate)(forge_model *, const char *, const char *, size_t, forge_token_fn,
-                             void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
-                             forge_error *);
+    forge_status (*generate)(forge_model *, const char *, const char *, const char *, size_t,
+                             forge_token_fn, void *, char **, forge_metrics *, forge_cancel_fn,
+                             void *, uint64_t, forge_error *);
     void (*destroy)(forge_model *);
 };
 bool fg_model_instance_init(forge_model *, forge_error *);
@@ -149,6 +149,11 @@ forge_status fg_model_generate_with_cache(forge_model *, const char *, const cha
                                           forge_token_fn, void *, char **, forge_metrics *,
                                           forge_cancel_fn, void *, uint64_t,
                                           const forge_checkpoint_cache_request *, forge_error *);
+forge_status fg_model_generate_routed_with_cache(forge_model *, const char *, const char *,
+                                                 const char *, size_t, forge_token_fn, void *,
+                                                 char **, forge_metrics *, forge_cancel_fn, void *,
+                                                 uint64_t, const forge_checkpoint_cache_request *,
+                                                 forge_error *);
 /* For compound operations that already own operation_active. Does not release
  * the guard. No automatic checkpoint request is nominated. */
 forge_status fg_model_generate_active(forge_model *, const char *, size_t, forge_token_fn, void *,
@@ -176,13 +181,24 @@ forge_status fg_checkpoint_restore_active(forge_model *, const forge_checkpoint 
                                           forge_cancel_fn, void *, uint64_t,
                                           forge_checkpoint_stats *, forge_error *);
 
+/* Optional free-text reasoning allowed on every model action. It is bounded
+ * both at the parser boundary and because retained ACTION segments can re-enter
+ * later prompts; the cap keeps that recurring prompt cost small. */
+#define FG_THOUGHT_MAX_BYTES 2048u
+/* std::regex pattern for llama.cpp's lazy grammar sampler. The first capture
+ * starts at the action object's opening brace, so earlier reasoning remains
+ * unconstrained while the complete action is replayed into the GBNF state. */
+#define FG_ACTION_TRIGGER_PATTERN "(\\{[ \\t\\r\\n]*\"(tool|memory|final)\"[ \\t\\r\\n]*:)"
 typedef struct {
     const char *name, *description, *fields, *grammar;
     forge_capability capability;
 } fg_tool_def;
 const fg_tool_def *fg_tools(size_t *);
-char *fg_tool_schema(void);
-char *fg_tool_grammar(void);
+/* `thought` selects whether reasoning is offered, `required` whether it may be
+ * empty, and `routed` whether it is a plain-text prefix outside the action JSON.
+ * Routed mode leaves the action constrained and uses a lazy grammar trigger. */
+char *fg_tool_schema(bool thought, bool required, bool routed);
+char *fg_tool_grammar(bool thought, bool required, bool routed);
 bool fg_tool_validate(const char *, yyjson_val *, forge_error *);
 uint64_t fg_tool_signature(const char *, yyjson_val *, uint64_t generation,
                            uint64_t diagnostic_hash);

@@ -126,8 +126,35 @@ numeric layer settings remain explicit overrides.
 | `git_diff`, `git_status` | Git inspection requiring process permission; configured filters can execute |
 | `expand_output` | Retrieve a page of recorded raw output |
 
-The registry generates a GBNF grammar. Schema validation runs again before
-dispatch. Malformed or unknown actions never execute.
+The registry generates a GBNF grammar. Any action may begin with an optional
+`thought` field: one free-text string, at most 2048 bytes, recorded in session
+artifacts and never executed. Schema validation runs again before dispatch.
+Malformed or unknown actions never execute; an invalid thought invalidates the
+whole action.
+
+The channel has independent host-enforced controls. `--no-thought` removes it
+from the generated grammar and schema and refuses any action that still carries
+one, which is the §32 ablation control. `--thought-required` rejects any action
+without a nonempty thought. Both checks run in the host after parsing, so they
+hold even for a backend that ignores the grammar.
+
+A thought never re-enters a later prompt by default. It conditions the
+generation that produced it and is recorded in the session log, but is dropped
+from the stored ACTION segment; `--thought-history` opts back into re-injecting
+it and `--thought-decode-only` states the default explicitly. Retention is off
+because it is measurably harmful once reasoning is actually elicited: it cost
+three of ten benchmark tasks and 2.3x the prompt tokens, unchanged when the turn
+budget was doubled, and it buys no extra evidence because the raw response is
+already persisted before the strip. See
+[the routed sweep](benchmark/results/2026-08-30-routed-sweep/README.md).
+
+`--thought-routed` changes the wire format: the model may reason in bounded
+plain text before its JSON action, and llama.cpp's lazy grammar sampler begins
+constraining output when the actual `tool`, `memory`, or `final` object starts.
+The host normalizes the prefix into the same validated thought field used by the
+rest of the agent. This removes JSON-string constraints from the reasoning
+prefix, but it does not force an optional prefix or implement the full
+thinking/tool/arguments/patch/final state router described by §32.
 
 ### Sessions
 

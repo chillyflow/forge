@@ -654,12 +654,13 @@ static size_t generation_count(forge_model *model, const char *text) {
     return state->bad_counter ? SIZE_MAX : (strlen(text) + 3) / 4;
 }
 static forge_status generate_fixture(forge_model *model, const char *prompt, const char *grammar,
-                                     size_t max_tokens, forge_token_fn token, void *userdata,
-                                     char **out, forge_metrics *metrics, forge_cancel_fn cancel,
+                                     const char *grammar_trigger, size_t max_tokens,
+                                     forge_token_fn token, void *userdata, char **out,
+                                     forge_metrics *metrics, forge_cancel_fn cancel,
                                      void *cancel_data, uint64_t deadline, forge_error *error) {
     model_fixture *state = model->backend;
     fixture *f = state->fixture;
-    assert(model->operation_active && !model->cache_request && !grammar);
+    assert(model->operation_active && !model->cache_request && !grammar && !grammar_trigger);
     assert(!f->repo->snapshot_active && sqlite3_get_autocommit(f->repo->db));
     assert(strstr(prompt, "Evidence:") && token);
     state->calls++;

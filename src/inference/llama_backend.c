@@ -229,10 +229,25 @@ done:
     stats->prefill_ms += (double)(fg_now_ms() - begin);
     return status;
 }
+static bool complete_action_suffix(const char *text) {
+    for (const char *candidate = strchr(text, '{'); candidate;
+         candidate = strchr(candidate + 1, '{')) {
+        yyjson_doc *doc = yyjson_read(candidate, strlen(candidate), 0);
+        yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;
+        bool complete = yyjson_is_obj(root) &&
+                        (yyjson_obj_get(root, "tool") || yyjson_obj_get(root, "memory") ||
+                         yyjson_obj_get(root, "final"));
+        yyjson_doc_free(doc);
+        if (complete)
+            return true;
+    }
+    return false;
+}
 static forge_status llama_generate(forge_model *m, const char *prompt, const char *grammar,
-                                   size_t max_tokens, forge_token_fn cb, void *u, char **output,
-                                   forge_metrics *stats, forge_cancel_fn cancel, void *cu,
-                                   uint64_t deadline, forge_error *e) {
+                                   const char *grammar_trigger, size_t max_tokens,
+                                   forge_token_fn cb, void *u, char **output, forge_metrics *stats,
+                                   forge_cancel_fn cancel, void *cu, uint64_t deadline,
+                                   forge_error *e) {
     llama_state *s = m->backend;
     int32_t n = 0;
     llama_token *tokens = tokenize(s, prompt, &n);
@@ -262,10 +277,15 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         goto finish;
     }
     if (grammar) {
-        grammar_sampler = llama_sampler_init_grammar(s->vocab, grammar, "root");
+        if (grammar_trigger) {
+            const char *patterns[] = {grammar_trigger};
+            grammar_sampler = llama_sampler_init_grammar_lazy_patterns(s->vocab, grammar, "root",
+                                                                       patterns, 1, NULL, 0);
+        } else
+            grammar_sampler = llama_sampler_init_grammar(s->vocab, grammar, "root");
         if (!grammar_sampler) {
-            status =
-                fg_error(e, FORGE_ERR_PARSE, "Generated tool grammar was rejected by llama.cpp");
+            status = fg_error(e, FORGE_ERR_PARSE,
+                              "Generated tool grammar or trigger was rejected by llama.cpp");
             goto finish;
         }
         llama_sampler_chain_add(sampler, grammar_sampler);
@@ -329,8 +349,9 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
     }
     stats->decode_ms += (double)(fg_now_ms() - begin);
     if (status == FORGE_OK && grammar && !ended) {
-        yyjson_doc *d = yyjson_read(out.data ? out.data : "", out.len, 0);
-        if (!d)
+        bool complete = grammar_trigger ? complete_action_suffix(out.data ? out.data : "") : false;
+        yyjson_doc *d = grammar_trigger ? NULL : yyjson_read(out.data ? out.data : "", out.len, 0);
+        if (!complete && !d)
             status =
                 fg_error(e, FORGE_ERR_LIMIT, "Generation limit reached before a complete action");
         yyjson_doc_free(d);

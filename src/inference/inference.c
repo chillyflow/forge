@@ -24,17 +24,24 @@ size_t fg_model_count(const char *text, void *model) {
     return m->count(m, text);
 }
 static forge_status script_generate(forge_model *m, const char *prompt, const char *grammar,
-                                    size_t max_tokens, forge_token_fn cb, void *user, char **out,
-                                    forge_metrics *stats, forge_cancel_fn cancel, void *cu,
-                                    uint64_t deadline, forge_error *e) {
+                                    const char *grammar_trigger, size_t max_tokens,
+                                    forge_token_fn cb, void *user, char **out, forge_metrics *stats,
+                                    forge_cancel_fn cancel, void *cu, uint64_t deadline,
+                                    forge_error *e) {
     (void)grammar;
+    (void)grammar_trigger;
     if ((cancel && cancel(cu)) || (deadline && fg_now_ms() >= deadline))
         return fg_error(e, FORGE_ERR_CANCELLED, "Generation cancelled");
     yyjson_val *steps = yyjson_doc_get_root(m->script),
                *step = yyjson_arr_get(steps, m->script_cursor++);
     if (!step)
         return fg_error(e, FORGE_ERR_MODEL, "Scripted test fixture exhausted");
-    char *json = yyjson_val_write(step, 0, NULL);
+    /* Object steps preserve the original concise fixture format. String steps
+     * are exact raw model text, used to exercise routed reasoning before the
+     * action JSON without giving the test backend special agent knowledge. */
+    char *json = yyjson_is_str(step) && yyjson_get_len(step) == strlen(yyjson_get_str(step))
+                     ? fg_strdup(yyjson_get_str(step))
+                     : yyjson_val_write(step, 0, NULL);
     if (!json)
         return fg_error(e, FORGE_ERR_MEMORY, "Script allocation failed");
     size_t count = script_count(m, json);
@@ -161,8 +168,8 @@ forge_status fg_model_generate_active(forge_model *m, const char *prompt, size_t
     *output = NULL;
     if ((cancel && cancel(cancel_userdata)) || (deadline && fg_now_ms() >= deadline))
         return fg_error(e, FORGE_ERR_CANCELLED, "Generation cancelled before tokenization");
-    return m->generate(m, prompt, NULL, max_tokens, callback, userdata, output, metrics, cancel,
-                       cancel_userdata, deadline, e);
+    return m->generate(m, prompt, NULL, NULL, max_tokens, callback, userdata, output, metrics,
+                       cancel, cancel_userdata, deadline, e);
 }
 forge_status fg_model_generate_with_cache(forge_model *m, const char *p, const char *g,
                                           size_t max_tokens, forge_token_fn cb, void *u, char **out,
@@ -170,8 +177,17 @@ forge_status fg_model_generate_with_cache(forge_model *m, const char *p, const c
                                           uint64_t deadline,
                                           const forge_checkpoint_cache_request *request,
                                           forge_error *e) {
+    return fg_model_generate_routed_with_cache(m, p, g, NULL, max_tokens, cb, u, out, stats, cancel,
+                                               cu, deadline, request, e);
+}
+forge_status fg_model_generate_routed_with_cache(
+    forge_model *m, const char *p, const char *g, const char *trigger, size_t max_tokens,
+    forge_token_fn cb, void *u, char **out, forge_metrics *stats, forge_cancel_fn cancel, void *cu,
+    uint64_t deadline, const forge_checkpoint_cache_request *request, forge_error *e) {
     if (!m || !m->generate || !p || !max_tokens || !out || !stats)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid generation request");
+    if (trigger && (!g || !*trigger))
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Lazy grammar requires grammar and trigger");
     *out = NULL;
     if (m->operation_active)
         return fg_error(e, FORGE_ERR_CONFLICT, "Another operation is active on this model");
@@ -185,7 +201,8 @@ forge_status fg_model_generate_with_cache(forge_model *m, const char *p, const c
     if ((cancel && cancel(cu)) || (deadline && fg_now_ms() >= deadline))
         status = fg_error(e, FORGE_ERR_CANCELLED, "Generation cancelled before tokenization");
     else
-        status = m->generate(m, p, g, max_tokens, cb, u, out, stats, cancel, cu, deadline, e);
+        status =
+            m->generate(m, p, g, trigger, max_tokens, cb, u, out, stats, cancel, cu, deadline, e);
     forge_checkpoint_cache_get_stats(m, &cache_after);
     cache_metrics(stats, &cache_before, &cache_after);
     m->cache_request = NULL;

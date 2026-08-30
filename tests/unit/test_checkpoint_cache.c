@@ -196,10 +196,12 @@ static const fg_checkpoint_backend backend = {supported,   prefill,       state_
                                               live_prefix, live_matches};
 
 static forge_status generate(forge_model *model, const char *prompt, const char *grammar,
-                             size_t maximum, forge_token_fn callback, void *callback_user,
-                             char **out, forge_metrics *metrics, forge_cancel_fn cancel,
-                             void *cancel_user, uint64_t deadline, forge_error *error) {
+                             const char *grammar_trigger, size_t maximum, forge_token_fn callback,
+                             void *callback_user, char **out, forge_metrics *metrics,
+                             forge_cancel_fn cancel, void *cancel_user, uint64_t deadline,
+                             forge_error *error) {
     (void)grammar;
+    (void)grammar_trigger;
     fixture *f = model->backend;
     f->generate_calls++;
     int32_t tokens[TOKEN_CAP];

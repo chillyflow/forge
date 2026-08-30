@@ -288,6 +288,109 @@ class ForgeTests(unittest.TestCase):
                     self.assertEqual(view['recent_outcomes'][0]['tool_call_id'],
                                      int(path.stem) - 2)
 
+    def test_thought_channel_retention_and_ablation(self):
+        # A bounded leading thought rides along with the action. Retention in
+        # the ACTION segment is OFF by default (it costs accuracy and prompt
+        # tokens once reasoning is actually elicited, and loses no evidence
+        # because the raw response is already in the session log);
+        # --thought-history opts back in; --no-thought removes the channel from
+        # the generated grammar and schema entirely.
+        secret = 'Reasoning sentinel that must not reach a later prompt.'
+        actions = [{'thought': secret, 'tool': 'read_file',
+                    'args': {'path': 'note.txt', 'start': 1, 'end': 1}},
+                   {'thought': secret, 'final': 'Inspected the note.'}]
+        (self.root / 'note.txt').write_text('original data\n', newline='\n')
+
+        result, _, session = self.run_script(actions, '--no-auto-validation')
+        prompts = [path.read_text() for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertFalse(any(secret in prompt for prompt in prompts),
+                         'thought must not re-enter a prompt by default')
+        # Stripping the thought must not drop the action it decorated.
+        self.assertTrue(any('read_file' in prompt for prompt in prompts))
+        # The thought is still recorded as session evidence: dropping it from
+        # later prompts must not cost observability.
+        self.assertIn(secret, result.stdout)
+
+        _, _, kept = self.run_script(actions, '--no-auto-validation', '--thought-history')
+        prompts = [path.read_text() for path in sorted((kept / 'context').glob('*.txt'))]
+        self.assertTrue(any(secret in prompt for prompt in prompts),
+                        '--thought-history must re-enter the thought')
+
+        # The explicit off switch stays available and agrees with the default.
+        _, _, stripped = self.run_script(actions, '--no-auto-validation', '--thought-decode-only')
+        prompts = [path.read_text() for path in sorted((stripped / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertFalse(any(secret in prompt for prompt in prompts))
+        self.assertEqual(json.loads((stripped / 'metrics.json').read_text())['status'], 'ok')
+
+        # The channel is host-gated, not merely grammar-hidden: with it off the
+        # schema stops advertising it and a thought-bearing action is refused,
+        # so the ablation cannot be defeated by an unconstrained backend.
+        result, _, ablated = self.run_script(actions, '--no-auto-validation', '--no-thought',
+                                             success=False)
+        prompts = [path.read_text() for path in sorted((ablated / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertNotIn('"thought" field', prompts[0])
+        self.assertFalse(any(secret in prompt for prompt in prompts))
+        self.assertIn('invalid action', result.stderr)
+
+        # Routed mode leaves the reasoning prefix unconstrained until the real
+        # action object begins, then normalizes it into the same host-validated
+        # thought field used above. Raw string script steps model that exact
+        # backend output without bypassing the agent parser.
+        routed_actions = [
+            secret + '\n' + json.dumps({'tool': 'read_file',
+                                         'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+            'The note has been inspected.\n' + json.dumps({'final': 'Inspected the note.'}),
+        ]
+        _, routed_events, routed = self.run_script(
+            routed_actions, '--no-auto-validation', '--thought-routed', '--thought-history')
+        tool_call = next(event['data'] for event in routed_events if event['type'] == 'tool_call')
+        self.assertEqual(tool_call['thought'], secret)
+        prompts = [path.read_text() for path in sorted((routed / 'context').glob('*.txt'))]
+        self.assertTrue(any(secret in prompt for prompt in prompts))
+
+        _, _, routed_stripped = self.run_script(
+            routed_actions, '--no-auto-validation', '--thought-routed', '--thought-decode-only')
+        prompts = [path.read_text() for path in sorted((routed_stripped / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertFalse(any(secret in prompt for prompt in prompts))
+
+        # Required routed thought is enforced by the host even for the scripted
+        # backend, which ignores grammar constraints.
+        missing = [json.dumps({'final': 'No reasoning prefix.'})]
+        result, _, _ = self.run_script(missing, '--no-auto-validation', '--thought-routed',
+                                       '--thought-required', success=False)
+        self.assertIn('required before every action', result.stderr)
+        oversized = ['x' * 2049 + json.dumps({'final': 'Too much reasoning.'})]
+        result, _, _ = self.run_script(oversized, '--no-auto-validation', '--thought-routed',
+                                       success=False)
+        self.assertIn('at most 2048 bytes', result.stderr)
+
+        # Contradictory ablation settings must fail loudly rather than quietly
+        # report one arm's numbers under the other arm's name.
+        contradiction = self.cli('run', 'Inspect the note.', '--script', str(self.root / 'script.json'),
+                                 '--no-thought', '--thought-required', success=False)
+        self.assertIn('contradicts', contradiction.stderr)
+
+        # Inline --thought-required is enforced by the host, not only by the
+        # grammar: the scripted backend ignores GBNF, so an action with no
+        # thought must still be refused. Without this the flag would be a
+        # no-op for any unconstrained backend and the ablation arm it names
+        # would silently measure the untreated configuration.
+        thoughtless = [json.dumps({'final': 'No reasoning at all.'})]
+        refused = self.run_script(thoughtless, '--no-auto-validation', '--thought-required',
+                                  success=False)[0]
+        self.assertIn('invalid action', refused.stderr)
+        # ... and an action that does carry one is still accepted.
+        withthought = [{'thought': 'Reasoned first.', 'final': 'Done.'}]
+        self.run_script(withthought, '--no-auto-validation', '--thought-required')
+        contradiction = self.cli('run', 'Inspect the note.', '--script',
+                                 str(self.root / 'script.json'), '--no-thought',
+                                 '--thought-routed', success=False)
+        self.assertIn('contradict', contradiction.stderr)
+
     def test_validation_plan_and_permission_denial(self):
         self.go_module()
         plan = json.loads(self.cli('validation-plan', 'calc.go', '--json').stdout)

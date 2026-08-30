@@ -38,6 +38,7 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
         !config->limits.output_reserve ||
         config->limits.output_reserve >= config->limits.context_tokens ||
         config->limits.context_tokens > config->model->config.context_tokens ||
+        (!config->thought && (config->thought_required || config->thought_routed)) ||
         !config->limits.max_tool_bytes || config->limits.max_tool_bytes > 16u * 1024u * 1024u ||
         !config->limits.max_file_bytes || config->limits.max_file_bytes > 16u * 1024u * 1024u ||
         !config->limits.wall_timeout_ms || !config->limits.command_timeout_ms ||
@@ -151,6 +152,94 @@ static bool record_change(forge_agent *a, forge_repo *repo, forge_context *ctx,
                "Observed filesystem changes require fresh source inspection and validation.",
                e) == FORGE_OK &&
            save_working_state(a, ctx, memory_id, turn, true, e);
+}
+/* Thought is a decode-side channel: it conditions the very generation that
+ * produced it and is never executed. When history retention is disabled it is
+ * dropped from the stored ACTION segment, so a reasoning turn costs output
+ * tokens once instead of prompt tokens on every later turn. Returns a newly
+ * allocated action string the caller frees, or NULL to store the raw response
+ * unchanged (retention on, no thought present, or the rewrite failed). */
+static char *action_history_text(bool retain, yyjson_val *o, forge_error *e) {
+    if (retain || !o || !yyjson_obj_get(o, "thought"))
+        return NULL;
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    if (!doc) {
+        fg_error(e, FORGE_ERR_MEMORY, "Could not strip thought from the retained action");
+        return NULL;
+    }
+    yyjson_mut_val *root = yyjson_val_mut_copy(doc, o);
+    char *stripped = NULL;
+    if (root && yyjson_mut_obj_remove_key(root, "thought")) {
+        yyjson_mut_doc_set_root(doc, root);
+        stripped = yyjson_mut_write(doc, 0, NULL);
+    }
+    yyjson_mut_doc_free(doc);
+    return stripped;
+}
+/* Lazy grammar routing leaves a bounded reasoning prefix unconstrained, then
+ * constrains the first complete tool/memory/final object. Normalize that prefix
+ * into the existing leading thought field so every downstream policy, event,
+ * validation and history path remains identical to inline thought handling. */
+static char *routed_action_text(const char *raw, bool required, forge_error *e) {
+    const char *action = NULL;
+    for (const char *candidate = strchr(raw, '{'); candidate;
+         candidate = strchr(candidate + 1, '{')) {
+        yyjson_doc *doc = yyjson_read(candidate, strlen(candidate), 0);
+        yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;
+        bool action_object = yyjson_is_obj(root) && !yyjson_obj_get(root, "thought") &&
+                             (yyjson_obj_get(root, "tool") || yyjson_obj_get(root, "memory") ||
+                              yyjson_obj_get(root, "final"));
+        yyjson_doc_free(doc);
+        if (action_object) {
+            action = candidate;
+            break;
+        }
+    }
+    if (!action) {
+        fg_error(e, FORGE_ERR_PARSE,
+                 "Routed generation did not end in one complete tool, memory, or final action");
+        return NULL;
+    }
+    const char *begin = raw, *end = action;
+    while (begin < end && isspace((unsigned char)*begin))
+        begin++;
+    while (end > begin && isspace((unsigned char)end[-1]))
+        end--;
+    size_t bytes = (size_t)(end - begin);
+    if (bytes > FG_THOUGHT_MAX_BYTES || !fg_utf8_valid(begin, bytes)) {
+        fg_error(e, bytes > FG_THOUGHT_MAX_BYTES ? FORGE_ERR_LIMIT : FORGE_ERR_PARSE,
+                 "Routed thought must be valid UTF-8 and at most %u bytes", FG_THOUGHT_MAX_BYTES);
+        return NULL;
+    }
+    if (required && !bytes) {
+        fg_error(e, FORGE_ERR_PARSE, "Routed thought is required before every action");
+        return NULL;
+    }
+    if (!bytes)
+        return fg_strdup(action);
+    char *prefix = malloc(bytes + 1);
+    if (!prefix) {
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot retain routed thought");
+        return NULL;
+    }
+    memcpy(prefix, begin, bytes);
+    prefix[bytes] = 0;
+    char *quoted = fg_json_string(prefix);
+    free(prefix);
+    if (!quoted) {
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot encode routed thought");
+        return NULL;
+    }
+    fg_buf normalized = {0};
+    fg_buf_puts(&normalized, "{\"thought\":");
+    fg_buf_puts(&normalized, quoted);
+    fg_buf_puts(&normalized, ",");
+    fg_buf_puts(&normalized, action + 1);
+    free(quoted);
+    char *result = fg_buf_take(&normalized);
+    if (!result)
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot normalize routed action");
+    return result;
 }
 static bool reject_stale(forge_agent *a, forge_context *ctx, uint64_t *latest_result,
                          uint64_t generation, forge_error *e) {
@@ -325,8 +414,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     }
     ctx = forge_context_create(a->config.limits.context_tokens, a->config.limits.output_reserve,
                                fg_model_count, a->config.model);
-    schema = fg_tool_schema();
-    grammar = fg_tool_grammar();
+    schema =
+        fg_tool_schema(a->config.thought, a->config.thought_required, a->config.thought_routed);
+    grammar =
+        fg_tool_grammar(a->config.thought, a->config.thought_required, a->config.thought_routed);
     summary = forge_repo_summary(repo, e);
     if (!ctx || !schema || !grammar || !summary) {
         status = fg_error(e, FORGE_ERR_MEMORY, "Agent initialization failed");
@@ -479,10 +570,11 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             cache_request.anchor_ends = &anchor;
             cache_request.anchor_count = anchor ? 1 : 0;
         }
-        status = fg_model_generate_with_cache(a->config.model, prompt, grammar, max_tokens,
-                                              stream_token, &stream, &response, &a->metrics,
-                                              a->config.cancelled, a->config.userdata, deadline,
-                                              a->config.model->cache ? &cache_request : NULL, e);
+        status = fg_model_generate_routed_with_cache(
+            a->config.model, prompt, grammar,
+            a->config.thought_routed ? FG_ACTION_TRIGGER_PATTERN : NULL, max_tokens, stream_token,
+            &stream, &response, &a->metrics, a->config.cancelled, a->config.userdata, deadline,
+            a->config.model->cache ? &cache_request : NULL, e);
         fg_buf_clear(&stream.pending);
         if (stream.failed)
             status = fg_error(e, FORGE_ERR_IO, "Token event could not be recorded");
@@ -520,6 +612,15 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             }
             continue;
         }
+        if (a->config.thought_routed) {
+            char *normalized = routed_action_text(response, a->config.thought_required, e);
+            free(response);
+            response = normalized;
+            if (!response) {
+                status = e && e->code ? e->code : FORGE_ERR_PARSE;
+                break;
+            }
+        }
         yyjson_alc json_allocator = {json_alloc, json_realloc, json_free, a->generation_arena};
         yyjson_read_err parse_error = {0};
         yyjson_doc *d =
@@ -534,7 +635,23 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         yyjson_val *o = d ? yyjson_doc_get_root(d) : NULL;
         const char *final = fg_json_str(o, "final"), *tool = fg_json_str(o, "tool");
         yyjson_val *remember = yyjson_obj_get(o, "memory");
-        if (final && yyjson_obj_size(o) == 1 &&
+        /* Every action may carry one optional leading free-text "thought". It
+         * is advisory only: never executed, and bounded so kept ACTION
+         * segments stay cheap to re-read. An invalid thought invalidates the
+         * whole action; a thought alone is not an action. Both switches are
+         * enforced here rather than left to the grammar, so an ablation holds
+         * for an unconstrained backend too: with the channel disabled a thought
+         * is refused, and with it required an action that omits one is refused.
+         * Routed generations already carry a normalized thought by this point. */
+        yyjson_val *thought = yyjson_obj_get(o, "thought");
+        size_t envelope = thought ? 1 : 0;
+        bool thought_valid =
+            !thought || (a->config.thought && yyjson_is_str(thought) &&
+                         yyjson_get_len(thought) == strlen(yyjson_get_str(thought)) &&
+                         yyjson_get_len(thought) <= FG_THOUGHT_MAX_BYTES);
+        if (a->config.thought_required && !thought)
+            thought_valid = false;
+        if (final && thought_valid && yyjson_obj_size(o) == 1 + envelope &&
             yyjson_get_len(yyjson_obj_get(o, "final")) == strlen(final)) {
             fg_repo_change final_changes = {0};
             status = fg_repo_monitor_poll(monitor, 0, true, &final_changes, e);
@@ -628,8 +745,11 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                     }
                     diagnostic_hash = fg_diagnostic_hash(verification.summary);
                     forge_context_pin(ctx, latest_result, false);
-                    uint64_t action = forge_context_add(ctx, FORGE_SEG_ACTION, response, 20, false,
-                                                        0, generation);
+                    char *action_text = action_history_text(a->config.thought_in_history, o, e);
+                    uint64_t action = forge_context_add(ctx, FORGE_SEG_ACTION,
+                                                        action_text ? action_text : response, 20,
+                                                        false, 0, generation);
+                    free(action_text);
                     fg_buf feedback = {0};
                     fg_buf_puts(&feedback,
                                 "FINAL_REJECTED: the host did not accept the proposed final "
@@ -690,7 +810,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             free(response);
             goto finish;
         }
-        if (remember && yyjson_obj_size(o) == 1) {
+        if (remember && thought_valid && yyjson_obj_size(o) == 1 + envelope) {
             char *memory_json = yyjson_val_write(remember, 0, NULL);
             status = memory_json ? forge_working_state_update_json(a->working_state, memory_json, e)
                                  : fg_error(e, FORGE_ERR_MEMORY, "Cannot encode memory update");
@@ -704,7 +824,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             continue;
         }
         yyjson_val *args = yyjson_obj_get(o, "args");
-        if (!tool || yyjson_obj_size(o) != 2 || !fg_tool_validate(tool, args, e)) {
+        if (!tool || !thought_valid || yyjson_obj_size(o) != 2 + envelope ||
+            !fg_tool_validate(tool, args, e)) {
             yyjson_doc_free(d);
             free(response);
             status = fg_error(e, FORGE_ERR_PARSE,
@@ -1314,8 +1435,11 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         }
         /* Always retain the latest result and its parent action. */
         forge_context_pin(ctx, latest_result, false);
-        uint64_t action = forge_context_add(ctx, FORGE_SEG_ACTION, response, 10, false, 0,
-                                            forge_repo_generation(repo));
+        char *action_text = action_history_text(a->config.thought_in_history, o, e);
+        uint64_t action =
+            forge_context_add(ctx, FORGE_SEG_ACTION, action_text ? action_text : response, 10,
+                              false, 0, forge_repo_generation(repo));
+        free(action_text);
         latest_result = forge_context_add(ctx, FORGE_SEG_RESULT, visible, changed ? 70 : 40, true,
                                           action, forge_repo_generation(repo));
         if (!action || !latest_result) {

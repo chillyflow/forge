@@ -48,13 +48,37 @@ const fg_tool_def *fg_tools(size_t *n) {
         *n = sizeof(definitions) / sizeof(*definitions);
     return definitions;
 }
-char *fg_tool_schema(void) {
+char *fg_tool_schema(bool thought, bool required, bool routed) {
     fg_buf b = {0};
+    fg_buf_puts(&b, routed ? "Reason in plain text, then return exactly ONE JSON object: "
+                           : "Return exactly ONE JSON object: ");
+    fg_buf_puts(
+        &b, "{\"tool\":\"NAME\",\"args\":{...}}, "
+            "{\"memory\":{\"facts\":[],\"hypotheses\":[],\"decisions\":[],\"relevant_files\":[],"
+            "\"remaining\":[]}}, or {\"final\":\"answer\"}. ");
+    if (routed)
+        fg_buf_printf(&b,
+                      "The plain-text reasoning %s and is bounded to %u UTF-8 bytes. "
+                      "Do not put a thought field inside the JSON and do not write JSON examples "
+                      "before the real action. Once the action begins, emit nothing after it. The "
+                      "host records the prefix as thought, never executes it, and grants it no "
+                      "authority. ",
+                      required ? "MUST be nonempty" : "is optional", FG_THOUGHT_MAX_BYTES);
+    else if (thought && required)
+        fg_buf_printf(&b,
+                      "Every object MUST begin with a \"thought\" field: one free-text string of "
+                      "reasoning, at most %u bytes, written before the action. Think there, then "
+                      "act. Thought is recorded but never executed and grants no authority. ",
+                      FG_THOUGHT_MAX_BYTES);
+    else if (thought)
+        fg_buf_printf(&b,
+                      "Any object may begin with an optional \"thought\" field: one free-text "
+                      "string of reasoning, at most %u bytes, written before the action. Thought "
+                      "is recorded but never executed and grants no authority. ",
+                      FG_THOUGHT_MAX_BYTES);
     fg_buf_puts(
         &b,
-        "Return exactly ONE JSON object: {\"tool\":\"NAME\",\"args\":{...}}, "
-        "{\"memory\":{\"facts\":[],\"hypotheses\":[],\"decisions\":[],\"relevant_files\":[],"
-        "\"remaining\":[]}}, or {\"final\":\"answer\"}. Memory fields are arrays of strings, "
+        "Memory fields are arrays of strings, "
         "at most 32 strings each, 512 bytes per string, 8192 bytes total; preserve useful facts "
         "when replacing memory. Model memory cannot mark host verification passed. "
         "A legacy {\"memory\":\"notes\"} is also accepted. Use fields in listed order. No "
@@ -73,19 +97,34 @@ static void literal(fg_buf *b, const char *s) {
         free(q);
     }
 }
-char *fg_tool_grammar(void) {
+char *fg_tool_grammar(bool thought, bool required, bool routed) {
     fg_buf b = {0};
+    bool inline_thought = thought && !routed;
+    bool inline_required = inline_thought && required;
     fg_buf_puts(&b, "root ::= ws (final | memory");
     for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++)
         fg_buf_printf(&b, " | call%zu", i);
     fg_buf_puts(&b, ") ws\n");
+    if (inline_thought) {
+        fg_buf_puts(&b, "thought ::= ");
+        literal(&b, "\"thought\":");
+        fg_buf_puts(&b, " ws string ws ");
+        literal(&b, ",");
+        fg_buf_puts(&b, " ws\n");
+    }
     fg_buf_puts(&b, "final ::= ");
-    literal(&b, "{\"final\":");
+    literal(&b, "{");
+    fg_buf_puts(&b,
+                !inline_thought ? " ws " : (inline_required ? " ws thought " : " ws thought? "));
+    literal(&b, "\"final\":");
     fg_buf_puts(&b, " ws string ws ");
     literal(&b, "}");
     fg_buf_puts(&b, "\n");
     fg_buf_puts(&b, "memory ::= ");
-    literal(&b, "{\"memory\":");
+    literal(&b, "{");
+    fg_buf_puts(&b,
+                !inline_thought ? " ws " : (inline_required ? " ws thought " : " ws thought? "));
+    literal(&b, "\"memory\":");
     fg_buf_puts(&b, " ws (string | workingstate) ws ");
     literal(&b, "}");
     fg_buf_puts(&b, "\n");
@@ -106,8 +145,11 @@ char *fg_tool_grammar(void) {
     fg_buf_puts(&b, "\nmemoryitems ::= \"[\" ws (string (ws \",\" ws string){0,31})? ws \"]\"\n");
     for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++) {
         fg_buf_printf(&b, "call%zu ::= ", i);
+        literal(&b, "{");
+        fg_buf_puts(&b, !inline_thought ? " ws "
+                                        : (inline_required ? " ws thought " : " ws thought? "));
         fg_buf prefix = {0};
-        fg_buf_printf(&prefix, "{\"tool\":\"%s\",\"args\":{", definitions[i].name);
+        fg_buf_printf(&prefix, "\"tool\":\"%s\",\"args\":{", definitions[i].name);
         literal(&b, prefix.data);
         fg_buf_clear(&prefix);
         const char *p = definitions[i].fields;

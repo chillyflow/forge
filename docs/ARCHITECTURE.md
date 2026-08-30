@@ -112,8 +112,33 @@ languages have literal search, not AST symbol navigation.
 ## Tools and execution
 
 One declarative registry defines field types, capability, and prompt description.
-The GBNF action grammar is generated from it. JSON is parsed by yyjson and all
-required field types/cardinality are validated before policy or execution.
+The GBNF action grammar is generated from it. Every action envelope accepts an
+optional leading `thought` string, bounded at 2048 bytes: a free-text reasoning
+channel written before the constrained action. Thought is never executed and
+grants no authority. It is retained verbatim in session evidence — the raw
+response is emitted to the session log before any normalization or stripping —
+but by default it is dropped from the stored ACTION segment and so never
+re-enters a later prompt. Host-enforced switches control the channel:
+`--no-thought` removes the field from the generated grammar and schema and
+rejects any action still carrying one (the §32 ablation control, valid for
+unconstrained backends too), `--thought-history` re-injects the thought into
+later prompts, `--thought-decode-only` states the default explicitly, and
+`--thought-required` rejects an empty or absent thought. Both are enforced by the
+host after parsing, not only by the grammar, so they hold for an unconstrained
+backend as well. Retention defaults off
+on measured grounds: with reasoning actually elicited it cost three of ten
+benchmark tasks and 2.3x the prompt tokens, and doubling the turn budget did not
+recover them.
+
+`--thought-routed` uses llama.cpp's lazy grammar sampler instead of putting the
+thought inside the action object. Output is unconstrained until a JSON object
+starting with `tool`, `memory`, or `final` triggers the generated action grammar;
+the host then bounds and validates the preceding UTF-8 text and normalizes it
+into the ordinary thought field. Required routed thought is a validation gate,
+not a decoder that can make a model produce a prefix. This is one action-boundary
+route, not the complete thinking/tool-selection/arguments/patch/final state
+machine required by §32. JSON is parsed by yyjson and all required field
+types/cardinality are validated before policy or execution.
 
 `apply_patch` requires one unique exact match, stages output in a sibling file,
 checks the old content again, and atomically replaces the file. It is not a

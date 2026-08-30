@@ -26,6 +26,7 @@ typedef struct {
     forge_checkpoint_cache_options checkpoint_cache;
     bool checkpoint_cache_enabled; /* Opt-in; physical cache support is checked at model load. */
     bool semantic_output, compact_context;
+    bool thought, thought_required, thought_in_history, thought_routed;
     forge_shell_network shell_network;
     /* Private storage. Do not free, assign, or copy these pointers. The public
      * model strings may be replaced by borrowed CLI strings; destroy only frees

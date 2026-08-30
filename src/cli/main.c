@@ -63,6 +63,11 @@ static void usage(void) {
          "  --checkpoint-cache-min-tokens N   minimum eligible prefix length\n"
          "  --checkpoint-cache-captures N     captures per prompt (1..4)\n"
          "  --grammar-first      disable greedy grammar fast path (ablation)\n"
+         "  --no-thought         remove the reasoning channel from the action grammar\n"
+         "  --thought-decode-only  keep thought out of retained action history\n"
+         "  --thought-history    retain thought in later prompts (default: off)\n"
+         "  --thought-required   require a leading thought on every action (ablation)\n"
+         "  --thought-routed     reason freely, then lazily constrain the action JSON\n"
          "  --no-auto-validation skip final Go validation (explicit ablation)\n"
          "  --script FILE        explicit simulated test backend (not inference)\n"
          "  --depth N            symbol expansion or retrieval graph hops, 0..3\n"
@@ -99,6 +104,11 @@ static int option_arity(const char *option) {
                                         "--grammar-first",
                                         "--no-semantic",
                                         "--no-compaction",
+                                        "--no-thought",
+                                        "--thought-decode-only",
+                                        "--thought-history",
+                                        "--thought-required",
+                                        "--thought-routed",
                                         "--no-auto-validation",
                                         "--summary-full-source",
                                         "--no-config"};
@@ -589,6 +599,10 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     ac.limits = config->limits;
     ac.semantic_output = config->semantic_output;
     ac.compact_context = config->compact_context;
+    ac.thought = config->thought;
+    ac.thought_in_history = config->thought_in_history;
+    ac.thought_required = config->thought_required;
+    ac.thought_routed = config->thought_routed;
     ac.cancelled = cancelled;
     const char *command = NULL, *argument = NULL;
     bool json = false;
@@ -661,6 +675,26 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         }
         if (!strcmp(a, "--no-compaction")) {
             ac.compact_context = false;
+            continue;
+        }
+        if (!strcmp(a, "--no-thought")) {
+            ac.thought = false;
+            continue;
+        }
+        if (!strcmp(a, "--thought-decode-only")) {
+            ac.thought_in_history = false;
+            continue;
+        }
+        if (!strcmp(a, "--thought-history")) {
+            ac.thought_in_history = true;
+            continue;
+        }
+        if (!strcmp(a, "--thought-required")) {
+            ac.thought_required = true;
+            continue;
+        }
+        if (!strcmp(a, "--thought-routed")) {
+            ac.thought_routed = true;
             continue;
         }
         if (i + 1 >= argc) {
@@ -768,6 +802,18 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     config->limits = ac.limits;
     config->semantic_output = ac.semantic_output;
     config->compact_context = ac.compact_context;
+    config->thought = ac.thought;
+    config->thought_in_history = ac.thought_in_history;
+    config->thought_required = ac.thought_required;
+    config->thought_routed = ac.thought_routed;
+    /* An ablation must not run under contradictory settings and silently
+     * report one arm's numbers under the other arm's name. */
+    if ((ac.thought_required || ac.thought_routed) && !ac.thought) {
+        fg_error(&error, FORGE_ERR_ARGUMENT,
+                 "--thought-required/--thought-routed contradicts --no-thought: the channel "
+                 "cannot be requested and absent");
+        return failed(&error);
+    }
     if (forge_config_validate(config, &error) != FORGE_OK ||
         forge_config_check_exec(config, ac.allow_exec, &error) != FORGE_OK)
         return failed(&error);

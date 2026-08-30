@@ -32,6 +32,14 @@ void forge_config_init(forge_config *config) {
     config->limits = forge_default_limits();
     config->checkpoint_cache = forge_default_checkpoint_cache_options();
     config->semantic_output = true;
+    config->thought = true;
+    config->thought_required = false;
+    /* Measured: retaining an elicited thought in the stored ACTION segment
+     * costs accuracy and prompt tokens with no evidence benefit, because the
+     * raw response is already persisted to the session log before the strip.
+     * See benchmark/results/2026-08-30-routed-sweep. --thought-history opts in. */
+    config->thought_in_history = false;
+    config->thought_routed = false;
     config->compact_context = true;
 }
 
@@ -569,6 +577,9 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
         return fg_error(e, FORGE_ERR_ARGUMENT, "Configuration is required");
     const forge_model_config *model = &config->model;
     const forge_limits *limits = &config->limits;
+    if (!config->thought && (config->thought_required || config->thought_routed))
+        return fg_error(e, FORGE_ERR_ARGUMENT,
+                        "Thought routing or required thought needs the thought channel enabled");
     if (model->context_tokens < 128 || model->context_tokens > 1048576 ||
         model->context_tokens != limits->context_tokens)
         return fg_error(e, FORGE_ERR_ARGUMENT,

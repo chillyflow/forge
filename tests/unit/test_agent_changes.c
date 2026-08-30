@@ -682,6 +682,90 @@ static void run_reanchor(const char *first_replacement, const char *second_repla
     (void)expected;
     destroy_fixture(&f);
 }
+/* Every action envelope accepts one optional bounded leading "thought"
+ * string: free-text reasoning the host records verbatim and never executes. */
+static size_t thought_tool_calls;
+static void thought_events(const forge_event *event, void *user) {
+    (void)user;
+    yyjson_doc *doc = yyjson_read(event->json, strlen(event->json), 0);
+    assert(doc);
+    yyjson_val *data = yyjson_obj_get(yyjson_doc_get_root(doc), "data");
+    if (!strcmp(event->type, "tool_call") && fg_json_str(data, "thought"))
+        thought_tool_calls++;
+    yyjson_doc_free(doc);
+}
+static void run_thought(void) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    assert_file(f.source, "original data\n");
+    const char *script_format =
+        "[{\"thought\":\"The note file needs the updated value.\",\"tool\":\"apply_patch\","
+        "\"args\":{\"path\":%s,\"old_text\":\"original data\\n\",\"new_text\":\"updated "
+        "data\\n\"}},"
+        "{\"thought\":\"Record what changed.\",\"memory\":{\"facts\":[\"patched the note\"],"
+        "\"hypotheses\":[],\"decisions\":[],\"relevant_files\":[],\"remaining\":[]}},"
+        "{\"thought\":\"The change is in place.\",\"final\":\"Patch applied.\"}]";
+    char *path_json = fg_json_string(f.relative);
+    assert(path_json);
+    char script[2048];
+    int written = snprintf(script, sizeof(script), script_format, path_json);
+    assert(written > 0 && (size_t)written < sizeof(script));
+    free(path_json);
+    assert(fg_write_file(f.script, script, strlen(script), NULL));
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = 4;
+    ac.limits.wall_timeout_ms = 15000;
+    ac.allow_write = true;
+    ac.thought = true;
+    ac.thought_in_history = true;
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    thought_tool_calls = 0;
+    forge_status status = forge_agent_run(f.agent, "Update the note.", thought_events, &f, &error);
+    assert(status == FORGE_OK);
+    assert(forge_agent_metrics(f.agent)->files_modified == 1);
+    assert(thought_tool_calls == 1);
+    assert_file(f.source, "updated data\n");
+    char *state = forge_agent_working_state(f.agent, &error);
+    assert(state && strstr(state, "patched the note"));
+    free(state);
+    destroy_fixture(&f);
+}
+/* An invalid thought (oversized, wrong type, or thought without an action)
+ * invalidates the whole action instead of degrading into a guess. */
+static void run_thought_rejected(const char *script) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    assert(fg_write_file(f.script, script, strlen(script), NULL));
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = 3;
+    ac.limits.wall_timeout_ms = 15000;
+    ac.allow_write = true;
+    ac.thought = true;
+    ac.thought_in_history = true;
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    forge_status status = forge_agent_run(f.agent, "Update the note.", thought_events, &f, &error);
+    assert(status == FORGE_ERR_PARSE);
+    assert_file(f.source, "original data\n");
+    destroy_fixture(&f);
+}
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -702,6 +786,21 @@ int main(void) {
     /* A patch whose old_text still matches must not be rewritten at all: the
      * normal path applies it, and the file ends in the corrected text. */
     run_reanchor("value\n", "value\n", "value\n", true);
+    /* Reasoning channel: a bounded leading thought rides along on tool,
+     * memory, and final actions; an invalid one voids the action. */
+    run_thought();
+    run_thought_rejected("[{\"thought\":7,\"final\":\"done\"}]");
+    run_thought_rejected("[{\"thought\":\"orphan reasoning\"}]");
+    {
+        fg_buf big = {0};
+        fg_buf_puts(&big, "[{\"thought\":\"");
+        for (size_t i = 0; i < FG_THOUGHT_MAX_BYTES + 1; i++)
+            fg_buf_puts(&big, "a");
+        fg_buf_puts(&big, "\",\"final\":\"done\"}]");
+        assert(!big.failed);
+        run_thought_rejected(big.data);
+        fg_buf_clear(&big);
+    }
     puts("Agent known-change and edit-evidence tests passed (no watch delivery)");
     return 0;
 }

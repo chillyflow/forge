@@ -268,8 +268,46 @@ int main(void) {
     d = yyjson_read(j, strlen(j), 0);
     assert(!fg_tool_validate("read_file", yyjson_doc_get_root(d), &e));
     yyjson_doc_free(d);
-    s = fg_tool_grammar();
+    s = fg_tool_grammar(true, false, false);
     assert(s && strstr(s, "call0") && strstr(s, "root ::="));
+    assert(strstr(s, "thought ::=") && strstr(s, " ws thought? "));
+    free(s);
+    s = fg_tool_schema(true, false, false);
+    assert(s && strstr(s, "\"thought\"") && strstr(s, "2048") && strstr(s, "may begin"));
+    free(s);
+    /* The §32 ablation control removes the reasoning channel from generation
+     * without touching the constrained action: every call rule survives. */
+    s = fg_tool_grammar(false, false, false);
+    assert(s && strstr(s, "call0") && strstr(s, "root ::="));
+    assert(!strstr(s, "thought"));
+    free(s);
+    s = fg_tool_schema(false, false, false);
+    assert(s && !strstr(s, "thought") && strstr(s, "read_file"));
+    free(s);
+    /* Required mode is the measurable "on" arm: models do not reliably opt
+     * into an optional field, so the ablation needs the channel mandatory. */
+    s = fg_tool_grammar(true, true, false);
+    assert(s && strstr(s, "thought ::=") && strstr(s, " ws thought ") &&
+           !strstr(s, " ws thought? "));
+    free(s);
+    s = fg_tool_schema(true, true, false);
+    assert(s && strstr(s, "MUST begin") && !strstr(s, "may begin"));
+    free(s);
+    /* Requiring the field cannot resurrect a disabled channel. */
+    s = fg_tool_grammar(false, true, false);
+    assert(s && !strstr(s, "thought"));
+    free(s);
+    /* Routed mode moves thought before the JSON object and therefore keeps the
+     * action grammar free of an inline thought field. */
+    s = fg_tool_grammar(true, false, true);
+    assert(s && strstr(s, "call0") && !strstr(s, "thought"));
+    free(s);
+    s = fg_tool_schema(true, false, true);
+    assert(s && strstr(s, "Reason in plain text") && strstr(s, "is optional") &&
+           strstr(s, "Do not put a thought field"));
+    free(s);
+    s = fg_tool_schema(true, true, true);
+    assert(s && strstr(s, "MUST be nonempty"));
     free(s);
     const char *raw =
         "{\"Action\":\"pass\",\"Test\":\"TestOK\"}\n{\"Action\":\"fail\",\"Package\":\"example/"
