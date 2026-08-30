@@ -357,6 +357,20 @@ class ForgeTests(unittest.TestCase):
         self.assertTrue(prompts)
         self.assertFalse(any(secret in prompt for prompt in prompts))
 
+        # The llama backend force-decodes a "Thought: " cue as scaffold. The
+        # host strips it: it never enters the recorded thought and never
+        # satisfies --thought-required on its own.
+        cued = ['Thought: ' + secret + '\n' + json.dumps(
+                    {'tool': 'read_file', 'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+                json.dumps({'final': 'Done.'})]
+        _, cued_events, _ = self.run_script(cued, '--no-auto-validation', '--thought-routed')
+        cued_call = next(e['data'] for e in cued_events if e['type'] == 'tool_call')
+        self.assertEqual(cued_call['thought'], secret)
+        cue_only = ['Thought: \n' + json.dumps({'final': 'No real reasoning.'})]
+        result, _, _ = self.run_script(cue_only, '--no-auto-validation', '--thought-routed',
+                                       '--thought-required', success=False)
+        self.assertIn('required before every action', result.stderr)
+
         # Required routed thought is enforced by the host even for the scripted
         # backend, which ignores grammar constraints.
         missing = [json.dumps({'final': 'No reasoning prefix.'})]

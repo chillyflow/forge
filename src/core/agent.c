@@ -201,6 +201,13 @@ static char *routed_action_text(const char *raw, bool required, forge_error *e) 
         return NULL;
     }
     const char *begin = raw, *end = action;
+    /* The llama backend force-decodes FG_THOUGHT_CUE as scaffold; only text
+     * beyond it is the model's reasoning, so the cue never satisfies
+     * thought_required and never enters the recorded thought. Backends
+     * without the cue are unaffected. */
+    if (end - begin >= (ptrdiff_t)strlen(FG_THOUGHT_CUE) &&
+        !strncmp(begin, FG_THOUGHT_CUE, strlen(FG_THOUGHT_CUE)))
+        begin += strlen(FG_THOUGHT_CUE);
     while (begin < end && isspace((unsigned char)*begin))
         begin++;
     while (end > begin && isspace((unsigned char)end[-1]))

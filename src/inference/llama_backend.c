@@ -417,7 +417,45 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
     }
     uint64_t begin = fg_now_ms();
     bool ended = false;
-    for (size_t i = 0; i < max_tokens; i++) {
+    size_t sample_budget = max_tokens;
+    /* Force-decode the reasoning cue so greedy decoding continues a prose
+     * sentence instead of echoing the prompt (the measured failure of a bare
+     * '{' ban). The cue streams and enters the raw response like sampled
+     * text, and every sampler accepts it so the lazy trigger buffer stays
+     * consistent with the output. */
+    if (grammar_trigger && suppress) {
+        llama_token cue_tokens[16];
+        int32_t cue_count =
+            llama_tokenize(s->vocab, FG_THOUGHT_CUE, (int32_t)strlen(FG_THOUGHT_CUE), cue_tokens,
+                           (int32_t)(sizeof(cue_tokens) / sizeof(*cue_tokens)), false, false);
+        if (cue_count > 0 && (size_t)cue_count < max_tokens) {
+            for (int32_t c = 0; c < cue_count && status == FORGE_OK; c++) {
+                llama_token token = cue_tokens[c];
+                char small[128];
+                int32_t length =
+                    llama_token_to_piece(s->vocab, token, small, (int32_t)sizeof(small), 0, false);
+                if (length < 0 || !fg_buf_add(&out, small, (size_t)FG_MAX(length, 0))) {
+                    status = fg_error(e, FORGE_ERR_MEMORY, "Token output failed");
+                    break;
+                }
+                llama_sampler_accept(sampler, token);
+                stats->generated_tokens++;
+                if (cb && !cb(small, (size_t)length, u)) {
+                    status = fg_error(e, FORGE_ERR_CANCELLED, "Token callback cancelled");
+                    break;
+                }
+                status = decode_batch(s, &token, 1, s->count, e);
+                if (status == FORGE_OK)
+                    s->tokens[s->count++] = token;
+            }
+            sample_budget = max_tokens - (size_t)cue_count;
+        }
+        if (status != FORGE_OK) {
+            stats->decode_ms += (double)(fg_now_ms() - begin);
+            goto finish;
+        }
+    }
+    for (size_t i = 0; i < sample_budget; i++) {
         /* The action cannot begin while '{' is banned, so when the budget ends
          * the brace ban is still at slot 1 behind the end ban. */
         if (suppress && i == suppress) {

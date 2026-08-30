@@ -23,6 +23,10 @@ IDENTITY = ('forge_binary_sha256', 'model_sha256', 'fixture_preparation',
 
 def classify(data):
     stripped = data.lstrip()
+    if stripped.startswith('Thought:'):
+        # Host-injected routed cue (FG_THOUGHT_CUE): scaffold, not model
+        # reasoning. Only text beyond it counts as a routed prefix.
+        stripped = stripped[len('Thought:'):].lstrip()
     if not stripped.startswith('{'):
         return 'routed_prefix'
     try:

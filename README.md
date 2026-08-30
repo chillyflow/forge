@@ -152,11 +152,13 @@ already persisted before the strip. See
 text before its JSON action, and llama.cpp's lazy grammar sampler begins
 constraining output when the actual `tool`, `memory`, or `final` object starts.
 Because a lazy trigger alone elicits nothing (the model can open the action
-object on its first token), routed decoding withholds action-opening tokens for
-a minimum prefix budget — 32 tokens, or a quarter of the turn's token budget if
-that is smaller — before the trigger may arm, and withholds end-of-generation
-tokens until the action actually begins, so a generation cannot end actionless
-after reasoning. The
+object on its first token), routed decoding force-decodes a `Thought: ` cue
+first — steering the continuation into prose rather than prompt echo — then
+withholds action-opening tokens for a minimum prefix budget (32 tokens, or a
+quarter of the turn's token budget if smaller) before the trigger may arm, and
+withholds end-of-generation tokens until the action actually begins, so a
+generation cannot end actionless after reasoning. The cue is host scaffold:
+it is stripped before the thought is bounded, validated, or recorded. The
 host normalizes the prefix into the same validated thought field used by the
 rest of the agent. This removes JSON-string constraints from the reasoning
 prefix; it still does not implement the full thinking/tool/arguments/patch/final

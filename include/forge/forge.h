@@ -102,10 +102,11 @@ typedef struct {
      * the generation that produced it. `thought_routed` changes the wire format
      * field to bounded plain text followed by a lazily constrained action object;
      * the host normalizes that prefix into the same thought field before validation.
-     * The llama backend also withholds action-opening tokens for a minimum prefix
-     * budget, and end-of-generation tokens until the action begins, so a routed
-     * run has room to reason and cannot end actionless before the
-     * action grammar arms. `thought_required` rejects an empty or absent
+     * The llama backend also force-decodes a "Thought: " cue (host scaffold,
+     * stripped before validation), withholds action-opening tokens for a minimum
+     * prefix budget, and withholds end-of-generation tokens until the action
+     * begins, so a routed run reasons before acting and cannot end actionless
+     * before the action grammar arms. `thought_required` rejects an empty or absent
      * thought; a whitespace-only routed prefix still fails it. Setting either
      * while `thought` is false is rejected: forge_agent_create fails with
      * FORGE_ERR_ARGUMENT. */

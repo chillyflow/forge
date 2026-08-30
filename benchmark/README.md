@@ -87,13 +87,14 @@ Thought-channel arms are available as `no-thought`, `thought-optional-decode-onl
 `thought-required`, and `thought-required-decode-only`. Prefix each thought arm
 with `thought-routed` in the variant name to use a plain-text reasoning prefix
 and lazy action-grammar trigger; for example, `thought-routed-decode-only` or
-`thought-routed-required-decode-only`. Routed decoding enforces a minimum
-prefix budget (32 tokens, or a quarter of the turn budget if smaller) by
-excluding action-opening tokens, and keeps end-of-generation tokens excluded
-until the action begins, so every routed action gets decode-time room for a
-plain-text prefix and cannot end a generation actionless. The budget guarantees
-sampled tokens, not visible text — a model can still spend it on whitespace, and
-required routed thought rejects exactly that case. During the suppressed and
+`thought-routed-required-decode-only`. Routed decoding force-decodes a `Thought: ` cue (host scaffold, stripped
+before validation and excluded from the thought census), then enforces a
+minimum prefix budget (32 tokens, or a quarter of the turn budget if smaller)
+by excluding action-opening tokens, and keeps end-of-generation tokens
+excluded until the action begins, so every routed action gets decode-time room
+for a plain-text prefix and cannot end a generation actionless. The budget
+guarantees sampled tokens, not visible text — a model can still spend it on
+whitespace, and required routed thought rejects exactly that case. During the suppressed and
 pre-action phases the grammar greedy fast path is disabled, so routed runs
 record those tokens under `grammar_fallback_tokens`; do not compare that counter
 across routed and non-routed arms. Results recorded before this budget existed
