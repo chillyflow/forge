@@ -12,7 +12,10 @@
 static const fg_tool_def definitions[] = {
     {"apply_patch",
      "Replace one exact unique text span; empty old_text creates a new file. Parent directory must "
-     "exist.",
+     "exist. old_text must match the CURRENT file content byte for byte. Both strings are JSON: "
+     "write each line break as \\n and each tab as \\t; a replacement of several statements is one "
+     "string containing \\n, not a single line. In Go, statements cannot share a line without a "
+     "semicolon, so write each statement on its own line with \\n.",
      "path:string old_text:string new_text:string", NULL, FORGE_CAP_WRITE},
     {"expand_output",
      "Read up to 8192 bytes of recorded UTF-8 tool text by id. A byte offset inside a character "
@@ -318,10 +321,29 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
     }
     char *match = *old ? strstr(text, old) : text;
     if (!match || (*old && strstr(match + 1, old))) {
+        /* Telling the caller to re-read the file is not a usable recovery: once
+         * the repository and the last diagnostic are unchanged, a repeated read
+         * is rejected as a repeated action, so the agent is instructed to do the
+         * one thing it is then blocked from doing. Return the current text so
+         * the next old_text can be copied from it instead. */
+        fg_buf report = {0};
+        fg_buf_printf(&report,
+                      "TOOL_ERROR [conflict]: old_text must match exactly once in %s. It does "
+                      "not match the current content; the file may have changed since you last "
+                      "read it. Current content follows. Copy the text you intend to replace "
+                      "from it verbatim, including only bytes that are present.\n",
+                      path);
+        size_t show = len > 8192 ? 8192 : len;
+        fg_buf_add(&report, text, show);
+        if (len > show)
+            fg_buf_puts(&report, "\n[truncated]");
+        fg_error(e, FORGE_ERR_CONFLICT, "old_text must match exactly once in %s", path);
         free(text);
-        fg_error(e, FORGE_ERR_CONFLICT,
-                 "old_text must match exactly once; read current source before retrying");
-        return NULL;
+        if (report.failed) {
+            fg_buf_clear(&report);
+            return NULL;
+        }
+        return fg_buf_take(&report);
     }
     fg_buf out = {0};
     size_t prefix = (size_t)(match - text);

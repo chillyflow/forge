@@ -151,7 +151,15 @@ static bool bool_field(yyjson_val *object, const char *key) {
 static void assert_file(const char *path, const char *expected) {
     size_t length = 0;
     char *text = fg_read_file(path, FG_MAX_JSON, &length, NULL);
+    if (!text || length != strlen(expected) || memcmp(text, expected, length))
+        fprintf(stderr, "assert_file: path=%s expected=[%s] actual=[%.*s]\n", path, expected,
+                text ? (int)length : -1, text ? text : "(missing)");
     assert(text && length == strlen(expected) && !memcmp(text, expected, length));
+    free(text);
+}
+static void assert_contains(const char *path, const char *needle) {
+    char *text = fg_read_file(path, FG_MAX_JSON, NULL, NULL);
+    assert(text && strstr(text, needle));
     free(text);
 }
 static void edit_artifact(fixture *f, const char *name, char path[FG_PATH_MAX]) {
@@ -596,6 +604,15 @@ static void run_edit_error(edit_case mode) {
         edit_artifact(&f, "tool/000002.edit.json", path);
         assert(!fg_read_file(path, 1024, NULL, NULL));
     }
+    if (mode == EDIT_CONFLICT) {
+        /* A mismatch must return the current text, not merely advise re-reading:
+         * once the repository and diagnostic state are unchanged a repeated read
+         * is rejected as a repeated action, so the model cannot re-read to
+         * recover. The conflict message is the only path back to valid input. */
+        edit_artifact(&f, "tool/000002.raw", path);
+        assert_contains(path, "TOOL_ERROR [conflict]");
+        assert_contains(path, "original data");
+    }
     char *state = forge_agent_working_state(f.agent, &error);
     yyjson_doc *doc = state ? yyjson_read(state, strlen(state), 0) : NULL;
     assert(doc);
@@ -607,6 +624,62 @@ static void run_edit_error(edit_case mode) {
     free(state);
     if (mode == EDIT_DENIED)
         check_edit_budget(&f);
+    destroy_fixture(&f);
+}
+/* A repair that repeats a stale old_text must be re-anchored to the text the
+ * previous patch actually wrote, and must never be re-anchored onto an
+ * occurrence that is not a whole region of that text. */
+static void reanchor_outputs(const forge_event *event, void *user) {
+    (void)user;
+    if (event && event->type && event->json && !strcmp(event->type, "tool_result"))
+        fprintf(stderr, "reanchor tool_result %s\n", event->json);
+}
+static void run_reanchor(const char *first_replacement, const char *second_replacement,
+                         const char *expected, bool expect_applied) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    assert_file(f.source, "original data\n");
+    /* Patch A lands; patch B repeats A's old_text with corrected new_text. */
+    const char *script_format =
+        "[{\"tool\":\"apply_patch\",\"args\":{\"path\":%s,\"old_text\":\"original data\\n\","
+        "\"new_text\":%s}},"
+        "{\"tool\":\"apply_patch\",\"args\":{\"path\":%s,\"old_text\":\"original data\\n\","
+        "\"new_text\":%s}},{\"final\":\"Patch applied.\"}]";
+    char *path_json = fg_json_string(f.relative);
+    char *first_json = fg_json_string(first_replacement);
+    char *second_json = fg_json_string(second_replacement);
+    assert(path_json && first_json && second_json);
+    char script[4096];
+    int written = snprintf(script, sizeof(script), script_format, path_json, first_json, path_json,
+                           second_json);
+    assert(written > 0 && (size_t)written < sizeof(script));
+    free(path_json);
+    free(first_json);
+    free(second_json);
+    assert(fg_write_file(f.script, script, strlen(script), NULL));
+
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = 4;
+    ac.limits.wall_timeout_ms = 15000;
+    ac.allow_write = true;
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    forge_status status =
+        forge_agent_run(f.agent, "Repair the previous edit.", reanchor_outputs, &f, &error);
+    assert(status == FORGE_OK);
+    assert(forge_agent_metrics(f.agent)->files_modified == 1);
+    /* The file ends in the corrected text when the repair was re-anchored, and
+     * in the first replacement when the rewrite was correctly refused. */
+    assert_file(f.source, expect_applied ? expected : first_replacement);
+    (void)expected;
     destroy_fixture(&f);
 }
 int main(void) {
@@ -623,6 +696,12 @@ int main(void) {
     run_case(true, false, true, true, true);
     for (edit_case mode = EDIT_CANCEL; mode <= EDIT_CONFLICT; mode++)
         run_edit_error(mode);
+    /* Repair re-anchoring: a repeated stale old_text is rewritten against the
+     * text the previous patch wrote, so the corrected edit lands. */
+    run_reanchor("return value\n", "return value2\n", "return value2\n", true);
+    /* A patch whose old_text still matches must not be rewritten at all: the
+     * normal path applies it, and the file ends in the corrected text. */
+    run_reanchor("value\n", "value\n", "value\n", true);
     puts("Agent known-change and edit-evidence tests passed (no watch delivery)");
     return 0;
 }
