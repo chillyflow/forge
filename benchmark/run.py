@@ -55,11 +55,12 @@ def main():
     parser.add_argument('--forge', type=Path, required=True)
     parser.add_argument('--model', type=Path, required=True)
     parser.add_argument('--tasks', nargs='*', default=[])
-    parser.add_argument('--variants', nargs='+', choices=['optimized', 'no-kv', 'no-semantic', 'no-compaction', 'grammar-first'], default=['optimized'])
+    parser.add_argument('--variants', nargs='+', choices=['optimized', 'no-kv', 'no-semantic', 'no-compaction', 'grammar-first', 'no-thought', 'thought-optional-decode-only', 'thought-required', 'thought-required-decode-only', 'thought-routed', 'thought-routed-decode-only', 'thought-routed-required', 'thought-routed-required-decode-only'], default=['optimized'])
     parser.add_argument('--gpu-layers', default='-1')
     parser.add_argument('--context', default='16384')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--timeout', type=int, default=600)
+    parser.add_argument('--max-turns', type=int, default=16)
     args = parser.parse_args()
     forge, model = args.forge.resolve(), args.model.resolve()
     if not forge.is_file() or not model.is_file():
@@ -67,12 +68,20 @@ def main():
     if not shutil.which('go') or not shutil.which('gofmt'):
         parser.error('Go and gofmt must be on PATH')
     args.output.mkdir(parents=True, exist_ok=True)
-    flags = {'optimized': [], 'no-kv': ['--no-kv-reuse'], 'no-semantic': ['--no-semantic'], 'no-compaction': ['--no-compaction'], 'grammar-first': ['--grammar-first']}
+    flags = {'optimized': ['--thought-history'], 'no-kv': ['--no-kv-reuse'], 'no-semantic': ['--no-semantic'], 'no-compaction': ['--no-compaction'], 'grammar-first': ['--grammar-first'],
+             'no-thought': ['--no-thought'], 'thought-optional-decode-only': ['--thought-decode-only'],
+             'thought-required': ['--thought-required', '--thought-history'],
+             'thought-required-decode-only': ['--thought-required', '--thought-decode-only'],
+             'thought-routed': ['--thought-routed', '--thought-history'],
+             'thought-routed-decode-only': ['--thought-routed', '--thought-decode-only'],
+             'thought-routed-required': ['--thought-routed', '--thought-required', '--thought-history'],
+             'thought-routed-required-decode-only': ['--thought-routed', '--thought-required',
+                                                     '--thought-decode-only']}
     records = []
     metadata = {'schema_version': 1, 'model_file': model.name, 'model_sha256': digest(model), 'gpu_layers': args.gpu_layers,
                 'forge_binary_sha256': digest(forge),
                 'fixture_preparation': FIXTURE_PREPARATION,
-                'context_tokens': int(args.context), 'platform': platform.platform(), 'forge_version': subprocess.check_output([str(forge), '--version'], text=True).strip(),
+                'context_tokens': int(args.context), 'max_turns': int(args.max_turns), 'platform': platform.platform(), 'forge_version': subprocess.check_output([str(forge), '--version'], text=True).strip(),
                 'go_version': subprocess.check_output(['go', 'version'], text=True).strip()}
     try:
         metadata['gpu'] = subprocess.check_output(['nvidia-smi', '--query-gpu=name,driver_version,memory.total', '--format=csv,noheader'], text=True).strip()
@@ -96,7 +105,7 @@ def main():
                 subprocess.run(['git', '-C', str(root), '-c', 'user.name=Forge benchmark', '-c', 'user.email=benchmark@example.invalid', 'commit', '-qm', 'Fixture baseline'], check=True)
                 before_tests = digest(root / 'repair_test.go')
                 command = [str(forge), 'bench', str(task_path.resolve()), '--workspace', str(root), '--model', str(model), '--gpu-layers', args.gpu_layers,
-                           '--context', args.context, '--allow-write', '--allow-exec', '--json', '--max-turns', '16', '--wall-ms', str(args.timeout * 1000), *flags[variant]]
+                           '--context', args.context, '--allow-write', '--allow-exec', '--json', '--max-turns', str(args.max_turns), '--wall-ms', str(args.timeout * 1000), *flags[variant]]
                 start = time.monotonic()
                 with (output / 'stdout.jsonl').open('w') as out, (output / 'stderr.txt').open('w') as err:
                     try:

@@ -15,7 +15,11 @@ python benchmark/run.py --forge ../build/forge --model /models/coder.gguf \
   --output /tmp/forge-bench
 ```
 
-Go and gofmt must be on PATH. Fixtures use only the standard library.
+Go 1.24+ and gofmt must be on PATH; CI uses Go 1.27.0. Every fixture's `go.mod`
+declares `go 1.24`, and an older toolchain makes each `go` invocation attempt a
+toolchain download instead of running the fixture. The failures then look like
+agent errors rather than an unusable environment. Fixtures use only the standard
+library.
 Both runners use shared `utf8-lf-gofmt-v1` preparation: write UTF-8/LF files and
 format Go inputs before timing, Git baseline creation and immutable-test hashing.
 Each result records the preparation version and per-file/aggregate SHA-256.
@@ -78,6 +82,13 @@ full-vocabulary masking. The fast path still validates every selected token.
 Its counters include end tokens; `generated_tokens` excludes them. `sampling_ms`
 excludes waiting for GPU work in revisions after `cb3254b`, while `decode_ms`
 includes sampling and event callbacks. Do not add those two durations together.
+
+Thought-channel arms are available as `no-thought`, `thought-decode-only`,
+`thought-required`, and `thought-required-decode-only`. Prefix each thought arm
+with `thought-routed` in the variant name to use a plain-text reasoning prefix
+and lazy action-grammar trigger; for example, `thought-routed-decode-only` or
+`thought-routed-required-decode-only`. Required routed thought rejects a model
+that begins with JSON immediately; it does not force the model to reason.
 
 Independent runs with the same seed did not always produce identical action
 traces. Treat the KV ablation as complete task runs, not a matched-token
