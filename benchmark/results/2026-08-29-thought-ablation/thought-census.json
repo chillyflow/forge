@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "description": "Per-run census of model actions that opened with a \"thought\" field, counted from the model_output events in each run stdout.jsonl. Published so the \"0 of 61\" inertness figure in README.md is reproducible without the 32 MiB of raw session logs.",
+  "counted_from": "event type=model_output, substring '\"thought\"' in the emitted action",
+  "per_variant": {
+    "optimized": {
+      "model_actions": 61,
+      "actions_with_thought": 0
+    },
+    "no-thought": {
+      "model_actions": 63,
+      "actions_with_thought": 0
+    },
+    "thought-required": {
+      "model_actions": 150,
+      "actions_with_thought": 150
+    },
+    "thought-required-decode-only": {
+      "model_actions": 68,
+      "actions_with_thought": 68
+    }
+  },
+  "per_run": {
+    "add-no-thought": {
+      "task": "add",
+      "variant": "no-thought",
+      "model_actions": 5,
+      "actions_with_thought": 0
+    },
+    "add-optimized": {
+      "task": "add",
+      "variant": "optimized",
+      "model_actions": 5,
+      "actions_with_thought": 0
+    },
+    "add-thought-required": {
+      "task": "add",
+      "variant": "thought-required",
+      "model_actions": 16,
+      "actions_with_thought": 16
+    },
+    "add-thought-required-decode-only": {
+      "task": "add",
+      "variant": "thought-required-decode-only",
+      "model_actions": 5,
+      "actions_with_thought": 5
+    },
+    "average-no-thought": {
+      "task": "average",
+      "variant": "no-thought",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "average-optimized": {
+      "task": "average",
+      "variant": "optimized",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "average-thought-required": {
+      "task": "average",
+      "variant": "thought-required",
+      "model_actions": 16,
+      "actions_with_thought": 16
+    },
+    "average-thought-required-decode-only": {
+      "task": "average",
+      "variant": "thought-required-decode-only",
+      "model_actions": 4,
+      "actions_with_thought": 4
+    },
+    "ceil_div-no-thought": {
+      "task": "ceil_div",
+      "variant": "no-thought",
+      "model_actions": 5,
+      "actions_with_thought": 0
+    },
+    "ceil_div-optimized": {
+      "task": "ceil_div",
+      "variant": "optimized",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "ceil_div-thought-required": {
+      "task": "ceil_div",
+      "variant": "thought-required",
+      "model_actions": 12,
+      "actions_with_thought": 12
+    },
+    "ceil_div-thought-required-decode-only": {
+      "task": "ceil_div",
+      "variant": "thought-required-decode-only",
+      "model_actions": 5,
+      "actions_with_thought": 5
+    },
+    "clamp-no-thought": {
+      "task": "clamp",
+      "variant": "no-thought",
+      "model_actions": 9,
+      "actions_with_thought": 0
+    },
+    "clamp-optimized": {
+      "task": "clamp",
+      "variant": "optimized",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "clamp-thought-required": {
+      "task": "clamp",
+      "variant": "thought-required",
+      "model_actions": 16,
+      "actions_with_thought": 16
+    },
+    "clamp-thought-required-decode-only": {
+      "task": "clamp",
+      "variant": "thought-required-decode-only",
+      "model_actions": 10,
+      "actions_with_thought": 10
+    },
+    "contains-no-thought": {
+      "task": "contains",
+      "variant": "no-thought",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "contains-optimized": {
+      "task": "contains",
+      "variant": "optimized",
+      "model_actions": 5,
+      "actions_with_thought": 0
+    },
+    "contains-thought-required": {
+      "task": "contains",
+      "variant": "thought-required",
+      "model_actions": 16,
+      "actions_with_thought": 16
+    },
+    "contains-thought-required-decode-only": {
+      "task": "contains",
+      "variant": "thought-required-decode-only",
+      "model_actions": 13,
+      "actions_with_thought": 13
+    },
+    "last_index-no-thought": {
+      "task": "last_index",
+      "variant": "no-thought",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "last_index-optimized": {
+      "task": "last_index",
+      "variant": "optimized",
+      "model_actions": 7,
+      "actions_with_thought": 0
+    },
+    "last_index-thought-required": {
+      "task": "last_index",
+      "variant": "thought-required",
+      "model_actions": 16,
+      "actions_with_thought": 16
+    },
+    "last_index-thought-required-decode-only": {
+      "task": "last_index",
+      "variant": "thought-required-decode-only",
+      "model_actions": 5,
+      "actions_with_thought": 5
+    },
+    "prefix-no-thought": {
+      "task": "prefix",
+      "variant": "no-thought",
+      "model_actions": 8,
+      "actions_with_thought": 0
+    },
+    "prefix-optimized": {
+      "task": "prefix",
+      "variant": "optimized",
+      "model_actions": 8,
+      "actions_with_thought": 0
+    },
+    "prefix-thought-required": {
+      "task": "prefix",
+      "variant": "thought-required",
+      "model_actions": 10,
+      "actions_with_thought": 10
+    },
+    "prefix-thought-required-decode-only": {
+      "task": "prefix",
+      "variant": "thought-required-decode-only",
+      "model_actions": 11,
+      "actions_with_thought": 11
+    },
+    "range_sum-no-thought": {
+      "task": "range_sum",
+      "variant": "no-thought",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "range_sum-optimized": {
+      "task": "range_sum",
+      "variant": "optimized",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "range_sum-thought-required": {
+      "task": "range_sum",
+      "variant": "thought-required",
+      "model_actions": 16,
+      "actions_with_thought": 16
+    },
+    "range_sum-thought-required-decode-only": {
+      "task": "range_sum",
+      "variant": "thought-required-decode-only",
+      "model_actions": 5,
+      "actions_with_thought": 5
+    },
+    "reverse-no-thought": {
+      "task": "reverse",
+      "variant": "no-thought",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "reverse-optimized": {
+      "task": "reverse",
+      "variant": "optimized",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "reverse-thought-required": {
+      "task": "reverse",
+      "variant": "thought-required",
+      "model_actions": 16,
+      "actions_with_thought": 16
+    },
+    "reverse-thought-required-decode-only": {
+      "task": "reverse",
+      "variant": "thought-required-decode-only",
+      "model_actions": 5,
+      "actions_with_thought": 5
+    },
+    "unique-no-thought": {
+      "task": "unique",
+      "variant": "no-thought",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "unique-optimized": {
+      "task": "unique",
+      "variant": "optimized",
+      "model_actions": 6,
+      "actions_with_thought": 0
+    },
+    "unique-thought-required": {
+      "task": "unique",
+      "variant": "thought-required",
+      "model_actions": 16,
+      "actions_with_thought": 16
+    },
+    "unique-thought-required-decode-only": {
+      "task": "unique",
+      "variant": "thought-required-decode-only",
+      "model_actions": 5,
+      "actions_with_thought": 5
+    }
+  }
+}
