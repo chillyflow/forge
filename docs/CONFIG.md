@@ -80,10 +80,11 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `index` | `languages` | Exactly `["go"]`; other/empty/duplicate language lists fail. |
 
 See `forge.toml.example` and `profiles/*.toml`. There are deliberately no config
-keys for tool permission grants, script fixtures, draft models, thinking modes,
-KV quantization, network sandbox backends or unsupported index languages.
+keys for tool permission grants, script fixtures, draft models, the reasoning
+channel, KV quantization, network sandbox backends or unsupported index
+languages.
 
-The reasoning channel has no TOML keys either; it is CLI-only. `--no-thought`,
+The reasoning channel is CLI-only. `--no-thought`,
 `--thought-required`, `--thought-routed`, `--thought-history` and
 `--thought-decode-only` are the whole surface, and a thought is dropped from
 later prompts unless `--thought-history` is given.

@@ -148,13 +148,19 @@ budget was doubled, and it buys no extra evidence because the raw response is
 already persisted before the strip. See
 [the routed sweep](benchmark/results/2026-08-30-routed-sweep/README.md).
 
-`--thought-routed` changes the wire format: the model may reason in bounded
-plain text before its JSON action, and llama.cpp's lazy grammar sampler begins
+`--thought-routed` changes the wire format: the model reasons in bounded plain
+text before its JSON action, and llama.cpp's lazy grammar sampler begins
 constraining output when the actual `tool`, `memory`, or `final` object starts.
-The host normalizes the prefix into the same validated thought field used by the
+Because a lazy trigger alone elicits nothing (the model can open the action
+object on its first token), routed decoding withholds action-opening tokens for
+a minimum prefix budget — 32 tokens, or a quarter of the turn's token budget if
+that is smaller — before the trigger may arm, and withholds end-of-generation
+tokens until the action actually begins, so a generation cannot end actionless
+after reasoning. The
+host normalizes the prefix into the same validated thought field used by the
 rest of the agent. This removes JSON-string constraints from the reasoning
-prefix, but it does not force an optional prefix or implement the full
-thinking/tool/arguments/patch/final state router described by §32.
+prefix; it still does not implement the full thinking/tool/arguments/patch/final
+state router described by §32.
 
 ### Sessions
 

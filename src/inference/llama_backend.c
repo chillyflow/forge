@@ -11,6 +11,14 @@ typedef struct {
     double load_ms;
     bool can_reuse;
     const char *checkpoint_unsupported;
+    /* Tokens excluded while a routed reasoning prefix is being elicited. The
+     * brace table holds every token whose piece contains '{' (any of them
+     * could open the action object and fire the lazy trigger); the eog table
+     * holds every end-of-generation token, banned until the action actually
+     * begins so a routed generation cannot end actionless. Built once per
+     * model on first routed generation. */
+    llama_logit_bias *brace_ban, *eog_ban;
+    int32_t brace_ban_count, eog_ban_count;
 } llama_state;
 static llama_token sample_token(llama_state *s, struct llama_sampler *sampler,
                                 struct llama_sampler *grammar, bool fast, forge_metrics *stats) {
@@ -229,6 +237,84 @@ done:
     stats->prefill_ms += (double)(fg_now_ms() - begin);
     return status;
 }
+static bool action_ban_ready(llama_state *s, forge_error *e) {
+    if (s->brace_ban && s->eog_ban)
+        return true;
+    int32_t count = llama_vocab_n_tokens(s->vocab);
+    llama_logit_bias *braces = count > 0 ? malloc((size_t)count * sizeof(*braces)) : NULL;
+    llama_logit_bias *ends = count > 0 ? malloc((size_t)count * sizeof(*ends)) : NULL;
+    if (!braces || !ends) {
+        free(braces);
+        free(ends);
+        fg_error(e, FORGE_ERR_MEMORY, "Routed prefix suppression table allocation failed");
+        return false;
+    }
+    int32_t brace_count = 0, eog_count = 0;
+    for (llama_token token = 0; token < count; token++) {
+        if (llama_vocab_is_eog(s->vocab, token)) {
+            ends[eog_count].token = token;
+            ends[eog_count].bias = -INFINITY;
+            eog_count++;
+            continue;
+        }
+        /* Render with special=true: the lazy trigger buffer accumulates the
+         * grammar's own piece rendering, which includes special tokens, so
+         * the ban must judge the same text the trigger will see. */
+        char small[128], *piece = small;
+        int32_t length =
+            llama_token_to_piece(s->vocab, token, piece, (int32_t)sizeof(small), 0, true);
+        if (length < 0) {
+            piece = malloc((size_t)-length);
+            if (!piece) {
+                free(braces);
+                free(ends);
+                fg_error(e, FORGE_ERR_MEMORY, "Routed prefix suppression table allocation failed");
+                return false;
+            }
+            length = llama_token_to_piece(s->vocab, token, piece, -length, 0, true);
+        }
+        bool ban = length > 0 && memchr(piece, '{', (size_t)length) != NULL;
+        if (piece != small)
+            free(piece);
+        if (ban) {
+            braces[brace_count].token = token;
+            braces[brace_count].bias = -INFINITY;
+            brace_count++;
+        }
+    }
+    s->brace_ban = braces;
+    s->brace_ban_count = brace_count;
+    s->eog_ban = ends;
+    s->eog_ban_count = eog_count;
+    return true;
+}
+/* True once the output contains the start of an action object: '{', optional
+ * JSON whitespace, a quoted tool/memory/final key, optional whitespace, ':'.
+ * Mirrors FG_ACTION_TRIGGER_PATTERN so the host can tell when the lazy
+ * grammar has armed and end-of-generation may be allowed again. */
+static bool action_begun(const char *text) {
+    for (const char *candidate = strchr(text, '{'); candidate;
+         candidate = strchr(candidate + 1, '{')) {
+        const char *cursor = candidate + 1;
+        while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
+            cursor++;
+        if (*cursor != '"')
+            continue;
+        cursor++;
+        static const char *const keys[] = {"tool", "memory", "final"};
+        for (size_t i = 0; i < sizeof(keys) / sizeof(*keys); i++) {
+            size_t length = strlen(keys[i]);
+            if (strncmp(cursor, keys[i], length) || cursor[length] != '"')
+                continue;
+            const char *colon = cursor + length + 1;
+            while (*colon == ' ' || *colon == '\t' || *colon == '\r' || *colon == '\n')
+                colon++;
+            if (*colon == ':')
+                return true;
+        }
+    }
+    return false;
+}
 static bool complete_action_suffix(const char *text) {
     for (const char *candidate = strchr(text, '{'); candidate;
          candidate = strchr(candidate + 1, '{')) {
@@ -276,6 +362,37 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         status = fg_error(e, FORGE_ERR_MEMORY, "Sampler allocation failed");
         goto finish;
     }
+    /* §32 elicitation. A lazy trigger alone never elicits reasoning: the model
+     * may open the action object on its first token and the grammar arms
+     * immediately. While the budget lasts, action-opening tokens are excluded,
+     * so decoding can only produce plain text; end-of-generation tokens stay
+     * excluded until the action actually begins, so a routed generation cannot
+     * end actionless after reasoning (the token budget remains the backstop).
+     * Both bans sit ahead of the samplers: end ban at slot 0 until the action
+     * begins, brace ban at slot 1 until the budget is spent. */
+    size_t suppress = grammar_trigger ? FG_MIN(FG_THOUGHT_MIN_PREFIX_TOKENS, max_tokens / 4) : 0;
+    bool awaiting_action = false;
+    if (suppress) {
+        if (!action_ban_ready(s, e)) {
+            status = e && e->code ? e->code : FORGE_ERR_MEMORY;
+            goto finish;
+        }
+        struct llama_sampler *ends = llama_sampler_init_logit_bias(
+            llama_vocab_n_tokens(s->vocab), s->eog_ban_count, s->eog_ban);
+        struct llama_sampler *braces =
+            ends ? llama_sampler_init_logit_bias(llama_vocab_n_tokens(s->vocab),
+                                                 s->brace_ban_count, s->brace_ban)
+                 : NULL;
+        if (!braces) {
+            if (ends)
+                llama_sampler_free(ends);
+            status = fg_error(e, FORGE_ERR_MEMORY, "Routed prefix sampler allocation failed");
+            goto finish;
+        }
+        llama_sampler_chain_add(sampler, ends);
+        llama_sampler_chain_add(sampler, braces);
+        awaiting_action = true;
+    }
     if (grammar) {
         if (grammar_trigger) {
             const char *patterns[] = {grammar_trigger};
@@ -301,15 +418,24 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
     uint64_t begin = fg_now_ms();
     bool ended = false;
     for (size_t i = 0; i < max_tokens; i++) {
+        /* The action cannot begin while '{' is banned, so when the budget ends
+         * the brace ban is still at slot 1 behind the end ban. */
+        if (suppress && i == suppress) {
+            llama_sampler_free(llama_sampler_chain_remove(sampler, 1));
+            suppress = 0;
+        }
         if (interrupted(cancel, cu, deadline)) {
             status = fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled or deadline reached");
             break;
         }
         llama_synchronize(s->ctx);
         uint64_t sampling_start = fg_now_ms();
-        llama_token token =
-            sample_token(s, sampler, grammar_sampler,
-                         m->config.grammar_fast_path && m->config.temperature <= 0, stats);
+        /* The greedy fast path reads raw logits and would bypass the bans. */
+        llama_token token = sample_token(s, sampler, grammar_sampler,
+                                         !suppress && !awaiting_action &&
+                                             m->config.grammar_fast_path &&
+                                             m->config.temperature <= 0,
+                                         stats);
         stats->sampling_ms += (double)(fg_now_ms() - sampling_start);
         if (llama_vocab_is_eog(s->vocab, token)) {
             ended = true;
@@ -334,6 +460,10 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             break;
         }
         stats->generated_tokens++;
+        if (awaiting_action && !suppress && action_begun(out.data ? out.data : "")) {
+            llama_sampler_free(llama_sampler_chain_remove(sampler, 0));
+            awaiting_action = false;
+        }
         if (cb && !cb(piece, (size_t)length, u)) {
             if (piece != small)
                 free(piece);
@@ -482,6 +612,8 @@ static void llama_destroy(forge_model *m) {
             llama_model_free(s->model);
         free(s->tokens);
         free(s->template_name);
+        free(s->brace_ban);
+        free(s->eog_ban);
         free(s);
     }
 }

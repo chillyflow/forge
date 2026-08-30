@@ -189,6 +189,16 @@ forge_status fg_checkpoint_restore_active(forge_model *, const forge_checkpoint 
  * starts at the action object's opening brace, so earlier reasoning remains
  * unconstrained while the complete action is replayed into the GBNF state. */
 #define FG_ACTION_TRIGGER_PATTERN "(\\{[ \\t\\r\\n]*\"(tool|memory|final)\"[ \\t\\r\\n]*:)"
+/* Minimum routed reasoning budget, in sampled tokens. A lazy trigger alone
+ * never elicits a prefix, because nothing stops the model from opening the
+ * action object on its very first token (measured: 0 prefixes in 67 routed
+ * actions). Routed decoding therefore excludes action-opening tokens until
+ * this many tokens have been sampled (bounded by a quarter of the turn's
+ * token budget), and keeps end-of-generation tokens excluded until the action
+ * actually begins, so a generation cannot end actionless after reasoning; the
+ * turn's token budget is the backstop. This is a floor on room to reason, not
+ * a cap: FG_THOUGHT_MAX_BYTES still bounds the accepted prefix. */
+#define FG_THOUGHT_MIN_PREFIX_TOKENS 32u
 typedef struct {
     const char *name, *description, *fields, *grammar;
     forge_capability capability;

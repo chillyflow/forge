@@ -134,10 +134,19 @@ recover them.
 thought inside the action object. Output is unconstrained until a JSON object
 starting with `tool`, `memory`, or `final` triggers the generated action grammar;
 the host then bounds and validates the preceding UTF-8 text and normalizes it
-into the ordinary thought field. Required routed thought is a validation gate,
-not a decoder that can make a model produce a prefix. This is one action-boundary
-route, not the complete thinking/tool-selection/arguments/patch/final state
-machine required by §32. JSON is parsed by yyjson and all required field
+into the ordinary thought field. The trigger needs suppressing to elicit
+anything: measured without it, the model opened the action object on its first
+token in every routed action. The llama backend therefore applies a minimum
+prefix budget — for the first `FG_THOUGHT_MIN_PREFIX_TOKENS` (32) sampled
+tokens, bounded by a quarter of the turn's token budget, every token containing
+`{` is excluded via logit bias, so decoding can only produce plain text; that
+ban is then lifted and the trigger arms normally. End-of-generation tokens stay
+excluded until the action object actually begins, so a routed generation cannot
+end actionless after reasoning; the turn's token budget is the backstop.
+Required routed thought remains a host validation gate on top: a
+whitespace-only prefix still fails it. This is one action-boundary route, not
+the complete thinking/tool-selection/arguments/patch/final state machine
+required by §32. JSON is parsed by yyjson and all required field
 types/cardinality are validated before policy or execution.
 
 `apply_patch` requires one unique exact match, stages output in a sibling file,

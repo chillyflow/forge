@@ -83,12 +83,22 @@ Its counters include end tokens; `generated_tokens` excludes them. `sampling_ms`
 excludes waiting for GPU work in revisions after `cb3254b`, while `decode_ms`
 includes sampling and event callbacks. Do not add those two durations together.
 
-Thought-channel arms are available as `no-thought`, `thought-decode-only`,
+Thought-channel arms are available as `no-thought`, `thought-optional-decode-only`,
 `thought-required`, and `thought-required-decode-only`. Prefix each thought arm
 with `thought-routed` in the variant name to use a plain-text reasoning prefix
 and lazy action-grammar trigger; for example, `thought-routed-decode-only` or
-`thought-routed-required-decode-only`. Required routed thought rejects a model
-that begins with JSON immediately; it does not force the model to reason.
+`thought-routed-required-decode-only`. Routed decoding enforces a minimum
+prefix budget (32 tokens, or a quarter of the turn budget if smaller) by
+excluding action-opening tokens, and keeps end-of-generation tokens excluded
+until the action begins, so every routed action gets decode-time room for a
+plain-text prefix and cannot end a generation actionless. The budget guarantees
+sampled tokens, not visible text — a model can still spend it on whitespace, and
+required routed thought rejects exactly that case. During the suppressed and
+pre-action phases the grammar greedy fast path is disabled, so routed runs
+record those tokens under `grammar_fallback_tokens`; do not compare that counter
+across routed and non-routed arms. Results recorded before this budget existed
+(binary `24bf9a18…`, the 2026-08-30 routed sweep) measured routed arms that
+elicited nothing.
 
 Independent runs with the same seed did not always produce identical action
 traces. Treat the KV ablation as complete task runs, not a matched-token
