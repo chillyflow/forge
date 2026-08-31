@@ -78,7 +78,9 @@ def actions(run_dir, cue=CUE):
 
 
 def signature(parsed):
-    return json.dumps(parsed, sort_keys=True)[:2000] if isinstance(parsed, dict) else None
+    # Keep the complete canonical object: truncating a long patch makes the
+    # diagnostic key invalid JSON and can also merge distinct repeated edits.
+    return json.dumps(parsed, sort_keys=True) if isinstance(parsed, dict) else None
 
 
 def diagnose(run_dir, status, turns=None, max_turns=None, cue=CUE, metrics=None):
