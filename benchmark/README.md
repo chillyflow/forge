@@ -97,9 +97,11 @@ guarantees sampled tokens, not visible text — a model can still spend it on
 whitespace, and required routed thought rejects exactly that case. During the suppressed and
 pre-action phases the grammar greedy fast path is disabled, so routed runs
 record those tokens under `grammar_fallback_tokens`; do not compare that counter
-across routed and non-routed arms. Results recorded before this budget existed
+across routed and non-routed arms. Results recorded before this mechanism existed
 (binary `24bf9a18…`, the 2026-08-30 routed sweep) measured routed arms that
-elicited nothing.
+elicited nothing; `results/2026-08-30-elicited-sweep/` re-measures every arm on
+the cue mechanism, with a doubled-turn-cap control and a five-replicate
+retention analysis (`analyze_retention.py`).
 
 Independent runs with the same seed did not always produce identical action
 traces. Treat the KV ablation as complete task runs, not a matched-token

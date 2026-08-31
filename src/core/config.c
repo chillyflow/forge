@@ -36,8 +36,9 @@ void forge_config_init(forge_config *config) {
     config->thought_required = false;
     /* Measured: retaining an elicited thought in the stored ACTION segment
      * costs accuracy and prompt tokens with no evidence benefit, because the
-     * raw response is already persisted to the session log before the strip.
-     * See benchmark/results/2026-08-30-routed-sweep. --thought-history opts in. */
+     * raw response is already persisted to the session log before the strip
+     * (15/15 discordant replicate pairs favor stripping, sign test p=6.1e-05;
+     * benchmark/results/2026-08-30-elicited-sweep). --thought-history opts in. */
     config->thought_in_history = false;
     config->thought_routed = false;
     config->compact_context = true;

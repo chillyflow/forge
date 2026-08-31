@@ -142,11 +142,12 @@ A thought never re-enters a later prompt by default. It conditions the
 generation that produced it and is recorded in the session log, but is dropped
 from the stored ACTION segment; `--thought-history` opts back into re-injecting
 it and `--thought-decode-only` states the default explicitly. Retention is off
-because it is measurably harmful once reasoning is actually elicited: it cost
-three of ten benchmark tasks and 2.3x the prompt tokens, unchanged when the turn
-budget was doubled, and it buys no extra evidence because the raw response is
-already persisted before the strip. See
-[the routed sweep](benchmark/results/2026-08-30-routed-sweep/README.md).
+because it is measurably harmful once reasoning is actually elicited: across
+five replicated sweeps, every one of the fifteen fixture runs whose outcome
+depended on retention failed with it and passed without it (exact sign test
+p = 6.1e-05), at 2.3x the prompt tokens — and it buys no extra evidence because
+the raw response is already persisted before the strip. See
+[the elicited sweep](benchmark/results/2026-08-30-elicited-sweep/README.md).
 
 `--thought-routed` changes the wire format: the model reasons in bounded plain
 text before its JSON action, and llama.cpp's lazy grammar sampler begins
