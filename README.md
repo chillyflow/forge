@@ -168,9 +168,11 @@ session evidence.
 The reasoning phase is bounded per state. After `--thought-budget` sampled
 reasoning tokens (default: half the turn's token budget — a chosen, unmeasured
 fraction) without an action, the never-triggered lazy grammar is swapped for
-an eager one, so the action must open immediately and under full tool
-constraints; `--no-thought-budget` restores the unbounded phase-1 behavior as
-an ablation. Once the action has begun, generation ends at the first token
+an eager one, so subsequent output is immediately constrained by the full tool
+grammar. Its leading whitespace rule can still consume the remaining turn
+budget before an action opens; the turn budget remains the backstop.
+`--no-thought-budget` restores the unbounded phase-1 behavior as an ablation.
+Once the action has begun, generation ends at the first token
 that completes the action object instead of waiting for an end-of-generation
 token — the grammar keeps trailing whitespace legal after the object closes,
 so a model that never emits an end token would otherwise burn the remaining
