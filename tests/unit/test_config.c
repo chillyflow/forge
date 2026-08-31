@@ -132,7 +132,7 @@ static void config_values(void) {
     const char *document =
         "# Quoted keys, inline tables, bases, underscores and comments are real TOML.\n"
         "model = {path = 'models/model # one.gguf', context = 0x4000, "
-        "chat_template = \"\"\"chatml\"\"\"}\n"
+        "chat_template = \"\"\"chatml\"\"\", enable_thinking = false}\n"
         "[\"inference\"]\n"
         "gpu_layers = \"auto\"\n"
         "threads = 3\n"
@@ -175,6 +175,7 @@ static void config_values(void) {
     assert(parse(&config, "inference.checkpoints.enabled=false\n", &error) == FORGE_OK);
     assert(!config.checkpoint_cache_enabled && config.checkpoint_cache.max_entries == 3);
     assert(!strcmp(config.model.chat_template, "chatml"));
+    assert(config.model.thinking == FORGE_THINKING_DISABLED);
     assert(config.model.context_tokens == 16384 && config.limits.context_tokens == 16384);
     assert(config.model.gpu_layers == FORGE_GPU_LAYERS_AUTO);
     assert(config.model.threads == 3 && config.model.seed == UINT32_MAX);
@@ -217,6 +218,7 @@ static void config_rejections(void) {
         {"model.path = \"foo\\u0000bar\"", "model.path"},
         {"model.path = \"foo\\nbar\"", "model.path"},
         {"model.chat_template = ''", "model.chat_template"},
+        {"model.enable_thinking = 1", "model.enable_thinking"},
         {"model = []", "model"},
         {"inference.seed = -1", "inference.seed"},
         {"inference.seed = 4294967296", "inference.seed"},
@@ -423,6 +425,9 @@ static void final_override_validation(void) {
     config.model.temperature = NAN;
     assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
     config.model.temperature = 0;
+    config.model.thinking = (forge_thinking_mode)99;
+    assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
+    config.model.thinking = FORGE_THINKING_AUTO;
     config.model.model_path = "model.gguf";
     config.model.script_path = "fixture.json";
     assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);

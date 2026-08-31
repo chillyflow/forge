@@ -15,20 +15,27 @@ the key would report zero for every routed arm regardless of what the model did.
 import argparse
 import json
 import pathlib
+import re
 import sys
 
 IDENTITY = ('forge_binary_sha256', 'model_sha256', 'fixture_preparation',
-            'context_tokens', 'max_turns')
+            'context_tokens', 'max_turns', 'gpu_layers', 'chat_template',
+            'task_suite', 'platform', 'go_version', 'gpu')
 
 
-def classify(data):
+def classify(data, cue='Thought: '):
     stripped = data.lstrip()
-    if stripped.startswith('Thought:'):
-        # Host-injected routed cue (FG_THOUGHT_CUE): scaffold, not model
-        # reasoning. Only text beyond it counts as a routed prefix.
-        stripped = stripped[len('Thought:'):].lstrip()
-    if not stripped.startswith('{'):
+    if cue and stripped.startswith(cue.strip()):
+        # Host-injected routed cue: scaffold, not model reasoning.  The cue is
+        # recorded by run.py so custom-cue arms remain census-correct.
+        stripped = stripped[len(cue.strip()):].lstrip()
+    match = re.search(r'\{[ \t\r\n]*"(?:tool|memory|final)"[ \t\r\n]*:', stripped)
+    if match and stripped[:match.start()].strip():
         return 'routed_prefix'
+    if match:
+        stripped = stripped[match.start():]
+    elif not stripped.startswith('{'):
+        return 'none'
     try:
         parsed = json.loads(stripped)
     except ValueError:
@@ -38,7 +45,7 @@ def classify(data):
     return 'none'
 
 
-def census_arm(arm_dir):
+def census_arm(arm_dir, cue):
     total = {'model_actions': 0, 'inline_thought': 0, 'routed_prefix': 0, 'none': 0}
     per_run = {}
     for log in sorted(arm_dir.glob('*/stdout.jsonl')):
@@ -50,7 +57,7 @@ def census_arm(arm_dir):
                 continue
             if event.get('type') == 'model_output':
                 counts['model_actions'] += 1
-                counts[classify(event.get('data', ''))] += 1
+                counts[classify(event.get('data', ''), cue)] += 1
         per_run[log.parent.name] = counts
         for key in total:
             total[key] += counts[key]
@@ -79,6 +86,36 @@ def check_identity(arms):
         if differing:
             mismatches[name] = differing
     return base, mismatches
+
+
+def check_records(arms):
+    """Require one identical fixture/task set in every arm."""
+    names = list(arms)
+    expected = None
+    mismatches = {}
+    for name in names:
+        records = arms[name][0]
+        seen = {}
+        duplicates = []
+        for record in records:
+            task = record.get('task')
+            if task in seen:
+                duplicates.append(task)
+            seen[task] = (record.get('fixture_preparation'), record.get('fixture_sha256'),
+                          record.get('fixture_files'), record.get('suite'))
+        if expected is None:
+            expected = seen
+        differences = {}
+        if seen != expected:
+            differences['task_or_fixture_set'] = sorted(seen)
+        if duplicates:
+            differences['duplicate_tasks'] = sorted(set(duplicates))
+        wrong_variants = sorted({record.get('variant') for record in records} - {name})
+        if wrong_variants:
+            differences['record_variants'] = wrong_variants
+        if differences:
+            mismatches[name] = differences
+    return sorted(expected or {}), mismatches
 
 
 def write(path, value):
@@ -116,6 +153,8 @@ def main():
     parser.add_argument('out')
     parser.add_argument('--control',
                         help='root of a same-binary control sweep, e.g. a turn-cap control')
+    parser.add_argument('--expect-arms', nargs='+', help='refuse missing or unexpected arms')
+    parser.add_argument('--expect-tasks', nargs='+', help='refuse missing or unexpected tasks')
     args = parser.parse_args()
 
     arms = load_arms(args.root)
@@ -126,18 +165,32 @@ def main():
         print('REFUSING to consolidate: arms differ in run identity', file=sys.stderr)
         print(json.dumps(mismatches, indent=2), file=sys.stderr)
         return 1
+    task_set, record_mismatches = check_records(arms)
+    if record_mismatches:
+        print('REFUSING to consolidate: arms differ in task/fixture identity', file=sys.stderr)
+        print(json.dumps(record_mismatches, indent=2), file=sys.stderr)
+        return 1
+    if args.expect_arms and sorted(args.expect_arms) != sorted(arms):
+        print('REFUSING to consolidate: arm set differs from --expect-arms', file=sys.stderr)
+        return 1
+    if args.expect_tasks and sorted(args.expect_tasks) != task_set:
+        print('REFUSING to consolidate: task set differs from --expect-tasks', file=sys.stderr)
+        return 1
 
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     records, census = [], {}
     for name, (arm_records, _) in arms.items():
         records += arm_records
-        total, per_run = census_arm(pathlib.Path(args.root) / name)
+        sample = arms[name][0][0] if arms[name][0] else {}
+        total, per_run = census_arm(pathlib.Path(args.root) / name,
+                                    sample.get('thought_cue'))
         census[name] = {'totals': total, 'per_run': per_run}
 
     environment = dict(arms[list(arms)[0]][1])
     environment['arms'] = list(arms)
     environment['identity_verified'] = list(IDENTITY)
+    environment['task_set_verified'] = task_set
     environment['consolidated_by'] = 'benchmark/consolidate_arms.py'
     write(out / 'environment.json', environment)
     write(out / 'results.json', records)

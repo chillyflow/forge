@@ -40,6 +40,9 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
         config->limits.context_tokens > config->model->config.context_tokens ||
         (!config->thought && (config->thought_required || config->thought_routed)) ||
         (!config->thought_routed &&
+         (config->thought_cue || config->thought_budget || config->thought_budget_unbounded ||
+          config->thought_native)) ||
+        (config->thought_native &&
          (config->thought_cue || config->thought_budget || config->thought_budget_unbounded)) ||
         !config->limits.max_tool_bytes || config->limits.max_tool_bytes > 16u * 1024u * 1024u ||
         !config->limits.max_file_bytes || config->limits.max_file_bytes > 16u * 1024u * 1024u ||
@@ -589,7 +592,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         }
         fg_decode_policy routed_policy = {FG_ACTION_TRIGGER_PATTERN, a->config.thought_cue,
                                           a->config.thought_budget,
-                                          a->config.thought_budget_unbounded};
+                                          a->config.thought_budget_unbounded,
+                                          a->config.thought_native};
         status = fg_model_generate_routed_with_cache(
             a->config.model, prompt, grammar, a->config.thought_routed ? &routed_policy : NULL,
             max_tokens, stream_token, &stream, &response, &a->metrics, a->config.cancelled,
@@ -634,7 +638,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         if (a->config.thought_routed) {
             char *normalized = routed_action_text(
                 response, a->config.thought_required,
-                a->config.thought_cue ? a->config.thought_cue : FG_THOUGHT_CUE, e);
+                a->config.thought_native ? ""
+                                         : (a->config.thought_cue ? a->config.thought_cue
+                                                                  : FG_THOUGHT_CUE),
+                e);
             free(response);
             response = normalized;
             if (!response) {

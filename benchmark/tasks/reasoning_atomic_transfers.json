@@ -1,0 +1,14 @@
+{
+  "id": "reasoning_atomic_transfers",
+  "suite": "reasoning-gated",
+  "prompt": "ApplyTransfers must apply a batch atomically: reject negative amounts, missing accounts, insufficient funds, and integer overflow; on rejection balances must be unchanged. Inspect the implementation, repair it, and run go test -json ./... without modifying tests.",
+  "verify": ["go", "test", "-json", "./..."],
+  "files": {
+    "go.mod": "module forgebench\n\ngo 1.24\n",
+    "repair.go": "package repair\n\ntype Transfer struct { From,To string; Amount int }\nfunc ApplyTransfers(balances map[string]int, transfers []Transfer) bool {\n for _,tr:=range transfers { if balances[tr.From]<tr.Amount { return false }; balances[tr.From]-=tr.Amount; balances[tr.To]+=tr.Amount }\n return true\n}\n",
+    "repair_test.go": "package repair\n\nimport (\"math\"; \"reflect\"; \"testing\")\nfunc TestApplyTransfers(t *testing.T) {\n b:=map[string]int{\"a\":10,\"b\":0,\"c\":2}; if !ApplyTransfers(b,[]Transfer{{\"a\",\"b\",7},{\"b\",\"c\",3}}) || !reflect.DeepEqual(b,map[string]int{\"a\":3,\"b\":4,\"c\":5}) { t.Fatalf(\"success=%v\",b) }\n for _,batch:=range [][]Transfer{{{\"a\",\"b\",4},{\"a\",\"c\",1}},{{\"a\",\"missing\",1}},{{\"a\",\"b\",-1}}} { before:=map[string]int{\"a\":4,\"b\":0,\"c\":0}; got:=map[string]int{\"a\":4,\"b\":0,\"c\":0}; if ApplyTransfers(got,batch) || !reflect.DeepEqual(got,before) { t.Fatalf(\"batch %v left %v\",batch,got) } }\n overflow:=map[string]int{\"a\":1,\"b\":math.MaxInt}; if ApplyTransfers(overflow,[]Transfer{{\"a\",\"b\",1}}) || overflow[\"a\"]!=1 { t.Fatalf(\"overflow=%v\",overflow) }\n same:=map[string]int{\"a\":5}; if !ApplyTransfers(same,[]Transfer{{\"a\",\"a\",4}}) || same[\"a\"]!=5 { t.Fatalf(\"self transfer=%v\",same) }\n}\n"
+  },
+  "oracle_files": {
+    "repair.go": "package repair\n\ntype Transfer struct { From,To string; Amount int }\nfunc ApplyTransfers(balances map[string]int, transfers []Transfer) bool {\n next:=make(map[string]int,len(balances)); for key,value:=range balances { next[key]=value }\n maxInt:=int(^uint(0)>>1)\n for _,tr:=range transfers {\n  from,fromOK:=next[tr.From]; to,toOK:=next[tr.To]\n  if !fromOK || !toOK || tr.Amount<0 || from<tr.Amount { return false }\n  if tr.From==tr.To { continue }; if to>maxInt-tr.Amount { return false }\n  next[tr.From]=from-tr.Amount; next[tr.To]=to+tr.Amount\n }\n for key,value:=range next { balances[key]=value }; return true\n}\n"
+  }
+}

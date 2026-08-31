@@ -37,7 +37,7 @@ KINDS = """
 """
 
 
-def actions(run_dir):
+def actions(run_dir, cue=CUE):
     """Yield (parsed_or_None, opened_object) per model_output event."""
     log = pathlib.Path(run_dir) / 'stdout.jsonl'
     if not log.exists():
@@ -50,8 +50,8 @@ def actions(run_dir):
         if event.get('type') != 'model_output':
             continue
         body = event.get('data', '').lstrip()
-        if body.startswith(CUE):
-            body = body[len(CUE):].lstrip()
+        if cue and body.startswith(cue.strip()):
+            body = body[len(cue.strip()):].lstrip()
         match = TRIGGER.search(body)
         if not match:
             yield None, False
@@ -68,9 +68,11 @@ def signature(parsed):
     return json.dumps(parsed, sort_keys=True)[:2000] if isinstance(parsed, dict) else None
 
 
-def diagnose(run_dir, status, turns=None, max_turns=None):
-    items = list(actions(run_dir))
+def diagnose(run_dir, status, turns=None, max_turns=None, cue=CUE, metrics=None):
+    items = list(actions(run_dir, cue))
     if not items:
+        if metrics and metrics.get('forced_actions'):
+            return 'forced_action_padding', {'actions': 0}
         return 'no_model_output', {'actions': 0}
     parsed = [p for p, _ in items if p is not None]
     malformed = sum(1 for p, opened in items if opened and p is None)
@@ -145,7 +147,8 @@ def main():
             metrics = run['metrics']
             status = metrics.get('status', '(none)')
             kind, detail = diagnose(raw / arm / ('%s-%s' % (run['task'], arm)), status,
-                                    metrics.get('turns'), max_turns)
+                                    metrics.get('turns'), max_turns,
+                                    run.get('thought_cue') or '', metrics)
             rows.append((arm, run['task'], status, metrics.get('turns'),
                          metrics.get('generated_tokens'), kind, detail))
     print()

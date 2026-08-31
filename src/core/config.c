@@ -41,6 +41,7 @@ void forge_config_init(forge_config *config) {
      * benchmark/results/2026-08-30-elicited-sweep). --thought-history opts in. */
     config->thought_in_history = false;
     config->thought_routed = false;
+    config->thought_native = false;
     config->compact_context = true;
 }
 
@@ -241,7 +242,8 @@ typedef enum {
     CFG_TIMEOUT,
     CFG_NETWORK,
     CFG_SPECULATIVE,
-    CFG_LANGUAGES
+    CFG_LANGUAGES,
+    CFG_THINKING
 } config_kind;
 
 typedef struct {
@@ -258,6 +260,7 @@ typedef struct {
 static const config_field fields[] = {
     {"model", "path", CFG_PATH, 0, 0, 0},
     {"model", "chat_template", CFG_TEMPLATE, 0, 0, 0},
+    {"model", "enable_thinking", CFG_THINKING, 0, 0, 0},
     {"model", "context", CFG_CONTEXT, 0, 128, 1048576},
     {"inference", "gpu_layers", CFG_GPU, 0, 0, 65535},
     {"inference", "threads", CFG_INT, MODEL_OFFSET(threads), 0, 1024},
@@ -332,6 +335,7 @@ static forge_status apply_field(forge_config *config, const config_field *field,
     case CFG_BOOL:
     case CFG_NETWORK:
     case CFG_SPECULATIVE:
+    case CFG_THINKING:
         if (value.type != TOML_BOOLEAN)
             return schema_error(e, value, key, "expected a boolean");
         if (field->kind == CFG_NETWORK) {
@@ -342,6 +346,9 @@ static forge_status apply_field(forge_config *config, const config_field *field,
                 return schema_error(e, value, key,
                                     "speculative decoding is not implemented; "
                                     "only false is supported");
+        } else if (field->kind == CFG_THINKING) {
+            config->model.thinking = value.u.boolean ? FORGE_THINKING_ENABLED
+                                                     : FORGE_THINKING_DISABLED;
         } else {
             *(bool *)dest = value.u.boolean;
         }
@@ -582,9 +589,14 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "Thought routing or required thought needs the thought channel enabled");
     if (!config->thought_routed &&
-        (config->thought_cue || config->thought_budget || config->thought_budget_unbounded))
+        (config->thought_cue || config->thought_budget || config->thought_budget_unbounded ||
+         config->thought_native))
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "Thought budget and cue controls need thought routing enabled");
+    if (config->thought_native &&
+        (config->thought_cue || config->thought_budget || config->thought_budget_unbounded))
+        return fg_error(e, FORGE_ERR_ARGUMENT,
+                        "Native thought cannot use a host cue or thought budget");
     if (config->thought_budget > INT32_MAX)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Thought budget must be in [1, 2147483647]");
     if (config->thought_cue && strchr(config->thought_cue, '{'))
@@ -625,6 +637,8 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
     if (!isfinite(model->temperature) || model->temperature < 0 || model->temperature > 2)
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "inference.temperature must be finite and in [0, 2]");
+    if ((unsigned)model->thinking > FORGE_THINKING_DISABLED)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid model thinking mode");
     if (model->model_path && model->script_path)
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "Choose a model path or an explicit script "

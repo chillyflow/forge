@@ -444,6 +444,19 @@ class ForgeTests(unittest.TestCase):
         custom_call = next(e['data'] for e in custom_events if e['type'] == 'tool_call')
         self.assertEqual(custom_call['thought'], secret)
 
+        # Native template thinking and its thinking-disabled control use the
+        # same lazy action grammar and no Forge cue, bans, or forced budget.
+        native = ['<think>inspect first</think>\n' + json.dumps(
+                      {'tool': 'read_file',
+                       'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+                  json.dumps({'final': 'Done.'})]
+        _, native_events, _ = self.run_script(native, '--no-auto-validation',
+                                              '--thought-native')
+        native_call = next(e['data'] for e in native_events if e['type'] == 'tool_call')
+        self.assertEqual(native_call['thought'], '<think>inspect first</think>')
+        self.run_script([json.dumps({'final': 'Done.'})], '--no-auto-validation',
+                        '--thought-native', '--disable-thinking')
+
     def test_validation_plan_and_permission_denial(self):
         self.go_module()
         plan = json.loads(self.cli('validation-plan', 'calc.go', '--json').stdout)

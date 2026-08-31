@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "chat_template.h"
 #include "llama.h"
 #include <math.h>
 typedef struct {
@@ -8,6 +9,8 @@ typedef struct {
     llama_token *tokens;
     size_t count, capacity;
     char *template_name;
+    fg_chat_templates *chat_templates;
+    forge_thinking_mode thinking_mode;
     double load_ms;
     bool can_reuse;
     const char *checkpoint_unsupported;
@@ -17,8 +20,8 @@ typedef struct {
      * holds every end-of-generation token, banned until the action actually
      * begins so a routed generation cannot end actionless. Built once per
      * model on first routed generation. */
-    llama_logit_bias *brace_ban, *eog_ban;
-    int32_t brace_ban_count, eog_ban_count;
+    llama_logit_bias *brace_ban, *eog_ban, *whitespace_ban;
+    int32_t brace_ban_count, eog_ban_count, whitespace_ban_count;
 } llama_state;
 static llama_token sample_token(llama_state *s, struct llama_sampler *sampler,
                                 struct llama_sampler *grammar, bool fast, forge_metrics *stats) {
@@ -65,6 +68,27 @@ static void token_release(const fg_checkpoint_allocator *allocator, void *memory
 static char *format_prompt(llama_state *s, const char *prompt,
                            const fg_checkpoint_allocator *allocator, size_t *allocated,
                            forge_error *error) {
+    if (s->chat_templates) {
+        size_t rendered_length = 0;
+        char detail[256] = {0};
+        char *rendered = fg_chat_templates_apply(
+            s->chat_templates, prompt,
+            s->thinking_mode == FORGE_THINKING_ENABLED, &rendered_length,
+            detail, sizeof(detail));
+        if (!rendered) {
+            fg_error(error, FORGE_ERR_MODEL, "Cannot apply Jinja chat template: %s", detail);
+            return NULL;
+        }
+        *allocated = rendered_length + 1;
+        char *text = token_allocate(allocator, *allocated, error);
+        if (!text) {
+            free(rendered);
+            return NULL;
+        }
+        memcpy(text, rendered, rendered_length + 1);
+        free(rendered);
+        return text;
+    }
     struct llama_chat_message message = {"user", prompt};
     int32_t n = llama_chat_apply_template(s->template_name, &message, 1, true, NULL, 0);
     if (n < 0 || n > 16 * 1024 * 1024) {
@@ -238,18 +262,20 @@ done:
     return status;
 }
 static bool action_ban_ready(llama_state *s, forge_error *e) {
-    if (s->brace_ban && s->eog_ban)
+    if (s->brace_ban && s->eog_ban && s->whitespace_ban)
         return true;
     int32_t count = llama_vocab_n_tokens(s->vocab);
     llama_logit_bias *braces = count > 0 ? malloc((size_t)count * sizeof(*braces)) : NULL;
     llama_logit_bias *ends = count > 0 ? malloc((size_t)count * sizeof(*ends)) : NULL;
-    if (!braces || !ends) {
+    llama_logit_bias *whitespace = count > 0 ? malloc((size_t)count * sizeof(*whitespace)) : NULL;
+    if (!braces || !ends || !whitespace) {
         free(braces);
         free(ends);
+        free(whitespace);
         fg_error(e, FORGE_ERR_MEMORY, "Routed prefix suppression table allocation failed");
         return false;
     }
-    int32_t brace_count = 0, eog_count = 0;
+    int32_t brace_count = 0, eog_count = 0, whitespace_count = 0;
     for (llama_token token = 0; token < count; token++) {
         if (llama_vocab_is_eog(s->vocab, token)) {
             ends[eog_count].token = token;
@@ -268,12 +294,14 @@ static bool action_ban_ready(llama_state *s, forge_error *e) {
             if (!piece) {
                 free(braces);
                 free(ends);
+                free(whitespace);
                 fg_error(e, FORGE_ERR_MEMORY, "Routed prefix suppression table allocation failed");
                 return false;
             }
             length = llama_token_to_piece(s->vocab, token, piece, -length, 0, true);
         }
         bool ban = length > 0 && memchr(piece, '{', (size_t)length) != NULL;
+        bool whitespace_only = length > 0 && fg_json_whitespace_only(piece, (size_t)length);
         if (piece != small)
             free(piece);
         if (ban) {
@@ -281,11 +309,18 @@ static bool action_ban_ready(llama_state *s, forge_error *e) {
             braces[brace_count].bias = -INFINITY;
             brace_count++;
         }
+        if (whitespace_only) {
+            whitespace[whitespace_count].token = token;
+            whitespace[whitespace_count].bias = -INFINITY;
+            whitespace_count++;
+        }
     }
     s->brace_ban = braces;
     s->brace_ban_count = brace_count;
     s->eog_ban = ends;
     s->eog_ban_count = eog_count;
+    s->whitespace_ban = whitespace;
+    s->whitespace_ban_count = whitespace_count;
     return true;
 }
 /* Think budget expired without an action: replace the never-triggered lazy
@@ -298,26 +333,39 @@ static bool action_ban_ready(llama_state *s, forge_error *e) {
  * host text the caller already holds, so freeing it loses nothing. */
 static forge_status force_action(llama_state *s, struct llama_sampler *chain,
                                  struct llama_sampler **grammar_sampler, const char *grammar,
-                                 bool eog_banned, forge_error *e) {
+                                 bool eog_banned, bool *progress_armed, forge_error *e) {
     if (eog_banned)
         llama_sampler_free(llama_sampler_chain_remove(chain, 0));
     llama_sampler_free(llama_sampler_chain_remove(chain, 0));
     *grammar_sampler = NULL;
     struct llama_sampler *eager = llama_sampler_init_grammar(s->vocab, grammar, "root");
-    if (!eager)
+    struct llama_sampler *progress =
+        eager ? llama_sampler_init_logit_bias(llama_vocab_n_tokens(s->vocab),
+                                              s->whitespace_ban_count, s->whitespace_ban)
+              : NULL;
+    if (!eager || !progress) {
+        if (eager)
+            llama_sampler_free(eager);
         return fg_error(e, FORGE_ERR_PARSE, "Action grammar was rejected while forcing the action");
+    }
     int selectors = llama_sampler_chain_n(chain);
     struct llama_sampler *tail[4];
     if (selectors < 0 || (size_t)selectors > sizeof(tail) / sizeof(*tail)) {
         llama_sampler_free(eager);
+        llama_sampler_free(progress);
         return fg_error(e, FORGE_ERR_ARGUMENT, "Unexpected sampler chain while forcing the action");
     }
     for (int i = selectors - 1; i >= 0; i--)
         tail[i] = llama_sampler_chain_remove(chain, i);
+    /* A fresh root permits ws*.  Keep every whitespace-only token masked until
+     * the first token that advances into the object.  Tokens containing both
+     * whitespace and '{' remain legal, preserving tokenizer portability. */
+    llama_sampler_chain_add(chain, progress);
     llama_sampler_chain_add(chain, eager);
     for (int i = 0; i < selectors; i++)
         llama_sampler_chain_add(chain, tail[i]);
     *grammar_sampler = eager;
+    *progress_armed = true;
     return FORGE_OK;
 }
 static forge_status llama_generate(forge_model *m, const char *prompt, const char *grammar,
@@ -369,11 +417,11 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
     const char *cue = NULL;
     if (policy) {
         fg_think_bounds(policy, max_tokens, &min_think, &think_cap);
-        cue = policy->cue ? policy->cue : FG_THOUGHT_CUE;
+        cue = policy->native_thinking ? "" : (policy->cue ? policy->cue : FG_THOUGHT_CUE);
     }
     size_t suppress = min_think;
-    bool awaiting_action = false, braces_armed = false;
-    if (policy) {
+    bool awaiting_action = false, braces_armed = false, progress_armed = false;
+    if (policy && !policy->native_thinking) {
         if (!action_ban_ready(s, e)) {
             status = e && e->code ? e->code : FORGE_ERR_MEMORY;
             goto finish;
@@ -496,8 +544,10 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             llama_sampler_free(llama_sampler_chain_remove(sampler, 1));
             braces_armed = false;
         }
-        if (policy && !action_open && !policy->think_unbounded && i == think_cap) {
-            status = force_action(s, sampler, &grammar_sampler, grammar, awaiting_action, e);
+        if (policy && !policy->native_thinking && !action_open && !policy->think_unbounded &&
+            i == think_cap) {
+            status = force_action(s, sampler, &grammar_sampler, grammar, awaiting_action,
+                                  &progress_armed, e);
             if (status != FORGE_OK)
                 break;
             awaiting_action = false;
@@ -512,10 +562,16 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         llama_synchronize(s->ctx);
         uint64_t sampling_start = fg_now_ms();
         /* The greedy fast path reads raw logits and would bypass the bans. */
+        fg_action_phase phase = action_open
+                                    ? fg_action_decode_phase(out.data ? out.data + action_offset : "")
+                                    : FG_ACTION_SELECT;
+        bool structured = action_open &&
+                          (phase == FG_ACTION_SELECT || phase == FG_ACTION_ARGUMENTS);
         llama_token token =
             sample_token(s, sampler, grammar_sampler,
-                         !braces_armed && !awaiting_action && m->config.grammar_fast_path &&
-                             m->config.temperature <= 0,
+                         !braces_armed && !awaiting_action && !progress_armed &&
+                             m->config.grammar_fast_path &&
+                             (m->config.temperature <= 0 || structured),
                          stats);
         stats->sampling_ms += (double)(fg_now_ms() - sampling_start);
         if (llama_vocab_is_eog(s->vocab, token)) {
@@ -541,6 +597,25 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             break;
         }
         stats->generated_tokens++;
+        if (action_open) {
+            if (phase == FG_ACTION_SELECT)
+                stats->action_select_tokens++;
+            else if (phase == FG_ACTION_ARGUMENTS)
+                stats->action_argument_tokens++;
+            else if (phase == FG_ACTION_PATCH)
+                stats->patch_tokens++;
+            else if (phase == FG_ACTION_FINAL)
+                stats->final_tokens++;
+            else if (phase == FG_ACTION_MEMORY)
+                stats->memory_tokens++;
+        }
+        if (progress_armed) {
+            stats->forced_action_progress_tokens++;
+            if (!fg_json_whitespace_only(piece, (size_t)FG_MAX(length, 0))) {
+                llama_sampler_free(llama_sampler_chain_remove(sampler, 0));
+                progress_armed = false;
+            }
+        }
         bool closing = length > 0 && memchr(piece, '}', (size_t)length) != NULL;
         if (policy && !action_open) {
             const char *opened = fg_action_begin(out.data ? out.data : "");
@@ -551,6 +626,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
                 }
                 action_open = true;
                 action_offset = (size_t)(opened - out.data);
+                stats->action_select_tokens++;
             } else
                 stats->think_tokens++;
         }
@@ -712,8 +788,10 @@ static void llama_destroy(forge_model *m) {
             llama_model_free(s->model);
         free(s->tokens);
         free(s->template_name);
+        fg_chat_templates_destroy(s->chat_templates);
         free(s->brace_ban);
         free(s->eog_ban);
+        free(s->whitespace_ban);
         free(s);
     }
 }
@@ -759,6 +837,21 @@ bool fg_llama_init(forge_model *m, forge_error *e) {
     if (!s->tokens || !s->template_name) {
         fg_error(e, FORGE_ERR_MEMORY, "Inference state allocation failed");
         return false;
+    }
+    s->thinking_mode = m->config.thinking;
+    if (m->config.thinking != FORGE_THINKING_AUTO) {
+        char detail[256] = {0};
+        s->chat_templates = fg_chat_templates_create(
+            s->model, m->config.chat_template, detail, sizeof(detail));
+        if (!s->chat_templates) {
+            fg_error(e, FORGE_ERR_MODEL, "Cannot initialize Jinja chat template: %s", detail);
+            return false;
+        }
+        if (!fg_chat_templates_support_thinking(s->chat_templates)) {
+            fg_error(e, FORGE_ERR_MODEL,
+                     "The selected chat template does not support enable_thinking");
+            return false;
+        }
     }
     s->can_reuse = !llama_model_is_recurrent(s->model) && !llama_model_is_hybrid(s->model);
     if (llama_model_has_encoder(s->model) || !llama_model_has_decoder(s->model))

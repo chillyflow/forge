@@ -224,7 +224,17 @@ typedef struct fg_decode_policy {
     const char *cue;
     size_t think_budget;
     bool think_unbounded;
+    bool native_thinking;
 } fg_decode_policy;
+
+typedef enum fg_action_phase {
+    FG_ACTION_SELECT = 0,
+    FG_ACTION_ARGUMENTS,
+    FG_ACTION_PATCH,
+    FG_ACTION_FINAL,
+    FG_ACTION_MEMORY,
+    FG_ACTION_COMPLETE
+} fg_action_phase;
 /* Pure routing predicates for the decode-state machine, unit-tested without a
  * model. fg_action_begin mirrors FG_ACTION_TRIGGER_PATTERN and returns the
  * opening brace of the first action-object start, or NULL. fg_action_complete
@@ -236,6 +246,8 @@ const char *fg_action_begin(const char *text);
 bool fg_action_complete(const char *text);
 void fg_think_bounds(const fg_decode_policy *, size_t max_tokens, size_t *min_think,
                      size_t *think_cap);
+fg_action_phase fg_action_decode_phase(const char *text);
+bool fg_json_whitespace_only(const char *text, size_t length);
 typedef struct {
     const char *name, *description, *fields, *grammar;
     forge_capability capability;

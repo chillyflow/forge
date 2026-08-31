@@ -53,6 +53,7 @@ static void usage(void) {
          "  --temperature N      finite sampling temperature 0..2\n"
          "  --seed N             sampling seed 0..4294967295\n"
          "  --chat-template NAME override unsupported model chat template\n"
+         "  --enable-thinking | --disable-thinking  set Jinja template thinking control\n"
          "  --allow-write        permit repository patches\n"
          "  --allow-exec         permit UNSANDBOXED commands, including repository code\n"
          "  --json               JSON-lines events\n"
@@ -68,6 +69,8 @@ static void usage(void) {
          "  --thought-history    retain thought in later prompts (default: off)\n"
          "  --thought-required   require a leading thought on every action (ablation)\n"
          "  --thought-routed     reason freely, then lazily constrain the action JSON\n"
+         "  --thought-native     cue-free lazy grammar; enables template thinking\n"
+         "                       append --disable-thinking for its matched safe baseline\n"
          "  --thought-budget N   max reasoning tokens before the action grammar is forced\n"
          "  --no-thought-budget  unbounded routed reasoning (ablation)\n"
          "  --thought-cue TEXT   replace the forced reasoning cue; empty disables it\n"
@@ -112,7 +115,10 @@ static int option_arity(const char *option) {
                                         "--thought-history",
                                         "--thought-required",
                                         "--thought-routed",
+                                        "--thought-native",
                                         "--no-thought-budget",
+                                        "--enable-thinking",
+                                        "--disable-thinking",
                                         "--no-auto-validation",
                                         "--summary-full-source",
                                         "--no-config"};
@@ -609,6 +615,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     ac.thought_in_history = config->thought_in_history;
     ac.thought_required = config->thought_required;
     ac.thought_routed = config->thought_routed;
+    ac.thought_native = config->thought_native;
     ac.thought_cue = config->thought_cue;
     ac.thought_budget = config->thought_budget;
     ac.thought_budget_unbounded = config->thought_budget_unbounded;
@@ -704,12 +711,31 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         }
         if (!strcmp(a, "--thought-routed")) {
             ac.thought_routed = true;
+            ac.thought_native = false;
+            continue;
+        }
+        if (!strcmp(a, "--thought-native")) {
+            ac.thought_routed = true;
+            ac.thought_native = true;
+            ac.thought_cue = NULL;
+            ac.thought_budget = 0;
+            ac.thought_budget_unbounded = false;
+            mc.thinking = FORGE_THINKING_ENABLED;
+            continue;
+        }
+        if (!strcmp(a, "--enable-thinking")) {
+            mc.thinking = FORGE_THINKING_ENABLED;
+            continue;
+        }
+        if (!strcmp(a, "--disable-thinking")) {
+            mc.thinking = FORGE_THINKING_DISABLED;
             continue;
         }
         if (!strcmp(a, "--no-thought-budget")) {
             /* Last flag wins against --thought-budget, checkpoint-cache style. */
             ac.thought_budget_unbounded = true;
             ac.thought_budget = 0;
+            ac.thought_native = false;
             continue;
         }
         if (i + 1 >= argc) {
@@ -746,9 +772,10 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             explicit_script = true;
         } else if (!strcmp(a, "--chat-template"))
             mc.chat_template = value;
-        else if (!strcmp(a, "--thought-cue"))
+        else if (!strcmp(a, "--thought-cue")) {
             ac.thought_cue = value;
-        else if (!strcmp(a, "--thought-budget")) {
+            ac.thought_native = false;
+        } else if (!strcmp(a, "--thought-budget")) {
             size_t budget = 0;
             /* 0 is the unset sentinel, and a zero budget under
              * --thought-required is a guaranteed first-turn death. */
@@ -758,6 +785,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             }
             ac.thought_budget = budget;
             ac.thought_budget_unbounded = false;
+            ac.thought_native = false;
         } else if (!strcmp(a, "--temperature")) {
             char *end = NULL;
             errno = 0;
@@ -833,6 +861,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     config->thought_in_history = ac.thought_in_history;
     config->thought_required = ac.thought_required;
     config->thought_routed = ac.thought_routed;
+    config->thought_native = ac.thought_native;
     config->thought_cue = ac.thought_cue;
     config->thought_budget = ac.thought_budget;
     config->thought_budget_unbounded = ac.thought_budget_unbounded;
@@ -844,7 +873,8 @@ static int cli_main(int argc, char **argv, forge_config *config) {
                  "cannot be requested and absent");
         return failed(&error);
     }
-    if ((ac.thought_cue || ac.thought_budget || ac.thought_budget_unbounded) &&
+    if ((ac.thought_cue || ac.thought_budget || ac.thought_budget_unbounded ||
+         ac.thought_native) &&
         !ac.thought_routed) {
         fg_error(&error, FORGE_ERR_ARGUMENT,
                  "--thought-budget/--no-thought-budget/--thought-cue require --thought-routed");

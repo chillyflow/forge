@@ -4,7 +4,13 @@ forge_limits forge_default_limits(void) {
                           120000, 1800000};
 }
 forge_model_config forge_default_model_config(void) {
-    return (forge_model_config){NULL, NULL, NULL, 16384, 0, 0, 42, 0.0f, true, true};
+    forge_model_config config = {0};
+    config.context_tokens = 16384;
+    config.seed = 42;
+    config.reuse_prefix = true;
+    config.grammar_fast_path = true;
+    config.thinking = FORGE_THINKING_AUTO;
+    return config;
 }
 bool fg_model_instance_init(forge_model *m, forge_error *e) {
     if (!m || !fg_random_hex(m->instance_nonce, 16)) {
@@ -71,6 +77,7 @@ static forge_status script_generate(forge_model *m, const char *prompt, const ch
 }
 forge_model *forge_model_load(const forge_model_config *config, forge_error *e) {
     if (!config || config->context_tokens < 128 || config->context_tokens > 1048576 ||
+        (unsigned)config->thinking > FORGE_THINKING_DISABLED ||
         (!config->model_path == !config->script_path)) {
         fg_error(
             e, FORGE_ERR_ARGUMENT,

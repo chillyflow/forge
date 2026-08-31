@@ -24,6 +24,54 @@ def digest(path):
 
 FIXTURE_PREPARATION = 'utf8-lf-gofmt-v1'
 
+# Keep experiment policy in one table so the CLI choices, recorded provenance,
+# and command line cannot drift apart.  ``thought_cue`` is the host scaffold
+# expected in raw model output; an empty value denotes the thinking-safe native
+# baseline, which deliberately injects no scaffold.
+VARIANTS = {
+    'optimized': {'flags': ['--thought-history']},
+    'no-kv': {'flags': ['--no-kv-reuse']},
+    'no-semantic': {'flags': ['--no-semantic']},
+    'no-compaction': {'flags': ['--no-compaction']},
+    'grammar-first': {'flags': ['--grammar-first']},
+    'no-thought': {'flags': ['--no-thought']},
+    'thought-optional-decode-only': {'flags': ['--thought-decode-only']},
+    'thought-required': {'flags': ['--thought-required', '--thought-history']},
+    'thought-required-decode-only': {
+        'flags': ['--thought-required', '--thought-decode-only']},
+    'thought-routed': {
+        'flags': ['--thought-routed', '--thought-history'], 'thought_cue': 'Thought: '},
+    'thought-routed-decode-only': {
+        'flags': ['--thought-routed', '--thought-decode-only'], 'thought_cue': 'Thought: '},
+    'thought-routed-required': {
+        'flags': ['--thought-routed', '--thought-required', '--thought-history'],
+        'thought_cue': 'Thought: '},
+    'thought-routed-required-decode-only': {
+        'flags': ['--thought-routed', '--thought-required', '--thought-decode-only'],
+        'thought_cue': 'Thought: '},
+    'thought-routed-unbounded-decode-only': {
+        'flags': ['--thought-routed', '--no-thought-budget', '--thought-decode-only'],
+        'thought_cue': 'Thought: ', 'thought_budget': 'unbounded'},
+    'thought-routed-budget-256-decode-only': {
+        'flags': ['--thought-routed', '--thought-budget', '256', '--thought-decode-only'],
+        'thought_cue': 'Thought: ', 'thought_budget': 256},
+    'thought-routed-budget-512-decode-only': {
+        'flags': ['--thought-routed', '--thought-budget', '512', '--thought-decode-only'],
+        'thought_cue': 'Thought: ', 'thought_budget': 512},
+    'thought-routed-budget-1024-decode-only': {
+        'flags': ['--thought-routed', '--thought-budget', '1024', '--thought-decode-only'],
+        'thought_cue': 'Thought: ', 'thought_budget': 1024},
+    'thought-routed-budget-1536-decode-only': {
+        'flags': ['--thought-routed', '--thought-budget', '1536', '--thought-decode-only'],
+        'thought_cue': 'Thought: ', 'thought_budget': 1536},
+    'thought-native-decode-only': {
+        'flags': ['--thought-native', '--thought-decode-only'],
+        'thought_cue': '', 'thought_budget': 'native'},
+    'thought-native-disabled-decode-only': {
+        'flags': ['--thought-native', '--disable-thinking', '--thought-decode-only'],
+        'thought_cue': '', 'thought_budget': 'native-disabled'},
+}
+
 def materialize(root, task):
     """Prepare identical, formatted inputs before timing and test-file hashing."""
     root = root.resolve()
@@ -55,7 +103,9 @@ def main():
     parser.add_argument('--forge', type=Path, required=True)
     parser.add_argument('--model', type=Path, required=True)
     parser.add_argument('--tasks', nargs='*', default=[])
-    parser.add_argument('--variants', nargs='+', choices=['optimized', 'no-kv', 'no-semantic', 'no-compaction', 'grammar-first', 'no-thought', 'thought-optional-decode-only', 'thought-required', 'thought-required-decode-only', 'thought-routed', 'thought-routed-decode-only', 'thought-routed-required', 'thought-routed-required-decode-only', 'thought-routed-unbounded-decode-only'], default=['optimized'])
+    parser.add_argument('--variants', nargs='+', choices=sorted(VARIANTS), default=['optimized'])
+    parser.add_argument('--suite', choices=['smoke', 'reasoning-gated', 'all'], default='smoke',
+                        help='fixture family; default preserves the original ten-task smoke suite')
     parser.add_argument('--gpu-layers', default='-1')
     parser.add_argument('--chat-template', default=None,
                         help='llama.cpp chat template name; default uses the template embedded in the GGUF')
@@ -70,23 +120,14 @@ def main():
     if not shutil.which('go') or not shutil.which('gofmt'):
         parser.error('Go and gofmt must be on PATH')
     args.output.mkdir(parents=True, exist_ok=True)
-    flags = {'optimized': ['--thought-history'], 'no-kv': ['--no-kv-reuse'], 'no-semantic': ['--no-semantic'], 'no-compaction': ['--no-compaction'], 'grammar-first': ['--grammar-first'],
-             'no-thought': ['--no-thought'], 'thought-optional-decode-only': ['--thought-decode-only'],
-             'thought-required': ['--thought-required', '--thought-history'],
-             'thought-required-decode-only': ['--thought-required', '--thought-decode-only'],
-             'thought-routed': ['--thought-routed', '--thought-history'],
-             'thought-routed-decode-only': ['--thought-routed', '--thought-decode-only'],
-             'thought-routed-required': ['--thought-routed', '--thought-required', '--thought-history'],
-             'thought-routed-required-decode-only': ['--thought-routed', '--thought-required',
-                                                     '--thought-decode-only'],
-             'thought-routed-unbounded-decode-only': ['--thought-routed', '--no-thought-budget',
-                                                      '--thought-decode-only']}
     records = []
     metadata = {'schema_version': 1, 'model_file': model.name, 'model_sha256': digest(model), 'gpu_layers': args.gpu_layers,
                 'chat_template': args.chat_template or 'embedded',
                 'forge_binary_sha256': digest(forge),
                 'fixture_preparation': FIXTURE_PREPARATION,
-                'context_tokens': int(args.context), 'max_turns': int(args.max_turns), 'platform': platform.platform(), 'forge_version': subprocess.check_output([str(forge), '--version'], text=True).strip(),
+                'context_tokens': int(args.context), 'max_turns': int(args.max_turns),
+                'task_suite': args.suite, 'platform': platform.platform(),
+                'forge_version': subprocess.check_output([str(forge), '--version'], text=True).strip(),
                 'go_version': subprocess.check_output(['go', 'version'], text=True).strip()}
     try:
         metadata['gpu'] = subprocess.check_output(['nvidia-smi', '--query-gpu=name,driver_version,memory.total', '--format=csv,noheader'], text=True).strip()
@@ -95,9 +136,13 @@ def main():
     (args.output / 'environment.json').write_text(json.dumps(metadata, indent=2))
     for task_path in sorted((Path(__file__).parent / 'tasks').glob('*.json')):
         task = json.loads(task_path.read_text())
+        suite = task.get('suite', 'smoke')
+        if args.suite != 'all' and suite != args.suite:
+            continue
         if args.tasks and task['id'] not in args.tasks:
             continue
         for variant in args.variants:
+            policy = VARIANTS[variant]
             name = f'{task["id"]}-{variant}'
             output = args.output / name
             output.mkdir(exist_ok=True)
@@ -110,7 +155,7 @@ def main():
                 subprocess.run(['git', '-C', str(root), '-c', 'user.name=Forge benchmark', '-c', 'user.email=benchmark@example.invalid', 'commit', '-qm', 'Fixture baseline'], check=True)
                 before_tests = digest(root / 'repair_test.go')
                 command = [str(forge), 'bench', str(task_path.resolve()), '--workspace', str(root), '--model', str(model), '--gpu-layers', args.gpu_layers,
-                           '--context', args.context, '--allow-write', '--allow-exec', '--json', '--max-turns', str(args.max_turns), '--wall-ms', str(args.timeout * 1000), *flags[variant],
+                           '--context', args.context, '--allow-write', '--allow-exec', '--json', '--max-turns', str(args.max_turns), '--wall-ms', str(args.timeout * 1000), *policy['flags'],
                            *(['--chat-template', args.chat_template] if args.chat_template else [])]
                 start = time.monotonic()
                 with (output / 'stdout.jsonl').open('w') as out, (output / 'stderr.txt').open('w') as err:
@@ -132,7 +177,10 @@ def main():
                 unchanged_tests = (root / 'repair_test.go').exists() and digest(root / 'repair_test.go') == before_tests
                 record = {'task': task['id'], 'variant': variant, 'returncode': code, 'wall_seconds': elapsed,
                           'passed': code == 0 and verdict.get('passed', False) and unchanged_tests,
-                          'tests_unchanged': unchanged_tests, 'metrics': metrics, **fixture}
+                          'tests_unchanged': unchanged_tests, 'suite': suite,
+                          'thought_cue': policy.get('thought_cue'),
+                          'thought_budget': policy.get('thought_budget'),
+                          'metrics': metrics, **fixture}
                 records.append(record)
                 (output / 'result.json').write_text(json.dumps(record, indent=2))
                 (args.output / 'results.json').write_text(json.dumps(records, indent=2))

@@ -44,17 +44,58 @@ bool fg_action_complete(const char *text) {
     }
     return false;
 }
+bool fg_json_whitespace_only(const char *text, size_t length) {
+    if (!text || !length)
+        return false;
+    for (size_t i = 0; i < length; i++)
+        if (text[i] != ' ' && text[i] != '\t' && text[i] != '\r' && text[i] != '\n')
+            return false;
+    return true;
+}
+
+fg_action_phase fg_action_decode_phase(const char *text) {
+    const char *action = text ? fg_action_begin(text) : NULL;
+    if (!action)
+        return FG_ACTION_SELECT;
+    const char *cursor = action + 1;
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
+        cursor++;
+    if (!strncmp(cursor, "\"final\"", 7))
+        return FG_ACTION_FINAL;
+    if (!strncmp(cursor, "\"memory\"", 8))
+        return FG_ACTION_MEMORY;
+    if (strncmp(cursor, "\"tool\"", 6))
+        return FG_ACTION_SELECT;
+    cursor += 6;
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
+        cursor++;
+    if (*cursor++ != ':')
+        return FG_ACTION_SELECT;
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
+        cursor++;
+    if (*cursor++ != '"')
+        return FG_ACTION_SELECT;
+    const char *name = cursor;
+    while (*cursor && *cursor != '"')
+        cursor++;
+    if (*cursor != '"')
+        return FG_ACTION_SELECT;
+    return (size_t)(cursor - name) == strlen("apply_patch") &&
+                   !strncmp(name, "apply_patch", strlen("apply_patch"))
+               ? FG_ACTION_PATCH
+               : FG_ACTION_ARGUMENTS;
+}
 void fg_think_bounds(const fg_decode_policy *policy, size_t max_tokens, size_t *min_think,
                      size_t *think_cap) {
     /* The suppress window exists only when a cue is force-decoded: banning the
      * model's action opener without steering text is the measured prompt-echo
      * death configuration. */
-    bool cued = !policy->cue || policy->cue[0];
+    bool cued = !policy->native_thinking && (!policy->cue || policy->cue[0]);
     size_t window = cued ? FG_MIN(FG_THOUGHT_MIN_PREFIX_TOKENS, max_tokens / 4) : 0;
     /* Half the turn budget is a chosen, unmeasured fraction (mirroring the
      * window's quarter); the unbounded arm measures bounded vs unbounded,
      * not the fraction. */
-    size_t cap = policy->think_unbounded ? SIZE_MAX
+    size_t cap = (policy->native_thinking || policy->think_unbounded) ? SIZE_MAX
                  : policy->think_budget  ? policy->think_budget
                                          : max_tokens / 2;
     *min_think = FG_MIN(window, cap);

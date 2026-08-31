@@ -326,12 +326,22 @@ int main(void) {
     assert(!fg_action_complete("{\"tool\":\"list_files\",\"args\":{\"path\":\".\"}"));
     assert(!fg_action_complete("{\"final\":\"a brace } inside"));
     assert(!fg_action_complete("nothing"));
+    assert(fg_json_whitespace_only(" \t\r\n", 4));
+    assert(!fg_json_whitespace_only("", 0));
+    assert(!fg_json_whitespace_only(" \n{", 3));
+    assert(fg_action_decode_phase("") == FG_ACTION_SELECT);
+    assert(fg_action_decode_phase("{\"tool\":\"read_file\",\"args\":{") ==
+           FG_ACTION_ARGUMENTS);
+    assert(fg_action_decode_phase("{\"tool\":\"apply_patch\",\"args\":{") ==
+           FG_ACTION_PATCH);
+    assert(fg_action_decode_phase("{\"final\":\"") == FG_ACTION_FINAL);
+    assert(fg_action_decode_phase("{\"memory\":{") == FG_ACTION_MEMORY);
     /* Think bounds: the suppress window stays a quarter capped at 32, the cap
      * defaults to half the turn budget, a configured budget clamps the window,
      * the unbounded ablation removes the cap, and an empty cue removes the
      * window (banning the opener without steering text is the measured
      * prompt-echo death configuration). */
-    fg_decode_policy policy = {FG_ACTION_TRIGGER_PATTERN, NULL, 0, false};
+    fg_decode_policy policy = {FG_ACTION_TRIGGER_PATTERN, NULL, 0, false, false};
     size_t min_think = 0, think_cap = 0;
     fg_think_bounds(&policy, 2048, &min_think, &think_cap);
     assert(min_think == 32 && think_cap == 1024);
@@ -348,6 +358,9 @@ int main(void) {
     policy.cue = "";
     fg_think_bounds(&policy, 2048, &min_think, &think_cap);
     assert(min_think == 0 && think_cap == 1024);
+    policy.native_thinking = true;
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 0 && think_cap == SIZE_MAX);
     /* A budget-forced action can cut the reasoning mid-character; only a
      * trailing incomplete sequence is dropped, and invalid bytes elsewhere
      * stay for validation to reject. */

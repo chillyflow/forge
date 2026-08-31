@@ -102,6 +102,12 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     U(think_tokens);
     U(forced_actions);
     U(action_stops);
+    U(action_select_tokens);
+    U(action_argument_tokens);
+    U(patch_tokens);
+    U(final_tokens);
+    U(memory_tokens);
+    U(forced_action_progress_tokens);
     U(raw_tool_tokens);
     U(visible_tool_tokens);
     U(files_opened);
