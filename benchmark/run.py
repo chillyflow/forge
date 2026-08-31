@@ -57,6 +57,8 @@ def main():
     parser.add_argument('--tasks', nargs='*', default=[])
     parser.add_argument('--variants', nargs='+', choices=['optimized', 'no-kv', 'no-semantic', 'no-compaction', 'grammar-first', 'no-thought', 'thought-optional-decode-only', 'thought-required', 'thought-required-decode-only', 'thought-routed', 'thought-routed-decode-only', 'thought-routed-required', 'thought-routed-required-decode-only'], default=['optimized'])
     parser.add_argument('--gpu-layers', default='-1')
+    parser.add_argument('--chat-template', default=None,
+                        help='llama.cpp chat template name; default uses the template embedded in the GGUF')
     parser.add_argument('--context', default='16384')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--timeout', type=int, default=600)
@@ -79,6 +81,7 @@ def main():
                                                      '--thought-decode-only']}
     records = []
     metadata = {'schema_version': 1, 'model_file': model.name, 'model_sha256': digest(model), 'gpu_layers': args.gpu_layers,
+                'chat_template': args.chat_template or 'embedded',
                 'forge_binary_sha256': digest(forge),
                 'fixture_preparation': FIXTURE_PREPARATION,
                 'context_tokens': int(args.context), 'max_turns': int(args.max_turns), 'platform': platform.platform(), 'forge_version': subprocess.check_output([str(forge), '--version'], text=True).strip(),
@@ -105,7 +108,8 @@ def main():
                 subprocess.run(['git', '-C', str(root), '-c', 'user.name=Forge benchmark', '-c', 'user.email=benchmark@example.invalid', 'commit', '-qm', 'Fixture baseline'], check=True)
                 before_tests = digest(root / 'repair_test.go')
                 command = [str(forge), 'bench', str(task_path.resolve()), '--workspace', str(root), '--model', str(model), '--gpu-layers', args.gpu_layers,
-                           '--context', args.context, '--allow-write', '--allow-exec', '--json', '--max-turns', str(args.max_turns), '--wall-ms', str(args.timeout * 1000), *flags[variant]]
+                           '--context', args.context, '--allow-write', '--allow-exec', '--json', '--max-turns', str(args.max_turns), '--wall-ms', str(args.timeout * 1000), *flags[variant],
+                           *(['--chat-template', args.chat_template] if args.chat_template else [])]
                 start = time.monotonic()
                 with (output / 'stdout.jsonl').open('w') as out, (output / 'stderr.txt').open('w') as err:
                     try:
