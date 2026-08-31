@@ -25,6 +25,38 @@ The weights were downloaded separately and checked against the publisher's
 SHA-256. They are not committed to GitHub. No access token is required by Forge:
 inference reads an existing local GGUF and makes no Hugging Face API requests.
 
+## Additional measured models
+
+The thought-channel mechanism was measured on three further non-thinking
+instruct models to test whether it is portable across tokenizers and chat
+template families rather than tuned to one model. All three were run on the
+same rig and settings as the development model: 16,384-token context with
+2,048 reserved per response, all layers offloaded (`--gpu-layers -1`), greedy
+decoding with seed 42, and the chat template embedded in each GGUF (no
+`--chat-template` override was needed). Results are in
+`benchmark/results/2026-08-31-tier1-models/`.
+
+| Property | Qwen3-4B-Instruct-2507 | Devstral-Small-2-24B-Instruct-2512 | Meta-Llama-3.1-8B-Instruct |
+| --- | --- | --- | --- |
+| Filename | `Qwen3-4B-Instruct-2507-Q8_0.gguf` | `Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf` | `Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf` |
+| Quantization | Q8_0 | Q4_K_M | Q4_K_M |
+| Size (bytes) | 4,280,405,600 | 14,334,446,752 | 4,920,739,232 |
+| Publisher (GGUF) | [unsloth](https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF) | [unsloth](https://huggingface.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF) | [bartowski](https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF) |
+| Hugging Face revision | `a06e946bb6b655725eafa393f4a9745d460374c9` | `6e458b8add42681bfd023de5eab93637694aaf82` | `bf5b95e96dac0462e2a09145ec66cae9a3f12067` |
+| SHA-256 | `391c1e410fd9f4cf2de2b510273b56a84c19ce18f4fa3bfb3774031dac4ef068` | `d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496` | `7b064f5842bf9532c91456deda288a1b672397a54fa729aa665952863033557c` |
+| Architecture (GGUF) | `qwen3` | `mistral3` | `llama` |
+| Chat template family | ChatML | Mistral | Llama-3 |
+| Context used for measurements | 16,384 tokens; 2,048 reserved for each response | same | same |
+| Offload | All layers (`--gpu-layers -1`) | same | same |
+| Sampling | Greedy, seed 42 | same | same |
+| Model license | Apache 2.0 | Apache 2.0 on the base model `mistralai/Devstral-Small-2-24B-Instruct-2512`; the GGUF repo tags `other` | Llama 3.1 Community License |
+
+Each file's SHA-256 was checked against the value the Hugging Face repository
+publishes for that exact revision before any measurement. Devstral's publisher
+recommends a 0.15 sampling temperature; every arm here is greedy, which is
+near that but not identical, and the other two models have no strong low
+temperature guidance. Consult each publisher's model card for license terms.
+
 ## Use a local model
 
 ```sh

@@ -103,6 +103,18 @@ elicited nothing; `results/2026-08-30-elicited-sweep/` re-measures every arm on
 the cue mechanism, with a doubled-turn-cap control and a five-replicate
 retention analysis (`analyze_retention.py`).
 
+Multi-model runs are consolidated per model, never across models.
+`consolidate_arms.py` includes `model_sha256` in the identity it verifies, so it
+structurally refuses to merge arms from different models; that is intended, not
+an obstacle to work around. Publish one results tree per model and compare only
+pass rates and turn counts across them. Token counters are tokenizer-relative
+and are not comparable between models, and `grammar_fallback_tokens` is not
+comparable between routed and non-routed arms even within one model. Use
+`--chat-template` only when a GGUF's embedded template is not recognized; the
+value applied is recorded in each run's `environment.json` as `chat_template`
+(`embedded` when no override was passed). `results/2026-08-31-tier1-models/`
+measures three further non-thinking instruct models this way.
+
 Independent runs with the same seed did not always produce identical action
 traces. Treat the KV ablation as complete task runs, not a matched-token
 microbenchmark. The initial two-task grammar ablation did preserve both action
