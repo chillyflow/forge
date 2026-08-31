@@ -5,7 +5,7 @@
   "verify": ["go", "test", "-json", "./..."],
   "files": {
     "go.mod": "module forgebench\n\ngo 1.24\n",
-    "repair.go": "package repair\n\ntype Interval struct { Lo,Hi int }\nfunc UnionIntervals(in []Interval) []Interval {\n out:=append([]Interval(nil),in...)\n for i:=1;i<len(out);i++ { if out[i].Lo<=out[i-1].Hi { out[i-1].Hi=out[i].Hi; out=append(out[:i],out[i+1:]...); i-- } }\n return out\n}\n",
+    "repair.go": "package repair\n\nimport \"sort\"\n\ntype Interval struct { Lo,Hi int }\nfunc UnionIntervals(in []Interval) []Interval {\n out:=append([]Interval{},in...)\n for i:=range out { if out[i].Lo>out[i].Hi { out[i].Lo,out[i].Hi=out[i].Hi,out[i].Lo } }\n sort.Slice(out,func(i,j int) bool { if out[i].Lo==out[j].Lo { return out[i].Hi<out[j].Hi }; return out[i].Lo<out[j].Lo })\n merged:=make([]Interval,0,len(out))\n for _,current:=range out {\n  if len(merged)==0 || current.Lo>merged[len(merged)-1].Hi { merged=append(merged,current); continue }\n  if current.Hi>merged[len(merged)-1].Hi { merged[len(merged)-1].Hi=current.Hi }\n }\n return merged\n}\n",
     "repair_test.go": "package repair\n\nimport (\"reflect\"; \"testing\")\nfunc TestUnionIntervals(t *testing.T) {\n in:=[]Interval{{8,6},{1,2},{4,5},{2,3},{20,20},{21,22}}; saved:=append([]Interval(nil),in...)\n want:=[]Interval{{1,8},{20,22}}\n if got:=UnionIntervals(in); !reflect.DeepEqual(got,want) { t.Fatalf(\"got %v\",got) }\n if !reflect.DeepEqual(in,saved) { t.Fatalf(\"mutated input: %v\",in) }\n if got:=UnionIntervals(nil); got==nil || len(got)!=0 { t.Fatalf(\"empty=%v\",got) }\n}\n"
   },
   "oracle_files": {

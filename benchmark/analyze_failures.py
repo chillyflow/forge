@@ -33,6 +33,7 @@ KINDS = """
   turn_cap         ran out of turns with well formed, varied actions
   within_turn      a generation ended before completing an action: the routed
                    token-budget death, where reasoning outran the turn budget
+  forced_action_padding  a forced grammar swap produced no action event
   wrong_fix        actions are well formed and varied; the repair just failed
 """
 
@@ -54,7 +55,19 @@ def actions(run_dir, cue=CUE):
             body = body[len(cue.strip()):].lstrip()
         match = TRIGGER.search(body)
         if not match:
-            yield None, False
+            # Inline-thought envelopes begin with "thought", so the routed
+            # trigger mirror does not match their opening brace. Parse the
+            # complete object before deciding it was prose-only.
+            if body.startswith('{'):
+                try:
+                    parsed, _ = json.JSONDecoder().raw_decode(body)
+                    opened = isinstance(parsed, dict) and any(
+                        key in parsed for key in ('tool', 'memory', 'final'))
+                    yield parsed if opened else None, opened
+                except ValueError:
+                    yield None, True
+            else:
+                yield None, False
             continue
         # Trailing prose after the object is normal, so decode just the object.
         try:

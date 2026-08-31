@@ -19,6 +19,10 @@ CONSOLIDATE_SPEC = importlib.util.spec_from_file_location(
     'forge_benchmark_consolidate', SOURCE.parent / 'consolidate_arms.py')
 CONSOLIDATE = importlib.util.module_from_spec(CONSOLIDATE_SPEC)
 CONSOLIDATE_SPEC.loader.exec_module(CONSOLIDATE)
+FAILURE_SPEC = importlib.util.spec_from_file_location(
+    'forge_benchmark_failures', SOURCE.parent / 'analyze_failures.py')
+FAILURES = importlib.util.module_from_spec(FAILURE_SPEC)
+FAILURE_SPEC.loader.exec_module(FAILURES)
 
 
 class FixtureTests(unittest.TestCase):
@@ -136,6 +140,16 @@ class FixtureTests(unittest.TestCase):
         for key in ('gpu_layers', 'chat_template', 'task_suite', 'output_reserve',
                     'temperature', 'seed', 'platform', 'go_version', 'gpu'):
             self.assertIn(key, CONSOLIDATE.IDENTITY)
+
+    def test_failure_classifier_parses_inline_thought_envelopes(self):
+        event = {'type': 'model_output', 'data': json.dumps({
+            'thought': 'reason', 'tool': 'read_file',
+            'args': {'path': 'x', 'start': 1, 'end': 1}})}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            (root / 'stdout.jsonl').write_text(json.dumps(event) + '\n', encoding='utf-8')
+            self.assertEqual(list(FAILURES.actions(root)),
+                             [(json.loads(event['data']), True)])
 
 
 if __name__ == '__main__':
