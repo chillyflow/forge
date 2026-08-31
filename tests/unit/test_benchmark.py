@@ -132,6 +132,11 @@ class FixtureTests(unittest.TestCase):
         arms['two'][0].append({**base, 'variant': 'two'})
         self.assertIn('two', CONSOLIDATE.check_records(arms)[1])
 
+    def test_run_identity_covers_decode_configuration(self):
+        for key in ('gpu_layers', 'chat_template', 'task_suite', 'output_reserve',
+                    'temperature', 'seed', 'platform', 'go_version', 'gpu'):
+            self.assertIn(key, CONSOLIDATE.IDENTITY)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -20,7 +20,8 @@ import sys
 
 IDENTITY = ('forge_binary_sha256', 'model_sha256', 'fixture_preparation',
             'context_tokens', 'max_turns', 'gpu_layers', 'chat_template',
-            'task_suite', 'platform', 'go_version', 'gpu')
+            'task_suite', 'output_reserve', 'temperature', 'seed',
+            'platform', 'go_version', 'gpu')
 
 
 def classify(data, cue='Thought: '):

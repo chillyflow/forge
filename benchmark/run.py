@@ -110,6 +110,9 @@ def main():
     parser.add_argument('--chat-template', default=None,
                         help='llama.cpp chat template name; default uses the template embedded in the GGUF')
     parser.add_argument('--context', default='16384')
+    parser.add_argument('--output-reserve', type=int, default=2048)
+    parser.add_argument('--temperature', type=float, default=0.0)
+    parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--timeout', type=int, default=600)
     parser.add_argument('--max-turns', type=int, default=16)
@@ -117,6 +120,12 @@ def main():
     forge, model = args.forge.resolve(), args.model.resolve()
     if not forge.is_file() or not model.is_file():
         parser.error('forge and model must exist')
+    if not 1 <= args.output_reserve <= 1048576:
+        parser.error('--output-reserve must be positive')
+    if not 0 <= args.temperature <= 2:
+        parser.error('--temperature must be in [0, 2]')
+    if not 0 <= args.seed <= 4294967295:
+        parser.error('--seed must be in [0, 4294967295]')
     if not shutil.which('go') or not shutil.which('gofmt'):
         parser.error('Go and gofmt must be on PATH')
     args.output.mkdir(parents=True, exist_ok=True)
@@ -126,6 +135,8 @@ def main():
                 'forge_binary_sha256': digest(forge),
                 'fixture_preparation': FIXTURE_PREPARATION,
                 'context_tokens': int(args.context), 'max_turns': int(args.max_turns),
+                'output_reserve': args.output_reserve,
+                'temperature': args.temperature, 'seed': args.seed,
                 'task_suite': args.suite, 'platform': platform.platform(),
                 'forge_version': subprocess.check_output([str(forge), '--version'], text=True).strip(),
                 'go_version': subprocess.check_output(['go', 'version'], text=True).strip()}
@@ -155,7 +166,9 @@ def main():
                 subprocess.run(['git', '-C', str(root), '-c', 'user.name=Forge benchmark', '-c', 'user.email=benchmark@example.invalid', 'commit', '-qm', 'Fixture baseline'], check=True)
                 before_tests = digest(root / 'repair_test.go')
                 command = [str(forge), 'bench', str(task_path.resolve()), '--workspace', str(root), '--model', str(model), '--gpu-layers', args.gpu_layers,
-                           '--context', args.context, '--allow-write', '--allow-exec', '--json', '--max-turns', str(args.max_turns), '--wall-ms', str(args.timeout * 1000), *policy['flags'],
+                           '--context', args.context, '--output-reserve', str(args.output_reserve),
+                           '--temperature', str(args.temperature), '--seed', str(args.seed),
+                           '--allow-write', '--allow-exec', '--json', '--max-turns', str(args.max_turns), '--wall-ms', str(args.timeout * 1000), *policy['flags'],
                            *(['--chat-template', args.chat_template] if args.chat_template else [])]
                 start = time.monotonic()
                 with (output / 'stdout.jsonl').open('w') as out, (output / 'stderr.txt').open('w') as err:
