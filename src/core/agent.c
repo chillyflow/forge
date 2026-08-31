@@ -39,6 +39,8 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
         config->limits.output_reserve >= config->limits.context_tokens ||
         config->limits.context_tokens > config->model->config.context_tokens ||
         (!config->thought && (config->thought_required || config->thought_routed)) ||
+        (!config->thought_routed &&
+         (config->thought_cue || config->thought_budget || config->thought_budget_unbounded)) ||
         !config->limits.max_tool_bytes || config->limits.max_tool_bytes > 16u * 1024u * 1024u ||
         !config->limits.max_file_bytes || config->limits.max_file_bytes > 16u * 1024u * 1024u ||
         !config->limits.wall_timeout_ms || !config->limits.command_timeout_ms ||
@@ -180,7 +182,7 @@ static char *action_history_text(bool retain, yyjson_val *o, forge_error *e) {
  * constrains the first complete tool/memory/final object. Normalize that prefix
  * into the existing leading thought field so every downstream policy, event,
  * validation and history path remains identical to inline thought handling. */
-static char *routed_action_text(const char *raw, bool required, forge_error *e) {
+static char *routed_action_text(const char *raw, bool required, const char *cue, forge_error *e) {
     const char *action = NULL;
     for (const char *candidate = strchr(raw, '{'); candidate;
          candidate = strchr(candidate + 1, '{')) {
@@ -201,23 +203,31 @@ static char *routed_action_text(const char *raw, bool required, forge_error *e) 
         return NULL;
     }
     const char *begin = raw, *end = action;
-    /* The llama backend force-decodes FG_THOUGHT_CUE as scaffold; only text
-     * beyond it is the model's reasoning, so the cue never satisfies
+    /* The llama backend force-decodes the configured cue as scaffold; only
+     * text beyond it is the model's reasoning, so the cue never satisfies
      * thought_required and never enters the recorded thought. Backends
      * without the cue are unaffected. */
-    if (end - begin >= (ptrdiff_t)strlen(FG_THOUGHT_CUE) &&
-        !strncmp(begin, FG_THOUGHT_CUE, strlen(FG_THOUGHT_CUE)))
-        begin += strlen(FG_THOUGHT_CUE);
+    size_t cue_bytes = strlen(cue);
+    if (cue_bytes && end - begin >= (ptrdiff_t)cue_bytes && !strncmp(begin, cue, cue_bytes))
+        begin += cue_bytes;
     while (begin < end && isspace((unsigned char)*begin))
         begin++;
     while (end > begin && isspace((unsigned char)end[-1]))
         end--;
     size_t bytes = (size_t)(end - begin);
-    if (bytes > FG_THOUGHT_MAX_BYTES || !fg_utf8_valid(begin, bytes)) {
-        fg_error(e, bytes > FG_THOUGHT_MAX_BYTES ? FORGE_ERR_LIMIT : FORGE_ERR_PARSE,
-                 "Routed thought must be valid UTF-8 and at most %u bytes", FG_THOUGHT_MAX_BYTES);
+    /* A budget-forced action can open mid-character; drop the stranded lead
+     * bytes so the forced boundary is not run-fatal, then validate the whole
+     * prefix BEFORE the byte cap slices it — invalid bytes past the cap must
+     * still fail. Over-long reasoning is truncated, not fatal: the raw text
+     * is already session evidence, and the prefix is decode-side prose, not a
+     * model-authored field. */
+    bytes = fg_utf8_trim_incomplete(begin, bytes);
+    if (!fg_utf8_valid(begin, bytes)) {
+        fg_error(e, FORGE_ERR_PARSE, "Routed thought must be valid UTF-8");
         return NULL;
     }
+    if (bytes > FG_THOUGHT_MAX_BYTES)
+        bytes = fg_utf8_prefix(begin, bytes, FG_THOUGHT_MAX_BYTES);
     if (required && !bytes) {
         fg_error(e, FORGE_ERR_PARSE, "Routed thought is required before every action");
         return NULL;
@@ -577,11 +587,13 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             cache_request.anchor_ends = &anchor;
             cache_request.anchor_count = anchor ? 1 : 0;
         }
+        fg_decode_policy routed_policy = {FG_ACTION_TRIGGER_PATTERN, a->config.thought_cue,
+                                          a->config.thought_budget,
+                                          a->config.thought_budget_unbounded};
         status = fg_model_generate_routed_with_cache(
-            a->config.model, prompt, grammar,
-            a->config.thought_routed ? FG_ACTION_TRIGGER_PATTERN : NULL, max_tokens, stream_token,
-            &stream, &response, &a->metrics, a->config.cancelled, a->config.userdata, deadline,
-            a->config.model->cache ? &cache_request : NULL, e);
+            a->config.model, prompt, grammar, a->config.thought_routed ? &routed_policy : NULL,
+            max_tokens, stream_token, &stream, &response, &a->metrics, a->config.cancelled,
+            a->config.userdata, deadline, a->config.model->cache ? &cache_request : NULL, e);
         fg_buf_clear(&stream.pending);
         if (stream.failed)
             status = fg_error(e, FORGE_ERR_IO, "Token event could not be recorded");
@@ -620,7 +632,9 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             continue;
         }
         if (a->config.thought_routed) {
-            char *normalized = routed_action_text(response, a->config.thought_required, e);
+            char *normalized = routed_action_text(
+                response, a->config.thought_required,
+                a->config.thought_cue ? a->config.thought_cue : FG_THOUGHT_CUE, e);
             free(response);
             response = normalized;
             if (!response) {

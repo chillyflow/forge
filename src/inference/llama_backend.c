@@ -288,49 +288,40 @@ static bool action_ban_ready(llama_state *s, forge_error *e) {
     s->eog_ban_count = eog_count;
     return true;
 }
-/* True once the output contains the start of an action object: '{', optional
- * JSON whitespace, a quoted tool/memory/final key, optional whitespace, ':'.
- * Mirrors FG_ACTION_TRIGGER_PATTERN so the host can tell when the lazy
- * grammar has armed and end-of-generation may be allowed again. */
-static bool action_begun(const char *text) {
-    for (const char *candidate = strchr(text, '{'); candidate;
-         candidate = strchr(candidate + 1, '{')) {
-        const char *cursor = candidate + 1;
-        while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
-            cursor++;
-        if (*cursor != '"')
-            continue;
-        cursor++;
-        static const char *const keys[] = {"tool", "memory", "final"};
-        for (size_t i = 0; i < sizeof(keys) / sizeof(*keys); i++) {
-            size_t length = strlen(keys[i]);
-            if (strncmp(cursor, keys[i], length) || cursor[length] != '"')
-                continue;
-            const char *colon = cursor + length + 1;
-            while (*colon == ' ' || *colon == '\t' || *colon == '\r' || *colon == '\n')
-                colon++;
-            if (*colon == ':')
-                return true;
-        }
+/* Think budget expired without an action: replace the never-triggered lazy
+ * grammar at slot 0 (after conditional ban removal) with an eager grammar over
+ * the same GBNF, so the action must open under full constraint — tool
+ * constraints retained, all three envelope alternatives open. The end ban is
+ * dropped here because a fresh root grammar masks end-of-generation until the
+ * action object closes. Selector samplers are re-added in their original
+ * order behind the new grammar. The lazy sampler's un-fired trigger buffer is
+ * host text the caller already holds, so freeing it loses nothing. */
+static forge_status force_action(llama_state *s, struct llama_sampler *chain,
+                                 struct llama_sampler **grammar_sampler, const char *grammar,
+                                 bool eog_banned, forge_error *e) {
+    if (eog_banned)
+        llama_sampler_free(llama_sampler_chain_remove(chain, 0));
+    llama_sampler_free(llama_sampler_chain_remove(chain, 0));
+    *grammar_sampler = NULL;
+    struct llama_sampler *eager = llama_sampler_init_grammar(s->vocab, grammar, "root");
+    if (!eager)
+        return fg_error(e, FORGE_ERR_PARSE, "Action grammar was rejected while forcing the action");
+    int selectors = llama_sampler_chain_n(chain);
+    struct llama_sampler *tail[4];
+    if (selectors < 0 || (size_t)selectors > sizeof(tail) / sizeof(*tail)) {
+        llama_sampler_free(eager);
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Unexpected sampler chain while forcing the action");
     }
-    return false;
-}
-static bool complete_action_suffix(const char *text) {
-    for (const char *candidate = strchr(text, '{'); candidate;
-         candidate = strchr(candidate + 1, '{')) {
-        yyjson_doc *doc = yyjson_read(candidate, strlen(candidate), 0);
-        yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;
-        bool complete = yyjson_is_obj(root) &&
-                        (yyjson_obj_get(root, "tool") || yyjson_obj_get(root, "memory") ||
-                         yyjson_obj_get(root, "final"));
-        yyjson_doc_free(doc);
-        if (complete)
-            return true;
-    }
-    return false;
+    for (int i = selectors - 1; i >= 0; i--)
+        tail[i] = llama_sampler_chain_remove(chain, i);
+    llama_sampler_chain_add(chain, eager);
+    for (int i = 0; i < selectors; i++)
+        llama_sampler_chain_add(chain, tail[i]);
+    *grammar_sampler = eager;
+    return FORGE_OK;
 }
 static forge_status llama_generate(forge_model *m, const char *prompt, const char *grammar,
-                                   const char *grammar_trigger, size_t max_tokens,
+                                   const fg_decode_policy *policy, size_t max_tokens,
                                    forge_token_fn cb, void *u, char **output, forge_metrics *stats,
                                    forge_cancel_fn cancel, void *cu, uint64_t deadline,
                                    forge_error *e) {
@@ -362,40 +353,53 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         status = fg_error(e, FORGE_ERR_MEMORY, "Sampler allocation failed");
         goto finish;
     }
-    /* §32 elicitation. A lazy trigger alone never elicits reasoning: the model
-     * may open the action object on its first token and the grammar arms
-     * immediately. While the budget lasts, action-opening tokens are excluded,
-     * so decoding can only produce plain text; end-of-generation tokens stay
-     * excluded until the action actually begins, so a routed generation cannot
-     * end actionless after reasoning (the token budget remains the backstop).
-     * Both bans sit ahead of the samplers: end ban at slot 0 until the action
-     * begins, brace ban at slot 1 until the budget is spent. */
-    size_t suppress = grammar_trigger ? FG_MIN(FG_THOUGHT_MIN_PREFIX_TOKENS, max_tokens / 4) : 0;
-    bool awaiting_action = false;
-    if (suppress) {
+    /* §32 per-state routing. A lazy trigger alone never elicits reasoning: the
+     * model may open the action object on its first token and the grammar arms
+     * immediately. While the suppress window lasts, action-opening tokens are
+     * excluded, so decoding can only produce plain text; end-of-generation
+     * tokens stay excluded until the action actually begins, so a routed
+     * generation cannot end actionless. Both bans sit ahead of the samplers:
+     * end ban at slot 0 until the action begins, brace ban at slot 1 until the
+     * window is spent. When the think cap expires without an action, the lazy
+     * grammar is swapped for an eager one so the action must open constrained.
+     * Once the action begins, generation ends at the first token that
+     * completes the object — the grammar would otherwise keep whitespace
+     * padding legal until an end token or the budget (root ends in ws). */
+    size_t min_think = 0, think_cap = 0;
+    const char *cue = NULL;
+    if (policy) {
+        fg_think_bounds(policy, max_tokens, &min_think, &think_cap);
+        cue = policy->cue ? policy->cue : FG_THOUGHT_CUE;
+    }
+    size_t suppress = min_think;
+    bool awaiting_action = false, braces_armed = false;
+    if (policy) {
         if (!action_ban_ready(s, e)) {
             status = e && e->code ? e->code : FORGE_ERR_MEMORY;
             goto finish;
         }
-        struct llama_sampler *ends = llama_sampler_init_logit_bias(
-            llama_vocab_n_tokens(s->vocab), s->eog_ban_count, s->eog_ban);
+        struct llama_sampler *ends = llama_sampler_init_logit_bias(llama_vocab_n_tokens(s->vocab),
+                                                                   s->eog_ban_count, s->eog_ban);
         struct llama_sampler *braces =
-            ends ? llama_sampler_init_logit_bias(llama_vocab_n_tokens(s->vocab),
-                                                 s->brace_ban_count, s->brace_ban)
-                 : NULL;
-        if (!braces) {
+            ends && suppress ? llama_sampler_init_logit_bias(llama_vocab_n_tokens(s->vocab),
+                                                             s->brace_ban_count, s->brace_ban)
+                             : NULL;
+        if (!ends || (suppress && !braces)) {
             if (ends)
                 llama_sampler_free(ends);
             status = fg_error(e, FORGE_ERR_MEMORY, "Routed prefix sampler allocation failed");
             goto finish;
         }
         llama_sampler_chain_add(sampler, ends);
-        llama_sampler_chain_add(sampler, braces);
         awaiting_action = true;
+        if (braces) {
+            llama_sampler_chain_add(sampler, braces);
+            braces_armed = true;
+        }
     }
     if (grammar) {
-        if (grammar_trigger) {
-            const char *patterns[] = {grammar_trigger};
+        if (policy) {
+            const char *patterns[] = {policy->trigger};
             grammar_sampler = llama_sampler_init_grammar_lazy_patterns(s->vocab, grammar, "root",
                                                                        patterns, 1, NULL, 0);
         } else
@@ -422,45 +426,84 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
      * sentence instead of echoing the prompt (the measured failure of a bare
      * '{' ban). The cue streams and enters the raw response like sampled
      * text, and every sampler accepts it so the lazy trigger buffer stays
-     * consistent with the output. */
-    if (grammar_trigger && suppress) {
+     * consistent with the output. A cue that cannot be force-decoded fails
+     * loudly here: proceeding with the bans armed but no steering text is the
+     * measured 10/10-death configuration, never a silent fallback. */
+    if (policy && *cue) {
         llama_token cue_tokens[16];
         int32_t cue_count =
-            llama_tokenize(s->vocab, FG_THOUGHT_CUE, (int32_t)strlen(FG_THOUGHT_CUE), cue_tokens,
+            llama_tokenize(s->vocab, cue, (int32_t)strlen(cue), cue_tokens,
                            (int32_t)(sizeof(cue_tokens) / sizeof(*cue_tokens)), false, false);
-        if (cue_count > 0 && (size_t)cue_count < max_tokens) {
-            for (int32_t c = 0; c < cue_count && status == FORGE_OK; c++) {
-                llama_token token = cue_tokens[c];
-                char small[128];
-                int32_t length =
-                    llama_token_to_piece(s->vocab, token, small, (int32_t)sizeof(small), 0, false);
-                if (length < 0 || !fg_buf_add(&out, small, (size_t)FG_MAX(length, 0))) {
-                    status = fg_error(e, FORGE_ERR_MEMORY, "Token output failed");
-                    break;
-                }
-                llama_sampler_accept(sampler, token);
-                stats->generated_tokens++;
-                if (cb && !cb(small, (size_t)length, u)) {
-                    status = fg_error(e, FORGE_ERR_CANCELLED, "Token callback cancelled");
-                    break;
-                }
-                status = decode_batch(s, &token, 1, s->count, e);
-                if (status == FORGE_OK)
-                    s->tokens[s->count++] = token;
-            }
-            sample_budget = max_tokens - (size_t)cue_count;
+        if (cue_count <= 0) {
+            status = fg_error(e, FORGE_ERR_MODEL,
+                              "Reasoning cue cannot be tokenized within its 16-token bound");
+            goto finish;
         }
+        if ((size_t)cue_count >= max_tokens) {
+            status = fg_error(e, FORGE_ERR_LIMIT, "Turn token budget cannot fit the reasoning cue");
+            goto finish;
+        }
+        /* Screen rendered pieces, not configured bytes: tokenizer
+         * normalization can map other code points onto '{', and a cue that
+         * opens the action object would fire the trigger mid-scaffold. The
+         * trigger buffer sees special=true renderings, so judge those. */
+        for (int32_t c = 0; c < cue_count; c++) {
+            char small[128];
+            int32_t special = llama_token_to_piece(s->vocab, cue_tokens[c], small,
+                                                   (int32_t)sizeof(small), 0, true);
+            if (special < 0 || memchr(small, '{', (size_t)special)) {
+                status = fg_error(e, FORGE_ERR_ARGUMENT,
+                                  "Reasoning cue renders an action-opening token");
+                goto finish;
+            }
+        }
+        for (int32_t c = 0; c < cue_count && status == FORGE_OK; c++) {
+            llama_token token = cue_tokens[c];
+            char small[128];
+            int32_t length =
+                llama_token_to_piece(s->vocab, token, small, (int32_t)sizeof(small), 0, false);
+            if (length < 0 || !fg_buf_add(&out, small, (size_t)FG_MAX(length, 0))) {
+                status = fg_error(e, FORGE_ERR_MEMORY, "Token output failed");
+                break;
+            }
+            llama_sampler_accept(sampler, token);
+            stats->generated_tokens++;
+            if (cb && !cb(small, (size_t)length, u)) {
+                status = fg_error(e, FORGE_ERR_CANCELLED, "Token callback cancelled");
+                break;
+            }
+            status = decode_batch(s, &token, 1, s->count, e);
+            if (status == FORGE_OK)
+                s->tokens[s->count++] = token;
+        }
+        sample_budget = max_tokens - (size_t)cue_count;
         if (status != FORGE_OK) {
             stats->decode_ms += (double)(fg_now_ms() - begin);
             goto finish;
         }
     }
+    /* Eager grammar constrains the action from the first token; routed
+     * generation reaches the action either at the lazy trigger or at the
+     * forced swap. action_offset marks where the constrained action region
+     * begins — the completeness check must never scan reasoning prose, which
+     * can legally contain complete JSON objects that never armed the grammar. */
+    bool action_open = !policy && grammar;
+    size_t action_offset = 0;
     for (size_t i = 0; i < sample_budget; i++) {
-        /* The action cannot begin while '{' is banned, so when the budget ends
-         * the brace ban is still at slot 1 behind the end ban. */
-        if (suppress && i == suppress) {
+        /* The action cannot begin while '{' is banned, so while the window
+         * lasts the brace ban is still at slot 1 behind the end ban. */
+        if (braces_armed && i == suppress) {
             llama_sampler_free(llama_sampler_chain_remove(sampler, 1));
-            suppress = 0;
+            braces_armed = false;
+        }
+        if (policy && !action_open && !policy->think_unbounded && i == think_cap) {
+            status = force_action(s, sampler, &grammar_sampler, grammar, awaiting_action, e);
+            if (status != FORGE_OK)
+                break;
+            awaiting_action = false;
+            action_open = true;
+            action_offset = out.len;
+            stats->forced_actions++;
         }
         if (interrupted(cancel, cu, deadline)) {
             status = fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled or deadline reached");
@@ -469,11 +512,11 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         llama_synchronize(s->ctx);
         uint64_t sampling_start = fg_now_ms();
         /* The greedy fast path reads raw logits and would bypass the bans. */
-        llama_token token = sample_token(s, sampler, grammar_sampler,
-                                         !suppress && !awaiting_action &&
-                                             m->config.grammar_fast_path &&
-                                             m->config.temperature <= 0,
-                                         stats);
+        llama_token token =
+            sample_token(s, sampler, grammar_sampler,
+                         !braces_armed && !awaiting_action && m->config.grammar_fast_path &&
+                             m->config.temperature <= 0,
+                         stats);
         stats->sampling_ms += (double)(fg_now_ms() - sampling_start);
         if (llama_vocab_is_eog(s->vocab, token)) {
             ended = true;
@@ -498,9 +541,18 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             break;
         }
         stats->generated_tokens++;
-        if (awaiting_action && !suppress && action_begun(out.data ? out.data : "")) {
-            llama_sampler_free(llama_sampler_chain_remove(sampler, 0));
-            awaiting_action = false;
+        bool closing = length > 0 && memchr(piece, '}', (size_t)length) != NULL;
+        if (policy && !action_open) {
+            const char *opened = fg_action_begin(out.data ? out.data : "");
+            if (opened) {
+                if (awaiting_action) {
+                    llama_sampler_free(llama_sampler_chain_remove(sampler, 0));
+                    awaiting_action = false;
+                }
+                action_open = true;
+                action_offset = (size_t)(opened - out.data);
+            } else
+                stats->think_tokens++;
         }
         if (cb && !cb(piece, (size_t)length, u)) {
             if (piece != small)
@@ -510,6 +562,15 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         }
         if (piece != small)
             free(piece);
+        /* End at completion: after the action object closes, the grammar
+         * still keeps whitespace legal (root ends in ws), so waiting for an
+         * end token can burn the rest of the budget. Objects can only close
+         * on a '}' piece, and the scan starts at the constrained region. */
+        if (grammar && action_open && closing && fg_action_complete(out.data + action_offset)) {
+            stats->action_stops++;
+            ended = true;
+            break;
+        }
         status = decode_batch(s, &token, 1, s->count, e);
         if (status != FORGE_OK)
             break;
@@ -517,8 +578,9 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
     }
     stats->decode_ms += (double)(fg_now_ms() - begin);
     if (status == FORGE_OK && grammar && !ended) {
-        bool complete = grammar_trigger ? complete_action_suffix(out.data ? out.data : "") : false;
-        yyjson_doc *d = grammar_trigger ? NULL : yyjson_read(out.data ? out.data : "", out.len, 0);
+        bool complete =
+            policy && action_open && fg_action_complete(out.data ? out.data + action_offset : "");
+        yyjson_doc *d = policy ? NULL : yyjson_read(out.data ? out.data : "", out.len, 0);
         if (!complete && !d)
             status =
                 fg_error(e, FORGE_ERR_LIMIT, "Generation limit reached before a complete action");

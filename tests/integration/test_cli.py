@@ -377,10 +377,17 @@ class ForgeTests(unittest.TestCase):
         result, _, _ = self.run_script(missing, '--no-auto-validation', '--thought-routed',
                                        '--thought-required', success=False)
         self.assertIn('required before every action', result.stderr)
-        oversized = ['x' * 2049 + json.dumps({'final': 'Too much reasoning.'})]
-        result, _, _ = self.run_script(oversized, '--no-auto-validation', '--thought-routed',
-                                       success=False)
-        self.assertIn('at most 2048 bytes', result.stderr)
+        # An over-long routed prefix is truncated at the byte cap, never
+        # run-fatal: the raw text is already session evidence, and killing the
+        # run for verbose reasoning was the recorded phase-2 defect. The
+        # UTF-8-boundary slice keeps exactly the first 2048 bytes here.
+        oversized = ['x' * 2049 + '\n' + json.dumps(
+                         {'tool': 'read_file', 'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+                     json.dumps({'final': 'Read after truncated reasoning.'})]
+        _, oversized_events, _ = self.run_script(oversized, '--no-auto-validation',
+                                                 '--thought-routed')
+        truncated = next(e['data'] for e in oversized_events if e['type'] == 'tool_call')
+        self.assertEqual(truncated['thought'], 'x' * 2048)
 
         # Contradictory ablation settings must fail loudly rather than quietly
         # report one arm's numbers under the other arm's name.
@@ -404,6 +411,38 @@ class ForgeTests(unittest.TestCase):
                                  str(self.root / 'script.json'), '--no-thought',
                                  '--thought-routed', success=False)
         self.assertIn('contradict', contradiction.stderr)
+
+        # §32 per-state routing controls. The think budget and cue only mean
+        # anything in routed mode; arming them elsewhere is a loud error, not a
+        # silent no-op arm.
+        rejected = self.cli('run', 'Inspect the note.', '--script',
+                            str(self.root / 'script.json'), '--thought-routed',
+                            '--thought-budget', '0', success=False)
+        self.assertIn('[1, 2147483647]', rejected.stderr)
+        rejected = self.cli('run', 'Inspect the note.', '--script',
+                            str(self.root / 'script.json'), '--thought-budget', '64',
+                            success=False)
+        self.assertIn('require --thought-routed', rejected.stderr)
+        rejected = self.cli('run', 'Inspect the note.', '--script',
+                            str(self.root / 'script.json'), '--thought-routed',
+                            '--thought-cue', 'Plan: {', success=False)
+        self.assertIn('action-opening brace', rejected.stderr)
+        # The unbounded ablation and an explicit budget parse and run; the
+        # scripted backend ignores decode routing, so these only pin the CLI
+        # and config surface.
+        self.run_script(routed_actions, '--no-auto-validation', '--thought-routed',
+                        '--no-thought-budget')
+        self.run_script(routed_actions, '--no-auto-validation', '--thought-routed',
+                        '--thought-budget', '64')
+        # A configured cue replaces the default scaffold in host normalization:
+        # it is stripped from the recorded thought exactly as "Thought: " is.
+        custom_cued = ['Plan: ' + secret + '\n' + json.dumps(
+                           {'tool': 'read_file', 'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+                       json.dumps({'final': 'Done.'})]
+        _, custom_events, _ = self.run_script(custom_cued, '--no-auto-validation',
+                                              '--thought-routed', '--thought-cue', 'Plan: ')
+        custom_call = next(e['data'] for e in custom_events if e['type'] == 'tool_call')
+        self.assertEqual(custom_call['thought'], secret)
 
     def test_validation_plan_and_permission_denial(self):
         self.go_module()

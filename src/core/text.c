@@ -53,6 +53,28 @@ size_t fg_utf8_forward(const char *text, size_t length, size_t offset) {
     return offset;
 }
 
+/* Drops a trailing INCOMPLETE UTF-8 sequence (a lead byte with too few
+ * continuation bytes before the end), at most one character's worth. Text cut
+ * at an arbitrary byte boundary — a budget-forced action swap — is otherwise
+ * unfixably invalid. Anything else, including outright invalid bytes, is left
+ * for fg_utf8_valid to reject. */
+size_t fg_utf8_trim_incomplete(const char *text, size_t length) {
+    if (!text)
+        return 0;
+    size_t lead = length;
+    while (lead && length - lead < 3 && ((unsigned char)text[lead - 1] & 0xc0) == 0x80)
+        lead--;
+    if (!lead)
+        return length;
+    unsigned char first = (unsigned char)text[lead - 1];
+    size_t width = first < 0x80                     ? 1
+                   : first >= 0xc2 && first <= 0xdf ? 2
+                   : first >= 0xe0 && first <= 0xef ? 3
+                   : first >= 0xf0 && first <= 0xf4 ? 4
+                                                    : 0;
+    return width > length - lead + 1 ? lead - 1 : length;
+}
+
 /* Human-readable text is not a lossless encoding: a literal "\\x00" and a
  * rendered NUL look alike. Exact stdout/stderr artifacts remain authoritative. */
 static bool render_bytes(fg_buf *result, const char *bytes, size_t length) {

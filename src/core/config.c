@@ -581,6 +581,15 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
     if (!config->thought && (config->thought_required || config->thought_routed))
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "Thought routing or required thought needs the thought channel enabled");
+    if (!config->thought_routed &&
+        (config->thought_cue || config->thought_budget || config->thought_budget_unbounded))
+        return fg_error(e, FORGE_ERR_ARGUMENT,
+                        "Thought budget and cue controls need thought routing enabled");
+    if (config->thought_budget > INT32_MAX)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Thought budget must be in [1, 2147483647]");
+    if (config->thought_cue && strchr(config->thought_cue, '{'))
+        return fg_error(e, FORGE_ERR_ARGUMENT,
+                        "The reasoning cue must not contain an action-opening brace");
     if (model->context_tokens < 128 || model->context_tokens > 1048576 ||
         model->context_tokens != limits->context_tokens)
         return fg_error(e, FORGE_ERR_ARGUMENT,

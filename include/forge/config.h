@@ -27,6 +27,11 @@ typedef struct {
     bool checkpoint_cache_enabled; /* Opt-in; physical cache support is checked at model load. */
     bool semantic_output, compact_context;
     bool thought, thought_required, thought_in_history, thought_routed;
+    /* Routed-mode §32 controls; CLI-only, no TOML keys. The cue string is
+     * borrowed (CLI argument), never owned by this object. */
+    const char *thought_cue;
+    size_t thought_budget;
+    bool thought_budget_unbounded;
     forge_shell_network shell_network;
     /* Private storage. Do not free, assign, or copy these pointers. The public
      * model strings may be replaced by borrowed CLI strings; destroy only frees

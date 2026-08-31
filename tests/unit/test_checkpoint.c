@@ -131,13 +131,13 @@ static const fg_checkpoint_backend backend = {supported, prefill,       state_si
                                               state_set, accept_tokens, clear};
 
 static forge_status generate(forge_model *model, const char *prompt, const char *grammar,
-                             const char *grammar_trigger, size_t max_tokens,
+                             const fg_decode_policy *policy, size_t max_tokens,
                              forge_token_fn callback, void *userdata, char **out,
                              forge_metrics *stats, forge_cancel_fn cancel, void *cancel_data,
                              uint64_t deadline, forge_error *error) {
     (void)prompt;
     (void)grammar;
-    (void)grammar_trigger;
+    (void)policy;
     (void)max_tokens;
     (void)callback;
     (void)userdata;

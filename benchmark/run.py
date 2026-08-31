@@ -55,7 +55,7 @@ def main():
     parser.add_argument('--forge', type=Path, required=True)
     parser.add_argument('--model', type=Path, required=True)
     parser.add_argument('--tasks', nargs='*', default=[])
-    parser.add_argument('--variants', nargs='+', choices=['optimized', 'no-kv', 'no-semantic', 'no-compaction', 'grammar-first', 'no-thought', 'thought-optional-decode-only', 'thought-required', 'thought-required-decode-only', 'thought-routed', 'thought-routed-decode-only', 'thought-routed-required', 'thought-routed-required-decode-only'], default=['optimized'])
+    parser.add_argument('--variants', nargs='+', choices=['optimized', 'no-kv', 'no-semantic', 'no-compaction', 'grammar-first', 'no-thought', 'thought-optional-decode-only', 'thought-required', 'thought-required-decode-only', 'thought-routed', 'thought-routed-decode-only', 'thought-routed-required', 'thought-routed-required-decode-only', 'thought-routed-unbounded-decode-only'], default=['optimized'])
     parser.add_argument('--gpu-layers', default='-1')
     parser.add_argument('--chat-template', default=None,
                         help='llama.cpp chat template name; default uses the template embedded in the GGUF')
@@ -78,7 +78,9 @@ def main():
              'thought-routed-decode-only': ['--thought-routed', '--thought-decode-only'],
              'thought-routed-required': ['--thought-routed', '--thought-required', '--thought-history'],
              'thought-routed-required-decode-only': ['--thought-routed', '--thought-required',
-                                                     '--thought-decode-only']}
+                                                     '--thought-decode-only'],
+             'thought-routed-unbounded-decode-only': ['--thought-routed', '--no-thought-budget',
+                                                      '--thought-decode-only']}
     records = []
     metadata = {'schema_version': 1, 'model_file': model.name, 'model_sha256': digest(model), 'gpu_layers': args.gpu_layers,
                 'chat_template': args.chat_template or 'embedded',

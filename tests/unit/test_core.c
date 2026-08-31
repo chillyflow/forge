@@ -309,6 +309,56 @@ int main(void) {
     s = fg_tool_schema(true, true, true);
     assert(s && strstr(s, "MUST be nonempty"));
     free(s);
+    /* §32 decode-state routing predicates. fg_action_begin mirrors the lazy
+     * trigger: an envelope key must open the object, so reasoning prose and
+     * embedded non-action objects never mark the constrained region. */
+    const char *begun = fg_action_begin("Thought: adding first {\"tool\":\"read_file\"");
+    assert(begun && !strncmp(begun, "{\"tool\"", 7));
+    begun = fg_action_begin("x { \"final\" : \"done\"}");
+    assert(begun && !strncmp(begun, "{ \"final\"", 9));
+    assert(!fg_action_begin("no action here"));
+    assert(!fg_action_begin("{\"thought\":\"only\"}"));
+    assert(!fg_action_begin("{\"x\":1,\"tool\":\"late key\"}"));
+    /* Completion requires a full parse to the end of the text: an unclosed
+     * object, or a '}' inside a string, must not end generation early. */
+    assert(fg_action_complete("{\"tool\":\"list_files\",\"args\":{\"path\":\".\"}}"));
+    assert(fg_action_complete("prose then {\"final\":\"done\"} \n"));
+    assert(!fg_action_complete("{\"tool\":\"list_files\",\"args\":{\"path\":\".\"}"));
+    assert(!fg_action_complete("{\"final\":\"a brace } inside"));
+    assert(!fg_action_complete("nothing"));
+    /* Think bounds: the suppress window stays a quarter capped at 32, the cap
+     * defaults to half the turn budget, a configured budget clamps the window,
+     * the unbounded ablation removes the cap, and an empty cue removes the
+     * window (banning the opener without steering text is the measured
+     * prompt-echo death configuration). */
+    fg_decode_policy policy = {FG_ACTION_TRIGGER_PATTERN, NULL, 0, false};
+    size_t min_think = 0, think_cap = 0;
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 32 && think_cap == 1024);
+    fg_think_bounds(&policy, 64, &min_think, &think_cap);
+    assert(min_think == 16 && think_cap == 32);
+    policy.think_budget = 8;
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 8 && think_cap == 8);
+    policy.think_budget = 0;
+    policy.think_unbounded = true;
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 32 && think_cap == SIZE_MAX);
+    policy.think_unbounded = false;
+    policy.cue = "";
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 0 && think_cap == 1024);
+    /* A budget-forced action can cut the reasoning mid-character; only a
+     * trailing incomplete sequence is dropped, and invalid bytes elsewhere
+     * stay for validation to reject. */
+    assert(fg_utf8_trim_incomplete("abc", 3) == 3);
+    assert(fg_utf8_trim_incomplete("ab\xf0", 3) == 2);
+    assert(fg_utf8_trim_incomplete("ab\xf0\x9f", 4) == 2);
+    assert(fg_utf8_trim_incomplete("ab\xc3\xa9", 4) == 4);
+    assert(fg_utf8_trim_incomplete("ab\xc0", 3) == 3);
+    assert(fg_utf8_trim_incomplete("ab\xf5", 3) == 3);
+    assert(fg_utf8_trim_incomplete("\x80\x80", 2) == 2);
+    assert(fg_utf8_trim_incomplete("", 0) == 0);
     const char *raw =
         "{\"Action\":\"pass\",\"Test\":\"TestOK\"}\n{\"Action\":\"fail\",\"Package\":\"example/"
         "math\",\"Test\":\"TestAdd\"}\n{\"Action\":\"output\",\"Output\":\"math_test.go:9: "

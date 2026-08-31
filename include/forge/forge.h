@@ -73,6 +73,11 @@ typedef struct {
     uint64_t checkpoint_additional_tokens; /* Reused beyond the previously usable live prefix. */
     size_t checkpoint_peak_bytes; /* Configured manager allocation high-water mark, not RSS. */
     double checkpoint_probe_ms, checkpoint_capture_ms, checkpoint_restore_ms;
+    /* §32 decode routing. think_tokens counts sampled reasoning tokens before
+     * the action began (tokenizer-relative, never comparable across models);
+     * forced_actions counts think-budget grammar swaps; action_stops counts
+     * generations ended at action completion instead of an end token. */
+    size_t think_tokens, forced_actions, action_stops;
 } forge_metrics;
 typedef struct {
     const char *model_path;
@@ -111,6 +116,19 @@ typedef struct {
      * while `thought` is false is rejected: forge_agent_create fails with
      * FORGE_ERR_ARGUMENT. */
     bool thought, thought_required, thought_in_history, thought_routed;
+    /* §32 routed-mode decode routing. All three require `thought_routed`;
+     * forge_agent_create rejects them without it. `thought_cue` replaces the
+     * forced "Thought: " cue (NULL: default; empty: no cue — natively-thinking
+     * models bring their own opener, and the action-opening ban window is
+     * dropped with the cue, because banning the opener without steering text
+     * is the measured prompt-echo death configuration). `thought_budget`
+     * bounds sampled reasoning tokens before the action grammar is enforced
+     * by an eager-grammar swap (0: half the per-turn token budget, a chosen,
+     * unmeasured fraction). `thought_budget_unbounded` restores unbounded
+     * reasoning (ablation; the phase-1 behavior). */
+    const char *thought_cue;
+    size_t thought_budget;
+    bool thought_budget_unbounded;
     bool skip_validation; /* Explicit ablation; ordinary runs verify changed Go workspaces. */
     forge_policy_fn policy;
     forge_cancel_fn cancelled;

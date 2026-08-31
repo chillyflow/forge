@@ -68,6 +68,9 @@ static void usage(void) {
          "  --thought-history    retain thought in later prompts (default: off)\n"
          "  --thought-required   require a leading thought on every action (ablation)\n"
          "  --thought-routed     reason freely, then lazily constrain the action JSON\n"
+         "  --thought-budget N   max reasoning tokens before the action grammar is forced\n"
+         "  --no-thought-budget  unbounded routed reasoning (ablation)\n"
+         "  --thought-cue TEXT   replace the forced reasoning cue; empty disables it\n"
          "  --no-auto-validation skip final Go validation (explicit ablation)\n"
          "  --script FILE        explicit simulated test backend (not inference)\n"
          "  --depth N            symbol expansion or retrieval graph hops, 0..3\n"
@@ -109,6 +112,7 @@ static int option_arity(const char *option) {
                                         "--thought-history",
                                         "--thought-required",
                                         "--thought-routed",
+                                        "--no-thought-budget",
                                         "--no-auto-validation",
                                         "--summary-full-source",
                                         "--no-config"};
@@ -118,6 +122,8 @@ static int option_arity(const char *option) {
                                          "--model",
                                          "--script",
                                          "--chat-template",
+                                         "--thought-budget",
+                                         "--thought-cue",
                                          "--summary-scope",
                                          "--summary-symbol",
                                          "--summary-producer",
@@ -603,6 +609,9 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     ac.thought_in_history = config->thought_in_history;
     ac.thought_required = config->thought_required;
     ac.thought_routed = config->thought_routed;
+    ac.thought_cue = config->thought_cue;
+    ac.thought_budget = config->thought_budget;
+    ac.thought_budget_unbounded = config->thought_budget_unbounded;
     ac.cancelled = cancelled;
     const char *command = NULL, *argument = NULL;
     bool json = false;
@@ -697,6 +706,12 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             ac.thought_routed = true;
             continue;
         }
+        if (!strcmp(a, "--no-thought-budget")) {
+            /* Last flag wins against --thought-budget, checkpoint-cache style. */
+            ac.thought_budget_unbounded = true;
+            ac.thought_budget = 0;
+            continue;
+        }
         if (i + 1 >= argc) {
             fg_error(&error, FORGE_ERR_ARGUMENT, "Missing value for %s", a);
             return failed(&error);
@@ -731,7 +746,19 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             explicit_script = true;
         } else if (!strcmp(a, "--chat-template"))
             mc.chat_template = value;
-        else if (!strcmp(a, "--temperature")) {
+        else if (!strcmp(a, "--thought-cue"))
+            ac.thought_cue = value;
+        else if (!strcmp(a, "--thought-budget")) {
+            size_t budget = 0;
+            /* 0 is the unset sentinel, and a zero budget under
+             * --thought-required is a guaranteed first-turn death. */
+            if (!number(value, &budget) || !budget || budget > INT32_MAX) {
+                fg_error(&error, FORGE_ERR_ARGUMENT, "--thought-budget must be in [1, 2147483647]");
+                return failed(&error);
+            }
+            ac.thought_budget = budget;
+            ac.thought_budget_unbounded = false;
+        } else if (!strcmp(a, "--temperature")) {
             char *end = NULL;
             errno = 0;
             float temperature = strtof(value, &end);
@@ -806,12 +833,21 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     config->thought_in_history = ac.thought_in_history;
     config->thought_required = ac.thought_required;
     config->thought_routed = ac.thought_routed;
+    config->thought_cue = ac.thought_cue;
+    config->thought_budget = ac.thought_budget;
+    config->thought_budget_unbounded = ac.thought_budget_unbounded;
     /* An ablation must not run under contradictory settings and silently
      * report one arm's numbers under the other arm's name. */
     if ((ac.thought_required || ac.thought_routed) && !ac.thought) {
         fg_error(&error, FORGE_ERR_ARGUMENT,
                  "--thought-required/--thought-routed contradicts --no-thought: the channel "
                  "cannot be requested and absent");
+        return failed(&error);
+    }
+    if ((ac.thought_cue || ac.thought_budget || ac.thought_budget_unbounded) &&
+        !ac.thought_routed) {
+        fg_error(&error, FORGE_ERR_ARGUMENT,
+                 "--thought-budget/--no-thought-budget/--thought-cue require --thought-routed");
         return failed(&error);
     }
     if (forge_config_validate(config, &error) != FORGE_OK ||

@@ -84,10 +84,13 @@ keys for tool permission grants, script fixtures, draft models, the reasoning
 channel, KV quantization, network sandbox backends or unsupported index
 languages.
 
-The reasoning channel is CLI-only. `--no-thought`,
-`--thought-required`, `--thought-routed`, `--thought-history` and
-`--thought-decode-only` are the whole surface, and a thought is dropped from
-later prompts unless `--thought-history` is given.
+The reasoning channel is CLI-only. `--no-thought`, `--thought-required`,
+`--thought-routed`, `--thought-history`, `--thought-decode-only`,
+`--thought-budget`, `--no-thought-budget` and `--thought-cue` are the whole
+surface, and a thought is dropped from later prompts unless `--thought-history`
+is given. The budget and cue controls require `--thought-routed`; a budget of 0
+and a cue containing `{` are rejected, and when both budget flags are given the
+last one wins.
 
 Checkpoint CLI overrides are `--checkpoint-cache`, `--no-checkpoint-cache`,
 `--checkpoint-cache-bytes`, `--checkpoint-cache-entries`,

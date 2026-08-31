@@ -99,6 +99,9 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     U(loop_warnings);
     U(grammar_fast_tokens);
     U(grammar_fallback_tokens);
+    U(think_tokens);
+    U(forced_actions);
+    U(action_stops);
     U(raw_tool_tokens);
     U(visible_tool_tokens);
     U(files_opened);
