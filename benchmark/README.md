@@ -1,6 +1,8 @@
 # Benchmark methodology
 
-`tasks/*.json` contains ten tiny Go repair tasks. They are a smoke suite, not
+`tasks/*.json` contains ten tiny Go smoke repairs and six reasoning-gated Go
+repairs. The latter isolate one logical defect in otherwise complete code; the
+oracle for each differs by one source line. These are controlled fixtures, not
 SWE-bench or representative evidence of general repository-level performance.
 `generate_tasks.py` recreates them deterministically for review.
 
@@ -11,7 +13,7 @@ the output directory before removing the runner-owned temporary checkout.
 
 ```sh
 python benchmark/run.py --forge ../build/forge --model /models/coder.gguf \
-  --tasks add clamp --variants optimized no-kv no-semantic \
+  --suite smoke --tasks add clamp --variants optimized no-kv no-semantic \
   --output /tmp/forge-bench
 ```
 
@@ -104,20 +106,32 @@ the cue mechanism, with a doubled-turn-cap control and a five-replicate
 retention analysis (`analyze_retention.py`).
 
 Phase 2 bounds the routed states. The reasoning phase ends at a think budget
-(default half the turn's token budget; `--thought-budget N` overrides it) by
+(default at most 256 tokens, reduced to half the remaining turn budget near
+exhaustion; `--thought-budget N` overrides it) by
 swapping the never-triggered lazy grammar for an eager one so the action must
-open constrained, and every grammar arm now ends generation at the token that
-completes the action object instead of waiting for an end token. The
+open constrained. Leading-whitespace tokens are excluded after a forced swap
+until the first action token, and every grammar arm ends generation at the
+token that completes the action object instead of waiting for an end token. The
 `thought-routed-unbounded-decode-only` arm (`--no-thought-budget`) is the
 same-binary A/B for the budget. Per-state counters `think_tokens`,
-`forced_actions`, and `action_stops` land in `metrics.json`; `think_tokens` is
-tokenizer-relative and never comparable across models, and `action_stops`
-approximates turn count on every grammar arm rather than signaling anomalies.
-Every published sweep predates this mechanism: pass rates and token counts of
-all grammar arms — baselines included, because early stop changes their decode
-mechanics too — need re-measuring on a phase-2 binary before comparison. A
-custom `--thought-cue` is not yet reflected in `consolidate_arms.py`'s census
-`classify()`, which strips only the default cue.
+`forced_actions`, `forced_action_progress_tokens`, and `action_stops` land in
+`metrics.json`; action selection, argument, patch, final, and memory tokens have
+separate counters. Structured selection/arguments are deterministic even when
+patch/final sampling uses temperature. `think_tokens` is tokenizer-relative
+and never comparable across models, and `action_stops` approximates turn count
+on every grammar arm rather than signaling anomalies. The complete same-binary
+re-sweep is checked in at `results/2026-08-31-phase2-resweep/`; the budget arms
+and reasoning-gated fixtures are at `results/2026-08-31-reasoning-gated/`.
+`consolidate_arms.py` and `analyze_failures.py` classify custom cues as well as
+the default cue.
+
+Use `--suite reasoning-gated` for the six logic fixtures, or `--suite all` for
+both suites. Budget calibration arms are
+`thought-routed-budget-256-decode-only`, `-512-`, `-1024-`, and `-1536-`, plus
+the unbounded control. Native-thinking models use `thought-native-decode-only`;
+`thought-native-disabled-decode-only` is the matched lazy-grammar control with
+template thinking disabled. Native arms must use a chat template that supports
+the `enable_thinking` variable.
 
 Multi-model runs are consolidated per model, never across models.
 `consolidate_arms.py` includes `model_sha256` in the identity it verifies, so it

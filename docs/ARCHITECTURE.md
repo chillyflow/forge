@@ -157,17 +157,17 @@ cue; an empty cue drops the cue and the `{`-ban window together, since the ban
 without steering text is the measured prompt-echo configuration.
 
 Routed decoding is a bounded state machine, not an open-ended free phase. The
-reasoning phase ends at the think budget (`--thought-budget`, default half the
-per-turn token budget — a chosen, unmeasured fraction mirroring the window's
-quarter; `--no-thought-budget` is the unbounded ablation): if the action has
+reasoning phase ends at the think budget (`--thought-budget`, default at most
+256 tokens and reduced to half the remaining turn budget near exhaustion;
+`--no-thought-budget` is the unbounded ablation): if the action has
 not begun by then, the never-triggered lazy grammar sampler is replaced in the
 chain by an eager grammar over the same GBNF, so every subsequent token is
 grammar-sanctioned and the action opens under full tool constraints, with all
 three envelope alternatives still available. If the swap lands mid-character,
 host normalization drops the stranded trailing bytes instead of failing the
-turn. Root's leading whitespace rule keeps whitespace padding grammar-legal
-after the swap, so a degenerate model can still spend the remaining budget
-actionless; the turn budget is the backstop. Once the action region begins —
+turn. After the swap, leading-whitespace tokens are biased out until the first
+action-progress token, closing the padding loophole without removing legal
+whitespace later in the grammar. Once the action region begins —
 at the lazy trigger, the forced swap, or token 0 under an eager grammar — the
 host ends generation at the first token that completes the action object
 (objects can only close on a `}` piece, and the completeness scan starts at
@@ -176,12 +176,22 @@ contain complete JSON objects that never armed the grammar). Waiting for an
 end token instead would leave the post-close whitespace tail legal until the
 budget dies. Per-state metrics (`think_tokens`, `forced_actions`,
 `action_stops`) record the machine's behavior in `metrics.json`;
-`think_tokens` is tokenizer-relative and never comparable across models. This
-routes thinking versus action with per-state sampler configuration; tool
-selection, arguments, patch content, and final prose still share one
-undifferentiated action grammar, which is the remaining §32 gap. JSON is
-parsed by yyjson and all required field types/cardinality are validated before
-policy or execution.
+`think_tokens` is tokenizer-relative and never comparable across models.
+`forced_action_progress_tokens` proves a forced swap produced an action token.
+
+The action state is further classified as envelope selection, tool arguments,
+patch content, final prose, or memory content. Selection and ordinary arguments
+use a deterministic sampler policy; patch and final prose retain the configured
+sampling policy. Inline-thought envelopes are classified from the top-level
+action object, so strings inside the thought cannot impersonate an action key.
+The generated GBNF remains active through every substate, and the corresponding
+token counters are serialized in `metrics.json`. JSON is parsed by yyjson and
+all required field types/cardinality are validated before policy or execution.
+
+For chat templates that natively think, `--thought-native` uses a cue-free lazy
+grammar and requests `enable_thinking`; `--disable-thinking` supplies a
+grammar-matched safe control. The same template switch is available as
+`--enable-thinking` / `--disable-thinking` and `model.enable_thinking`.
 
 `apply_patch` requires one unique exact match, stages output in a sibling file,
 checks the old content again, and atomically replaces the file. It is not a

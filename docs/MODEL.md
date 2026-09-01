@@ -57,6 +57,24 @@ recommends a 0.15 sampling temperature; every arm here is greedy, which is
 near that but not identical, and the other two models have no strong low
 temperature guidance. Consult each publisher's model card for license terms.
 
+## Native-thinking models
+
+Forge can preserve a model's template-native reasoning path. The model
+configuration key `enable_thinking` and CLI switches `--enable-thinking` /
+`--disable-thinking` are passed to llama.cpp's Jinja chat-template renderer;
+an explicit value fails rather than being ignored when the template does not
+support the control. `--thought-native` combines enabled template thinking with
+the cue-free lazy action grammar. Appending `--disable-thinking` leaves that
+same grammar in place, providing a thinking-safe matched baseline instead of
+amputating native reasoning with an eager token-0 action grammar.
+
+The official Qwen3-4B Q8_0 smoke in
+`benchmark/results/2026-08-31-reasoning-gated/native-qwen3-4b-smoke/` verifies
+the path: native thinking passed `ceil_div` in 3 turns with 1,608 recorded
+reasoning tokens; its thinking-disabled control reached the run limit in 9
+turns. This single fixture establishes mechanism operation, not a general
+accuracy benefit.
+
 ## Use a local model
 
 ```sh

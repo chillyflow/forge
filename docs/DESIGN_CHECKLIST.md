@@ -247,6 +247,31 @@ Keep implementation, runtime correctness, platform support, and performance evid
 
 The source's module layout and several API signatures, model/profile names, configuration values, and numerical speedups are illustrative. Equivalent organization and names can satisfy their intent; record deviations instead of manufacturing empty files to match a tree. The named behavior, hard invariants, deliverables, platform gates, and benchmark requirements still need to be implemented. Earlier discussion of cloud providers, remote execution, MCP, or multiple agents is superseded for the initial product by the final scope and explicit postponements.
 
+## Phase 2 routing completion addendum — 2026-08-31
+
+This addendum supersedes the historical §32 row and the noted Phase 2
+follow-ups below. Implementation commits `8b738ae`, `d508199`, `1aa4aec`,
+`b1c8966`, and `b103e15` establish the code, harness identity, reasoning
+fixtures, failure preservation, and inline-action classifier correction.
+
+| Source | Current status | Evidence and limits |
+| --- | --- | --- |
+| §32 / phase 25 | **Complete for the scoped literal routing requirement** | `src/inference/routing.c` classifies thinking, envelope selection, tool arguments, patch content, final prose, and memory content. `src/inference/llama_backend.c` applies deterministic sampling to structured selection/arguments and configured sampling to patch/final content while retaining the generated grammar throughout. The classifier finds the top-level action after an inline thought, so action-like text inside a thought cannot select a state. `action_*_tokens` counters make every path observable. Unit and integration coverage is in `tests/unit/test_core.c` and `tests/integration/test_cli.py`. Agent-state-conditioned routing remains a separate design extension, not an omitted literal substate. |
+| Phase 2 mechanism defects | Complete | Reasoning is bounded; action objects stop generation at completion; cue failure is fatal; overlong prefixes truncate safely; a forced grammar swap excludes leading-whitespace tokens until action progress. The Llama smoke records one forced action, one immediate progress token, and one completed action. |
+| Native thinking | Implemented and smoke-verified | The pinned llama common Jinja renderer now receives tri-state `enable_thinking` control from `model.enable_thinking` or CLI. `--thought-native` supplies a cue-free lazy grammar; `--disable-thinking` supplies the matched grammar-safe control. The Qwen3-4B smoke passed with native thinking and reached the limit in its disabled control. The reference profile is still not auto-loaded, so broader §41 remains Partial. |
+| Phase 2 data | Complete | The [100-record all-arm re-sweep][phase2] uses one verified Qwen3-Coder binary/model/environment identity. Every one of seven forced transitions immediately opened action progress. Baselines remain 10/10. |
+| Reasoning-lift question | Measured pilot; no lift observed | Six one-line logic defects form the reasoning-gated suite. Qwen3-Coder was 1/6 in both no-thought and ordinary routed arms; Devstral was 4/6 no-thought versus 3/6 routed. The [reasoning report][reasoning] rejects a demonstrated-lift claim for this six-task, one-seed pilot without claiming impossibility. |
+| Budget calibration | Complete for the default | Qwen3-Coder success was 1/6 at 256, 512, 1,024, 1,536, and unbounded. The 256 arm was the cheapest bounded arm by turns, prompt tokens, and generated tokens, so zero configuration now selects a 256-token ceiling (or half the remaining turn budget when smaller). Explicit arms remain available. |
+| Harness follow-ups | Complete | `benchmark/run.py` selects smoke/reasoning/all suites and records cue, budget, output reserve, temperature, seed, fixture identity, binary identity, and environment. `consolidate_arms.py` verifies complete arm/task identities and classifies custom/native cues; `analyze_failures.py` preserves failure signatures and recognizes forced-padding and custom-cue outcomes. |
+
+The fixture inventory is now sixteen Go tasks (ten smoke, six
+reasoning-gated), so the historical §46 row's count is stale; the 25–50 task,
+multi-language breadth requirement remains Partial. The WSL2 CUDA runs add real
+Linux/NVIDIA model evidence to §5, while macOS Metal inference is still open.
+The §47 matrix now includes full Phase 2 grammar arms, four explicit budget
+arms, unbounded reasoning, native thinking, and its disabled matched control;
+graph/speculation/unconstrained-tool ablations remain outside this follow-up.
+
 ## Sections 1–6: product and foundations
 
 | Source | Requirement | Status | Evidence and remaining work |
@@ -529,3 +554,5 @@ For each status change, record the implementing revision, exact source/test loca
 [routed]: ../benchmark/results/2026-08-30-routed-sweep/README.md
 [elicited]: ../benchmark/results/2026-08-30-elicited-sweep/README.md
 [tier1]: ../benchmark/results/2026-08-31-tier1-models/README.md
+[phase2]: ../benchmark/results/2026-08-31-phase2-resweep/README.md
+[reasoning]: ../benchmark/results/2026-08-31-reasoning-gated/README.md

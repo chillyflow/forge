@@ -132,8 +132,8 @@ typedef struct {
      * dropped with the cue, because banning the opener without steering text
      * is the measured prompt-echo death configuration). `thought_budget`
      * bounds sampled reasoning tokens before the action grammar is enforced
-     * by an eager-grammar swap (0: half the per-turn token budget, a chosen,
-     * unmeasured fraction). `thought_budget_unbounded` restores unbounded
+     * by an eager-grammar swap (0: a calibrated 256-token ceiling, reduced to
+     * half the remaining turn budget near exhaustion). `thought_budget_unbounded` restores unbounded
      * reasoning (ablation; the phase-1 behavior). */
     const char *thought_cue;
     size_t thought_budget;

@@ -210,14 +210,15 @@ forge_status fg_checkpoint_restore_active(forge_model *, const forge_checkpoint 
  * the turn's token budget is the backstop. Floor on room to reason, not a
  * cap: FG_THOUGHT_MAX_BYTES still bounds the accepted prefix. */
 #define FG_THOUGHT_MIN_PREFIX_TOKENS 32u
+#define FG_THOUGHT_DEFAULT_BUDGET 256u
 /* §32 per-state decode routing policy for one generation. A non-NULL policy
  * selects routed (lazy-grammar) mode and requires `trigger`. `cue` replaces
  * the forced reasoning cue: NULL means FG_THOUGHT_CUE; empty disables the cue
  * AND the action-opening ban window, because banning the model's opener
  * without steering text is the measured prompt-echo death configuration.
  * `think_budget` bounds sampled reasoning tokens before the action grammar is
- * enforced by an eager-grammar swap; 0 selects half the turn's token budget, a
- * chosen, unmeasured fraction mirroring the suppress window's quarter.
+ * enforced by an eager-grammar swap; 0 selects a calibrated 256-token ceiling,
+ * reduced to half the remaining turn budget near exhaustion.
  * `think_unbounded` restores the phase-1 unbounded behavior (ablation). */
 typedef struct fg_decode_policy {
     const char *trigger;

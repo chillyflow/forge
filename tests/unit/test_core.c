@@ -341,15 +341,15 @@ int main(void) {
            FG_ACTION_SELECT);
     assert(fg_action_decode_phase("{\"final\":\"") == FG_ACTION_FINAL);
     assert(fg_action_decode_phase("{\"memory\":{") == FG_ACTION_MEMORY);
-    /* Think bounds: the suppress window stays a quarter capped at 32, the cap
-     * defaults to half the turn budget, a configured budget clamps the window,
-     * the unbounded ablation removes the cap, and an empty cue removes the
-     * window (banning the opener without steering text is the measured
-     * prompt-echo death configuration). */
+    /* Think bounds: the suppress window stays a quarter capped at 32; the cap
+     * defaults to a measured 256 ceiling (half-turn when smaller); a configured
+     * budget clamps the window; the unbounded ablation removes the cap; and an
+     * empty cue removes the window (banning the opener without steering text is
+     * the measured prompt-echo death configuration). */
     fg_decode_policy policy = {FG_ACTION_TRIGGER_PATTERN, NULL, 0, false, false};
     size_t min_think = 0, think_cap = 0;
     fg_think_bounds(&policy, 2048, &min_think, &think_cap);
-    assert(min_think == 32 && think_cap == 1024);
+    assert(min_think == 32 && think_cap == 256);
     fg_think_bounds(&policy, 64, &min_think, &think_cap);
     assert(min_think == 16 && think_cap == 32);
     policy.think_budget = 8;
@@ -362,7 +362,7 @@ int main(void) {
     policy.think_unbounded = false;
     policy.cue = "";
     fg_think_bounds(&policy, 2048, &min_think, &think_cap);
-    assert(min_think == 0 && think_cap == 1024);
+    assert(min_think == 0 && think_cap == 256);
     policy.native_thinking = true;
     fg_think_bounds(&policy, 2048, &min_think, &think_cap);
     assert(min_think == 0 && think_cap == SIZE_MAX);

@@ -54,6 +54,7 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `model` | `path` | Nonempty local GGUF path; never downloads a model. |
 | `model` | `context` | Integer 128–1,048,576; sets model and agent context capacity. |
 | `model` | `chat_template` | Nonempty template/name passed to the inference backend, at most 64 KiB. |
+| `model` | `enable_thinking` | Boolean Jinja template control. Omission preserves the template's legacy/default behavior; an explicit value requires template support. |
 | `inference` | `gpu_layers` | `"auto"`, `-1` for all layers, or 0–65,535. Default 0. |
 | `inference` | `threads` | Integer 0–1,024; 0 leaves thread selection to the backend/planner. |
 | `inference` | `temperature` | Finite integer or float 0–2. |
@@ -80,17 +81,23 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `index` | `languages` | Exactly `["go"]`; other/empty/duplicate language lists fail. |
 
 See `forge.toml.example` and `profiles/*.toml`. There are deliberately no config
-keys for tool permission grants, script fixtures, draft models, the reasoning
-channel, KV quantization, network sandbox backends or unsupported index
-languages.
+keys for tool permission grants, script fixtures, draft models, the
+reasoning-channel wire policy, KV quantization, network sandbox backends or
+unsupported index languages. The model-level `enable_thinking` key controls
+template rendering; it does not enable routed reasoning by itself.
 
 The reasoning channel is CLI-only. `--no-thought`, `--thought-required`,
-`--thought-routed`, `--thought-history`, `--thought-decode-only`,
+`--thought-routed`, `--thought-native`, `--thought-history`, `--thought-decode-only`,
 `--thought-budget`, `--no-thought-budget` and `--thought-cue` are the whole
 surface, and a thought is dropped from later prompts unless `--thought-history`
 is given. The budget and cue controls require `--thought-routed`; a budget of 0
 and a cue containing `{` are rejected, and when both budget flags are given the
-last one wins.
+last one wins. The routed default is at most 256 reasoning tokens, reduced to
+half the remaining per-turn budget when smaller. `--thought-native` selects a
+cue-free lazy grammar and enables template thinking; a later
+`--disable-thinking` creates the matched safe baseline. The standalone
+`--enable-thinking` / `--disable-thinking` switches override
+`model.enable_thinking` by normal CLI precedence.
 
 Checkpoint CLI overrides are `--checkpoint-cache`, `--no-checkpoint-cache`,
 `--checkpoint-cache-bytes`, `--checkpoint-cache-entries`,

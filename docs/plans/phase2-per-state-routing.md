@@ -228,3 +228,33 @@ unchanged; a future custom-cue arm must extend `classify()` (and
   Llama-3.1-8B (forced action replaces the turn-1 actionless 2048-token burn).
 - Full re-sweep of all grammar arms is the follow-up data commit, not this
   change.
+
+## Execution update — 2026-08-31
+
+Every recorded follow-up above is now implemented or measured:
+
+- The scheduled 100-record all-arm sweep is checked in at
+  `benchmark/results/2026-08-31-phase2-resweep/` with exact binary, model,
+  fixture, sampling, platform, Go, and GPU identity verified across arms.
+- A forced swap now biases out leading grammar whitespace until the first
+  action-progress token. The Llama smoke records a 1/1 forced transition,
+  progress token, and completed action.
+- Literal §32 routing now distinguishes selection, arguments, patch, final,
+  and memory substates. Structured states are deterministic; patch/final prose
+  retain configured sampling; the grammar remains active throughout.
+- The pinned llama common Jinja renderer supports `enable_thinking` through
+  TOML and CLI. `--thought-native` and its `--disable-thinking` control provide
+  matched lazy-grammar arms; the Qwen3-4B smoke exercises both.
+- Six reasoning-gated fixtures and their one-line oracles are covered by the
+  benchmark integration test. Qwen3-Coder and Devstral show no routed success
+  lift in this pilot; details are in
+  `benchmark/results/2026-08-31-reasoning-gated/`.
+- Budget arms at 256, 512, 1,024, 1,536, and unbounded had equal Qwen success.
+  The measured default is therefore a 256-token ceiling, the cheapest bounded
+  arm, with explicit controls retained.
+- The census and failure-analysis classifiers now accept custom cues and native
+  thinking instead of assuming the default scaffold.
+
+The earlier "explicitly out of scope" section is retained as the historical
+plan boundary; this update is its disposition and supersedes its statements
+that these items remain open.

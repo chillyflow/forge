@@ -71,7 +71,7 @@ static void usage(void) {
          "  --thought-routed     reason freely, then lazily constrain the action JSON\n"
          "  --thought-native     cue-free lazy grammar; enables template thinking\n"
          "                       append --disable-thinking for its matched safe baseline\n"
-         "  --thought-budget N   max reasoning tokens before the action grammar is forced\n"
+         "  --thought-budget N   max reasoning tokens before forcing action (default: <=256)\n"
          "  --no-thought-budget  unbounded routed reasoning (ablation)\n"
          "  --thought-cue TEXT   replace the forced reasoning cue; empty disables it\n"
          "  --no-auto-validation skip final Go validation (explicit ablation)\n"

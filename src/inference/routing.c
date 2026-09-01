@@ -132,12 +132,12 @@ void fg_think_bounds(const fg_decode_policy *policy, size_t max_tokens, size_t *
      * death configuration. */
     bool cued = !policy->native_thinking && (!policy->cue || policy->cue[0]);
     size_t window = cued ? FG_MIN(FG_THOUGHT_MIN_PREFIX_TOKENS, max_tokens / 4) : 0;
-    /* Half the turn budget is a chosen, unmeasured fraction (mirroring the
-     * window's quarter); the unbounded arm measures bounded vs unbounded,
-     * not the fraction. */
+    /* Calibration on the reasoning-gated suite found equal success from 256
+     * through unbounded, with 256 the cheapest bounded arm. Near exhaustion,
+     * retain half-turn scaling so the action keeps at least half. */
     size_t cap = (policy->native_thinking || policy->think_unbounded) ? SIZE_MAX
                  : policy->think_budget  ? policy->think_budget
-                                         : max_tokens / 2;
+                                         : FG_MIN(FG_THOUGHT_DEFAULT_BUDGET, max_tokens / 2);
     *min_think = FG_MIN(window, cap);
     *think_cap = cap;
 }

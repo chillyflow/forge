@@ -1,5 +1,13 @@
 # 2026-08-31 tier-1 multi-model sweep: is the thought channel portable?
 
+> Follow-up: Phase 2 fixes and the required all-arm re-sweep are now recorded in
+> `../2026-08-31-phase2-resweep/`. Six reasoning-gated fixtures, a better-matched
+> Devstral comparison, budget calibration, native Qwen3 thinking, and the Llama
+> forced-whitespace regression are in `../2026-08-31-reasoning-gated/`. The
+> current pilot observes no routed success lift (Devstral 4/6 no-thought versus
+> 3/6 routed); this supersedes the open-question disposition below without
+> rewriting these historical tier-1 measurements.
+
 Every published thought-channel number until now rested on one model
 (Qwen3-Coder-30B-A3B-Instruct Q4_K_M, `../2026-08-30-elicited-sweep/`). This
 sweep measures four arms on three further **non-thinking instruct models** to
