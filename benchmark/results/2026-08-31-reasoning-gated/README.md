@@ -57,11 +57,12 @@ limit in 9 turns. This establishes that `enable_thinking` reaches the template
 and that a thinking-safe baseline exists; one smoke task is not an accuracy
 study.
 
-The Llama-3.1-8B forced-swap smoke recorded `forced_actions = 1`,
-`forced_action_progress_tokens = 1`, and `action_stops = 1`. The model's final
-answer did not repair the fixture, but it opened and completed an action after
-the forced swap instead of consuming the rest of the turn in leading grammar
-whitespace. That is the intended regression evidence for the whitespace fix.
+The post-calibration Llama-3.1-8B forced-swap smoke recorded
+`forced_actions = 3`, `forced_action_progress_tokens = 3`, and
+`action_stops = 14`. The run eventually reached its global limit without a
+valid repair, but every forced transition opened action progress instead of
+consuming the rest of its turn in leading grammar whitespace. That is the
+intended regression evidence for the whitespace fix.
 
 Subdirectories retain environment identity, full result records, and censuses
 where applicable. Token counts are only compared within a model.

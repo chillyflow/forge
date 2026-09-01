@@ -237,8 +237,9 @@ Every recorded follow-up above is now implemented or measured:
   `benchmark/results/2026-08-31-phase2-resweep/` with exact binary, model,
   fixture, sampling, platform, Go, and GPU identity verified across arms.
 - A forced swap now biases out leading grammar whitespace until the first
-  action-progress token. The Llama smoke records a 1/1 forced transition,
-  progress token, and completed action.
+  action-progress token. The post-calibration Llama smoke records progress on
+  all three forced transitions and 14 completed actions before the global run
+  limit.
 - Literal §32 routing now distinguishes selection, arguments, patch, final,
   and memory substates. Structured states are deterministic; patch/final prose
   retain configured sampling; the grammar remains active throughout.

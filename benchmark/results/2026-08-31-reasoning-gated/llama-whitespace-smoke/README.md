@@ -1,6 +1,7 @@
 # Llama forced-swap whitespace smoke
 
-See the [parent report](../README.md). The single record is a targeted mechanism
-check: one forced grammar swap produced one immediate action-progress token and
-one completed action. Harness failure reflects the model's incorrect final
-answer, not an actionless whitespace budget burn.
+See the [parent report](../README.md). The single post-calibration record is a
+targeted mechanism check: three forced grammar swaps produced three immediate
+action-progress tokens, and 14 actions completed across the run. Harness failure
+reflects the global run limit without a valid repair, not an actionless
+whitespace budget burn.
