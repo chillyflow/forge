@@ -64,6 +64,7 @@ char *fg_render_bytes(const char *, size_t);
 forge_status fg_process_at(const char *workspace_root, const char *cwd, const char *const *argv,
                            uint64_t timeout, size_t max_bytes, forge_cancel_fn, void *,
                            fg_process_result *, forge_error *);
+bool fg_process_executable_available(const char *workspace_root, const char *cwd, const char *name);
 
 typedef struct {
     char dir[FG_PATH_MAX];

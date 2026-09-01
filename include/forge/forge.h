@@ -35,7 +35,9 @@ typedef enum {
     FORGE_AGENT_TOOL_RESULT,
     FORGE_AGENT_RECONTEXTUALIZE,
     FORGE_AGENT_DONE,
-    FORGE_AGENT_ERROR
+    FORGE_AGENT_ERROR,
+    /* Appended so the numeric values of every existing public state remain stable. */
+    FORGE_AGENT_RECOVERY
 } forge_agent_state;
 typedef enum { FORGE_CAP_READ = 1, FORGE_CAP_WRITE = 2, FORGE_CAP_PROCESS = 4 } forge_capability;
 typedef struct {
@@ -133,15 +135,16 @@ typedef struct {
      * is the measured prompt-echo death configuration). `thought_budget`
      * bounds sampled reasoning tokens before the action grammar is enforced
      * by an eager-grammar swap (0: a calibrated 256-token ceiling, reduced to
-     * half the remaining turn budget near exhaustion). `thought_budget_unbounded` restores unbounded
-     * reasoning (ablation; the phase-1 behavior). */
+     * half the remaining turn budget near exhaustion). `thought_budget_unbounded` restores
+     * unbounded reasoning (ablation; the phase-1 behavior). */
     const char *thought_cue;
     size_t thought_budget;
     bool thought_budget_unbounded;
     /* Lazy grammar with template-controlled reasoning and no host cue/bans/swap.
      * FORGE_THINKING_DISABLED gives its matched thinking-safe baseline. */
     bool thought_native;
-    bool skip_validation; /* Explicit ablation; ordinary runs verify changed Go workspaces. */
+    /* Explicit ablation; ordinary runs verify changed Go/Python workspaces. */
+    bool skip_validation;
     forge_policy_fn policy;
     forge_cancel_fn cancelled;
     void *userdata;

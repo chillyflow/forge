@@ -193,9 +193,14 @@ grammar and requests `enable_thinking`; `--disable-thinking` supplies a
 grammar-matched safe control. The same template switch is available as
 `--enable-thinking` / `--disable-thinking` and `model.enable_thinking`.
 
-`apply_patch` requires one unique exact match, stages output in a sibling file,
-checks the old content again, and atomically replaces the file. It is not a
-unified-diff parser. Empty old text creates a missing file only.
+`apply_patch` requires one unique exact match. `apply_hunk` instead replaces an
+inclusive line range only when the caller supplies the full-file SHA-256 emitted
+by `read_file`; this makes narrow edits unambiguous and rejects stale line
+coordinates. Both tools stage output in a sibling file, record the proposed
+bytes, check Go syntax in-process, recheck the old content, and atomically
+replace the file. A syntax-invalid Go candidate is recorded as aborted and
+never replaces the target. Neither tool is a unified-diff parser. Empty old text
+creates a missing file only through `apply_patch`.
 
 The process runner uses `fork/exec` and process groups on POSIX, or `CreateProcess`
 and kill-on-close Job Objects on Windows. It captures stdout/stderr separately,
@@ -242,9 +247,13 @@ generated action/final and rebuild source context; the discarded inference
 still counts toward token and turn limits. Native notification delivery and
 filesystem reads are not atomic against concurrent writers.
 
-Before accepting a final answer after edits, the host runs the deterministic Go
-validation plan with the same process policy and deadlines. It stops at the first
-failure and returns diagnostics for repair; mutation during validation invalidates
-the result. Other languages and explicit `--no-auto-validation` runs have no such
-automatic proof. Even passing Go checks does not prove arbitrary task correctness.
+Before accepting a final answer after edits, the host runs the deterministic
+Go/Python validation plan with the same process policy and deadlines. Go uses
+its syntactic package graph; Python uses non-importing, in-memory compiler
+syntax checks, filename-related tests, broad pytest discovery, and explicit
+execution of every indexed unittest file. A missing Python runtime blocks an
+applicable plan. Validation stops at the first failure and returns diagnostics
+for repair; mutation during validation invalidates the result. Other languages
+and explicit `--no-auto-validation` runs have no such automatic proof. Even
+passing checks does not prove arbitrary task correctness.
 `bench` additionally runs its explicit independent verification command.

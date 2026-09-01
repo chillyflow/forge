@@ -13,8 +13,10 @@ extern "C" {
  * Commands contain argv arrays and workspace-relative cwd values. Execute
  * stages in order, stopping on failure, policy denial, cancellation or budget
  * exhaustion. A command with require_empty_stdout also fails on nonempty
- * stdout (gofmt -l). See docs/VALIDATION.md for the versioned JSON contract and
- * limitations of the syntactic Go import graph.
+ * stdout (gofmt -l). Plans may contain Go and Python commands. A plan whose
+ * verification_status is blocked or not_applicable is never passing evidence.
+ * See docs/VALIDATION.md for the versioned JSON contract and limitations of
+ * Go graph and Python filename-based selection.
  *
  * An empty change list requests broad verification. Maximum 1024 paths;
  * invalid paths or oversized graphs fail explicitly, never truncate a plan.

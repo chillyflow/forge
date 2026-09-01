@@ -253,11 +253,11 @@ static size_t probe_runs(fixture *f) {
     return count;
 }
 
-static yyjson_doc *run(fixture *f, forge_status expected) {
-    const char *changed[] = {"main.go"};
+static yyjson_doc *run_paths(fixture *f, const char *const *changed, size_t changed_count,
+                             forge_status expected) {
     memset(&f->error, 0, sizeof(f->error));
     forge_status status =
-        fg_validation_run(&f->tools, changed, 1, &f->metrics, &f->result, &f->error);
+        fg_validation_run(&f->tools, changed, changed_count, &f->metrics, &f->result, &f->error);
     if (status != expected)
         fprintf(stderr, "verification status=%s expected=%s: %s\n", forge_status_string(status),
                 forge_status_string(expected), f->error.message);
@@ -273,6 +273,11 @@ static yyjson_doc *run(fixture *f, forge_status expected) {
     assert(f->metrics.validation_failures == (expected == FORGE_OK ? 0u : 1u));
     assert(!strcmp(fg_json_str(report, "status"), forge_status_string(expected)));
     return doc;
+}
+
+static yyjson_doc *run(fixture *f, forge_status expected) {
+    const char *changed[] = {"main.go"};
+    return run_paths(f, changed, 1, expected);
 }
 
 static void expect_no_launch(fixture *f, yyjson_val *report) {
@@ -315,6 +320,31 @@ static void test_denial_and_resolution_failure(void) {
     doc = run(&f, FORGE_ERR_NOT_FOUND);
     expect_no_launch(&f, yyjson_doc_get_root(doc));
     yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
+static void test_blocked_plan_diagnostics(void) {
+    fixture f;
+    fixture_start(&f, NORMAL);
+    write_file(f.root, "module.py", "def value():\n    return 1\n");
+    write_file(f.root, "test_module.py",
+               "import unittest\n\nclass ModuleTest(unittest.TestCase):\n    pass\n");
+    assert(forge_repo_index(f.tools.repo, &f.error) == FORGE_OK);
+
+    const char *changed[] = {"module.py"};
+    yyjson_doc *doc = run_paths(&f, changed, 1, FORGE_ERR_NOT_FOUND);
+    yyjson_val *report = yyjson_doc_get_root(doc);
+    assert(!f.result.passed && f.result.commands == 0 && probe_runs(&f) == 0);
+    assert(f.policy_calls == 0 && f.command_starts == 0 && f.command_results == 0);
+    assert(yyjson_arr_size(yyjson_obj_get(report, "commands")) == 0);
+    assert(strstr(f.result.summary, "Missing required tools: python"));
+    assert(strstr(f.result.summary, "python_executable_unavailable"));
+    assert(strstr(f.result.summary, "python3/python/py was not found"));
+    assert(strstr(f.error.message, "python_executable_unavailable"));
+    assert(!strcmp(fg_json_str(report, "summary"), f.result.summary));
+    yyjson_doc_free(doc);
+    delete_if_present(f.root, "module.py");
+    delete_if_present(f.root, "test_module.py");
     fixture_finish(&f);
 }
 
@@ -423,6 +453,7 @@ int main(int argc, char **argv) {
     assert(!path || original_path);
     test_deadline_callbacks();
     test_denial_and_resolution_failure();
+    test_blocked_plan_diagnostics();
     test_persistence_failure("validation/0001-0001.stdout");
     test_persistence_failure("validation/0001.json");
     test_persistence_failure("validation/latest.json");

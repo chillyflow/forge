@@ -133,7 +133,9 @@ symbols; `parse_error` records the syntax/package problem.
 Descriptions return at most 4,096 symbols, with `symbols_truncated` and the
 complete `symbol_count`. The aggregate symbol hash still covers every extracted
 symbol. Serialized output is limited to 16 MiB. Text files have no AST or symbol
-hash. Existing databases acquire the new metadata lazily on the next index pass;
+hash. `pytest.ini`, `.pytest.ini`, `setup.cfg`, and `tox.ini` are indexed as
+validation configuration even though arbitrary `.ini`/`.cfg` files are not.
+Existing databases acquire the new metadata lazily on the next index pass;
 `metadata_complete: false` makes that migration state explicit.
 
 ## Counters

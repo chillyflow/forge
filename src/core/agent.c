@@ -14,6 +14,14 @@ struct forge_agent {
     forge_working_state *working_state;
     forge_arena *generation_arena;
 };
+typedef struct {
+    bool active;
+    uint64_t failed_signature;
+    size_t entered_turn;
+    char failed_tool[32];
+    char failed_path[FG_PATH_MAX];
+    char failed_hypothesis[2049];
+} recovery_mode;
 static void *json_alloc(void *context, size_t bytes) {
     return forge_arena_alloc(context, bytes, NULL);
 }
@@ -39,9 +47,8 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
         config->limits.output_reserve >= config->limits.context_tokens ||
         config->limits.context_tokens > config->model->config.context_tokens ||
         (!config->thought && (config->thought_required || config->thought_routed)) ||
-        (!config->thought_routed &&
-         (config->thought_cue || config->thought_budget || config->thought_budget_unbounded ||
-          config->thought_native)) ||
+        (!config->thought_routed && (config->thought_cue || config->thought_budget ||
+                                     config->thought_budget_unbounded || config->thought_native)) ||
         (config->thought_native &&
          (config->thought_cue || config->thought_budget || config->thought_budget_unbounded)) ||
         !config->limits.max_tool_bytes || config->limits.max_tool_bytes > 16u * 1024u * 1024u ||
@@ -82,6 +89,175 @@ static bool event_text(forge_agent *a, const char *type, const char *text, forge
     free(q);
     return ok;
 }
+static void recovery_copy(char *target, size_t capacity, const char *text) {
+    if (!capacity)
+        return;
+    if (!text)
+        text = "";
+    size_t take = fg_utf8_prefix(text, strlen(text), capacity - 1);
+    memcpy(target, text, take);
+    target[take] = 0;
+}
+static void recovery_reset(recovery_mode *recovery) {
+    memset(recovery, 0, sizeof(*recovery));
+}
+static void recovery_enter(recovery_mode *recovery, uint64_t signature, const char *tool,
+                           yyjson_val *args, const char *hypothesis, size_t turn) {
+    recovery_reset(recovery);
+    recovery->active = true;
+    recovery->failed_signature = signature;
+    recovery->entered_turn = turn;
+    snprintf(recovery->failed_tool, sizeof(recovery->failed_tool), "%s", tool ? tool : "action");
+    const char *path = args ? fg_json_str(args, "path") : NULL;
+    if (path)
+        snprintf(recovery->failed_path, sizeof(recovery->failed_path), "%s", path);
+    if (hypothesis && *hypothesis)
+        recovery_copy(recovery->failed_hypothesis, sizeof(recovery->failed_hypothesis), hypothesis);
+    else
+        snprintf(recovery->failed_hypothesis, sizeof(recovery->failed_hypothesis),
+                 "No explicit hypothesis was supplied; the repeated %s action is the failed "
+                 "approach.",
+                 recovery->failed_tool);
+}
+static bool recovery_materially_different(const recovery_mode *recovery, uint64_t signature,
+                                          const char *tool, yyjson_val *args) {
+    if (!recovery->active)
+        return true;
+    /* Any tool action is a repair attempt after a rejected final answer. Tool
+     * recovery episodes, in contrast, compare context-independent strategies. */
+    if (!strcmp(recovery->failed_tool, "final"))
+        return true;
+    if (signature == recovery->failed_signature)
+        return false;
+    /* Moving the read window over the same file is still the same strategy. A
+     * different file/symbol, a validation command, or a changed edit is useful. */
+    if (!strcmp(recovery->failed_tool, "read_file") && tool && !strcmp(tool, "read_file")) {
+        const char *path = args ? fg_json_str(args, "path") : NULL;
+        if (path && recovery->failed_path[0] && !strcmp(path, recovery->failed_path))
+            return false;
+    }
+    return true;
+}
+static bool process_action_name(const char *tool) {
+    return tool && (!strcmp(tool, "run_command") || !strcmp(tool, "git_status") ||
+                    !strcmp(tool, "git_diff"));
+}
+static void recovery_excerpt(fg_buf *out, const char *label, const char *text, size_t limit) {
+    if (!text || !*text) {
+        fg_buf_printf(out, "%s: none recorded\n", label);
+        return;
+    }
+    size_t length = strlen(text);
+    size_t take = fg_utf8_prefix(text, length, limit);
+    fg_buf_printf(out, "%s (%zu byte%s%s):\n<<<\n", label, length, length == 1 ? "" : "s",
+                  take < length ? ", bounded" : "");
+    fg_buf_add(out, text, take);
+    fg_buf_puts(out, "\n>>>\n");
+}
+static void recovery_file(fg_buf *out, const char *path) {
+    if (!path || !*path)
+        return;
+    char *quoted = fg_json_string(path);
+    if (!quoted) {
+        out->failed = true;
+        return;
+    }
+    fg_buf_printf(out, "- %s\n", quoted);
+    free(quoted);
+}
+static void recovery_relevant_file(const char **paths, size_t *count, const char *path) {
+    if (!path || !*path || *count >= 20)
+        return;
+    for (size_t i = 0; i < *count; i++)
+        if (!strcmp(paths[i], path))
+            return;
+    paths[(*count)++] = path;
+}
+static char *recovery_text(const recovery_mode *recovery, const forge_agent *a,
+                           char *const *changed_paths, size_t changed_count,
+                           const char *current_path, const char *last_patch_path,
+                           const char *last_patch_old, const char *last_patch_new,
+                           const char *last_edit_diff, const char *broken_path,
+                           const char *last_diagnostic, size_t turn, uint64_t deadline) {
+    size_t remaining_turns =
+        a->config.limits.max_turns > turn ? a->config.limits.max_turns - turn : 0;
+    size_t remaining_generated =
+        a->config.limits.max_generated_tokens > a->metrics.generated_tokens
+            ? a->config.limits.max_generated_tokens - a->metrics.generated_tokens
+            : 0;
+    size_t remaining_input = a->config.limits.max_input_tokens > a->metrics.prompt_tokens
+                                 ? a->config.limits.max_input_tokens - a->metrics.prompt_tokens
+                                 : 0;
+    uint64_t now = fg_now_ms();
+    uint64_t remaining_ms = deadline > now ? deadline - now : 0;
+    fg_buf notice = {0};
+    fg_buf_puts(&notice,
+                "LOOP_DETECTED: RECOVERY_MODE rejected the repeated action without execution. "
+                "The next "
+                "action must be materially different: use a different file/symbol or validation "
+                "command, or submit a changed edit anchored in current content. Repeating the "
+                "same read with different line bounds or replaying an unchanged patch is not "
+                "progress.\n");
+    fg_buf_printf(&notice,
+                  "recovery_state: entered_turn=%zu failed_tool=%s remaining_turns=%zu "
+                  "remaining_generated_tokens=%zu remaining_input_tokens=%zu "
+                  "remaining_wall_ms=%llu\n",
+                  recovery->entered_turn, recovery->failed_tool, remaining_turns,
+                  remaining_generated, remaining_input, (unsigned long long)remaining_ms);
+    fg_buf_puts(&notice, "relevant_files:\n");
+    const char *relevant[20] = {0};
+    size_t relevant_count = 0;
+    recovery_relevant_file(relevant, &relevant_count, current_path);
+    recovery_relevant_file(relevant, &relevant_count, recovery->failed_path);
+    recovery_relevant_file(relevant, &relevant_count, broken_path);
+    recovery_relevant_file(relevant, &relevant_count, last_patch_path);
+    size_t shown = FG_MIN(changed_count, (size_t)16);
+    for (size_t i = 0; i < shown; i++)
+        recovery_relevant_file(relevant, &relevant_count, changed_paths[i]);
+    for (size_t i = 0; i < relevant_count; i++)
+        recovery_file(&notice, relevant[i]);
+    if (!relevant_count)
+        fg_buf_puts(&notice, "- none recorded\n");
+    if (changed_count > shown)
+        fg_buf_printf(&notice, "- [%zu additional changed files omitted]\n", changed_count - shown);
+    fg_buf_puts(&notice, "current_diff (bounded committed edit history, newest last):\n");
+    if (last_edit_diff)
+        recovery_excerpt(&notice, "unified_diff", last_edit_diff, 16384);
+    else if (last_patch_path && last_patch_old && last_patch_new) {
+        recovery_file(&notice, last_patch_path);
+        recovery_excerpt(&notice, "before", last_patch_old, 1024);
+        recovery_excerpt(&notice, "after", last_patch_new, 1024);
+    } else
+        fg_buf_puts(&notice, "none recorded\n");
+    recovery_excerpt(&notice, "last_diagnostic", last_diagnostic, 2048);
+    recovery_excerpt(&notice, "failed_hypothesis", recovery->failed_hypothesis, 1024);
+    fg_buf_puts(&notice,
+                "RECOVERY_REQUIREMENT: do not retry the failed action. Make one materially "
+                "different next action using the evidence above.\n");
+    return fg_buf_take(&notice);
+}
+static char *recovery_edit_diff(const forge_agent *a, size_t call_id) {
+    char artifact[64], path[FG_PATH_MAX];
+    snprintf(artifact, sizeof(artifact), "tool/%06zu.patch", call_id);
+    if (!fg_path_join(path, a->session.dir, artifact))
+        return NULL;
+    FILE *file = fopen(path, "rb");
+    if (!file)
+        return NULL;
+    char bytes[4096];
+    size_t length = fread(bytes, 1, sizeof(bytes), file);
+    int extra = length == sizeof(bytes) ? fgetc(file) : EOF;
+    bool failed = ferror(file) != 0;
+    fclose(file);
+    if (failed || !length || !fg_utf8_valid(bytes, length))
+        return NULL;
+    fg_buf diff = {0};
+    fg_buf_add(&diff, bytes, length);
+    if (extra != EOF)
+        fg_buf_puts(&diff,
+                    "\n[bounded recovery diff; full edit remains in the session artifact]\n");
+    return fg_buf_take(&diff);
+}
 static bool save_working_state(forge_agent *a, forge_context *ctx, uint64_t memory_id, size_t turn,
                                bool refresh_prompt, forge_error *e) {
     char *json = forge_working_state_json(a->working_state, e);
@@ -117,6 +293,73 @@ static bool save_working_state(forge_agent *a, forge_context *ctx, uint64_t memo
         }
     }
     return ok;
+}
+
+static bool validate_stalled_workspace(forge_agent *a, fg_tool_context *tools, forge_repo *repo,
+                                       forge_context *ctx, uint64_t repo_segment,
+                                       uint64_t memory_id, size_t turn, char *const *changed_paths,
+                                       size_t changed_count, bool *unknown_changes,
+                                       char last_diagnostic[4097], uint64_t *diagnostic_hash,
+                                       forge_error *e) {
+    fg_validation_result verification = {0};
+    forge_error verify_error = {0};
+    forge_status verified = fg_validation_run(
+        tools, *unknown_changes ? NULL : (const char *const *)changed_paths,
+        *unknown_changes ? 0 : changed_count, &a->metrics, &verification, &verify_error);
+    uint64_t generation = forge_repo_generation(repo);
+    if (generation != verification.generation || verification.inputs_changed)
+        *unknown_changes = true;
+    forge_context_invalidate(ctx, 0, generation);
+    char *current = forge_repo_summary(repo, e);
+    forge_status updated = current ? forge_context_update(ctx, repo_segment, current, generation)
+                                   : (e && e->code ? e->code : FORGE_ERR_MEMORY);
+    free(current);
+    if (updated != FORGE_OK) {
+        fg_error(e, updated, "Cannot refresh repository context after stall validation");
+        fg_validation_result_free(&verification);
+        return false;
+    }
+    char fallback[640];
+    const char *summary = verification.summary;
+    if (!summary) {
+        snprintf(fallback, sizeof(fallback), "Automatic validation did not complete: %s",
+                 verify_error.message[0] ? verify_error.message : forge_status_string(verified));
+        summary = fallback;
+    }
+    forge_state_validation_status validation_status =
+        verified == FORGE_ERR_POLICY ? FORGE_STATE_DENIED
+        : verified != FORGE_OK       ? FORGE_STATE_FAILED
+        : verification.passed        ? FORGE_STATE_PASSED
+                                     : FORGE_STATE_NOT_APPLICABLE;
+    if (forge_working_state_set_validation(a->working_state, generation, validation_status, summary,
+                                           e) != FORGE_OK ||
+        !save_working_state(a, ctx, memory_id, turn, true, e)) {
+        fg_validation_result_free(&verification);
+        return false;
+    }
+    fg_buf diagnostic = {0};
+    if (last_diagnostic[0] && strcmp(last_diagnostic, summary))
+        recovery_excerpt(&diagnostic, "last_tool_diagnostic", last_diagnostic, 1800);
+    recovery_excerpt(&diagnostic, "stall_validation_diagnostic", summary, 1800);
+    char *combined = fg_buf_take(&diagnostic);
+    if (!combined) {
+        fg_validation_result_free(&verification);
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot retain stall validation diagnostic");
+        return false;
+    }
+    recovery_copy(last_diagnostic, 4097, combined);
+    *diagnostic_hash = fg_diagnostic_hash(combined);
+    free(combined);
+    fg_validation_result_free(&verification);
+    if (verified != FORGE_OK && verified != FORGE_ERR_CONFLICT && verified != FORGE_ERR_NOT_FOUND &&
+        verified != FORGE_ERR_POLICY) {
+        if (e)
+            *e = verify_error;
+        if (!e || !e->code)
+            fg_error(e, verified, "Automatic stall validation could not complete");
+        return false;
+    }
+    return true;
 }
 static bool record_change(forge_agent *a, forge_repo *repo, forge_context *ctx,
                           uint64_t repo_segment, uint64_t memory_id, size_t turn,
@@ -398,10 +641,16 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     char *schema = NULL, *grammar = NULL, *summary = NULL;
     char *changed_paths[1024] = {0};
     char *last_patch_path = NULL, *last_patch_old = NULL, *last_patch_new = NULL;
+    char *last_edit_diff = NULL;
     char *broken_path = NULL, *broken_detail = NULL;
+    char last_diagnostic[4097] = "";
+    recovery_mode recovery = {0};
+    bool stall_validation_attempted = false;
+    uint64_t stall_validation_generation = 0;
     yyjson_doc *reanchored_doc = NULL;
     size_t changed_count = 0;
     bool unknown_changes = false;
+    bool validation_required = false;
     if (!state(a, FORGE_AGENT_INIT, e) || !event_text(a, "request", request, e)) {
         status = FORGE_ERR_IO;
         goto finish;
@@ -502,22 +751,25 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     tools.deadline = deadline;
     strcpy(tools.root, a->root);
     uint64_t signatures[64] = {0}, latest_result = 0, diagnostic_hash = 0;
-    size_t signature_count = 0, repeated = 0;
+    size_t signature_count = 0;
     uint64_t previous_validation_failure = 0;
-    size_t repeated_validation = 0;
     /* Content-level ring of applied patches, independent of repository
      * generation and diagnostics: re-proposing an identical edit is rejected
      * before execution instead of burning turns. */
-    uint64_t patch_keys[64] = {0};
-    size_t patch_key_count = 0;
+    uint64_t edit_keys[64] = {0};
+    size_t edit_key_count = 0;
+    /* Process tools advance repository generation even when indexed bytes are
+     * unchanged. Retain their context-free strategies until a real edit or an
+     * observed external change so repeated commands still enter recovery. */
+    uint64_t process_keys[64] = {0};
+    size_t process_key_count = 0;
     /* The recorded patch is only a trustworthy anchor while nothing else has
      * rewritten the workspace: a launched command or an external change
      * invalidates it. A repository generation comparison is too strict here,
      * because watcher notifications for the patch itself can arrive late. */
     bool anchor_valid = false;
-    size_t broken_reads = 0;
     /* A .go file left unparseable by a patch, and the reason. While it stands,
-     * repeated reads of that file are recovery, not looping. */
+     * its diagnostic is included in a recovery state. */
     /* Held at function scope: a re-anchored argument copy must stay alive for
      * the rest of the turn, including every early break path below. */
     for (size_t turn = 1; turn <= a->config.limits.max_turns; turn++) {
@@ -538,8 +790,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         if (status == FORGE_OK && !record_change(a, repo, ctx, repo_segment, memory_id, turn,
                                                  &changes, &unknown_changes, e))
             status = e && e->code ? e->code : FORGE_ERR_IO;
-        if (changes.changed)
+        if (changes.changed) {
             anchor_valid = false; /* The file may no longer match the anchor. */
+            process_key_count = 0;
+        }
         fg_repo_change_free(&changes);
         if (status != FORGE_OK)
             break;
@@ -590,10 +844,9 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             cache_request.anchor_ends = &anchor;
             cache_request.anchor_count = anchor ? 1 : 0;
         }
-        fg_decode_policy routed_policy = {FG_ACTION_TRIGGER_PATTERN, a->config.thought_cue,
-                                          a->config.thought_budget,
-                                          a->config.thought_budget_unbounded,
-                                          a->config.thought_native};
+        fg_decode_policy routed_policy = {
+            FG_ACTION_TRIGGER_PATTERN, a->config.thought_cue, a->config.thought_budget,
+            a->config.thought_budget_unbounded, a->config.thought_native};
         status = fg_model_generate_routed_with_cache(
             a->config.model, prompt, grammar, a->config.thought_routed ? &routed_policy : NULL,
             max_tokens, stream_token, &stream, &response, &a->metrics, a->config.cancelled,
@@ -624,6 +877,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                                                  &during_generation, &unknown_changes, e))
             status = e && e->code ? e->code : FORGE_ERR_IO;
         bool stale_response = during_generation.changed;
+        if (stale_response)
+            process_key_count = 0;
         fg_repo_change_free(&during_generation);
         if (status != FORGE_OK || stale_response) {
             free(response);
@@ -638,9 +893,9 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         if (a->config.thought_routed) {
             char *normalized = routed_action_text(
                 response, a->config.thought_required,
-                a->config.thought_native ? ""
-                                         : (a->config.thought_cue ? a->config.thought_cue
-                                                                  : FG_THOUGHT_CUE),
+                a->config.thought_native
+                    ? ""
+                    : (a->config.thought_cue ? a->config.thought_cue : FG_THOUGHT_CUE),
                 e);
             free(response);
             response = normalized;
@@ -681,12 +936,19 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             thought_valid = false;
         if (final && thought_valid && yyjson_obj_size(o) == 1 + envelope &&
             yyjson_get_len(yyjson_obj_get(o, "final")) == strlen(final)) {
+            /* A final answer is a different strategy from a failed tool action.
+             * If it does not pass validation, its own repeated failure below can
+             * start a new recovery episode. */
+            if (recovery.active && strcmp(recovery.failed_tool, "final"))
+                recovery_reset(&recovery);
             fg_repo_change final_changes = {0};
             status = fg_repo_monitor_poll(monitor, 0, true, &final_changes, e);
             if (status == FORGE_OK && !record_change(a, repo, ctx, repo_segment, memory_id, turn,
                                                      &final_changes, &unknown_changes, e))
                 status = e && e->code ? e->code : FORGE_ERR_IO;
             bool stale_final = final_changes.changed;
+            if (stale_final)
+                process_key_count = 0;
             fg_repo_change_free(&final_changes);
             if (status != FORGE_OK) {
                 yyjson_doc_free(d);
@@ -710,9 +972,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 free(response);
                 break;
             }
-            bool dirty = unknown_changes || changed_count ||
-                         forge_repo_generation(repo) != initial_generation;
-            if (dirty && !a->config.skip_validation) {
+            if (validation_required && !a->config.skip_validation) {
                 fg_validation_result verification = {0};
                 forge_error verify_error = {0};
                 forge_status verified = fg_validation_run(
@@ -748,6 +1008,11 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                     status = e && e->code ? e->code : FORGE_ERR_IO;
                     break;
                 }
+                if (verified == FORGE_OK && !verification.passed)
+                    verified = fg_error(&verify_error, FORGE_ERR_NOT_FOUND, "%s",
+                                        verification.summary
+                                            ? verification.summary
+                                            : "Automatic validation did not establish a pass");
                 if (verified != FORGE_OK) {
                     if (verified != FORGE_ERR_CONFLICT) {
                         if (e)
@@ -759,13 +1024,48 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                         break;
                     }
                     uint64_t failure = fg_diagnostic_hash(verification.summary) ^ generation;
-                    repeated_validation =
-                        failure == previous_validation_failure ? repeated_validation + 1 : 1;
+                    bool repeated_failure =
+                        previous_validation_failure && failure == previous_validation_failure;
                     previous_validation_failure = failure;
-                    if (repeated_validation >= 3) {
+                    recovery_copy(last_diagnostic, sizeof(last_diagnostic), verification.summary);
+                    bool entered_recovery = false;
+                    if (repeated_failure &&
+                        (!recovery.active || recovery.failed_signature != failure ||
+                         strcmp(recovery.failed_tool, "final"))) {
+                        const char *hypothesis = thought ? yyjson_get_str(thought) : response;
+                        recovery_enter(&recovery, failure, "final", NULL, hypothesis, turn);
                         a->metrics.loop_warnings++;
-                        status = fg_error(e, FORGE_ERR_LIMIT,
-                                          "The same automatic validation failure was repeated");
+                        entered_recovery = true;
+                    } else if (!repeated_failure)
+                        recovery_reset(&recovery);
+                    char *repair_feedback = NULL;
+                    if (repeated_failure) {
+                        repair_feedback = recovery_text(&recovery, a, changed_paths, changed_count,
+                                                        NULL, last_patch_path, last_patch_old,
+                                                        last_patch_new, last_edit_diff, broken_path,
+                                                        last_diagnostic, turn, deadline);
+                        if (!repair_feedback || !state(a, FORGE_AGENT_RECOVERY, e) ||
+                            (entered_recovery && !event_text(a, "recovery", repair_feedback, e))) {
+                            free(repair_feedback);
+                            status = e && e->code ? e->code : FORGE_ERR_MEMORY;
+                            fg_validation_result_free(&verification);
+                            yyjson_doc_free(d);
+                            free(response);
+                            break;
+                        }
+                    } else {
+                        fg_buf feedback = {0};
+                        fg_buf_puts(&feedback,
+                                    "FINAL_REJECTED: the host did not accept the proposed final "
+                                    "answer. Repair the failed check below using an authorized "
+                                    "tool before trying final again. Repeating the same final "
+                                    "answer without a change will enter recovery mode.\n\n");
+                        fg_buf_puts(&feedback, verification.summary);
+                        repair_feedback = fg_buf_take(&feedback);
+                    }
+                    if (!repair_feedback) {
+                        status =
+                            fg_error(e, FORGE_ERR_MEMORY, "Cannot retain verification failure");
                         fg_validation_result_free(&verification);
                         yyjson_doc_free(d);
                         free(response);
@@ -778,14 +1078,6 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                                                         action_text ? action_text : response, 20,
                                                         false, 0, generation);
                     free(action_text);
-                    fg_buf feedback = {0};
-                    fg_buf_puts(&feedback,
-                                "FINAL_REJECTED: the host did not accept the proposed final "
-                                "answer. Repair the failed check below using an authorized tool "
-                                "before trying final again. Repeating the same final answer "
-                                "without a change will not pass validation.\n\n");
-                    fg_buf_puts(&feedback, verification.summary);
-                    char *repair_feedback = fg_buf_take(&feedback);
                     latest_result = repair_feedback
                                         ? forge_context_add(ctx, FORGE_SEG_RESULT, repair_feedback,
                                                             95, true, action, generation)
@@ -813,6 +1105,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                                                      &verified_changes, &unknown_changes, e))
                 status = e && e->code ? e->code : FORGE_ERR_IO;
             bool changed_after_verification = verified_changes.changed;
+            if (changed_after_verification)
+                process_key_count = 0;
             fg_repo_change_free(&verified_changes);
             if (status != FORGE_OK || changed_after_verification) {
                 yyjson_doc_free(d);
@@ -870,7 +1164,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         }
         uint64_t signature =
             fg_tool_signature(tool, args, forge_repo_generation(repo), diagnostic_hash);
-        if (!signature) {
+        uint64_t strategy_signature = fg_tool_signature(tool, args, 0, 0);
+        if (!signature || !strategy_signature) {
             yyjson_doc_free(d);
             free(response);
             status = fg_error(e, FORGE_ERR_MEMORY, "Cannot identify the requested tool action");
@@ -881,28 +1176,23 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             if (signatures[j] == signature)
                 hits++;
         signatures[signature_count++ % 64] = signature;
-        bool identical_patch = false;
-        if (!strcmp(tool, "apply_patch")) {
-            const char *patch_path = fg_json_str(args, "path");
-            const char *patch_old = fg_json_str(args, "old_text");
-            const char *patch_new = fg_json_str(args, "new_text");
-            if (patch_path && patch_old && patch_new) {
-                fg_buf key = {0};
-                fg_buf_printf(&key, "%s\x1f%s\x1f%s", patch_path, patch_old, patch_new);
-                uint64_t patch_key = key.failed ? 0 : fg_hash(key.data, key.len);
-                fg_buf_clear(&key);
-                if (!patch_key) {
-                    yyjson_doc_free(d);
-                    free(response);
-                    status = fg_error(e, FORGE_ERR_MEMORY, "Cannot identify the requested patch");
-                    break;
-                }
-                for (size_t j = 0; j < FG_MIN(patch_key_count, 64); j++)
-                    if (patch_keys[j] == patch_key)
-                        identical_patch = true;
-                if (!identical_patch)
-                    patch_keys[patch_key_count++ % 64] = patch_key;
-            }
+        bool identical_edit = false;
+        if (!strcmp(tool, "apply_patch") || !strcmp(tool, "apply_hunk")) {
+            /* Exclude generation/diagnostics so an exact replay is recognized
+             * immediately after the first edit advanced repository state. */
+            for (size_t j = 0; j < FG_MIN(edit_key_count, 64); j++)
+                if (edit_keys[j] == strategy_signature)
+                    identical_edit = true;
+            if (!identical_edit)
+                edit_keys[edit_key_count++ % 64] = strategy_signature;
+        }
+        bool identical_process = false;
+        if (process_action_name(tool)) {
+            for (size_t j = 0; j < FG_MIN(process_key_count, 64); j++)
+                if (process_keys[j] == strategy_signature)
+                    identical_process = true;
+            if (!identical_process)
+                process_keys[process_key_count++ % 64] = strategy_signature;
         }
         /* Re-anchor a stale old_text instead of rejecting the repair.
          *
@@ -918,7 +1208,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         yyjson_doc_free(reanchored_doc);
         reanchored_doc = NULL;
         yyjson_val *patch_args = args;
-        if (!strcmp(tool, "apply_patch") && !identical_patch && last_patch_path && last_patch_old &&
+        if (!strcmp(tool, "apply_patch") && !identical_edit && last_patch_path && last_patch_old &&
             last_patch_new) {
             const char *patch_path = fg_json_str(args, "path");
             const char *patch_old = fg_json_str(args, "old_text");
@@ -1000,99 +1290,67 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         char *raw = NULL;
         bool changed = false;
         forge_error tool_error = {0};
-        if (!state(a, FORGE_AGENT_TOOL_RUNNING, e)) {
-            yyjson_doc_free(d);
-            free(response);
-            status = FORGE_ERR_IO;
-            break;
-        }
         uint64_t tool_start = fg_now_ms();
         tools.process_ran = false;
         tools.evidence_failed = false;
         memset(&tools.process, 0, sizeof(tools.process));
-        /* Re-reading a file the host knows is broken is the model inspecting its
-         * own damage, so it must not consume the fatal repeat budget: the run has
-         * to keep turns available to act on the outstanding error. */
-        bool inspecting_broken = false;
-        if (broken_path && !strcmp(tool, "read_file") && fg_json_str(args, "path") &&
-            !strcmp(fg_json_str(args, "path"), broken_path) && broken_reads < 2)
-            inspecting_broken = true;
-        /* Bounded: without a cap this suppression would let the agent read a
-         * broken file until the turn limit instead of ending the run. */
-        if (inspecting_broken)
-            broken_reads++;
-        if (hits >= 2 || identical_patch) {
-            a->metrics.loop_warnings++;
-            if (!inspecting_broken)
-                repeated++;
-            tool_error.code = FORGE_ERR_CONFLICT;
-            fg_buf notice = {0};
-            if (identical_patch)
-                fg_buf_puts(&notice,
-                            "IDENTICAL_PATCH: this exact edit is already in the file; applying "
-                            "it again changes nothing. The file already contains the new_text "
-                            "of that earlier patch, including any syntax error it introduced, so "
-                            "the stale old_text you repeated will never match again. To repair "
-                            "it: copy old_text verbatim from the current content below, and "
-                            "write new_text with each statement on its own line using \\n and "
-                            "with every brace you open also closed, then validate with a test "
-                            "command before final. Repeating this same patch is not a repair.\n");
-            else if (inspecting_broken)
-                fg_buf_printf(&notice,
-                              "%s is still in the state your last edit left it. Reading it "
-                              "again will not change it. The outstanding error is below; patch "
-                              "this file now by copying old_text from the content just returned "
-                              "and supplying new_text that fixes it.\n%s\n",
-                              broken_path, broken_detail ? broken_detail : "");
-            else
-                fg_buf_puts(&notice,
-                            "LOOP_DETECTED: this strategy produced the same repository and "
-                            "diagnostic state. Choose a different approach; do not retry an "
-                            "unchanged patch.\n");
-            if (!strcmp(tool, "apply_patch") && last_patch_path && last_patch_old && last_patch_new)
-                fg_buf_printf(&notice,
-                              "Your last applied edit to %s replaced:\n%.*s\nwith:\n%.*s\n"
-                              "Retrying it is not progress. Inspect the current file content, "
-                              "run a validation command, or choose a structurally different "
-                              "edit.\n",
-                              last_patch_path, (int)FG_MIN(strlen(last_patch_old), 400),
-                              last_patch_old, (int)FG_MIN(strlen(last_patch_new), 400),
-                              last_patch_new);
-            if (identical_patch) {
-                /* The model believes the edit never landed. Prove otherwise by
-                 * attaching the live file content, so its next old_text can be
-                 * copied verbatim instead of reconstructed from memory. */
-                const char *patch_path = fg_json_str(args, "path");
-                char full[FG_PATH_MAX];
-                forge_error read_error = {0};
-                if (patch_path && fg_safe_path(a->root, patch_path, false, full, &read_error)) {
-                    size_t content_len = 0;
-                    char *content = fg_read_file(full, 8192, &content_len, &read_error);
-                    if (content && !memchr(content, 0, content_len) &&
-                        fg_utf8_valid(content, content_len))
-                        fg_buf_printf(&notice,
-                                      "Current content of %s follows. Your next old_text must "
-                                      "be copied from THIS text verbatim:\n%s\n",
-                                      patch_path, content);
-                    free(content);
-                }
-            }
-            raw = fg_buf_take(&notice);
-            if (repeated >= 3) {
+        bool materially_different =
+            recovery_materially_different(&recovery, strategy_signature, tool, args);
+        bool repeated_action = hits >= 1 || identical_edit || identical_process;
+        bool rejected_by_recovery = recovery.active && !materially_different;
+        bool recovery_rejected = repeated_action || rejected_by_recovery;
+        uint64_t current_generation = forge_repo_generation(repo);
+        if (recovery_rejected && validation_required && !a->config.skip_validation &&
+            (!stall_validation_attempted || stall_validation_generation != current_generation)) {
+            stall_validation_attempted = true;
+            stall_validation_generation = current_generation;
+            if (!validate_stalled_workspace(a, &tools, repo, ctx, repo_segment, memory_id, turn,
+                                            changed_paths, changed_count, &unknown_changes,
+                                            last_diagnostic, &diagnostic_hash, e)) {
                 yyjson_doc_free(d);
                 free(response);
-                free(raw);
-                status = fg_error(e, FORGE_ERR_LIMIT, "Repeated-action loop detected");
+                status = e && e->code ? e->code : FORGE_ERR_IO;
                 break;
             }
+            stall_validation_generation = forge_repo_generation(repo);
+        }
+        bool entered_recovery = false;
+        if (repeated_action && (!recovery.active || materially_different)) {
+            const char *hypothesis = thought ? yyjson_get_str(thought) : response;
+            recovery_enter(&recovery, strategy_signature, tool, args, hypothesis, turn);
+            a->metrics.loop_warnings++;
+            entered_recovery = true;
+        }
+        if (recovery_rejected) {
+            tool_error.code = FORGE_ERR_CONFLICT;
+            raw = recovery_text(
+                &recovery, a, changed_paths, changed_count, fg_json_str(args, "path"),
+                last_patch_path, last_patch_old, last_patch_new, last_edit_diff, broken_path,
+                last_diagnostic[0] ? last_diagnostic : broken_detail, turn, deadline);
             if (!raw) {
                 yyjson_doc_free(d);
                 free(response);
                 status = FORGE_ERR_MEMORY;
                 break;
             }
-        } else
+            if (!state(a, FORGE_AGENT_RECOVERY, e) ||
+                (entered_recovery && !event_text(a, "recovery", raw, e))) {
+                free(raw);
+                yyjson_doc_free(d);
+                free(response);
+                status = FORGE_ERR_IO;
+                break;
+            }
+        } else {
+            recovery_reset(&recovery);
+            if (!state(a, FORGE_AGENT_TOOL_RUNNING, e)) {
+                yyjson_doc_free(d);
+                free(response);
+                status = FORGE_ERR_IO;
+                break;
+            }
             raw = fg_tool_execute(&tools, tool, args, &changed, &tool_error);
+        }
         double tool_ms = (double)(fg_now_ms() - tool_start);
         a->metrics.tool_ms += tool_ms;
         if (!raw) {
@@ -1127,6 +1385,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             else if (tools.process.exit_code != 0)
                 outcome = FORGE_ERR_CONFLICT;
         }
+        if (!recovery_rejected && outcome != FORGE_OK)
+            recovery_copy(last_diagnostic, sizeof(last_diagnostic), raw);
         if (changed) {
             char path[FG_PATH_MAX];
             if (!fg_relative_path(fg_json_str(args, "path"), path, e)) {
@@ -1152,7 +1412,30 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 changed_count++;
             }
             a->metrics.files_modified = changed_count;
-            repeated = 0;
+            if (!strcmp(tool, "apply_patch") || !strcmp(tool, "apply_hunk")) {
+                char *updated_diff = recovery_edit_diff(a, tools.call_id);
+                if (updated_diff) {
+                    fg_buf history = {0};
+                    if (last_edit_diff) {
+                        size_t history_length = strlen(last_edit_diff);
+                        size_t retained = FG_MIN(history_length, (size_t)12288);
+                        const char *history_start = last_edit_diff + history_length - retained;
+                        while (retained && ((unsigned char)*history_start & 0xc0) == 0x80) {
+                            history_start++;
+                            retained--;
+                        }
+                        if (history_start != last_edit_diff)
+                            fg_buf_puts(&history, "[older committed edits omitted]\n");
+                        fg_buf_add(&history, history_start, retained);
+                        fg_buf_puts(&history, "\n");
+                    }
+                    size_t room = history.len < 16384 ? 16384 - history.len : 0;
+                    fg_buf_add(&history, updated_diff, FG_MIN(strlen(updated_diff), room));
+                    free(updated_diff);
+                    free(last_edit_diff);
+                    last_edit_diff = fg_buf_take(&history);
+                }
+            }
             if (!strcmp(tool, "apply_patch")) {
                 char *updated_path = fg_strdup(fg_json_str(args, "path"));
                 char *updated_old = fg_strdup(fg_json_str(args, "old_text"));
@@ -1171,10 +1454,11 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 }
             }
         }
-        /* Compile-in-the-loop: a .go patch is checked with gofmt immediately so
+        /* Compile-in-the-loop: every .go text edit is checked with gofmt immediately so
          * a parse failure or missing formatting is repaired on the next turn
          * instead of being discovered at final validation. Read-only check. */
-        if (changed && !strcmp(tool, "apply_patch") && a->config.allow_exec) {
+        if (changed && (!strcmp(tool, "apply_patch") || !strcmp(tool, "apply_hunk")) &&
+            a->config.allow_exec) {
             const char *patch_path = fg_json_str(args, "path");
             const char *extension = patch_path ? strrchr(patch_path, '.') : NULL;
             if (extension && !strcmp(extension, ".go")) {
@@ -1207,13 +1491,36 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                                : FORGE_ERR_CANCELLED;
                     if (check.started) {
                         a->metrics.validation_commands++;
+                    }
+                    bool interrupted = check.cancelled || check.timed_out || check.truncated ||
+                                       check_status == FORGE_ERR_CANCELLED ||
+                                       check_status == FORGE_ERR_LIMIT;
+                    if (interrupted) {
+                        if (check_status == FORGE_OK)
+                            check_status =
+                                check.cancelled
+                                    ? fg_error(e, FORGE_ERR_CANCELLED,
+                                               "Go post-edit check was cancelled")
+                                    : fg_error(e, FORGE_ERR_LIMIT,
+                                               "Go post-edit check exceeded its execution budget");
+                        else if (e)
+                            *e = check_error;
+                        if (!e || !e->code)
+                            fg_error(e, check_status, "Go post-edit check could not complete");
+                        fg_process_free(&check);
+                        free(raw);
+                        yyjson_doc_free(d);
+                        free(response);
+                        status = check_status;
+                        break;
+                    }
+                    if (check.started && check_status == FORGE_OK) {
                         /* A parse failure is a nonzero gofmt exit. stderr alone
                          * is not enough: a warning on a successful run must not
                          * be reported as "could not parse", because that also
                          * relaxes the repeat guard for this file. */
-                        bool syntax_failed = check_status != FORGE_OK || check.exit_code != 0;
-                        bool needs_format =
-                            check_status == FORGE_OK && check.exit_code == 0 && check.out_len > 0;
+                        bool syntax_failed = check.exit_code != 0;
+                        bool needs_format = check.exit_code == 0 && check.out_len > 0;
                         /* Clear the outstanding-failure state for this file on
                          * every successful check, not only when a problem is
                          * reported: otherwise a later clean patch would leave a
@@ -1264,9 +1571,12 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                                 fg_buf_printf(&addendum, "%s\n", detail);
                             free(detail);
                             char *text = fg_buf_take(&addendum);
-                            /* Record the outstanding parse failure so later
-                             * recovery reads are not mistaken for looping. It is
-                             * cleared on the next clean check of this file. */
+                            /* Retain the exact failure for a later recovery state.
+                             * The outstanding-file marker is cleared by the next
+                             * clean check, while the last diagnostic remains useful
+                             * evidence about the failed approach. */
+                            if (text)
+                                recovery_copy(last_diagnostic, sizeof(last_diagnostic), text);
                             if (syntax_failed) {
                                 char *next_path = fg_strdup(patch_path);
                                 char *next_detail = fg_strdup(text ? text : "");
@@ -1304,6 +1614,12 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         if (tools.process_ran) {
             unknown_changes = true; /* Commands may change unindexed test/data inputs. */
             anchor_valid = false;   /* The command may have rewritten the file. */
+            if (!strcmp(tool, "run_command"))
+                validation_required = true;
+        }
+        if (changed) {
+            validation_required = true;
+            process_key_count = 0;
         }
         if (changed || tools.process_ran) {
             uint64_t index_start = fg_now_ms();
@@ -1353,10 +1669,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             /* Only the anchored path refreshes the anchor: a patch elsewhere
              * does not prove this file is still as the anchor describes. */
             if (changed && !strcmp(tool, "apply_patch") && last_patch_path &&
-                !strcmp(last_patch_path, fg_json_str(args, "path"))) {
+                !strcmp(last_patch_path, fg_json_str(args, "path")))
                 anchor_valid = true;
-                broken_reads = 0;
-            }
             /* Canonical separators alone do not identify case/short-name aliases
              * on all supported filesystems. Until source bindings carry portable
              * file identity, invalidate all source-dependent views immediately. */
@@ -1369,8 +1683,6 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             a->metrics.files_opened++;
         if (!strcmp(tool, "run_command") && tools.process_ran) {
             uint64_t next_diagnostic = fg_diagnostic_hash(raw);
-            if (next_diagnostic != diagnostic_hash)
-                repeated = 0;
             diagnostic_hash = next_diagnostic;
         }
         char artifact[64];
@@ -1566,6 +1878,7 @@ finish:
     free(last_patch_path);
     free(last_patch_old);
     free(last_patch_new);
+    free(last_edit_diff);
     free(broken_path);
     free(broken_detail);
     yyjson_doc_free(reanchored_doc);

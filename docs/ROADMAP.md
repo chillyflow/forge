@@ -5,6 +5,9 @@ Implemented behavior is separate from model accuracy, platform runtime evidence,
 security isolation and performance comparisons. Required phases remain in scope
 until implemented and verified.
 
+The benchmark-driven sequence for closing the current OpenCode accuracy gap is
+tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-reliability.md).
+
 ## Implemented
 
 - C17 library/CLI with isolated llama.cpp types and explicit ownership.
@@ -31,7 +34,7 @@ until implemented and verified.
   generation JSON and file-reading runtime integration.
 - Typed model memory separated from host evidence, token-aware compaction,
   canonical action/diagnostic loop detection and no-op patch conflicts.
-- Go package import/reverse-import planning and automatic six-stage validation.
+- Go package import/reverse-import planning plus automatic Go/Python six-stage validation.
 - Bounded input snapshots and fail-closed validation evidence recording.
 - Transactional TOML profiles/configuration and metadata-only hardware planning.
 - Source-context invalidation after known edits.
@@ -47,7 +50,7 @@ until implemented and verified.
 | Repository graph | Go declarations, occurrences and package import/reverse graph | Resolved calls/types, symbol impact and test mapping |
 | Incremental indexing | Native watch/delta updates, retained Go trees, transactional edits and syntax hashes | Additional AST languages, semantic change impact, large-repository performance evidence |
 | Working memory | Typed claims, host outcomes, validation and compaction | Semantic summary dependency cache and resume |
-| Validation scheduler | Six-stage Go verification | Symbol impact and additional languages |
+| Validation scheduler | Six-stage Go verification plus Python compiler syntax and unittest/pytest discovery | Symbol impact and languages beyond Go/Python |
 | Context checkpoints | Active sequential reuse plus independent same-instance host snapshots | Automatic semantic checkpoint policy, aggregate eviction, disk KV resume |
 | Diagnostics | Named bounded adapters with normalized evidence and raw streams | Additional formats and language validation schedulers |
 | Memory | Arena/slice/file-view APIs, action JSON and read-file callers | Broader lifetime migration and measured application memory savings |

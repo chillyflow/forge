@@ -1,14 +1,16 @@
 #include "internal.h"
 #include "forge/memory.h"
 #include "forge/retrieval.h"
+#include "core/digest.h"
 #include "edit_journal.h"
-#include <errno.h>
+#include "tree_sitter/api.h"
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <windows.h>
 #else
 #include <unistd.h>
 #endif
+extern const TSLanguage *tree_sitter_go(void);
 static const fg_tool_def definitions[] = {
     {"apply_patch",
      "Replace one exact unique text span; empty old_text creates a new file. Parent directory must "
@@ -17,6 +19,12 @@ static const fg_tool_def definitions[] = {
      "string containing \\n, not a single line. In Go, statements cannot share a line without a "
      "semicolon, so write each statement on its own line with \\n.",
      "path:string old_text:string new_text:string", NULL, FORGE_CAP_WRITE},
+    {"apply_hunk",
+     "Replace an inclusive 1-based line range in an existing text file. file_sha256 must equal "
+     "the full-file anchor returned by read_file, so stale line numbers cannot edit changed "
+     "bytes. new_text is the exact replacement, including any required final line break. Prefer "
+     "this for narrow edits; use apply_patch to create files or replace a non-line text span.",
+     "path:string start:line end:line file_sha256:string new_text:string", NULL, FORGE_CAP_WRITE},
     {"expand_output",
      "Read up to 8192 bytes of recorded UTF-8 tool text by id. A byte offset inside a character "
      "advances to the next character.",
@@ -32,7 +40,9 @@ static const fg_tool_def definitions[] = {
     {"git_status", "Inspect Git status; configured filters require process authorization.", "",
      NULL, FORGE_CAP_PROCESS},
     {"list_directory", "List indexed repository paths.", "", NULL, FORGE_CAP_READ},
-    {"read_file", "Read inclusive lines: start>=1, end>=start, at most 2001 lines.",
+    {"read_file",
+     "Read inclusive lines: start>=1, end>=start, at most 2001 lines. The first output line is "
+     "file_sha256:<hex>, an anchor for a later apply_hunk call.",
      "path:string start:line end:line", NULL, FORGE_CAP_READ},
     {"retrieve_context",
      "Retrieve indexed evidence: exact Go symbol, package imports, literal text, then full-text "
@@ -299,8 +309,15 @@ static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
         fg_error(e, FORGE_ERR_PARSE, "Binary or invalid UTF-8 files are not supported");
         return NULL;
     }
+    char sha256[65];
+    if (!fg_sha256_hex(file.ptr, file.len, sha256)) {
+        forge_file_view_close(view);
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot hash file view");
+        return NULL;
+    }
     size_t line = 1, offset = 0;
     fg_buf b = {0};
+    fg_buf_printf(&b, "file_sha256:%s\n", sha256);
     while (offset < file.len && line <= end) {
         const char *p = file.ptr + offset;
         const char *z = memchr(p, '\n', file.len - offset);
@@ -318,9 +335,370 @@ static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
     forge_file_view_close(view);
     return fg_buf_take(&b);
 }
+
+static int go_hex_digit(unsigned char c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+static bool go_escape_valid(const char *text, size_t length, bool allow_string_hex_tail) {
+    if (length < 2 || text[0] != '\\')
+        return false;
+    if (length == 2 && strchr("abfnrtv\\'\"", (unsigned char)text[1]))
+        return true;
+    size_t digits = 0;
+    size_t offset = 0;
+    unsigned base = 0;
+    uint32_t value = 0;
+    if (text[1] == 'x') {
+        digits = 2;
+        offset = 2;
+        base = 16;
+    } else if (text[1] == 'u') {
+        digits = 4;
+        offset = 2;
+        base = 16;
+    } else if (text[1] == 'U') {
+        digits = 8;
+        offset = 2;
+        base = 16;
+    } else {
+        digits = 3;
+        offset = 1;
+        base = 8;
+    }
+    size_t required = digits + offset;
+    if (length != required && !(text[1] == 'x' && allow_string_hex_tail && length > required))
+        return false;
+    for (size_t i = 0; i < digits; i++) {
+        int digit = go_hex_digit((unsigned char)text[i + offset]);
+        if (digit < 0 || (unsigned)digit >= base)
+            return false;
+        value = value * base + (unsigned)digit;
+    }
+    if (base == 8)
+        return value <= 255;
+    if (text[1] == 'x') {
+        for (size_t i = required; i < length; i++)
+            if (go_hex_digit((unsigned char)text[i]) < 0)
+                return false;
+        return true;
+    }
+    return value <= UINT32_C(0x10ffff) && !(value >= UINT32_C(0xd800) && value <= UINT32_C(0xdfff));
+}
+
+static bool go_single_rune(const char *text, size_t length) {
+    if (!length || text[0] == '\n' || text[0] == '\r')
+        return false;
+    unsigned char first = (unsigned char)text[0];
+    size_t width = first < 0x80 ? 1 : first < 0xe0 ? 2 : first < 0xf0 ? 3 : 4;
+    return length == width;
+}
+
+static bool validate_go_lexemes(TSNode root, const char *text, size_t length, TSPoint *point,
+                                const char **kind) {
+    TSTreeCursor cursor = ts_tree_cursor_new(root);
+    bool valid = true, done = false;
+    while (!done) {
+        TSNode node = ts_tree_cursor_current_node(&cursor);
+        const char *type = ts_node_type(node);
+        uint32_t first = ts_node_start_byte(node), last = ts_node_end_byte(node);
+        if (last > length || first > last) {
+            valid = false;
+            *kind = "invalid token bounds";
+        } else if (!strcmp(type, "escape_sequence") &&
+                   !go_escape_valid(text + first, last - first, true)) {
+            valid = false;
+            *kind = "invalid escape sequence";
+        } else if (!strcmp(type, "rune_literal")) {
+            size_t token_length = last - first;
+            const char *token = text + first;
+            bool rune_valid =
+                token_length >= 3 && token[0] == '\'' && token[token_length - 1] == '\'';
+            if (rune_valid) {
+                const char *body = token + 1;
+                size_t body_length = token_length - 2;
+                rune_valid = body[0] == '\\' ? go_escape_valid(body, body_length, false)
+                                             : go_single_rune(body, body_length);
+            }
+            if (!rune_valid) {
+                valid = false;
+                *kind = "invalid rune literal";
+            }
+        }
+        if (!valid) {
+            *point = ts_node_start_point(node);
+            break;
+        }
+        if (ts_tree_cursor_goto_first_child(&cursor))
+            continue;
+        while (!ts_tree_cursor_goto_next_sibling(&cursor)) {
+            if (!ts_tree_cursor_goto_parent(&cursor)) {
+                done = true;
+                break;
+            }
+        }
+    }
+    ts_tree_cursor_delete(&cursor);
+    return valid;
+}
+
+static bool validate_go_candidate(const char *path, const char *text, size_t len, forge_error *e) {
+    const char *ext = strrchr(path, '.');
+    if (!ext || strcmp(ext, ".go"))
+        return true;
+    if (!fg_utf8_valid(text, len)) {
+        fg_error(e, FORGE_ERR_PARSE,
+                 "Proposed Go edit rejected before commit: source is not valid UTF-8");
+        return false;
+    }
+    if (len > UINT32_MAX) {
+        fg_error(e, FORGE_ERR_LIMIT, "Proposed Go file exceeds parser input limit");
+        return false;
+    }
+    TSParser *parser = ts_parser_new();
+    if (!parser) {
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot allocate staged Go syntax parser");
+        return false;
+    }
+    if (!ts_parser_set_language(parser, tree_sitter_go())) {
+        ts_parser_delete(parser);
+        fg_error(e, FORGE_ERR_PARSE, "Go parser ABI mismatch");
+        return false;
+    }
+    TSTree *tree = ts_parser_parse_string(parser, NULL, text, (uint32_t)len);
+    ts_parser_delete(parser);
+    if (!tree) {
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot parse staged Go edit");
+        return false;
+    }
+    TSNode root = ts_tree_root_node(tree);
+    TSPoint structural_point = ts_node_start_point(root);
+    const char *structural_kind = NULL;
+    bool package_seen = false, declarations_started = false;
+    uint32_t children = ts_node_named_child_count(root);
+    for (uint32_t i = 0; i < children && !structural_kind; i++) {
+        TSNode node = ts_node_named_child(root, i);
+        const char *type = ts_node_type(node);
+        if (!strcmp(type, "comment"))
+            continue;
+        if (!strcmp(type, "package_clause")) {
+            TSNode name = {0};
+            uint32_t names = 0, package_children = ts_node_named_child_count(node);
+            for (uint32_t child_index = 0; child_index < package_children; child_index++) {
+                TSNode child = ts_node_named_child(node, child_index);
+                if (!strcmp(ts_node_type(child), "comment"))
+                    continue;
+                name = child;
+                names++;
+            }
+            if (package_seen || declarations_started || names != 1) {
+                structural_kind = "invalid package clause placement";
+                structural_point = ts_node_start_point(node);
+                break;
+            }
+            uint32_t first = ts_node_start_byte(name), last = ts_node_end_byte(name);
+            if (last <= first || last > len || (last - first == 1 && text[first] == '_')) {
+                structural_kind = "invalid package name";
+                structural_point = ts_node_start_point(name);
+                break;
+            }
+            package_seen = true;
+            continue;
+        }
+        if (!strcmp(type, "import_declaration")) {
+            if (!package_seen || declarations_started) {
+                structural_kind = "import outside the package import section";
+                structural_point = ts_node_start_point(node);
+            }
+            continue;
+        }
+        bool declaration = !strcmp(type, "const_declaration") || !strcmp(type, "var_declaration") ||
+                           !strcmp(type, "type_declaration") ||
+                           !strcmp(type, "function_declaration") ||
+                           !strcmp(type, "method_declaration");
+        if (!package_seen || !declaration) {
+            structural_kind =
+                package_seen ? "invalid top-level Go construct" : "missing leading package clause";
+            structural_point = ts_node_start_point(node);
+            break;
+        }
+        declarations_started = true;
+    }
+    if (!package_seen && !structural_kind)
+        structural_kind = "missing package clause";
+    TSPoint lexical_point = ts_node_start_point(root);
+    const char *lexical_kind = NULL;
+    bool lexically_valid =
+        !structural_kind && validate_go_lexemes(root, text, len, &lexical_point, &lexical_kind);
+    if (!ts_node_has_error(root) && !structural_kind && lexically_valid) {
+        ts_tree_delete(tree);
+        return true;
+    }
+
+    TSPoint point = structural_kind    ? structural_point
+                    : !lexically_valid ? lexical_point
+                                       : ts_node_start_point(root);
+    const char *kind = structural_kind    ? structural_kind
+                       : !lexically_valid ? lexical_kind
+                                          : ts_node_type(root);
+    if (!structural_kind && lexically_valid) {
+        TSTreeCursor cursor = ts_tree_cursor_new(root);
+        bool done = false;
+        while (!done) {
+            TSNode node = ts_tree_cursor_current_node(&cursor);
+            if (ts_node_is_error(node) || ts_node_is_missing(node)) {
+                point = ts_node_start_point(node);
+                kind = ts_node_is_missing(node) ? "missing syntax" : ts_node_type(node);
+                break;
+            }
+            if (ts_node_has_error(node) && ts_tree_cursor_goto_first_child(&cursor))
+                continue;
+            while (!ts_tree_cursor_goto_next_sibling(&cursor)) {
+                if (!ts_tree_cursor_goto_parent(&cursor)) {
+                    done = true;
+                    break;
+                }
+            }
+        }
+        ts_tree_cursor_delete(&cursor);
+    }
+    ts_tree_delete(tree);
+    fg_error(e, FORGE_ERR_PARSE,
+             "Proposed Go edit rejected before commit: syntax error at %s:%u:%u (%s)", path,
+             point.row + 1, point.column + 1, kind);
+    return false;
+}
+
+static char *commit_edit(fg_tool_context *c, const char *path, char full[FG_PATH_MAX], bool exists,
+                         const struct stat *st, char *text, size_t len, fg_buf *out, bool *changed,
+                         forge_error *e) {
+#ifdef _WIN32
+    (void)st;
+#endif
+    char temp[FG_PATH_MAX], random[17];
+    if (!fg_random_hex(random, 8) ||
+        snprintf(temp, sizeof(temp), "%s.forge-%s.tmp", full, random) >= (int)sizeof(temp)) {
+        free(text);
+        fg_buf_clear(out);
+        fg_error(e, FORGE_ERR_IO, "Cannot create patch staging path");
+        return NULL;
+    }
+    FILE *f = fopen(temp, "wbx");
+    if (!f) {
+        free(text);
+        fg_buf_clear(out);
+        fg_error(e, FORGE_ERR_IO, "Cannot exclusively create patch staging file");
+        return NULL;
+    }
+    bool ok = fwrite(out->data, 1, out->len, f) == out->len;
+    if (fclose(f) != 0)
+        ok = false;
+#ifndef _WIN32
+    if (ok && exists && chmod(temp, st->st_mode & 0777) != 0)
+        ok = false;
+#endif
+    if (!ok) {
+        free(text);
+        fg_buf_clear(out);
+        remove(temp);
+        fg_error(e, FORGE_ERR_IO, "Cannot write patch staging file");
+        return NULL;
+    }
+    fg_edit_record edit = {0};
+    if (!fg_edit_prepare(c, path, exists, (forge_slice){text, len},
+                         (forge_slice){out->data, out->len}, &edit, e)) {
+        free(text);
+        fg_buf_clear(out);
+        remove(temp);
+        return NULL;
+    }
+
+    forge_error syntax = {0};
+    if (!validate_go_candidate(path, out->data, out->len, &syntax)) {
+        remove(temp);
+        forge_error recording = {0};
+        if (!fg_edit_finish(c, &edit, false, syntax.code, &recording)) {
+            if (e)
+                *e = recording;
+        } else if (e) {
+            *e = syntax;
+        }
+        free(text);
+        fg_buf_clear(out);
+        return NULL;
+    }
+
+    /* Recheck the exact source before atomic replacement to catch ordinary concurrent edits. */
+    if (exists) {
+        size_t current_len = 0;
+        char *current = fg_read_file(full, c->config.limits.max_file_bytes, &current_len, e);
+        ok = current && current_len == len && !memcmp(current, text, len);
+        free(current);
+    }
+    if (ok && !exists) {
+        struct stat current;
+        if (stat(full, &current) == 0)
+            ok = false;
+    }
+    if (ok && !fg_safe_path(c->root, path, true, full, e))
+        ok = false;
+    if (ok && ((c->config.cancelled && c->config.cancelled(c->config.userdata)) ||
+               (c->deadline && fg_now_ms() >= c->deadline))) {
+        fg_error(e, FORGE_ERR_CANCELLED, "Patch cancelled before target replacement");
+        ok = false;
+    }
+#ifdef _WIN32
+    if (ok)
+        ok = MoveFileExA(temp, full,
+                         exists ? MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
+                                : MOVEFILE_WRITE_THROUGH) != 0;
+#else
+    if (ok)
+        ok = rename(temp, full) == 0;
+#endif
+    free(text);
+    fg_buf_clear(out);
+    if (!ok) {
+        remove(temp);
+        if (!e || !e->code)
+            fg_error(e, FORGE_ERR_CONFLICT, "Atomic patch failed or source changed concurrently");
+        forge_status reason = e && e->code ? e->code : FORGE_ERR_CONFLICT;
+        fg_edit_finish(c, &edit, false, reason, e);
+        return NULL;
+    }
+    *changed = true;
+    if (!fg_edit_finish(c, &edit, true, FORGE_OK, e))
+        return NULL;
+    fg_buf result = {0};
+    fg_buf_printf(&result, "Patched %s.\nRecorded edit diff: %s\n", path, edit.diff);
+    const char *ext = strrchr(path, '.');
+    if (ext && !strcmp(ext, ".go")) {
+        fg_buf_puts(&result, "Staged Go syntax validation passed before commit.\n");
+        char *target = fg_repo_targets(c->repo, path, e);
+        if (target) {
+            fg_buf_printf(
+                &result, "Suggested targeted validation (requires command approval): %s\n", target);
+            free(target);
+        }
+    }
+    return fg_buf_take(&result);
+}
+
 static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_error *e) {
     const char *path = fg_json_str(args, "path"), *old = fg_json_str(args, "old_text"),
                *replacement = fg_json_str(args, "new_text");
+    if (*old && !strcmp(old, replacement)) {
+        fg_error(e, FORGE_ERR_CONFLICT,
+                 "No edit performed: old_text and new_text are identical. Supply different "
+                 "replacement text; encode line breaks as \\n when changing multiple statements.");
+        return NULL;
+    }
     char full[FG_PATH_MAX];
     if (!fg_safe_path(c->root, path, true, full, e))
         return NULL;
@@ -406,97 +784,142 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
                  "replacement text; encode line breaks as \\n when changing multiple statements.");
         return NULL;
     }
-    char temp[FG_PATH_MAX], random[17];
-    if (!fg_random_hex(random, 8) ||
-        snprintf(temp, sizeof(temp), "%s.forge-%s.tmp", full, random) >= (int)sizeof(temp)) {
-        free(text);
-        fg_buf_clear(&out);
-        fg_error(e, FORGE_ERR_IO, "Cannot create patch staging path");
+    return commit_edit(c, path, full, exists, &st, text, len, &out, changed, e);
+}
+
+static bool line_span(const char *text, size_t len, size_t start, size_t end, size_t *first,
+                      size_t *last) {
+    if (!len && start == 1 && end == 1) {
+        *first = *last = 0;
+        return true;
+    }
+    size_t line = 1, offset = 0;
+    bool found = false;
+    while (offset < len) {
+        const char *newline = memchr(text + offset, '\n', len - offset);
+        size_t next = newline ? (size_t)(newline - text) + 1 : len;
+        if (line == start) {
+            *first = offset;
+            found = true;
+        }
+        if (line == end) {
+            if (!found)
+                return false;
+            *last = next;
+            return true;
+        }
+        if (!newline)
+            break;
+        offset = next;
+        line++;
+    }
+    return false;
+}
+
+static char *hunk(fg_tool_context *c, yyjson_val *args, bool *changed, forge_error *e) {
+    const char *path = fg_json_str(args, "path");
+    const char *anchor = fg_json_str(args, "file_sha256");
+    const char *replacement = fg_json_str(args, "new_text");
+    size_t start, end;
+    fg_json_uint(args, "start", &start, 0);
+    fg_json_uint(args, "end", &end, 0);
+    if (!start || end < start || end - start > 2000) {
+        fg_error(e, FORGE_ERR_ARGUMENT, "Invalid hunk line range (maximum 2001 lines)");
         return NULL;
     }
-    FILE *f = fopen(temp, "wbx");
-    if (!f) {
-        free(text);
-        fg_buf_clear(&out);
-        fg_error(e, FORGE_ERR_IO, "Cannot exclusively create patch staging file");
+    if (!fg_sha256_valid_hex(anchor)) {
+        fg_error(e, FORGE_ERR_ARGUMENT, "file_sha256 must be 64 lowercase hexadecimal digits");
         return NULL;
     }
-    bool ok = fwrite(out.data, 1, out.len, f) == out.len;
-    if (fclose(f) != 0)
-        ok = false;
-#ifndef _WIN32
-    if (ok && exists && chmod(temp, st.st_mode & 0777) != 0)
-        ok = false;
-#endif
-    if (!ok) {
-        free(text);
-        fg_buf_clear(&out);
-        remove(temp);
-        fg_error(e, FORGE_ERR_IO, "Cannot write patch staging file");
+    char full[FG_PATH_MAX];
+    if (!fg_safe_path(c->root, path, true, full, e))
+        return NULL;
+    struct stat st;
+    if (stat(full, &st) != 0) {
+        fg_error(e, FORGE_ERR_NOT_FOUND, "Hunk target does not exist");
         return NULL;
     }
-    fg_edit_record edit = {0};
-    if (!fg_edit_prepare(c, path, exists, (forge_slice){text, len},
-                         (forge_slice){out.data, out.len}, &edit, e)) {
-        free(text);
-        fg_buf_clear(&out);
-        remove(temp);
+    if ((st.st_mode & S_IFMT) != S_IFREG) {
+        fg_error(e, FORGE_ERR_CONFLICT, "Hunk target is not a regular file");
         return NULL;
-    }
-    /* Recheck the exact source before atomic replacement to catch ordinary concurrent edits. */
-    if (ok && exists) {
-        size_t current_len = 0;
-        char *current = fg_read_file(full, c->config.limits.max_file_bytes, &current_len, e);
-        ok = current && current_len == len && !memcmp(current, text, len);
-        free(current);
-    }
-    if (ok && !exists) {
-        struct stat current;
-        if (stat(full, &current) == 0)
-            ok = false;
-    }
-    if (ok && !fg_safe_path(c->root, path, true, full, e))
-        ok = false;
-    if (ok && ((c->config.cancelled && c->config.cancelled(c->config.userdata)) ||
-               (c->deadline && fg_now_ms() >= c->deadline))) {
-        fg_error(e, FORGE_ERR_CANCELLED, "Patch cancelled before target replacement");
-        ok = false;
     }
 #ifdef _WIN32
-    if (ok)
-        ok = MoveFileExA(temp, full,
-                         exists ? MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
-                                : MOVEFILE_WRITE_THROUGH) != 0;
-#else
-    if (ok)
-        ok = rename(temp, full) == 0;
+    HANDLE handle = CreateFileA(full, FILE_READ_ATTRIBUTES,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                                OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    BY_HANDLE_FILE_INFORMATION info;
+    bool linked = handle == INVALID_HANDLE_VALUE || !GetFileInformationByHandle(handle, &info) ||
+                  info.nNumberOfLinks > 1;
+    if (handle != INVALID_HANDLE_VALUE)
+        CloseHandle(handle);
+    if (linked) {
+        fg_error(e, FORGE_ERR_POLICY, "Refusing a hard-linked or inaccessible hunk target");
+        return NULL;
+    }
 #endif
-    free(text);
-    fg_buf_clear(&out);
-    if (!ok) {
-        remove(temp);
-        if (!e || !e->code)
-            fg_error(e, FORGE_ERR_CONFLICT, "Atomic patch failed or source changed concurrently");
-        forge_status reason = e && e->code ? e->code : FORGE_ERR_CONFLICT;
-        fg_edit_finish(c, &edit, false, reason, e);
+    size_t len = 0;
+    char *text = fg_read_file(full, c->config.limits.max_file_bytes, &len, e);
+    if (!text)
+        return NULL;
+    if ((len && memchr(text, 0, len)) || !fg_utf8_valid(text, len)) {
+        free(text);
+        fg_error(e, FORGE_ERR_PARSE, "Cannot apply a line hunk to binary or invalid UTF-8 content");
         return NULL;
     }
-    *changed = true;
-    if (!fg_edit_finish(c, &edit, true, FORGE_OK, e))
+    char current[65];
+    if (!fg_sha256_hex(text, len, current)) {
+        free(text);
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot hash hunk target");
         return NULL;
-    fg_buf result = {0};
-    fg_buf_printf(&result, "Patched %s.\nRecorded edit diff: %s\n", path, edit.diff);
-    const char *ext = strrchr(path, '.');
-    if (ext && !strcmp(ext, ".go")) {
-        char *target = fg_repo_targets(c->repo, path, e);
-        if (target) {
-            fg_buf_printf(
-                &result, "Suggested targeted validation (requires command approval): %s\n", target);
-            free(target);
+    }
+    if (strcmp(anchor, current)) {
+        fg_buf report = {0};
+        fg_buf_printf(&report,
+                      "TOOL_ERROR [conflict]: stale file_sha256 for %s; current file_sha256 is "
+                      "%s. Current selected content follows; use this hash for a revised hunk.\n",
+                      path, current);
+        size_t first = 0, last = 0;
+        if (line_span(text, len, start, end, &first, &last)) {
+            size_t show = FG_MIN(last - first, (size_t)8192);
+            fg_buf_add(&report, text + first, show);
+            if (last - first > show)
+                fg_buf_puts(&report, "\n[truncated]");
+        } else
+            fg_buf_puts(&report, "[requested line range is no longer present]\n");
+        free(text);
+        fg_error(e, FORGE_ERR_CONFLICT, "Stale file_sha256 for %s", path);
+        if (report.failed) {
+            fg_buf_clear(&report);
+            return NULL;
         }
+        return fg_buf_take(&report);
     }
-    return fg_buf_take(&result);
+    size_t first = 0, last = 0;
+    if (!line_span(text, len, start, end, &first, &last)) {
+        free(text);
+        fg_error(e, FORGE_ERR_ARGUMENT, "Hunk line range is outside the current file");
+        return NULL;
+    }
+    fg_buf out = {0};
+    fg_buf_add(&out, text, first);
+    fg_buf_puts(&out, replacement);
+    fg_buf_add(&out, text + last, len - last);
+    if (out.failed || out.len > c->config.limits.max_file_bytes) {
+        free(text);
+        fg_buf_clear(&out);
+        fg_error(e, FORGE_ERR_LIMIT, "Patched file exceeds file budget");
+        return NULL;
+    }
+    if (out.len == len && !memcmp(out.data, text, len)) {
+        free(text);
+        fg_buf_clear(&out);
+        fg_error(e, FORGE_ERR_CONFLICT,
+                 "No hunk edit performed: new_text is identical to the selected line span");
+        return NULL;
+    }
+    return commit_edit(c, path, full, true, &st, text, len, &out, changed, e);
 }
+
 static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
     fg_process_result r = {0};
     uint64_t now = fg_now_ms();
@@ -540,6 +963,19 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
     memset(&c->process, 0, sizeof(c->process));
     if (!fg_tool_validate(name, args, e))
         return NULL;
+    if (!strcmp(name, "apply_patch")) {
+        const char *old = fg_json_str(args, "old_text");
+        const char *replacement = fg_json_str(args, "new_text");
+        /* File creation with two empty strings still changes directory state;
+         * every byte-level no-op is rejected before policy or filesystem work. */
+        if (old && *old && replacement && !strcmp(old, replacement)) {
+            fg_error(
+                e, FORGE_ERR_CONFLICT,
+                "No edit performed: old_text and new_text are identical. Supply different "
+                "replacement text; encode line breaks as \\n when changing multiple statements.");
+            return NULL;
+        }
+    }
     const fg_tool_def *def = NULL;
     for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++)
         if (!strcmp(name, definitions[i].name))
@@ -569,6 +1005,8 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
         return read_lines(c, args, e);
     if (!strcmp(name, "apply_patch"))
         return patch(c, args, changed, e);
+    if (!strcmp(name, "apply_hunk"))
+        return hunk(c, args, changed, e);
     if (!strcmp(name, "find_symbol")) {
         size_t depth;
         fg_json_uint(args, "depth", &depth, 0);

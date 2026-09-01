@@ -41,6 +41,57 @@ static bool report_verdict(yyjson_mut_doc *doc, yyjson_mut_val *report,
                               yyjson_mut_strcpy(doc, result->summary));
 }
 
+/* A blocked plan already contains the planner's best explanation. Preserve it
+ * in the model-visible result instead of replacing it with a generic missing
+ * dependency error that gives recovery no useful next action. */
+static char *blocked_plan_summary(yyjson_val *plan) {
+    fg_buf message = {0};
+    fg_buf_puts(&message, "Automatic validation is blocked; no verification command was run.");
+
+    yyjson_val *missing = yyjson_obj_get(plan, "missing_tools");
+    if (yyjson_is_arr(missing) && yyjson_arr_size(missing)) {
+        fg_buf_puts(&message, "\nMissing required tools: ");
+        size_t index, count;
+        yyjson_val *tool;
+        bool first = true;
+        yyjson_arr_foreach(missing, index, count, tool) {
+            if (!yyjson_is_str(tool))
+                continue;
+            fg_buf_printf(&message, "%s%s", first ? "" : ", ", yyjson_get_str(tool));
+            first = false;
+        }
+        fg_buf_puts(&message, first ? "unspecified.\n" : ".\n");
+    } else
+        fg_buf_puts(&message, "\n");
+
+    yyjson_val *reasons = yyjson_obj_get(plan, "fallback_reasons");
+    bool explained = false;
+    if (yyjson_is_arr(reasons)) {
+        size_t index, count;
+        yyjson_val *reason;
+        yyjson_arr_foreach(reasons, index, count, reason) {
+            const char *code = fg_json_str(reason, "code");
+            const char *path = fg_json_str(reason, "path");
+            const char *detail = fg_json_str(reason, "detail");
+            if (!code && !detail)
+                continue;
+            if (!explained)
+                fg_buf_puts(&message, "Planner fallback reasons:\n");
+            fg_buf_printf(&message, "- %s", code ? code : "unspecified");
+            if (path && *path)
+                fg_buf_printf(&message, " [%s]", path);
+            if (detail && *detail)
+                fg_buf_printf(&message, ": %s", detail);
+            fg_buf_puts(&message, "\n");
+            explained = true;
+        }
+    }
+    if (!explained)
+        fg_buf_puts(&message,
+                    "Planner fallback reason: no runnable validation target was available.\n");
+    return fg_buf_take(&message);
+}
+
 static bool emit_value(fg_session *session, const char *type, yyjson_mut_val *value,
                        forge_error *e) {
     char *json = yyjson_mut_val_write(value, 0, NULL);
@@ -78,12 +129,24 @@ forge_status fg_validation_run(fg_tool_context *c, const char *const *paths, siz
     yyjson_doc *pd = yyjson_read(plan, strlen(plan), 0);
     yyjson_val *po = pd ? yyjson_doc_get_root(pd) : NULL;
     yyjson_val *stages = yyjson_obj_get(po, "stages");
-    if (!yyjson_is_arr(stages) || !yyjson_is_bool(yyjson_obj_get(po, "applicable"))) {
+    yyjson_val *applicable = yyjson_obj_get(po, "applicable");
+    yyjson_val *available = yyjson_obj_get(po, "verification_available");
+    const char *plan_status = fg_json_str(po, "verification_status");
+    if (!yyjson_is_arr(stages) || !yyjson_is_bool(applicable) || !yyjson_is_bool(available) ||
+        !plan_status) {
         free(plan);
         yyjson_doc_free(pd);
         return fg_error(e, FORGE_ERR_PARSE, "Invalid validation plan");
     }
-    result->applicable = yyjson_get_bool(yyjson_obj_get(po, "applicable"));
+    result->applicable = yyjson_get_bool(applicable);
+    bool verification_available = yyjson_get_bool(available);
+    if ((!result->applicable && strcmp(plan_status, "not_applicable")) ||
+        (result->applicable && verification_available && strcmp(plan_status, "planned")) ||
+        (result->applicable && !verification_available && strcmp(plan_status, "blocked"))) {
+        free(plan);
+        yyjson_doc_free(pd);
+        return fg_error(e, FORGE_ERR_PARSE, "Inconsistent validation plan status");
+    }
     yyjson_mut_doc *rd = yyjson_mut_doc_new(NULL);
     if (!rd) {
         free(plan);
@@ -110,6 +173,13 @@ forge_status fg_validation_run(fg_tool_context *c, const char *const *paths, siz
     }
     if (cancelled(c)) {
         status = fg_error(e, FORGE_ERR_CANCELLED, "Validation cancelled or deadline reached");
+        goto finish;
+    }
+    if (result->applicable && !verification_available) {
+        result->summary = blocked_plan_summary(po);
+        status = result->summary ? fg_error(e, FORGE_ERR_NOT_FOUND, "%s", result->summary)
+                                 : fg_error(e, FORGE_ERR_MEMORY,
+                                            "Cannot retain blocked validation plan diagnostics");
         goto finish;
     }
     if (result->applicable) {
@@ -347,12 +417,13 @@ finish:
     if (!result->summary) {
         fg_buf message = {0};
         if (status == FORGE_OK && !result->applicable)
-            fg_buf_puts(&message, "Automatic validation not applicable: no indexed Go target. "
-                                  "No test success has been established.");
+            fg_buf_puts(&message,
+                        "Automatic validation not applicable: no indexed Go or Python target. "
+                        "No test success has been established.");
         else if (result->passed)
             fg_buf_printf(&message,
-                          "Automatic Go validation passed: %zu commands across %zu "
-                          "stages, repository generation=%llu.",
+                          "Automatic staged validation passed: %zu commands across %zu stages, "
+                          "repository generation=%llu.",
                           result->commands, result->stages, (unsigned long long)result->generation);
         else
             fg_buf_printf(&message, "Automatic validation did not pass: %s",

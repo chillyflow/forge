@@ -20,9 +20,10 @@ download provenance and GPU settings documented separately.
 
 ## Build
 
-CMake 3.24+, a C17/C++17 compiler, Git 2.45+, and Python 3.10+ for tests. Go and gofmt
-are needed for Go validation; CI exercises real checks with Go 1.27.0. The first build
-fetches pinned native dependencies. Subsequent builds can run offline.
+CMake 3.24+, a C17/C++17 compiler, Git 2.45+, and Python 3.10+ for tests and
+Python validation. Go and gofmt are needed for Go validation; CI exercises real
+checks with Go 1.27.0. The first build fetches pinned native dependencies.
+Subsequent builds can run offline.
 
 Git 2.45+ is required for the `--no-lazy-fetch` flag used during repository
 enumeration. Older Git is supported but silently falls back to a full filesystem
@@ -83,11 +84,13 @@ Ctrl+C requests cancellation; GPU kernels are not preempted mid-dispatch.
 including network access. Use a disposable checkout/container for untrusted
 repositories. Read the [security model](docs/SECURITY.md) before enabling execution.
 
-Go workspaces with edits or launched commands undergo formatting checks, compilation, affected
-and reverse-dependent tests, vet, and broad verification before an agent's final
-answer is accepted. Failures return to the agent for repair; denied execution
-does not become a successful verification. This checks the active Go environment,
-not every build tag/platform or the correctness of arbitrary task claims.
+Go/Python workspaces with relevant edits or arbitrary `run_command` execution
+undergo staged verification before an agent's final answer is accepted. Go checks formatting,
+compilation, affected and reverse-dependent tests, vet, and broad tests. Python
+checks compiler-level syntax, filename-related tests, and broad unittest/pytest
+execution. Failures return to the agent for repair; denied or unavailable
+execution does not become successful verification. This checks the active
+language environment, not every build tag/platform or arbitrary task correctness.
 Validation also compares bounded workspace input snapshots, including unindexed
 test fixtures, before accepting success. See [the validation contract](docs/VALIDATION.md).
 `--no-auto-validation` is an explicit ablation.
@@ -115,13 +118,14 @@ numeric layer settings remain explicit overrides.
 
 | Tool | Behavior |
 | --- | --- |
-| `read_file` | Bounded line ranges with line numbers |
+| `read_file` | Bounded line ranges with line numbers and a full-file SHA-256 edit anchor |
 | `list_directory` | Sorted indexed file map |
 | `search_text` | Literal source search, bounded results |
 | `retrieve_context` | Exact symbol → package graph → literal → FTS5, with snapshot provenance and budgets |
 | `find_symbol` | Go declaration/signature/body expansion |
 | `get_references` | Go identifier occurrences, not type-resolved references |
 | `apply_patch` | One exact, unique replacement; atomic file replacement |
+| `apply_hunk` | SHA-256-anchored inclusive line replacement; rejects stale file revisions |
 | `run_command` | Argument-vector execution, separate stdout/stderr, deadlines |
 | `git_diff`, `git_status` | Git inspection requiring process permission; configured filters can execute |
 | `expand_output` | Retrieve a page of recorded raw output |

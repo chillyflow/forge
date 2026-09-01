@@ -1,7 +1,6 @@
 #include "repo_internal.h"
 #include "forge/validation.h"
 #include "core/digest.h"
-#include <ctype.h>
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -579,6 +578,14 @@ static bool track_go_module(forge_repo *r, const char *path) {
 }
 static bool supported(const char *path) {
     if (go_metadata(path))
+        return true;
+    const char *base = strrchr(path, '/');
+    const char *windows_base = strrchr(path, '\\');
+    if (!base || (windows_base && windows_base > base))
+        base = windows_base;
+    base = base ? base + 1 : path;
+    if (!strcmp(base, "pytest.ini") || !strcmp(base, ".pytest.ini") || !strcmp(base, "setup.cfg") ||
+        !strcmp(base, "tox.ini"))
         return true;
     const char *ext = strrchr(path, '.');
     if (!ext)

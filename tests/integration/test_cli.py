@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import pathlib
@@ -75,6 +76,10 @@ class ForgeTests(unittest.TestCase):
     def require_go(self):
         if not shutil.which('go') or not shutil.which('gofmt'):
             self.skipTest('Go and gofmt are needed for real automatic validation')
+
+    def require_python(self):
+        if not any(shutil.which(name) for name in ('python3', 'python', 'py')):
+            self.skipTest('A discoverable Python interpreter is needed for real validation')
 
     def indexed_rows(self, query):
         with sqlite3.connect(self.root / '.forge' / 'index.db') as connection:
@@ -494,6 +499,27 @@ class ForgeTests(unittest.TestCase):
         self.assertEqual(failure['commands'][0]['stage'], 'format')
         self.assertEqual(failure['commands'][0]['exit_code'], 0)
 
+    def test_python_validation_rejects_compiler_only_syntax_errors(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'tests').mkdir()
+        (self.root / 'worker.py').write_text('return 1\n', encoding='utf-8', newline='\n')
+        (self.root / 'tests/test_worker.py').write_text(
+            'import unittest\n\nclass WorkerTest(unittest.TestCase):\n'
+            '    def test_placeholder(self):\n        self.assertTrue(True)\n',
+            encoding='utf-8', newline='\n')
+        failed = self.cli('validate', 'worker.py', '--allow-exec', '--json', success=False)
+        events = [json.loads(line) for line in failed.stdout.splitlines()]
+        report = next(event['data'] for event in events
+                      if event['type'] == 'validation_result')
+        self.assertFalse(report['passed'])
+        self.assertEqual(report['commands_run'], 1)
+        self.assertEqual(report['commands'][0]['stage'], 'compile')
+        artifact = pathlib.Path(report['session']) / report['commands'][0]['stderr_artifact']
+        self.assertIn('outside function', artifact.read_text(encoding='utf-8'))
+        self.assertFalse((self.root / '__pycache__').exists())
+
     def test_staged_retrieval_cli_and_read_only_tool(self):
         (self.root / 'notes.md').write_text('ADD is documented in uppercase.\n', encoding='utf-8')
         report = json.loads(self.cli('retrieve', 'Add', '--depth', '0', '--json').stdout)
@@ -556,6 +582,24 @@ class ForgeTests(unittest.TestCase):
         self.assertFalse(any(e['type'] == 'message' for e in events))
         self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
                          'denied')
+
+    def test_agent_cannot_finish_when_validation_is_not_applicable(self):
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'note.txt').write_text('before\n', encoding='utf-8', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'note.txt', 'old_text': 'before', 'new_text': 'after'}},
+            {'final': 'Claimed success without an applicable validation plan.'},
+        ], '--allow-write', success=False, fallback_watch=True)
+        reports = [event['data'] for event in events
+                   if event['type'] == 'validation_result']
+        self.assertEqual(len(reports), 1)
+        self.assertFalse(reports[0]['applicable'])
+        self.assertFalse(reports[0]['passed'])
+        self.assertFalse(any(event['type'] == 'message' for event in events))
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'not_applicable')
 
     def test_unindexed_command_changes_require_fresh_validation(self):
         self.require_go()
@@ -680,6 +724,216 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('conflict', results[0])
         self.assertEqual((self.root / 'new.go').read_text(), 'package calc\n')
 
+    def test_hash_anchored_hunk_is_narrow_and_rejects_stale_revision(self):
+        self.go_module('a - b')
+        before = (self.root / 'calc.go').read_bytes()
+        anchor = hashlib.sha256(before).hexdigest()
+        _, events, session = self.run_script([
+            {'tool': 'read_file', 'args': {'path': 'calc.go', 'start': 4, 'end': 4}},
+            {'tool': 'apply_hunk', 'args': {
+                'path': 'calc.go', 'start': 4, 'end': 4, 'file_sha256': anchor,
+                'new_text': '\treturn a + b\n'}},
+            {'tool': 'apply_hunk', 'args': {
+                'path': 'calc.go', 'start': 4, 'end': 4, 'file_sha256': anchor,
+                'new_text': '\treturn 0\n'}},
+            {'final': 'Applied one anchored line edit.'},
+        ], '--allow-write', '--no-auto-validation')
+        outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
+        self.assertEqual(outputs[0], f'file_sha256:{anchor}\n4: \treturn a - b\n')
+        self.assertIn('Patched calc.go', outputs[1])
+        self.assertIn('Staged Go syntax validation passed before commit', outputs[1])
+        self.assertIn('TOOL_ERROR [conflict]', outputs[2])
+        self.assertIn('stale file_sha256', outputs[2])
+        self.assertIn('\treturn a + b\n', (self.root / 'calc.go').read_text())
+        outcome = json.loads((session / 'tool/000002.edit-result.json').read_text())
+        self.assertEqual(outcome['state'], 'applied')
+        self.assertFalse((session / 'tool/000003.edit.json').exists())
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['files_modified'], 1)
+
+    def test_hash_anchored_hunk_can_fill_an_existing_empty_file(self):
+        target = self.root / 'empty.txt'
+        target.write_bytes(b'')
+        anchor = hashlib.sha256(b'').hexdigest()
+        _, events, _ = self.run_script([
+            {'tool': 'apply_hunk', 'args': {
+                'path': 'empty.txt', 'start': 1, 'end': 1, 'file_sha256': anchor,
+                'new_text': 'first line\n'}},
+            {'final': 'Filled the empty file.'},
+        ], '--allow-write', '--no-auto-validation')
+        output = next(event['data']['output'] for event in events
+                      if event['type'] == 'tool_result')
+        self.assertIn('Patched empty.txt', output)
+        self.assertEqual(target.read_text(), 'first line\n')
+
+    def test_syntax_broken_go_candidate_is_aborted_before_commit(self):
+        before = (self.root / 'calc.go').read_bytes()
+        source = before.decode()
+        candidates = [
+            source.replace('return a - b }', 'return a + b'),
+            'func Add(a, b int) int { return a + b }\n',
+            'package calc\nreturn 1\n',
+            'package calc\n' + r'var _ = "\q"' + '\n',
+            'package calc\n' + r"var _ = '\x12ab'" + '\n',
+            '',
+        ]
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'calc.go', 'old_text': source, 'new_text': candidate}}
+            for candidate in candidates
+        ] + [
+            {'final': 'The invalid candidate was rejected.'},
+        ], '--allow-write', '--no-auto-validation')
+        outputs = [event['data']['output'] for event in events
+                   if event['type'] == 'tool_result']
+        self.assertEqual(len(outputs), len(candidates))
+        for output in outputs:
+            self.assertIn('TOOL_ERROR [parse]', output)
+            self.assertIn('Proposed Go edit rejected before commit', output)
+        self.assertEqual((self.root / 'calc.go').read_bytes(), before)
+        self.assertEqual((session / 'tool/000001.before').read_bytes(), before)
+        for index, candidate in enumerate(candidates, 1):
+            self.assertEqual((session / f'tool/{index:06}.after').read_bytes(),
+                             candidate.encode())
+            outcome = json.loads((session / f'tool/{index:06}.edit-result.json').read_text())
+            self.assertEqual(outcome['state'], 'aborted')
+            self.assertEqual(outcome['status'], 'parse')
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['files_modified'], 0)
+
+    def test_valid_go_package_comment_and_coalesced_hex_escape_commit(self):
+        before = (self.root / 'calc.go').read_bytes()
+        candidate = (b'package /* inline */ calc\n\nvar _ = "\\x12ab"\n\n'
+                     b'func Add(a, b int) int { return a - b }\n')
+        _, events, _ = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'calc.go', 'old_text': before.decode(),
+                'new_text': candidate.decode()}},
+            {'final': 'The valid candidate committed.'},
+        ], '--allow-write', '--no-auto-validation')
+        output = next(event['data']['output'] for event in events
+                      if event['type'] == 'tool_result')
+        self.assertIn('Patched calc.go', output)
+        self.assertIn('Staged Go syntax validation passed before commit', output)
+        self.assertEqual((self.root / 'calc.go').read_bytes(), candidate)
+
+    def test_python_first_stall_runs_validation_and_pins_failure(self):
+        if not any(shutil.which(name) for name in ('python', 'python3', 'py')):
+            self.skipTest('Python executable discovery is needed for automatic validation')
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'expr').mkdir()
+        (self.root / 'tests').mkdir()
+        (self.root / 'expr/__init__.py').write_text('')
+        (self.root / 'expr/evaluate.py').write_text(
+            'import ast\n\ndef evaluate(expression)\n'
+            '    node = ast.parse(expression, mode="eval").body\n'
+            '    if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Add):\n'
+            '        raise ValueError("unsupported")\n'
+            '    if not isinstance(node.left, ast.Constant) or not isinstance(node.right, ast.Constant):\n'
+            '        raise ValueError("unsupported")\n'
+            '    return node.left.value + node.right.value\n', newline='\n')
+        (self.root / 'tests/test_evaluate.py').write_text(
+            'import unittest\nfrom expr.evaluate import evaluate\n\n'
+            'class EvaluateTests(unittest.TestCase):\n'
+            '    def test_addition_only(self):\n'
+            '        self.assertEqual(evaluate("2 + 5"), 7)\n'
+            '        with self.assertRaises(ValueError): evaluate("2 * 5")\n'
+            '        with self.assertRaises(ValueError): evaluate("\'a\' + \'b\'")\n', newline='\n')
+        old_guard = ('    if not isinstance(node.left, ast.Constant) or '
+                     'not isinstance(node.right, ast.Constant):\n'
+                     '        raise ValueError("unsupported")')
+        new_guard = ('    if not all(isinstance(value, ast.Constant) and '
+                     'isinstance(value.value, int)\n'
+                     '               for value in (node.left, node.right)):\n'
+                     '        raise ValueError("unsupported")')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'expr/evaluate.py', 'old_text': 'def evaluate(expression)\n',
+                'new_text': 'def evaluate(expression):\n'}},
+            {'tool': 'read_file', 'args': {
+                'path': 'expr/__init__.py', 'start': 1, 'end': 1}},
+            {'tool': 'read_file', 'args': {
+                'path': 'expr/__init__.py', 'start': 1, 'end': 1}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'expr/evaluate.py', 'old_text': old_guard, 'new_text': new_guard}},
+            {'final': 'Python repair validated.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        recoveries = [event['data'] for event in events if event['type'] == 'recovery']
+        self.assertEqual(len(recoveries), 1)
+        self.assertIn('ValueError not raised', recoveries[0])
+        validation_results = [event for event in events if event['type'] == 'validation_result']
+        self.assertGreaterEqual(len(validation_results), 2)
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'passed')
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual(metrics['loop_warnings'], 1)
+        self.assertGreaterEqual(metrics['validation_commands'], 4)
+        self.assertFalse((self.root / '__pycache__').exists())
+        self.assertFalse((self.root / '.pytest_cache').exists())
+        repaired = (self.root / 'expr/evaluate.py').read_text()
+        self.assertIn('isinstance(value.value, int)', repaired)
+
+    def test_blocked_python_stall_enters_recovery_and_can_add_tests(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text(
+            'def value():\n    return 1\n', encoding='utf-8', newline='\n')
+        test_source = (
+            'import unittest\nfrom worker import value\n\n'
+            'class WorkerTest(unittest.TestCase):\n'
+            '    def test_value(self):\n        self.assertEqual(value(), 2)\n')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'return 1', 'new_text': 'return 2'}},
+            {'tool': 'read_file', 'args': {'path': 'worker.py', 'start': 1, 'end': 5}},
+            {'tool': 'read_file', 'args': {'path': 'worker.py', 'start': 1, 'end': 5}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'test_worker.py', 'old_text': '', 'new_text': test_source}},
+            {'final': 'Added the missing Python test and validated the repair.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        recoveries = [event['data'] for event in events if event['type'] == 'recovery']
+        self.assertEqual(len(recoveries), 1)
+        self.assertIn('python_tests_not_detected', recoveries[0])
+        reports = [event['data'] for event in events
+                   if event['type'] == 'validation_result']
+        self.assertEqual([report['passed'] for report in reports], [False, True])
+        self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
+                         ['Added the missing Python test and validated the repair.'])
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'passed')
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['loop_warnings'], 1)
+
+    def test_stall_recovery_preserves_rejected_edit_diagnostic(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text(
+            'def value():\n    return 1\n', encoding='utf-8', newline='\n')
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nfrom worker import value\n\n'
+            'class WorkerTest(unittest.TestCase):\n'
+            '    def test_value(self):\n        self.assertEqual(value(), 2)\n',
+            encoding='utf-8', newline='\n')
+        invalid = {
+            'path': 'broken.go',
+            'old_text': '',
+            'new_text': 'package broken\nfunc Broken() {\n',
+        }
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'return 1', 'new_text': 'return 2'}},
+            {'tool': 'apply_patch', 'args': invalid},
+            {'tool': 'apply_patch', 'args': invalid},
+            {'final': 'Kept the valid committed Python repair.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        recoveries = [event['data'] for event in events if event['type'] == 'recovery']
+        self.assertEqual(len(recoveries), 1)
+        self.assertIn('Proposed Go edit rejected before commit', recoveries[0])
+        self.assertIn('Automatic staged validation passed', recoveries[0])
+        self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
+                         ['Kept the valid committed Python repair.'])
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['loop_warnings'], 1)
+
     def test_edit_artifacts_are_exact_and_git_applicable(self):
         if not shutil.which('git'):
             self.skipTest('Git is needed to independently check emitted patches')
@@ -737,7 +991,7 @@ class ForgeTests(unittest.TestCase):
 
     def test_identical_patch_is_a_conflict_and_can_recover(self):
         _, events, session = self.run_script([
-            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a - b'}},
+            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'not present', 'new_text': 'not present'}},
             {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a + b'}},
             {'final': 'Fixed the expression.'},
         ], '--allow-write', '--no-auto-validation')
@@ -745,6 +999,7 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('TOOL_ERROR [conflict]', outputs[0])
         self.assertIn('No edit performed', outputs[0])
         self.assertIn('Patched calc.go', outputs[1])
+        self.assertFalse((session / 'tool/000001.edit.json').exists())
         self.assertEqual(json.loads((session / 'metrics.json').read_text())['files_modified'], 1)
 
     def test_loop_detection_uses_canonical_arguments(self):
@@ -764,6 +1019,53 @@ class ForgeTests(unittest.TestCase):
         self.assertFalse(any(event['type'] == 'validation_result' for event in events))
         self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
                          'unverified')
+
+    def test_repeated_process_action_enters_recovery_across_generation_bumps(self):
+        command = {'tool': 'run_command', 'args': {
+            'argv': [sys.executable, '-c', "print('same command')"]}}
+        _, events, session = self.run_script([
+            command,
+            command,
+            {'tool': 'read_file', 'args': {'path': 'calc.go', 'start': 1, 'end': 3}},
+            {'final': 'Recovered from the repeated process action.'},
+        ], '--allow-exec', '--no-auto-validation')
+        outputs = [event['data']['output'] for event in events
+                   if event['type'] == 'tool_result']
+        self.assertIn('exit_code=0', outputs[0])
+        self.assertIn('RECOVERY_MODE', outputs[1])
+        self.assertIn('file_sha256:', outputs[2])
+        self.assertEqual(len([event for event in events if event['type'] == 'recovery']), 1)
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual(metrics['loop_warnings'], 1)
+        self.assertEqual(metrics['tool_calls'], 3)
+
+    def test_denied_stall_validation_is_recovery_evidence_not_terminal(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text(
+            'def value():\n    return 1\n', encoding='utf-8', newline='\n')
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nfrom worker import value\n\n'
+            'class WorkerTest(unittest.TestCase):\n'
+            '    def test_value(self):\n        self.assertEqual(value(), 2)\n',
+            encoding='utf-8', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'return 1', 'new_text': 'return 2'}},
+            {'tool': 'read_file', 'args': {'path': 'worker.py', 'start': 1, 'end': 5}},
+            {'tool': 'read_file', 'args': {'path': 'worker.py', 'start': 1, 'end': 5}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'return 2', 'new_text': 'return 3'}},
+            {'final': 'This final remains denied.'},
+        ], '--allow-write', success=False, fallback_watch=True)
+        recoveries = [event['data'] for event in events if event['type'] == 'recovery']
+        self.assertEqual(len(recoveries), 1)
+        self.assertIn('requires explicit unsandboxed process approval', recoveries[0])
+        self.assertIn('return 3', (self.root / 'worker.py').read_text())
+        self.assertFalse(any(event['type'] == 'message' for event in events))
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'denied')
 
     def test_no_implicit_simulation(self):
         self.assertNotEqual(self.cli('run', 'task', success=False).returncode, 0)
@@ -794,7 +1096,11 @@ class ForgeTests(unittest.TestCase):
             {'final': 'Read bounded source slices.'},
         ])
         outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
-        self.assertEqual(outputs, ['', '2: café\n'])
+        empty_hash = hashlib.sha256(b'').hexdigest()
+        last_hash = hashlib.sha256('one\ncafé'.encode('utf-8')).hexdigest()
+        self.assertEqual(outputs,
+                         [f'file_sha256:{empty_hash}\n',
+                          f'file_sha256:{last_hash}\n2: café\n'])
 
     def test_hardlink_patch_denied(self):
         outside = self.root / 'original.txt'

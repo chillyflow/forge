@@ -2,11 +2,11 @@
 #define _GNU_SOURCE
 #endif
 #include "internal.h"
-#include <errno.h>
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include <errno.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -148,6 +148,16 @@ static bool executable_path(const char *root, const char *cwd, const char *name,
         p = z + 1;
     }
     return false;
+}
+
+bool fg_process_executable_available(const char *workspace_root, const char *cwd,
+                                     const char *name) {
+    if (!workspace_root || !*workspace_root || !cwd || !*cwd || !name || !*name)
+        return false;
+    char executable[FG_PATH_MAX], canonical_root[FG_PATH_MAX], canonical_cwd[FG_PATH_MAX];
+    return process_directory(workspace_root, canonical_root, NULL) &&
+           process_directory(cwd, canonical_cwd, NULL) &&
+           executable_path(canonical_root, canonical_cwd, name, executable);
 }
 #ifdef _WIN32
 static void quote_arg(fg_buf *b, const char *s) {

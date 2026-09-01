@@ -27,7 +27,7 @@ static void usage(void) {
          "  forge summarize PATH --summary-producer ID --model MODEL   cached model summary\n"
          "  forge watch [--wall-ms N]              update index from native file events\n"
          "  forge index-info PATH                 report indexed source/AST/symbol hashes\n"
-         "  forge validation-plan [CHANGED_PATH]   print staged Go verification plan\n"
+         "  forge validation-plan [CHANGED_PATH]   print staged Go/Python verification plan\n"
          "  forge validate [CHANGED_PATH] --allow-exec   execute staged verification\n"
          "  forge hardware-plan [--model model.gguf] [--json]\n"
          "  forge replay SESSION | stats SESSION | context SESSION\n"
@@ -74,7 +74,7 @@ static void usage(void) {
          "  --thought-budget N   max reasoning tokens before forcing action (default: <=256)\n"
          "  --no-thought-budget  unbounded routed reasoning (ablation)\n"
          "  --thought-cue TEXT   replace the forced reasoning cue; empty disables it\n"
-         "  --no-auto-validation skip final Go validation (explicit ablation)\n"
+         "  --no-auto-validation skip final Go/Python validation (explicit ablation)\n"
          "  --script FILE        explicit simulated test backend (not inference)\n"
          "  --depth N            symbol expansion or retrieval graph hops, 0..3\n"
          "  --summary-scope NAME repository/module/package/file/symbol (default file)\n"
@@ -873,8 +873,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
                  "cannot be requested and absent");
         return failed(&error);
     }
-    if ((ac.thought_cue || ac.thought_budget || ac.thought_budget_unbounded ||
-         ac.thought_native) &&
+    if ((ac.thought_cue || ac.thought_budget || ac.thought_budget_unbounded || ac.thought_native) &&
         !ac.thought_routed) {
         fg_error(&error, FORGE_ERR_ARGUMENT,
                  "--thought-budget/--no-thought-budget/--thought-cue require --thought-routed");
