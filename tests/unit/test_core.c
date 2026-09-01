@@ -334,6 +334,11 @@ int main(void) {
            FG_ACTION_ARGUMENTS);
     assert(fg_action_decode_phase("{\"tool\":\"apply_patch\",\"args\":{") ==
            FG_ACTION_PATCH);
+    assert(fg_action_decode_phase("{\"thought\":\"use { tool carefully\","
+                                  "\"tool\":\"apply_patch\",\"args\":{") ==
+           FG_ACTION_PATCH);
+    assert(fg_action_decode_phase("{\"thought\":\"the key \\\"tool\\\" is quoted\"") ==
+           FG_ACTION_SELECT);
     assert(fg_action_decode_phase("{\"final\":\"") == FG_ACTION_FINAL);
     assert(fg_action_decode_phase("{\"memory\":{") == FG_ACTION_MEMORY);
     /* Think bounds: the suppress window stays a quarter capped at 32, the cap

@@ -53,26 +53,66 @@ bool fg_json_whitespace_only(const char *text, size_t length) {
     return true;
 }
 
+static const char *top_level_value(const char *action, const char *key) {
+    size_t key_length = strlen(key);
+    int depth = 0;
+    for (const char *cursor = action; cursor && *cursor;) {
+        if (*cursor == '{' || *cursor == '[') {
+            depth++;
+            cursor++;
+            continue;
+        }
+        if (*cursor == '}' || *cursor == ']') {
+            depth--;
+            cursor++;
+            continue;
+        }
+        if (*cursor != '"') {
+            cursor++;
+            continue;
+        }
+        const char *start = ++cursor;
+        bool escaped = false;
+        while (*cursor && *cursor != '"') {
+            if (*cursor == '\\' && cursor[1]) {
+                escaped = true;
+                cursor += 2;
+            } else
+                cursor++;
+        }
+        if (!*cursor)
+            return NULL;
+        const char *end = cursor++;
+        if (depth != 1 || escaped || (size_t)(end - start) != key_length ||
+            strncmp(start, key, key_length))
+            continue;
+        while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
+            cursor++;
+        if (*cursor != ':')
+            continue;
+        do {
+            cursor++;
+        } while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n');
+        return cursor;
+    }
+    return NULL;
+}
+
 fg_action_phase fg_action_decode_phase(const char *text) {
-    const char *action = text ? fg_action_begin(text) : NULL;
+    const char *action = text;
+    while (action && (*action == ' ' || *action == '\t' || *action == '\r' || *action == '\n'))
+        action++;
+    if (!action || *action != '{')
+        action = text ? fg_action_begin(text) : NULL;
     if (!action)
         return FG_ACTION_SELECT;
-    const char *cursor = action + 1;
-    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
-        cursor++;
-    if (!strncmp(cursor, "\"final\"", 7))
+    if (top_level_value(action, "final"))
         return FG_ACTION_FINAL;
-    if (!strncmp(cursor, "\"memory\"", 8))
+    if (top_level_value(action, "memory"))
         return FG_ACTION_MEMORY;
-    if (strncmp(cursor, "\"tool\"", 6))
+    const char *cursor = top_level_value(action, "tool");
+    if (!cursor)
         return FG_ACTION_SELECT;
-    cursor += 6;
-    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
-        cursor++;
-    if (*cursor++ != ':')
-        return FG_ACTION_SELECT;
-    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
-        cursor++;
     if (*cursor++ != '"')
         return FG_ACTION_SELECT;
     const char *name = cursor;
