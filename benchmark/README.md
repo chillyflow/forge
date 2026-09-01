@@ -1,10 +1,76 @@
 # Benchmark methodology
 
-`tasks/*.json` contains ten tiny Go smoke repairs and six reasoning-gated Go
-repairs. The latter isolate one logical defect in otherwise complete code; the
-oracle for each differs by one source line. These are controlled fixtures, not
-SWE-bench or representative evidence of general repository-level performance.
-`generate_tasks.py` recreates them deterministically for review.
+`tasks/*.json` contains 29 deterministic tasks: ten tiny Go smoke repairs, six
+reasoning-gated Go repairs, and thirteen campaign tasks split across Go and
+Python. The campaign set covers multi-file changes, APIs, refactors, compiler or
+import failures, repository exploration and algorithms. These remain controlled
+synthetic fixtures, not SWE-bench or representative evidence of general
+repository-level performance. `generate_tasks.py` and
+`generate_campaign_tasks.py` recreate them for review.
+
+## Campaign workflow
+
+Preflight every broken fixture and every supplied oracle before using a model:
+
+```sh
+python benchmark/preflight.py --suite all --output /tmp/preflight.json
+```
+
+OpenCode 1.18.25 is the first established comparison harness. Aider 0.86.2 is
+the second; its adapter refuses any other version. Install it in an isolated
+environment from the checked-in top-level pin:
+
+```sh
+python -m venv .tools/aider
+.tools/aider/bin/python -m pip install -r benchmark/requirements-aider.txt
+```
+
+The parity pilot runs three tasks through Forge, OpenCode and Aider with cold
+model lifecycles and the same independent verifier. The orchestrator writes a
+`protocol-lock.json` containing source, task, model, executable, adjacent DLL
+and Aider package identities before any model run:
+
+```sh
+python benchmark/campaign.py --mode pilot \
+  --forge /tools/forge --opencode /tools/opencode --aider /tools/aider \
+  --server /tools/llama-server --model /models/coder.gguf \
+  --output /results/parity-pilot
+```
+
+After reviewing the pilot artifacts, use `--mode campaign` for all 29 tasks and
+three randomized repetitions. Pass `--repetitions N`, `--tasks ...`, or a
+different `--order-seed` to make an explicit protocol change. `report.py`
+structurally checks model, fixture, context, decode and lifecycle identity, then
+reports per-task and aggregate p50/p90/p95, sample standard deviation, failures,
+tokens, peak process-tree RSS and peak device VRAM.
+
+The primary campaign uses only Forge `optimized` so the external harnesses have
+one matched comparison arm. After that result is frozen, run Forge mechanism
+ablations separately against the same lock and task order, for example:
+
+```sh
+python benchmark/run.py --forge /tools/forge --model /models/coder.gguf \
+  --suite all --repetitions 3 --order-seed 20260831 \
+  --variants optimized no-kv no-semantic no-compaction grammar-first \
+  --output /results/forge-ablations
+```
+
+Portability checks use new per-model output directories and the same selected
+task subset; never consolidate token counts across model tokenizers.
+
+Every schema-v2 record separates:
+
+- `startup_seconds`: cold model/server load.
+- `agent_seconds`: the harness task phase.
+- `verification_seconds`: the same external manifest verifier.
+- `end_to_end_seconds`: cold server/process spawn through verifier exit.
+
+OpenCode and Aider also record server teardown in cold mode. Warm server runs are
+supported by their individual adapters and are labeled `warm`; the reporter
+refuses to mix warm and cold data without an explicit override. RSS covers the
+harness/model process roots and descendants. VRAM sampling uses whole-device
+`nvidia-smi` usage because per-process VRAM is unavailable on some WDDM systems;
+the scope and pre-run baseline are stored with every measurement.
 
 `run.py` creates a fresh temporary Git checkout for every task/variant, runs Forge,
 and checks an independent verifier after the model finishes. Modifying the
@@ -22,8 +88,8 @@ declares `go 1.24`, and an older toolchain makes each `go` invocation attempt a
 toolchain download instead of running the fixture. The failures then look like
 agent errors rather than an unusable environment. Fixtures use only the standard
 library.
-Both runners use shared `utf8-lf-gofmt-v1` preparation: write UTF-8/LF files and
-format Go inputs before timing, Git baseline creation and immutable-test hashing.
+All runners use shared `utf8-lf-language-format-v2` preparation: write UTF-8/LF
+files and format Go inputs before timing, Git baseline creation and protected-file hashing.
 Each result records the preparation version and per-file/aggregate SHA-256.
 This avoids turning pre-existing fixture formatting into an agent failure.
 Older published runs used the original unformatted fixtures and must not be
@@ -57,21 +123,21 @@ speedup is assumed before measurement. Review raw artifacts before publishing.
 
 ## Established-harness comparison
 
-The optional adapter uses a separately installed OpenCode and matching
-`llama-server`. It runs only the trusted synthetic fixtures, with remote tools,
-subagents, auto-sharing, plugins and model downloads disabled. The loopback server
-has an ephemeral authentication key; it is unrelated to any Hugging Face token.
-The generated OpenCode configuration is private benchmark state, not a file to
-publish. KV is cleared between tasks, while prefix reuse within a task remains
-enabled. Batch sizes and thread counts match Forge's current defaults.
+The OpenCode and Aider adapters use a separately installed harness and matching
+`llama-server`. They run only trusted synthetic fixtures, with remote services,
+auto-sharing, model downloads and analytics disabled. The loopback server has an
+ephemeral authentication key. Generated harness configuration is private
+benchmark state, not a file to publish. KV is cleared between tasks, while
+prefix reuse within a task remains enabled. Batch sizes and thread counts match
+Forge's current defaults.
 
 ```sh
 python benchmark/opencode.py --opencode /tools/opencode \
   --server /tools/llama-server --model /models/coder.gguf \
-  --output /tmp/opencode-results
-python benchmark/summarize.py --forge /tmp/forge-results \
-  --opencode /tmp/opencode-results --forge-revision ACTUAL_GIT_COMMIT \
-  --output /tmp/public-numeric-results
+  --lifecycle cold --repetitions 3 --suite all --output /tmp/opencode-results
+python benchmark/aider.py --aider /tools/aider \
+  --server /tools/llama-server --model /models/coder.gguf \
+  --lifecycle cold --repetitions 3 --suite all --output /tmp/aider-results
 ```
 
 The summarizer reads server counters, including metadata/title inference, rather

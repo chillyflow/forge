@@ -31,7 +31,7 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Debug --output-on-failure
       - name: Check benchmark tooling
-        run: python -m py_compile benchmark/run.py benchmark/opencode.py benchmark/summarize.py benchmark/generate_tasks.py
+        run: python -m py_compile benchmark/common.py benchmark/run.py benchmark/opencode.py benchmark/aider.py benchmark/campaign.py benchmark/freeze.py benchmark/preflight.py benchmark/report.py benchmark/summarize.py benchmark/generate_tasks.py benchmark/generate_campaign_tasks.py
   sanitizers:
     runs-on: ubuntu-latest
     steps:

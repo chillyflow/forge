@@ -1,0 +1,26 @@
+{
+  "id": "go_multifile_transfer",
+  "suite": "campaign",
+  "language": "go",
+  "category": "multi-file",
+  "prompt": "Transfer must atomically debit the source ledger and credit the destination ledger, returning an error without changing either ledger when funds are insufficient. Repair all affected files and run go test -json ./... without modifying tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "protected_files": [
+    "ledger/transfer_test.go"
+  ],
+  "files": {
+    "go.mod": "module campaign.test/fixture\n\ngo 1.24\n",
+    "ledger/ledger.go": "package ledger\n\ntype Ledger struct { Balance int }\nfunc (l *Ledger) debit(amount int) bool { if amount<0 || l.Balance<=amount { return false }; l.Balance-=amount; return true }\n",
+    "ledger/transfer.go": "package ledger\n\nimport \"errors\"\nfunc Transfer(from,to *Ledger, amount int) error { if !from.debit(amount) { return errors.New(\"insufficient funds\") }; from.Balance+=amount; return nil }\n",
+    "ledger/transfer_test.go": "package ledger\n\nimport \"testing\"\nfunc TestTransfer(t *testing.T) { a,b:=&Ledger{10},&Ledger{2}; if err:=Transfer(a,b,10); err!=nil || a.Balance!=0 || b.Balance!=12 { t.Fatalf(\"exact: %v %d %d\",err,a.Balance,b.Balance) }; c,d:=&Ledger{3},&Ledger{4}; if err:=Transfer(c,d,5); err==nil || c.Balance!=3 || d.Balance!=4 { t.Fatalf(\"atomic: %v %d %d\",err,c.Balance,d.Balance) } }\n"
+  },
+  "oracle_files": {
+    "ledger/ledger.go": "package ledger\n\ntype Ledger struct { Balance int }\nfunc (l *Ledger) debit(amount int) bool { if amount<0 || l.Balance<amount { return false }; l.Balance-=amount; return true }\n",
+    "ledger/transfer.go": "package ledger\n\nimport \"errors\"\nfunc Transfer(from,to *Ledger, amount int) error { if !from.debit(amount) { return errors.New(\"insufficient funds\") }; to.Balance+=amount; return nil }\n"
+  }
+}

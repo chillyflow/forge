@@ -1,0 +1,30 @@
+{
+  "id": "py_explore_slug",
+  "suite": "campaign",
+  "language": "python",
+  "category": "exploration",
+  "prompt": "Public slugs must be lowercase ASCII words separated by one hyphen, with punctuation removed, accents transliterated, and no leading or trailing separator. Locate and repair the relevant code, then run the unittest suite without modifying tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-v"
+  ],
+  "protected_files": [
+    "tests/test_slug.py"
+  ],
+  "files": {
+    "app/__init__.py": "",
+    "app/models.py": "class Article:\n    pass\n",
+    "app/text/__init__.py": "",
+    "app/text/slug.py": "import re\n\ndef slugify(value):\n    return re.sub(r\"\\s+\", \"-\", value.strip().lower())\n",
+    "tests/test_slug.py": "import unittest\nfrom app.text.slug import slugify\n\nclass SlugTests(unittest.TestCase):\n    def test_public_form(self):\n        self.assertEqual(slugify(\"  Caf\u00e9, d\u00e9j\u00e0 vu!  \"), \"cafe-deja-vu\")\n        self.assertEqual(slugify(\"one---two\"), \"one-two\")\n"
+  },
+  "oracle_files": {
+    "app/text/slug.py": "import re\nimport unicodedata\n\ndef slugify(value):\n    normalized = unicodedata.normalize(\"NFKD\", value).encode(\"ascii\", \"ignore\").decode()\n    return re.sub(r\"[^a-z0-9]+\", \"-\", normalized.lower()).strip(\"-\")\n"
+  },
+  "entry_files": []
+}

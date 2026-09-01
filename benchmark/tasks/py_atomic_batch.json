@@ -1,0 +1,28 @@
+{
+  "id": "py_atomic_batch",
+  "suite": "campaign",
+  "language": "python",
+  "category": "multi-file",
+  "prompt": "apply_batch must validate all inventory adjustments before mutating state: unknown SKUs and negative final quantities reject the whole batch. Repair it and run the unittest suite without modifying tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-v"
+  ],
+  "protected_files": [
+    "tests/test_batch.py"
+  ],
+  "files": {
+    "inventory/__init__.py": "",
+    "inventory/model.py": "class Inventory:\n    def __init__(self, quantities):\n        self.quantities = dict(quantities)\n",
+    "inventory/batch.py": "def apply_batch(inventory, adjustments):\n    for sku, delta in adjustments:\n        if sku not in inventory.quantities:\n            return False\n        inventory.quantities[sku] += delta\n        if inventory.quantities[sku] < 0:\n            return False\n    return True\n",
+    "tests/test_batch.py": "import unittest\nfrom inventory.model import Inventory\nfrom inventory.batch import apply_batch\n\nclass BatchTests(unittest.TestCase):\n    def test_atomicity(self):\n        stock=Inventory({\"a\":3,\"b\":1}); self.assertTrue(apply_batch(stock,[(\"a\",-2),(\"b\",2)])); self.assertEqual(stock.quantities,{\"a\":1,\"b\":3})\n        stock=Inventory({\"a\":3,\"b\":1}); self.assertFalse(apply_batch(stock,[(\"a\",-2),(\"b\",-4)])); self.assertEqual(stock.quantities,{\"a\":3,\"b\":1})\n        self.assertFalse(apply_batch(stock,[(\"missing\",1)])); self.assertEqual(stock.quantities,{\"a\":3,\"b\":1})\n"
+  },
+  "oracle_files": {
+    "inventory/batch.py": "def apply_batch(inventory, adjustments):\n    proposed = dict(inventory.quantities)\n    for sku, delta in adjustments:\n        if sku not in proposed or proposed[sku] + delta < 0:\n            return False\n        proposed[sku] += delta\n    inventory.quantities.clear()\n    inventory.quantities.update(proposed)\n    return True\n"
+  }
+}

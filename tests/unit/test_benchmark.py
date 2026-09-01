@@ -23,6 +23,10 @@ FAILURE_SPEC = importlib.util.spec_from_file_location(
     'forge_benchmark_failures', SOURCE.parent / 'analyze_failures.py')
 FAILURES = importlib.util.module_from_spec(FAILURE_SPEC)
 FAILURE_SPEC.loader.exec_module(FAILURES)
+REPORT_SPEC = importlib.util.spec_from_file_location(
+    'forge_benchmark_report', SOURCE.parent / 'report.py')
+REPORT = importlib.util.module_from_spec(REPORT_SPEC)
+REPORT_SPEC.loader.exec_module(REPORT)
 
 
 class FixtureTests(unittest.TestCase):
@@ -88,6 +92,60 @@ class FixtureTests(unittest.TestCase):
             for name in ('../escape.txt', '.'):
                 with self.subTest(path=name), self.assertRaises(ValueError):
                     BENCH.materialize(root, {'files': {name: 'bad'}})
+
+    def test_campaign_has_bounded_multilanguage_category_coverage(self):
+        tasks = [json.loads(path.read_text(encoding='utf-8'))
+                 for path in SOURCE.parent.joinpath('tasks').glob('*.json')]
+        self.assertGreaterEqual(len(tasks), 25)
+        self.assertLessEqual(len(tasks), 50)
+        campaign = [task for task in tasks if task.get('suite') == 'campaign']
+        self.assertEqual({task.get('language') for task in campaign}, {'go', 'python'})
+        self.assertTrue({'multi-file', 'api', 'refactor', 'compiler-failure', 'exploration'}
+                        <= {task.get('category') for task in campaign})
+        self.assertTrue(all(task.get('protected_files') for task in campaign))
+
+    def test_repeated_schedule_is_seeded_and_complete(self):
+        cases = ['a', 'b', 'c']
+        first = BENCH.schedule(cases, repetitions=3, seed=7)
+        second = BENCH.schedule(cases, repetitions=3, seed=7)
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 9)
+        self.assertEqual({(case, repetition) for case, repetition, _ in first},
+                         {(case, repetition) for case in cases for repetition in range(1, 4)})
+        self.assertEqual([index for _, _, index in first], list(range(1, 10)))
+
+    def test_protected_file_hashes_generalize_beyond_repair_test(self):
+        task = {'files': {'src/a.py': 'value = 1\n', 'tests/test_a.py': 'sentinel = 1\n'},
+                'protected_files': ['tests/test_a.py']}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            BENCH.materialize(root, task)
+            before = BENCH.snapshot_protected(root, task)
+            self.assertTrue(BENCH.protected_unchanged(root, before))
+            (root / 'tests' / 'test_a.py').write_text('sentinel = 2\n', encoding='utf-8')
+            self.assertFalse(BENCH.protected_unchanged(root, before))
+
+    def test_campaign_report_distributions_and_fixture_validation(self):
+        records = []
+        for repetition, seconds in enumerate((1.0, 2.0, 6.0), 1):
+            records.append({'task': 'a', 'repetition': repetition, 'passed': repetition != 3,
+                            'wall_seconds': seconds,
+                            'timing': {'end_to_end_seconds': seconds, 'agent_seconds': seconds - .2,
+                                       'startup_seconds': .1, 'verification_seconds': .1},
+                            'metrics': {'generated_tokens': 10 * repetition},
+                            'fixture_preparation': 'v2', 'fixture_sha256': 'same',
+                            'fixture_files': {'a.py': 'hash'},
+                            'resource_usage': {'peak_process_tree_rss_bytes': 100 * repetition,
+                                               'peak_gpu_used_bytes': 200 * repetition}})
+        summary = REPORT.summarize(records)
+        self.assertEqual(summary['passed'], 2)
+        self.assertEqual(summary['end_to_end_seconds']['p50'], 2.0)
+        self.assertGreater(summary['end_to_end_seconds']['stdev'], 0)
+        REPORT.validate_groups({'one': records, 'two': [dict(record) for record in records]})
+        changed = [dict(record) for record in records]
+        changed[0]['fixture_sha256'] = 'different'
+        with self.assertRaises(ValueError):
+            REPORT.validate_groups({'one': records, 'two': changed})
 
     def test_hash_changes_with_content_or_path(self):
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:

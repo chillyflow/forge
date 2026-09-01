@@ -1,0 +1,27 @@
+{
+  "id": "py_api_query",
+  "suite": "campaign",
+  "language": "python",
+  "category": "api",
+  "prompt": "parse_query must accept a URL query string, keep blank values, return the last value for repeated keys, and reject malformed percent escapes with ValueError. Repair it and run the unittest suite without modifying tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-v"
+  ],
+  "protected_files": [
+    "tests/test_query.py"
+  ],
+  "files": {
+    "web/__init__.py": "",
+    "web/query.py": "from urllib.parse import parse_qs\n\ndef parse_query(value):\n    parsed = parse_qs(value)\n    return {key: values[0] for key, values in parsed.items()}\n",
+    "tests/test_query.py": "import unittest\nfrom web.query import parse_query\n\nclass QueryTests(unittest.TestCase):\n    def test_contract(self):\n        self.assertEqual(parse_query(\"a=1&a=2&empty=\"), {\"a\": \"2\", \"empty\": \"\"})\n        with self.assertRaises(ValueError):\n            parse_query(\"bad=%ZZ\")\n"
+  },
+  "oracle_files": {
+    "web/query.py": "from urllib.parse import parse_qs\nimport re\n\ndef parse_query(value):\n    if re.search(r\"%(?![0-9A-Fa-f]{2})\", value):\n        raise ValueError(\"malformed percent escape\")\n    parsed = parse_qs(value, keep_blank_values=True, strict_parsing=True)\n    return {key: values[-1] for key, values in parsed.items()}\n"
+  }
+}

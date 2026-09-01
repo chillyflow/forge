@@ -1,0 +1,29 @@
+{
+  "id": "py_multifile_invoice",
+  "suite": "campaign",
+  "language": "python",
+  "category": "multi-file",
+  "prompt": "Invoice totals must apply the customer discount before adding the fixed shipping charge, and money must be rounded to two decimal places. Repair the implementation across modules and run the unittest suite without modifying tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-v"
+  ],
+  "protected_files": [
+    "tests/test_invoice.py"
+  ],
+  "files": {
+    "billing/__init__.py": "",
+    "billing/money.py": "def money(value):\n    return round(value, 1)\n",
+    "billing/invoice.py": "from .money import money\n\ndef total(subtotal, discount_rate, shipping):\n    return money((subtotal + shipping) * (1 - discount_rate))\n",
+    "tests/test_invoice.py": "import unittest\nfrom billing.invoice import total\n\nclass InvoiceTests(unittest.TestCase):\n    def test_order_and_rounding(self):\n        self.assertEqual(total(10.05, 0.10, 2.00), 11.05)\n        self.assertEqual(total(1.26, 0, 0), 1.26)\n"
+  },
+  "oracle_files": {
+    "billing/money.py": "def money(value):\n    return round(value, 2)\n",
+    "billing/invoice.py": "from .money import money\n\ndef total(subtotal, discount_rate, shipping):\n    return money(subtotal * (1 - discount_rate) + shipping)\n"
+  }
+}

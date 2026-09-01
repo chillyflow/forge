@@ -1,0 +1,25 @@
+{
+  "id": "go_refactor_clock",
+  "suite": "campaign",
+  "language": "go",
+  "category": "refactor",
+  "prompt": "Refactor expiration checks to use the injected Clock everywhere so tests and production share one time source. Preserve the exported API and run go test -json ./... without modifying tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "protected_files": [
+    "session/session_test.go"
+  ],
+  "files": {
+    "go.mod": "module campaign.test/fixture\n\ngo 1.24\n",
+    "session/clock.go": "package session\n\nimport \"time\"\ntype Clock interface { Now() time.Time }\ntype SystemClock struct{}\nfunc (SystemClock) Now() time.Time { return time.Now() }\n",
+    "session/session.go": "package session\n\nimport \"time\"\ntype Session struct { ExpiresAt time.Time; clock Clock }\nfunc New(expires time.Time, clock Clock) Session { return Session{ExpiresAt:expires,clock:clock} }\nfunc (s Session) Expired() bool { return time.Now().After(s.ExpiresAt) }\n",
+    "session/session_test.go": "package session\n\nimport (\"testing\"; \"time\")\ntype fixed struct{ at time.Time }; func (f fixed) Now() time.Time{return f.at}\nfunc TestExpiredUsesClock(t *testing.T) { base:=time.Date(2030,1,1,0,0,0,0,time.UTC); if New(base.Add(time.Hour),fixed{base}).Expired() { t.Fatal(\"future marked expired\") }; if !New(base.Add(-time.Hour),fixed{base}).Expired() { t.Fatal(\"past marked active\") } }\n"
+  },
+  "oracle_files": {
+    "session/session.go": "package session\n\nimport \"time\"\ntype Session struct { ExpiresAt time.Time; clock Clock }\nfunc New(expires time.Time, clock Clock) Session { return Session{ExpiresAt:expires,clock:clock} }\nfunc (s Session) Expired() bool { return s.clock.Now().After(s.ExpiresAt) }\n"
+  }
+}
