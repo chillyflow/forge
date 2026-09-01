@@ -89,7 +89,10 @@ def main():
     if any(r['metrics'].get('simulated') for r in forge):
         parser.error('Cannot publish simulated benchmark as inference')
     args.output.mkdir(parents=True, exist_ok=True)
-    environment = {key: forge_env[key] for key in ['model_file', 'model_sha256', 'platform', 'gpu', 'context_tokens', 'go_version', 'forge_binary_sha256', 'fixture_preparation'] if key in forge_env}
+    environment = {key: forge_env[key] for key in
+                   ['model_file', 'model_sha256', 'platform', 'gpu', 'context_tokens',
+                    'go_version', 'forge_binary_sha256', 'fixture_preparation',
+                    'prompt_protocol'] if key in forge_env}
     environment.update(forge_revision=args.forge_revision, opencode_version=other_env['opencode_version'],
                        server_command=other_env['server_command'], baseline_conditions=other_env['notes'])
     for key in ('server_binary_sha256', 'opencode_binary_sha256'):

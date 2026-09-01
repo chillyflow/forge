@@ -434,6 +434,16 @@ static void final_override_validation(void) {
     config.model.script_path = NULL;
     config.limits.command_timeout_ms = 1; /* CLI units need not be whole seconds. */
     assert(forge_config_validate(&config, &error) == FORGE_OK);
+    config.model.prompt_protocol = (forge_prompt_protocol)99;
+    assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
+    assert(strstr(error.message, "prompt protocol"));
+    config.model.prompt_protocol = FORGE_PROMPT_NATIVE;
+    config.thought_routed = true;
+    assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
+    assert(strstr(error.message, "cannot be combined"));
+    config.thought_routed = false;
+    assert(forge_config_validate(&config, &error) == FORGE_OK);
+    config.model.prompt_protocol = FORGE_PROMPT_FLATTENED;
     config.shell_network = (forge_shell_network)99;
     assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
     assert(forge_config_check_exec(&config, true, &error) == FORGE_ERR_ARGUMENT);

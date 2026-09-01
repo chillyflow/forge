@@ -19,6 +19,18 @@ if '--fallback-forge' in sys.argv:
     FALLBACK_FORGE = str(pathlib.Path(sys.argv.pop(index + 1)).resolve())
     sys.argv.pop(index)
 
+
+def native_call(name, arguments, reasoning=None, call_id=None):
+    call = {'type': 'function',
+            'function': {'name': name, 'arguments': json.dumps(arguments,
+                                                                separators=(',', ':'))}}
+    if call_id:
+        call['id'] = call_id
+    message = {'role': 'assistant', 'content': '', 'tool_calls': [call]}
+    if reasoning is not None:
+        message['reasoning_content'] = reasoning
+    return message
+
 class ForgeTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='forge-test-')
@@ -461,6 +473,92 @@ class ForgeTests(unittest.TestCase):
         self.assertEqual(native_call['thought'], '<think>inspect first</think>')
         self.run_script([json.dumps({'final': 'Done.'})], '--no-auto-validation',
                         '--thought-native', '--disable-thinking')
+
+    def test_native_prompt_protocol_roles_tools_and_explicit_failures(self):
+        (self.root / 'note.txt').write_text('native evidence\n', encoding='utf-8', newline='\n')
+        read = native_call('read_file', {'path': 'note.txt', 'start': 1, 'end': 1},
+                           reasoning='inspect natively', call_id='model-call')
+        finish = native_call('final', {'answer': 'Inspected the note.'})
+        _, events, session = self.run_script(
+            [read, finish, finish, finish], '--prompt-protocol', 'native',
+            '--no-auto-validation')
+        calls = [event['data'] for event in events if event['type'] == 'tool_call']
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['tool'], 'read_file')
+        self.assertEqual(calls[0]['thought'], 'inspect natively')
+        self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
+                         ['Inspected the note.'])
+        prompts = [json.loads(path.read_text(encoding='utf-8'))
+                   for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertTrue(all(prompt['protocol'] == 'forge-native-v1' for prompt in prompts))
+        tool_names = {tool['function']['name'] for tool in prompts[0]['tools']}
+        self.assertTrue({'read_file', 'final', 'memory'} <= tool_names)
+        paired = next(prompt for prompt in prompts
+                      if any(message['role'] == 'tool' for message in prompt['messages']))
+        messages = paired['messages']
+        tool_index = next(i for i, message in enumerate(messages) if message['role'] == 'tool')
+        assistant = messages[tool_index - 1]
+        tool_message = messages[tool_index]
+        self.assertEqual(assistant['role'], 'assistant')
+        self.assertEqual(len(assistant['tool_calls']), 1)
+        history_call = assistant['tool_calls'][0]
+        self.assertEqual(history_call['function']['name'], 'read_file')
+        self.assertEqual(history_call['function']['arguments'],
+                         {'path': 'note.txt', 'start': 1, 'end': 1})
+        self.assertEqual(history_call['id'], tool_message['tool_call_id'])
+        self.assertEqual(len(history_call['id']), 9)
+        self.assertEqual(tool_message['name'], 'read_file')
+
+        memory = {'facts': ['Native memory fact.'], 'hypotheses': [],
+                  'decisions': ['Keep native roles paired.'], 'relevant_files': ['note.txt'],
+                  'remaining': ['Finish.']}
+        _, _, memory_session = self.run_script(
+            [native_call('memory', memory, reasoning='retain state'), finish],
+            '--prompt-protocol', 'native', '--no-auto-validation')
+        state = json.loads((memory_session / 'working_state.json').read_text(encoding='utf-8'))
+        self.assertEqual(state['facts'], memory['facts'])
+        memory_prompts = [json.loads(path.read_text(encoding='utf-8'))
+                          for path in sorted((memory_session / 'context').glob('*.txt'))]
+        paired_memory = next(prompt for prompt in memory_prompts
+                             if any(message.get('name') == 'memory'
+                                    for message in prompt['messages']))
+        memory_messages = paired_memory['messages']
+        memory_tool_index = next(i for i, message in enumerate(memory_messages)
+                                 if message.get('name') == 'memory')
+        self.assertEqual(memory_messages[memory_tool_index - 1]['role'], 'assistant')
+        self.assertEqual(
+            memory_messages[memory_tool_index - 1]['tool_calls'][0]['function']['name'],
+            'memory')
+        self.assertEqual(memory_messages[memory_tool_index]['role'], 'tool')
+
+        original = (self.root / 'calc.go').read_bytes()
+        malformed = [
+            (native_call('not_a_forge_tool', {}), 'unsupported tool'),
+            ({'role': 'assistant', 'content': '', 'tool_calls': [
+                native_call('git_status', {})['tool_calls'][0],
+                native_call('git_diff', {})['tool_calls'][0],
+            ]}, 'exactly one tool call'),
+            (native_call('read_file', {'path': 'calc.go', 'start': 1}), 'missing end'),
+        ]
+        for response, detail in malformed:
+            with self.subTest(detail=detail):
+                result, failed_events, _ = self.run_script(
+                    [response], '--prompt-protocol', 'native', success=False)
+                self.assertIn(detail, result.stderr.lower())
+                self.assertTrue(any(event['type'] == 'model_output'
+                                    for event in failed_events))
+                self.assertFalse(any(event['type'] == 'tool_call'
+                                     for event in failed_events))
+                self.assertEqual((self.root / 'calc.go').read_bytes(), original)
+
+        script = self.root / 'script.json'
+        invalid = self.cli('run', 'Inspect.', '--script', str(script),
+                           '--prompt-protocol', 'neither', success=False)
+        self.assertIn('must be flattened or native', invalid.stderr)
+        routed = self.cli('run', 'Inspect.', '--script', str(script),
+                          '--prompt-protocol', 'native', '--thought-routed', success=False)
+        self.assertIn('cannot be combined with routed', routed.stderr)
 
     def test_validation_plan_and_permission_denial(self):
         self.go_module()

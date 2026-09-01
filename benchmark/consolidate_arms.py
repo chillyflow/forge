@@ -1,9 +1,10 @@
 """Consolidate per-arm ablation runs into one auditable result set.
 
-Each arm is run separately (one ``run.py --variants <arm>`` invocation per arm),
-so comparability is a claim that must be checked rather than assumed: this tool
-refuses to merge arms whose binary, model, fixture preparation or turn cap
-differ, and records the shared identity it verified.
+Each arm is run separately, so comparability is a claim that must be checked
+rather than assumed: this tool refuses to merge arms whose binary, model,
+fixture preparation, schedule, or decode configuration differ, and records the
+shared identity it verified.  Arm directory names describe the treatment; they
+do not have to match the variant label recorded by ``run.py``.
 
 It also emits a thought census. The raw ``model_output`` event is written before
 routed normalization, so an inline thought appears as a "thought" key while a
@@ -21,7 +22,10 @@ import sys
 IDENTITY = ('forge_binary_sha256', 'model_sha256', 'fixture_preparation',
             'context_tokens', 'max_turns', 'gpu_layers', 'chat_template',
             'task_suite', 'output_reserve', 'temperature', 'seed',
+            'repetitions', 'order_seed', 'randomized_order', 'lifecycle',
             'platform', 'go_version', 'gpu')
+PROMPT_PROTOCOLS = ('flattened', 'native')
+RECORD_IDENTITY = ('task', 'variant', 'repetition')
 
 
 def classify(data, cue='Thought: '):
@@ -30,6 +34,9 @@ def classify(data, cue='Thought: '):
         # Host-injected routed cue: scaffold, not model reasoning.  The cue is
         # recorded by run.py so custom-cue arms remain census-correct.
         stripped = stripped[len(cue.strip()):].lstrip()
+    native_call = re.search(r'<tool_call\b[^>]*>', stripped)
+    if native_call:
+        return 'routed_prefix' if stripped[:native_call.start()].strip() else 'none'
     match = re.search(r'\{[ \t\r\n]*"(?:tool|memory|final)"[ \t\r\n]*:', stripped)
     if match and stripped[:match.start()].strip():
         return 'routed_prefix'
@@ -89,34 +96,107 @@ def check_identity(arms):
     return base, mismatches
 
 
+def prompt_protocol_provenance(arms):
+    """Describe the treatment arm without mistaking it for shared run identity."""
+    by_arm = {name: environment.get('prompt_protocol', 'unrecorded')
+              for name, (_, environment) in arms.items()}
+    protocols = set(by_arm.values())
+    return (next(iter(protocols)) if len(protocols) == 1 else 'mixed'), by_arm
+
+
+def check_prompt_protocol_provenance(arms):
+    """Require each arm's records to agree with its declared prompt protocol."""
+    protocol, by_arm = prompt_protocol_provenance(arms)
+    mismatches = {}
+    for name, (records, environment) in arms.items():
+        expected = environment.get('prompt_protocol')
+        differences = {}
+        if expected not in PROMPT_PROTOCOLS:
+            differences['environment_prompt_protocol'] = expected or 'unrecorded'
+        recorded = sorted({record.get('prompt_protocol') or 'unrecorded'
+                           for record in records})
+        if records and recorded != [expected]:
+            differences['record_prompt_protocols'] = recorded
+        if name in PROMPT_PROTOCOLS and expected != name:
+            differences['arm_label_prompt_protocol'] = {
+                'arm': name, 'environment': expected or 'unrecorded'}
+        if differences:
+            mismatches[name] = differences
+    return protocol, by_arm, mismatches
+
+
+def _record_identity(record):
+    return tuple(record.get(key) for key in RECORD_IDENTITY)
+
+
+def _display_record_identities(identities):
+    ordered = sorted(identities, key=lambda identity: tuple(
+        '' if value is None else str(value) for value in identity))
+    return [dict(zip(RECORD_IDENTITY, identity)) for identity in ordered]
+
+
 def check_records(arms):
-    """Require one identical fixture/task set in every arm."""
+    """Require an identical fixture/task/variant/repetition set in every arm."""
     names = list(arms)
     expected = None
     mismatches = {}
     for name in names:
-        records = arms[name][0]
+        records, environment = arms[name]
         seen = {}
         duplicates = []
+        invalid = []
+        repetitions = {}
         for record in records:
-            task = record.get('task')
-            if task in seen:
-                duplicates.append(task)
-            seen[task] = (record.get('fixture_preparation'), record.get('fixture_sha256'),
-                          record.get('fixture_files'), record.get('suite'))
+            identity = _record_identity(record)
+            valid_identity = (isinstance(identity[0], str) and bool(identity[0])
+                              and isinstance(identity[1], str) and bool(identity[1])
+                              and isinstance(identity[2], int)
+                              and not isinstance(identity[2], bool)
+                              and identity[2] > 0)
+            if not valid_identity:
+                invalid.append(identity)
+            if identity in seen:
+                duplicates.append(identity)
+            else:
+                seen[identity] = (
+                    record.get('fixture_preparation'), record.get('fixture_sha256'),
+                    record.get('fixture_files'), record.get('suite'),
+                    record.get('order_index'))
+            if valid_identity:
+                repetitions.setdefault(identity[:2], set()).add(identity[2])
         if expected is None:
             expected = seen
         differences = {}
         if seen != expected:
-            differences['task_or_fixture_set'] = sorted(seen)
+            expected_ids, seen_ids = set(expected), set(seen)
+            differences['missing_records'] = _display_record_identities(expected_ids - seen_ids)
+            differences['unexpected_records'] = _display_record_identities(
+                seen_ids - expected_ids)
+            changed = {identity for identity in expected_ids & seen_ids
+                       if expected[identity] != seen[identity]}
+            differences['changed_fixtures_or_order'] = _display_record_identities(changed)
         if duplicates:
-            differences['duplicate_tasks'] = sorted(set(duplicates))
-        wrong_variants = sorted({record.get('variant') for record in records} - {name})
-        if wrong_variants:
-            differences['record_variants'] = wrong_variants
+            differences['duplicate_records'] = _display_record_identities(set(duplicates))
+        if invalid:
+            differences['invalid_record_identities'] = _display_record_identities(set(invalid))
+        declared_repetitions = environment.get('repetitions')
+        if isinstance(declared_repetitions, int) and declared_repetitions > 0:
+            complete = set(range(1, declared_repetitions + 1))
+            incomplete = {identity: sorted(observed)
+                          for identity, observed in repetitions.items()
+                          if observed != complete}
+            if incomplete:
+                differences['incomplete_repetitions'] = [
+                    {'task': identity[0], 'variant': identity[1],
+                     'observed': observed, 'expected': sorted(complete)}
+                    for identity, observed in sorted(
+                        incomplete.items(), key=lambda item: tuple(str(value)
+                                                                  for value in item[0]))]
         if differences:
             mismatches[name] = differences
-    return sorted(expected or {}), mismatches
+    tasks = {identity[0] for identity in (expected or {})
+             if isinstance(identity[0], str)}
+    return sorted(tasks), mismatches
 
 
 def write(path, value):
@@ -166,6 +246,12 @@ def main():
         print('REFUSING to consolidate: arms differ in run identity', file=sys.stderr)
         print(json.dumps(mismatches, indent=2), file=sys.stderr)
         return 1
+    protocol, protocol_by_arm, protocol_mismatches = check_prompt_protocol_provenance(arms)
+    if protocol_mismatches:
+        print('REFUSING to consolidate: prompt protocol provenance is invalid',
+              file=sys.stderr)
+        print(json.dumps(protocol_mismatches, indent=2), file=sys.stderr)
+        return 1
     task_set, record_mismatches = check_records(arms)
     if record_mismatches:
         print('REFUSING to consolidate: arms differ in task/fixture identity', file=sys.stderr)
@@ -189,8 +275,11 @@ def main():
         census[name] = {'totals': total, 'per_run': per_run}
 
     environment = dict(arms[list(arms)[0]][1])
+    environment['prompt_protocol'] = protocol
+    environment['prompt_protocol_by_arm'] = protocol_by_arm
     environment['arms'] = list(arms)
     environment['identity_verified'] = list(IDENTITY)
+    environment['record_identity_verified'] = list(RECORD_IDENTITY)
     environment['task_set_verified'] = task_set
     environment['consolidated_by'] = 'benchmark/consolidate_arms.py'
     write(out / 'environment.json', environment)

@@ -15,8 +15,9 @@ struct forge_context {
     size_t count, capacity, reserve, allocated;
     size_t text_bytes, dependency_count, planned_tokens, planned_evicted;
     bool planned;
+    forge_prompt_protocol prompt_protocol;
     uint64_t next_id;
-    forge_count_tokens_fn count_tokens;
+    forge_count_tokens_fn count_tokens, count_prompt_tokens;
     void *user;
 };
 static const char *const labels[] = {"SYSTEM",        "TOOLS",  "REPOSITORY", "TASK",
@@ -89,10 +90,29 @@ forge_context *forge_context_create(size_t capacity, size_t reserve, forge_count
         c->capacity = capacity;
         c->reserve = reserve;
         c->count_tokens = fn;
+        c->count_prompt_tokens = fn;
         c->user = u;
         c->next_id = 1;
     }
     return c;
+}
+forge_status forge_context_set_prompt_protocol(forge_context *c, forge_prompt_protocol protocol) {
+    if (!c || (unsigned)protocol > FORGE_PROMPT_NATIVE)
+        return FORGE_ERR_ARGUMENT;
+    if (c->prompt_protocol != protocol) {
+        clear_selection(c);
+        c->prompt_protocol = protocol;
+    }
+    return FORGE_OK;
+}
+forge_status forge_context_set_prompt_counter(forge_context *c, forge_count_tokens_fn fn) {
+    if (!c || !fn)
+        return FORGE_ERR_ARGUMENT;
+    if (c->count_prompt_tokens != fn) {
+        clear_selection(c);
+        c->count_prompt_tokens = fn;
+    }
+    return FORGE_OK;
 }
 uint64_t forge_context_add(forge_context *c, forge_segment_kind kind, const char *text,
                            int priority, bool pinned, uint64_t dependency, uint64_t generation) {
@@ -323,7 +343,200 @@ static void select_bundle(forge_context *c, const closure *work) {
     for (size_t i = 0; i < work->count; i++)
         c->items[work->nodes[i]].view.selected = true;
 }
+
+static bool native_dependency_is(const segment *child, size_t parent) {
+    for (size_t i = 0; i < child->dependency_count; i++)
+        if (child->dependencies[i] == parent)
+            return true;
+    return false;
+}
+
+static bool native_has_single_action_parent(const forge_context *c, const segment *result) {
+    size_t action_parents = 0;
+    for (size_t i = 0; i < result->dependency_count; i++) {
+        const segment *parent = &c->items[result->dependencies[i]];
+        if (parent->view.kind == FORGE_SEG_ACTION) {
+            if (!parent->view.selected || ++action_parents > 1)
+                return false;
+        }
+    }
+    return action_parents == 1;
+}
+
+static bool native_put_quoted(fg_buf *out, const char *text) {
+    char *quoted = fg_json_string(text);
+    bool ok = quoted && fg_buf_puts(out, quoted);
+    free(quoted);
+    return ok;
+}
+
+static bool native_flush_plain(fg_buf *out, fg_buf *plain, const char **plain_role, bool *first) {
+    if (!*plain_role)
+        return true;
+    bool ok = (*first || fg_buf_puts(out, ",")) && fg_buf_puts(out, "{\"role\":") &&
+              native_put_quoted(out, *plain_role) && fg_buf_puts(out, ",\"content\":") &&
+              native_put_quoted(out, plain->data ? plain->data : "") && fg_buf_puts(out, "}");
+    if (ok)
+        *first = false;
+    fg_buf_clear(plain);
+    *plain_role = NULL;
+    return ok;
+}
+
+static bool native_queue_plain(fg_buf *out, fg_buf *plain, const char **plain_role, bool *first,
+                               const char *role, const segment *s) {
+    if (*plain_role && strcmp(*plain_role, role) &&
+        !native_flush_plain(out, plain, plain_role, first))
+        return false;
+    *plain_role = role;
+    return fg_buf_printf(plain, "\n[%s]\n%s\n", labels[s->view.kind], s->owned);
+}
+
+static bool native_write_pair(fg_buf *out, bool *first, size_t action_index, const segment *action,
+                              const segment *result) {
+    yyjson_doc *document = yyjson_read(action->owned, strlen(action->owned), 0);
+    yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
+    const char *name = fg_json_str(root, "tool");
+    const char *thought = fg_json_str(root, "thought");
+    yyjson_val *arguments = root ? yyjson_obj_get(root, "args") : NULL;
+    char *args = NULL;
+    if (name && arguments && yyjson_is_obj(arguments))
+        args = yyjson_val_write(arguments, 0, NULL);
+    else {
+        const char *answer = fg_json_str(root, "final");
+        yyjson_val *memory = root ? yyjson_obj_get(root, "memory") : NULL;
+        if (answer) {
+            char *quoted = fg_json_string(answer);
+            fg_buf encoded = {0};
+            name = "final";
+            if (quoted && fg_buf_printf(&encoded, "{\"answer\":%s}", quoted))
+                args = fg_buf_take(&encoded);
+            else
+                fg_buf_clear(&encoded);
+            free(quoted);
+        } else if (memory && yyjson_is_obj(memory)) {
+            name = "memory";
+            args = yyjson_val_write(memory, 0, NULL);
+        }
+    }
+    if (!name || !args) {
+        yyjson_doc_free(document);
+        free(args);
+        return false;
+    }
+    /* Nine fixed characters satisfy templates such as Mistral that validate
+     * call IDs. The bounded segment slot, unlike a truncated public ID, is
+     * unique within this rendered conversation. */
+    char call_id[10];
+    snprintf(call_id, sizeof(call_id), "f%08x", (unsigned)action_index);
+    bool ok = (*first || fg_buf_puts(out, ",")) && fg_buf_puts(out, "{\"role\":\"assistant\",");
+    if (ok && thought)
+        ok = fg_buf_puts(out, "\"reasoning_content\":") && native_put_quoted(out, thought) &&
+             fg_buf_puts(out, ",");
+    ok = ok && fg_buf_puts(out, "\"tool_calls\":[{\"id\":") && native_put_quoted(out, call_id) &&
+         fg_buf_puts(out, ",\"type\":\"function\",\"function\":{\"name\":") &&
+         native_put_quoted(out, name) && fg_buf_puts(out, ",\"arguments\":") &&
+         fg_buf_puts(out, args) && fg_buf_puts(out, "}}]}") &&
+         fg_buf_puts(out, ",{\"role\":\"tool\",\"name\":") && native_put_quoted(out, name) &&
+         fg_buf_puts(out, ",\"tool_call_id\":") && native_put_quoted(out, call_id) &&
+         fg_buf_puts(out, ",\"content\":") && native_put_quoted(out, result->owned) &&
+         fg_buf_puts(out, "}");
+    if (ok)
+        *first = false;
+    free(args);
+    yyjson_doc_free(document);
+    return ok;
+}
+
+static char *render_selected_native(const forge_context *c, size_t *anchor) {
+    const segment *tools = NULL;
+    bool stable = true;
+    size_t system_segments = 0;
+    for (size_t i = 0; i < c->count; i++) {
+        const segment *s = &c->items[i];
+        if (!s->view.selected)
+            continue;
+        if (s->view.kind == FORGE_SEG_RESULT && !native_has_single_action_parent(c, s))
+            return NULL;
+        if (s->view.kind == FORGE_SEG_TOOLS) {
+            if (tools) /* A native request has exactly one schema registry. */
+                return NULL;
+            tools = s;
+        }
+        if (s->view.kind <= FORGE_SEG_TOOLS)
+            stable &=
+                s->view.immutable && s->view.cacheable && !s->view.stale && !s->dependency_count;
+        if (s->view.kind == FORGE_SEG_SYSTEM)
+            system_segments++;
+    }
+    if (!tools || !system_segments)
+        return NULL;
+    yyjson_doc *tool_document = yyjson_read(tools->owned, strlen(tools->owned), 0);
+    if (!tool_document || !yyjson_is_arr(yyjson_doc_get_root(tool_document))) {
+        yyjson_doc_free(tool_document);
+        return NULL;
+    }
+    yyjson_doc_free(tool_document);
+
+    fg_buf out = {0}, plain = {0};
+    const char *plain_role = NULL;
+    bool first = true;
+    if (!fg_buf_puts(&out, "{\"protocol\":\"forge-native-v1\",\"tools\":") ||
+        !fg_buf_puts(&out, tools->owned))
+        goto fail;
+    size_t stable_end = out.len;
+    /* Adjacent system/user evidence is coalesced. Tool call/result messages are
+     * emitted as an inseparable pair so compact selection cannot create an
+     * invalid native transcript. */
+    if (!fg_buf_printf(&out, ",\"anchor_message_count\":%u,\"messages\":[",
+                       stable && system_segments ? 1u : 0u))
+        goto fail;
+    for (int group = 0; group <= 5; group++)
+        for (size_t i = 0; i < c->count; i++) {
+            const segment *s = &c->items[i];
+            int rank = s->view.kind <= FORGE_SEG_TASK     ? (int)s->view.kind
+                       : s->view.kind == FORGE_SEG_MEMORY ? 5
+                                                          : 4;
+            if (rank != group || !s->view.selected || s->view.kind == FORGE_SEG_TOOLS)
+                continue;
+            if (s->view.kind == FORGE_SEG_ACTION) {
+                size_t matched = SIZE_MAX;
+                for (size_t j = i + 1; j < c->count; j++) {
+                    const segment *candidate = &c->items[j];
+                    if (candidate->view.selected && candidate->view.kind == FORGE_SEG_RESULT &&
+                        native_dependency_is(candidate, i)) {
+                        if (matched != SIZE_MAX)
+                            goto fail;
+                        matched = j;
+                    }
+                }
+                if (matched == SIZE_MAX || !native_flush_plain(&out, &plain, &plain_role, &first) ||
+                    !native_write_pair(&out, &first, i, s, &c->items[matched]))
+                    goto fail;
+                continue;
+            }
+            if (s->view.kind == FORGE_SEG_RESULT)
+                continue; /* Emitted immediately after its sole assistant call. */
+            const char *role = s->view.kind == FORGE_SEG_SYSTEM ? "system" : "user";
+            if (!native_queue_plain(&out, &plain, &plain_role, &first, role, s))
+                goto fail;
+        }
+    if (!native_flush_plain(&out, &plain, &plain_role, &first) || !fg_buf_puts(&out, "]}"))
+        goto fail;
+    if (anchor)
+        *anchor = stable ? stable_end : 0;
+    return fg_buf_take(&out);
+fail:
+    fg_buf_clear(&plain);
+    fg_buf_clear(&out);
+    if (anchor)
+        *anchor = 0;
+    return NULL;
+}
+
 static char *render_selected_anchor(const forge_context *c, size_t *anchor) {
+    if (c->prompt_protocol == FORGE_PROMPT_NATIVE)
+        return render_selected_native(c, anchor);
     fg_buf b = {0};
     bool eligible = true;
     if (anchor)
@@ -433,6 +646,11 @@ char *forge_context_plan(forge_context *c, size_t *tokens, size_t *evicted, forg
         double score = -1;
         for (size_t i = 0; i < c->count; i++)
             if (!considered[i] && !c->items[i].view.stale && !c->items[i].view.selected) {
+                if (c->prompt_protocol == FORGE_PROMPT_NATIVE &&
+                    c->items[i].view.kind == FORGE_SEG_ACTION) {
+                    considered[i] = true;
+                    continue;
+                }
                 double candidate = ((double)c->items[i].view.priority + 1.0) *
                                    (1.0 + (double)i / (double)(c->count + 1)) /
                                    (double)FG_MAX(c->items[i].view.tokens, 1);
@@ -459,7 +677,7 @@ char *forge_context_plan(forge_context *c, size_t *tokens, size_t *evicted, forg
         fg_error(e, FORGE_ERR_MEMORY, "Prompt allocation failed");
         goto finish;
     }
-    size_t actual = c->count_tokens(out, c->user);
+    size_t actual = c->count_prompt_tokens(out, c->user);
     if (actual > budget) {
         free(out);
         out = NULL;
@@ -503,14 +721,17 @@ char *forge_context_export(const forge_context *c, forge_error *e) {
     }
     yyjson_mut_val *root = yyjson_mut_obj(doc), *items = yyjson_mut_arr(doc);
     yyjson_mut_doc_set_root(doc, root);
-    bool ok = root && items && yyjson_mut_obj_add_uint(doc, root, "schema_version", 1) &&
-              yyjson_mut_obj_add_uint(doc, root, "capacity", c->capacity) &&
-              yyjson_mut_obj_add_uint(doc, root, "reserve", c->reserve) &&
-              yyjson_mut_obj_add_uint(doc, root, "next_id", c->next_id) &&
-              yyjson_mut_obj_add_bool(doc, root, "planned", c->planned) &&
-              yyjson_mut_obj_add_uint(doc, root, "planned_tokens", c->planned_tokens) &&
-              yyjson_mut_obj_add_uint(doc, root, "planned_evicted", c->planned_evicted) &&
-              yyjson_mut_obj_add_val(doc, root, "segments", items);
+    bool native = c->prompt_protocol == FORGE_PROMPT_NATIVE;
+    bool ok = root && items && yyjson_mut_obj_add_uint(doc, root, "schema_version", native ? 2 : 1);
+    if (ok && native)
+        ok = yyjson_mut_obj_add_uint(doc, root, "prompt_protocol", c->prompt_protocol);
+    ok = ok && yyjson_mut_obj_add_uint(doc, root, "capacity", c->capacity) &&
+         yyjson_mut_obj_add_uint(doc, root, "reserve", c->reserve) &&
+         yyjson_mut_obj_add_uint(doc, root, "next_id", c->next_id) &&
+         yyjson_mut_obj_add_bool(doc, root, "planned", c->planned) &&
+         yyjson_mut_obj_add_uint(doc, root, "planned_tokens", c->planned_tokens) &&
+         yyjson_mut_obj_add_uint(doc, root, "planned_evicted", c->planned_evicted) &&
+         yyjson_mut_obj_add_val(doc, root, "segments", items);
     for (size_t i = 0; ok && i < c->count; i++) {
         const segment *s = &c->items[i];
         const forge_segment_view *v = &s->view;
@@ -602,20 +823,29 @@ forge_context *forge_context_import(const char *json, forge_count_tokens_fn fn, 
     if (!doc)
         goto invalid;
     yyjson_val *root = yyjson_doc_get_root(doc);
-    static const char *const root_fields[] = {"schema_version",  "capacity", "reserve",
-                                              "next_id",         "planned",  "planned_tokens",
-                                              "planned_evicted", "segments"};
+    static const char *const root_fields_v1[] = {"schema_version",  "capacity", "reserve",
+                                                 "next_id",         "planned",  "planned_tokens",
+                                                 "planned_evicted", "segments"};
+    static const char *const root_fields_v2[] = {"schema_version", "prompt_protocol", "capacity",
+                                                 "reserve",        "next_id",         "planned",
+                                                 "planned_tokens", "planned_evicted", "segments"};
     static const char *const item_fields[] = {
         "id",        "content_hash", "version",     "generation",   "kind",
         "tokens",    "priority",     "pinned",      "selected",     "immutable",
         "cacheable", "stale",        "source_hash", "dependencies", "text"};
     static const char *const bool_fields[] = {"pinned", "selected", "immutable", "cacheable",
                                               "stale"};
-    uint64_t schema, capacity, reserve, next_id, planned_tokens, planned_evicted;
-    if (!snapshot_fields(root, root_fields, sizeof(root_fields) / sizeof(root_fields[0])) ||
-        !snapshot_uint(root, "schema_version", &schema) || schema != 1 ||
-        !snapshot_uint(root, "capacity", &capacity) || !capacity || capacity > SIZE_MAX ||
-        !snapshot_uint(root, "reserve", &reserve) || reserve >= capacity ||
+    uint64_t schema, protocol = FORGE_PROMPT_FLATTENED, capacity, reserve, next_id, planned_tokens,
+                     planned_evicted;
+    if (!snapshot_uint(root, "schema_version", &schema) ||
+        (schema == 1 && !snapshot_fields(root, root_fields_v1,
+                                         sizeof(root_fields_v1) / sizeof(root_fields_v1[0]))) ||
+        (schema == 2 &&
+         (!snapshot_fields(root, root_fields_v2,
+                           sizeof(root_fields_v2) / sizeof(root_fields_v2[0])) ||
+          !snapshot_uint(root, "prompt_protocol", &protocol) || protocol > FORGE_PROMPT_NATIVE)) ||
+        (schema != 1 && schema != 2) || !snapshot_uint(root, "capacity", &capacity) || !capacity ||
+        capacity > SIZE_MAX || !snapshot_uint(root, "reserve", &reserve) || reserve >= capacity ||
         !snapshot_uint(root, "next_id", &next_id) || !next_id ||
         !snapshot_uint(root, "planned_tokens", &planned_tokens) || planned_tokens > SIZE_MAX ||
         !snapshot_uint(root, "planned_evicted", &planned_evicted) || planned_evicted > SIZE_MAX ||
@@ -632,6 +862,8 @@ forge_context *forge_context_import(const char *json, forge_count_tokens_fn fn, 
     selection = calloc(count ? count : 1, sizeof(*selection));
     if (!c || !selection)
         goto memory;
+    if (forge_context_set_prompt_protocol(c, (forge_prompt_protocol)protocol) != FORGE_OK)
+        goto invalid;
     uint64_t previous_id = 0;
     for (size_t i = 0; i < count; i++) {
         yyjson_val *item = yyjson_arr_get(items, i);
@@ -729,7 +961,7 @@ forge_context *forge_context_import(const char *json, forge_count_tokens_fn fn, 
         rendered = render_selected(c);
         if (!rendered)
             goto memory;
-        if (c->count_tokens(rendered, c->user) != (size_t)planned_tokens)
+        if (c->count_prompt_tokens(rendered, c->user) != (size_t)planned_tokens)
             goto tokenizer;
         c->planned = true;
         c->planned_tokens = (size_t)planned_tokens;

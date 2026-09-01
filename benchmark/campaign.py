@@ -38,6 +38,7 @@ def main():
     parser.add_argument('--max-turns', type=int, default=16)
     parser.add_argument('--gpu-layers', default='-1')
     parser.add_argument('--chat-template')
+    parser.add_argument('--prompt-protocol', choices=['flattened', 'native'], default='flattened')
     parser.add_argument('--temperature', type=float, default=0.0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--gpu-index', type=int, default=0)
@@ -80,7 +81,9 @@ def main():
         preflight += ['--tasks', *tasks]
     codes['preflight'] = execute('preflight', preflight, env)
     if codes['preflight'] != 0:
-        write_json(output / 'campaign.json', {'mode': args.mode, 'codes': codes})
+        write_json(output / 'campaign.json', {'mode': args.mode,
+                                              'prompt_protocol': args.prompt_protocol,
+                                              'codes': codes})
         return codes['preflight']
     freeze = [python, str(directory / 'freeze.py'), '--forge', str(args.forge.resolve()),
               '--opencode', str(args.opencode.resolve()), '--aider', str(args.aider.resolve()),
@@ -89,6 +92,7 @@ def main():
               '--context', str(args.context), '--output-reserve', str(args.output_reserve),
               '--max-turns', str(args.max_turns), '--gpu-layers', args.gpu_layers,
               '--chat-template', args.chat_template or 'embedded',
+              '--prompt-protocol', args.prompt_protocol,
               '--temperature', str(args.temperature), '--seed', str(args.seed),
               '--repetitions', str(repetitions), '--order-seed', str(args.order_seed),
               '--lifecycle', 'cold']
@@ -96,12 +100,14 @@ def main():
         freeze += ['--tasks', *tasks]
     codes['freeze'] = execute('freeze', freeze, env)
     if codes['freeze'] != 0:
-        write_json(output / 'campaign.json', {'mode': args.mode, 'codes': codes})
+        write_json(output / 'campaign.json', {'mode': args.mode,
+                                              'prompt_protocol': args.prompt_protocol,
+                                              'codes': codes})
         return codes['freeze']
     commands = {
         'forge': [python, str(directory / 'run.py'), '--forge', str(args.forge.resolve()),
                   '--model', str(args.model.resolve()), '--output', str(output / 'forge'),
-                  '--variants', 'optimized', *common],
+                  '--variants', 'optimized', '--prompt-protocol', args.prompt_protocol, *common],
         'opencode': [python, str(directory / 'opencode.py'), '--opencode',
                      str(args.opencode.resolve()), '--server', str(args.server.resolve()),
                      '--model', str(args.model.resolve()), '--output', str(output / 'opencode'),
@@ -120,6 +126,7 @@ def main():
         codes['report'] = execute('report', report, env)
     write_json(output / 'campaign.json', {'schema_version': 1, 'mode': args.mode,
                                           'tasks': tasks or 'all',
+                                          'prompt_protocol': args.prompt_protocol,
                                           'repetitions': repetitions,
                                           'order_seed': args.order_seed, 'codes': codes})
     return 0 if all(code == 0 for code in codes.values()) else 1

@@ -98,6 +98,299 @@ char *fg_tool_schema(bool thought, bool required, bool routed) {
                       definitions[i].description);
     return fg_buf_take(&b);
 }
+
+static bool native_schema_type(fg_buf *out, const char *type) {
+    if (!strcmp(type, "string"))
+        return fg_buf_puts(out, "{\"type\":\"string\",\"maxLength\":2097152}");
+    if (!strcmp(type, "strings"))
+        return fg_buf_puts(out, "{\"type\":\"array\",\"items\":{\"type\":\"string\","
+                                "\"maxLength\":8192},\"minItems\":1,\"maxItems\":64}");
+    if (!strcmp(type, "line"))
+        return fg_buf_puts(out, "{\"type\":\"integer\",\"minimum\":1,"
+                                "\"maximum\":999999999}");
+    if (!strcmp(type, "uint"))
+        return fg_buf_puts(out, "{\"type\":\"integer\",\"minimum\":0,"
+                                "\"maximum\":999999999}");
+    return false;
+}
+
+static bool native_schema_function(fg_buf *out, const char *name, const char *description,
+                                   const char *fields, bool comma) {
+    char *qname = fg_json_string(name), *qdescription = fg_json_string(description);
+    bool ok = qname && qdescription && (!comma || fg_buf_puts(out, ",")) &&
+              fg_buf_printf(out,
+                            "{\"type\":\"function\",\"function\":{\"name\":%s,"
+                            "\"description\":%s,\"parameters\":{\"type\":\"object\","
+                            "\"properties\":{",
+                            qname, qdescription);
+    free(qname);
+    free(qdescription);
+    if (!ok)
+        return false;
+    size_t count = 0;
+    const char *cursor = fields;
+    while (*cursor) {
+        while (*cursor == ' ')
+            cursor++;
+        const char *end = strchr(cursor, ' ');
+        if (!end)
+            end = cursor + strlen(cursor);
+        const char *colon = memchr(cursor, ':', (size_t)(end - cursor));
+        if (!colon || colon == cursor || colon + 1 == end || (size_t)(colon - cursor) >= 64)
+            return false;
+        char field[64], type[32];
+        size_t field_length = (size_t)(colon - cursor), type_length = (size_t)(end - colon - 1);
+        if (type_length >= sizeof(type))
+            return false;
+        memcpy(field, cursor, field_length);
+        field[field_length] = 0;
+        memcpy(type, colon + 1, type_length);
+        type[type_length] = 0;
+        char *quoted = fg_json_string(field);
+        ok = quoted && (!count || fg_buf_puts(out, ",")) && fg_buf_printf(out, "%s:", quoted) &&
+             native_schema_type(out, type);
+        free(quoted);
+        if (!ok)
+            return false;
+        count++;
+        cursor = end;
+    }
+    if (!fg_buf_puts(out, "},\"required\":["))
+        return false;
+    cursor = fields;
+    size_t required = 0;
+    while (*cursor) {
+        while (*cursor == ' ')
+            cursor++;
+        const char *end = strchr(cursor, ' ');
+        if (!end)
+            end = cursor + strlen(cursor);
+        const char *colon = memchr(cursor, ':', (size_t)(end - cursor));
+        if (!colon || (size_t)(colon - cursor) >= 64)
+            return false;
+        char field[64];
+        size_t length = (size_t)(colon - cursor);
+        memcpy(field, cursor, length);
+        field[length] = 0;
+        char *quoted = fg_json_string(field);
+        ok = quoted && (!required || fg_buf_puts(out, ",")) && fg_buf_puts(out, quoted);
+        free(quoted);
+        if (!ok)
+            return false;
+        required++;
+        cursor = end;
+    }
+    return fg_buf_puts(out, "],\"additionalProperties\":false}}}");
+}
+
+char *fg_tool_native_schema(void) {
+    fg_buf out = {0};
+    if (!fg_buf_puts(&out, "["))
+        return NULL;
+    for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++)
+        if (!native_schema_function(&out, definitions[i].name, definitions[i].description,
+                                    definitions[i].fields, i != 0))
+            goto fail;
+    if (!native_schema_function(
+            &out, "final",
+            "Finish the task. Call only after required validation; answer must accurately state "
+            "what changed and what was tested.",
+            "answer:string", true))
+        goto fail;
+    if (!fg_buf_puts(
+            &out, ",{\"type\":\"function\",\"function\":{\"name\":\"memory\","
+                  "\"description\":\"Replace bounded working memory while continuing the task.\","
+                  "\"parameters\":{\"type\":\"object\",\"properties\":{"
+                  "\"facts\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":512},"
+                  "\"maxItems\":32},"
+                  "\"hypotheses\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
+                  "512},\"maxItems\":32},"
+                  "\"decisions\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
+                  "512},\"maxItems\":32},"
+                  "\"relevant_files\":{\"type\":\"array\",\"items\":{\"type\":\"string\","
+                  "\"maxLength\":512},\"maxItems\":32},"
+                  "\"remaining\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
+                  "512},\"maxItems\":32}},"
+                  "\"required\":[\"facts\",\"hypotheses\",\"decisions\",\"relevant_files\","
+                  "\"remaining\"],"
+                  "\"additionalProperties\":false}}}]"))
+        goto fail;
+    return fg_buf_take(&out);
+fail:
+    fg_buf_clear(&out);
+    return NULL;
+}
+
+static bool native_known_tool(const char *name) {
+    size_t count = 0;
+    const fg_tool_def *tools = fg_tools(&count);
+    for (size_t i = 0; i < count; i++)
+        if (!strcmp(name, tools[i].name))
+            return true;
+    return !strcmp(name, "final") || !strcmp(name, "memory");
+}
+
+forge_status fg_native_action_normalize(const char *message, bool include_thought, char **action,
+                                        forge_error *error) {
+    if (!message || !action)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Missing native action input");
+    *action = NULL;
+    size_t length = strlen(message);
+    yyjson_doc *document = yyjson_read(message, length, 0);
+    yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
+    if (!root || !yyjson_is_obj(root)) {
+        yyjson_doc_free(document);
+        return fg_error(error, FORGE_ERR_PARSE,
+                        "Native response is not an assistant message object");
+    }
+    yyjson_val *role_value = yyjson_obj_get(root, "role");
+    const char *role = yyjson_is_str(role_value) ? yyjson_get_str(role_value) : NULL;
+    yyjson_val *content_value = yyjson_obj_get(root, "content");
+    const char *content = yyjson_is_str(content_value) ? yyjson_get_str(content_value) : NULL;
+    yyjson_val *calls = yyjson_obj_get(root, "tool_calls");
+    if (!role || yyjson_get_len(role_value) != strlen(role) || strcmp(role, "assistant")) {
+        yyjson_doc_free(document);
+        return fg_error(error, FORGE_ERR_PARSE, "Native response role must be assistant");
+    }
+    if (!content_value || !content || yyjson_get_len(content_value) != strlen(content) ||
+        *content) {
+        yyjson_doc_free(document);
+        return fg_error(error, FORGE_ERR_PARSE,
+                        "Native response must use one tool call, not assistant content");
+    }
+    if (!calls || !yyjson_is_arr(calls) || yyjson_arr_size(calls) != 1) {
+        yyjson_doc_free(document);
+        return fg_error(
+            error, FORGE_ERR_PARSE,
+            "Native response must contain exactly one tool call; parallel calls are disabled");
+    }
+    yyjson_val *call = yyjson_arr_get(calls, 0);
+    yyjson_val *type_value = call ? yyjson_obj_get(call, "type") : NULL;
+    const char *type = yyjson_is_str(type_value) ? yyjson_get_str(type_value) : NULL;
+    yyjson_val *function = call ? yyjson_obj_get(call, "function") : NULL;
+    yyjson_val *name_value = function ? yyjson_obj_get(function, "name") : NULL;
+    const char *name = yyjson_is_str(name_value) ? yyjson_get_str(name_value) : NULL;
+    yyjson_val *encoded_arguments = function ? yyjson_obj_get(function, "arguments") : NULL;
+    if (!call || !yyjson_is_obj(call) || !type || strcmp(type, "function") || !name ||
+        !encoded_arguments || yyjson_get_len(type_value) != strlen(type) ||
+        yyjson_get_len(name_value) != strlen(name)) {
+        yyjson_doc_free(document);
+        return fg_error(error, FORGE_ERR_PARSE,
+                        "Native tool call requires type=function, name, and arguments");
+    }
+    yyjson_val *id_value = yyjson_obj_get(call, "id");
+    const char *id = yyjson_is_str(id_value) ? yyjson_get_str(id_value) : NULL;
+    size_t expected_call_fields = id_value ? 3 : 2;
+    size_t expected_root_fields = yyjson_obj_get(root, "reasoning_content") ? 4 : 3;
+    if (yyjson_obj_size(root) != expected_root_fields ||
+        yyjson_obj_size(call) != expected_call_fields || yyjson_obj_size(function) != 2 ||
+        (id_value && (!id || !*id || yyjson_get_len(id_value) != strlen(id)))) {
+        yyjson_doc_free(document);
+        return fg_error(error, FORGE_ERR_PARSE,
+                        "Native assistant message or tool call contains malformed fields");
+    }
+    if (!native_known_tool(name)) {
+        forge_status status = fg_error(error, FORGE_ERR_UNSUPPORTED,
+                                       "Native response called unsupported tool: %s", name);
+        yyjson_doc_free(document);
+        return status;
+    }
+    yyjson_doc *arguments_document = NULL;
+    yyjson_val *arguments = NULL;
+    if (yyjson_is_str(encoded_arguments)) {
+        const char *text = yyjson_get_str(encoded_arguments);
+        size_t text_length = yyjson_get_len(encoded_arguments);
+        if (!text || text_length != strlen(text)) {
+            yyjson_doc_free(document);
+            return fg_error(error, FORGE_ERR_PARSE,
+                            "Native tool arguments contain an embedded NUL byte");
+        }
+        arguments_document = yyjson_read(text, text_length, 0);
+        arguments = arguments_document ? yyjson_doc_get_root(arguments_document) : NULL;
+    } else
+        arguments = encoded_arguments;
+    if (!arguments || !yyjson_is_obj(arguments)) {
+        yyjson_doc_free(arguments_document);
+        yyjson_doc_free(document);
+        return fg_error(error, FORGE_ERR_PARSE,
+                        "Native tool arguments must encode one JSON object");
+    }
+    if (strcmp(name, "final") && strcmp(name, "memory") &&
+        !fg_tool_validate(name, arguments, error)) {
+        yyjson_doc_free(arguments_document);
+        yyjson_doc_free(document);
+        return error && error->code ? error->code : FORGE_ERR_PARSE;
+    }
+    const char *thought = NULL;
+    char *thought_copy = NULL;
+    yyjson_val *thought_value = yyjson_obj_get(root, "reasoning_content");
+    if (thought_value) {
+        const char *parsed_thought =
+            yyjson_is_str(thought_value) ? yyjson_get_str(thought_value) : NULL;
+        size_t thought_length = yyjson_get_len(thought_value);
+        if (!parsed_thought || thought_length != strlen(parsed_thought) ||
+            !fg_utf8_valid(parsed_thought, thought_length)) {
+            yyjson_doc_free(arguments_document);
+            yyjson_doc_free(document);
+            return fg_error(error, FORGE_ERR_PARSE, "Native reasoning content is invalid");
+        }
+        /* Like routed decode prose, native reasoning is non-executable text and
+         * its full form is already retained in the raw model_output event. Keep
+         * the normalized ACTION envelope under the identical thought limit by
+         * retaining a valid UTF-8 prefix instead of rejecting an otherwise
+         * valid, policy-checked tool call. */
+        if (include_thought && thought_length) {
+            size_t retained = fg_utf8_prefix(parsed_thought, thought_length, FG_THOUGHT_MAX_BYTES);
+            thought_copy = malloc(retained + 1);
+            if (!thought_copy) {
+                yyjson_doc_free(arguments_document);
+                yyjson_doc_free(document);
+                return fg_error(error, FORGE_ERR_MEMORY, "Cannot retain native reasoning");
+            }
+            memcpy(thought_copy, parsed_thought, retained);
+            thought_copy[retained] = 0;
+            thought = thought_copy;
+        }
+    }
+    char *arguments_json = yyjson_val_write(arguments, 0, NULL);
+    char *thought_json = thought ? fg_json_string(thought) : NULL;
+    fg_buf out = {0};
+    bool ok = arguments_json && (!thought || thought_json) && fg_buf_puts(&out, "{");
+    if (ok && thought)
+        ok = fg_buf_printf(&out, "\"thought\":%s,", thought_json);
+    if (ok && !strcmp(name, "final")) {
+        const char *answer = fg_json_str(arguments, "answer");
+        yyjson_val *answer_value = yyjson_obj_get(arguments, "answer");
+        char *quoted = answer ? fg_json_string(answer) : NULL;
+        ok = answer && answer_value && yyjson_obj_size(arguments) == 1 &&
+             yyjson_get_len(answer_value) == strlen(answer) && quoted &&
+             fg_buf_printf(&out, "\"final\":%s}", quoted);
+        free(quoted);
+        if (!ok)
+            fg_error(error, FORGE_ERR_PARSE,
+                     "Native final call requires exactly one string answer");
+    } else if (ok && !strcmp(name, "memory"))
+        ok = fg_buf_printf(&out, "\"memory\":%s}", arguments_json);
+    else if (ok) {
+        char *quoted = fg_json_string(name);
+        ok = quoted && fg_buf_printf(&out, "\"tool\":%s,\"args\":%s}", quoted, arguments_json);
+        free(quoted);
+    }
+    free(thought_json);
+    free(thought_copy);
+    free(arguments_json);
+    yyjson_doc_free(arguments_document);
+    yyjson_doc_free(document);
+    if (!ok) {
+        fg_buf_clear(&out);
+        if (!error || !error->code)
+            return fg_error(error, FORGE_ERR_MEMORY, "Cannot normalize native tool call");
+        return error->code;
+    }
+    *action = fg_buf_take(&out);
+    return *action ? FORGE_OK
+                   : fg_error(error, FORGE_ERR_MEMORY, "Cannot allocate normalized native action");
+}
 static void literal(fg_buf *b, const char *s) {
     char *q = fg_json_string(s);
     if (!q)

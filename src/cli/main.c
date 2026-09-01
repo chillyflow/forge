@@ -53,6 +53,7 @@ static void usage(void) {
          "  --temperature N      finite sampling temperature 0..2\n"
          "  --seed N             sampling seed 0..4294967295\n"
          "  --chat-template NAME override unsupported model chat template\n"
+         "  --prompt-protocol NAME  flattened (default) or native roles/tools\n"
          "  --enable-thinking | --disable-thinking  set Jinja template thinking control\n"
          "  --allow-write        permit repository patches\n"
          "  --allow-exec         permit UNSANDBOXED commands, including repository code\n"
@@ -128,6 +129,7 @@ static int option_arity(const char *option) {
                                          "--model",
                                          "--script",
                                          "--chat-template",
+                                         "--prompt-protocol",
                                          "--thought-budget",
                                          "--thought-cue",
                                          "--summary-scope",
@@ -772,7 +774,17 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             explicit_script = true;
         } else if (!strcmp(a, "--chat-template"))
             mc.chat_template = value;
-        else if (!strcmp(a, "--thought-cue")) {
+        else if (!strcmp(a, "--prompt-protocol")) {
+            if (!strcmp(value, "flattened"))
+                mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
+            else if (!strcmp(value, "native"))
+                mc.prompt_protocol = FORGE_PROMPT_NATIVE;
+            else {
+                fg_error(&error, FORGE_ERR_ARGUMENT,
+                         "--prompt-protocol must be flattened or native");
+                return failed(&error);
+            }
+        } else if (!strcmp(a, "--thought-cue")) {
             ac.thought_cue = value;
             ac.thought_native = false;
         } else if (!strcmp(a, "--thought-budget")) {

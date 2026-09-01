@@ -46,6 +46,8 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
         !config->limits.output_reserve ||
         config->limits.output_reserve >= config->limits.context_tokens ||
         config->limits.context_tokens > config->model->config.context_tokens ||
+        (unsigned)config->model->config.prompt_protocol > FORGE_PROMPT_NATIVE ||
+        (config->model->config.prompt_protocol == FORGE_PROMPT_NATIVE && config->thought_routed) ||
         (!config->thought && (config->thought_required || config->thought_routed)) ||
         (!config->thought_routed && (config->thought_cue || config->thought_budget ||
                                      config->thought_budget_unbounded || config->thought_native)) ||
@@ -683,12 +685,22 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     }
     ctx = forge_context_create(a->config.limits.context_tokens, a->config.limits.output_reserve,
                                fg_model_count, a->config.model);
-    schema =
-        fg_tool_schema(a->config.thought, a->config.thought_required, a->config.thought_routed);
-    grammar =
-        fg_tool_grammar(a->config.thought, a->config.thought_required, a->config.thought_routed);
+    bool native_protocol = a->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
+    if (ctx && (forge_context_set_prompt_protocol(ctx, a->config.model->config.prompt_protocol) !=
+                    FORGE_OK ||
+                (native_protocol &&
+                 forge_context_set_prompt_counter(ctx, fg_model_count_prompt) != FORGE_OK))) {
+        status = fg_error(e, FORGE_ERR_ARGUMENT, "Cannot select the prompt protocol");
+        goto finish;
+    }
+    schema = native_protocol ? fg_tool_native_schema()
+                             : fg_tool_schema(a->config.thought, a->config.thought_required,
+                                              a->config.thought_routed);
+    grammar = native_protocol ? NULL
+                              : fg_tool_grammar(a->config.thought, a->config.thought_required,
+                                                a->config.thought_routed);
     summary = forge_repo_summary(repo, e);
-    if (!ctx || !schema || !grammar || !summary) {
+    if (!ctx || !schema || (!native_protocol && !grammar) || !summary) {
         status = fg_error(e, FORGE_ERR_MEMORY, "Agent initialization failed");
         goto finish;
     }
@@ -889,6 +901,17 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 break;
             }
             continue;
+        }
+        if (native_protocol) {
+            char *message = NULL, *normalized = NULL;
+            status = fg_model_parse_native(a->config.model, response, &message, e);
+            if (status == FORGE_OK)
+                status = fg_native_action_normalize(message, a->config.thought, &normalized, e);
+            free(message);
+            free(response);
+            response = normalized;
+            if (status != FORGE_OK)
+                break;
         }
         if (a->config.thought_routed) {
             char *normalized = routed_action_text(
@@ -1139,6 +1162,26 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             free(memory_json);
             if (status == FORGE_OK && !save_working_state(a, ctx, memory_id, turn, true, e))
                 status = e && e->code ? e->code : FORGE_ERR_IO;
+            if (status == FORGE_OK && native_protocol) {
+                /* The flattened protocol historically replaces only the
+                 * WORKING_STATE segment. Native transcripts must additionally
+                 * preserve a valid assistant-call/tool-result pair before the
+                 * next generation. This is context evidence only: memory keeps
+                 * its existing non-executable policy and event path. */
+                forge_context_pin(ctx, latest_result, false);
+                char *action_text = action_history_text(a->config.thought_in_history, o, e);
+                uint64_t action =
+                    forge_context_add(ctx, FORGE_SEG_ACTION, action_text ? action_text : response,
+                                      10, false, 0, forge_repo_generation(repo));
+                free(action_text);
+                latest_result =
+                    action ? forge_context_add(ctx, FORGE_SEG_RESULT, "Working memory updated.", 90,
+                                               true, action, forge_repo_generation(repo))
+                           : 0;
+                if (!action || !latest_result)
+                    status = fg_error(e, FORGE_ERR_MEMORY,
+                                      "Cannot retain native memory tool-call history");
+            }
             yyjson_doc_free(d);
             free(response);
             if (status != FORGE_OK)

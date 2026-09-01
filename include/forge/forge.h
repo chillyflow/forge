@@ -89,6 +89,7 @@ typedef enum {
     FORGE_THINKING_ENABLED,
     FORGE_THINKING_DISABLED
 } forge_thinking_mode;
+typedef enum { FORGE_PROMPT_FLATTENED = 0, FORGE_PROMPT_NATIVE } forge_prompt_protocol;
 typedef struct {
     const char *model_path;
     const char *script_path;   /* Explicit deterministic test fixture; never auto-selected. */
@@ -99,6 +100,9 @@ typedef struct {
     float temperature;
     bool reuse_prefix, grammar_fast_path;
     forge_thinking_mode thinking; /* Jinja enable_thinking control; AUTO preserves legacy. */
+    /* FLATTENED preserves the original single-user-message protocol byte for byte.
+     * NATIVE renders structured roles and function schemas through llama.cpp. */
+    forge_prompt_protocol prompt_protocol;
 } forge_model_config;
 typedef struct forge_model forge_model;
 typedef struct forge_agent forge_agent;

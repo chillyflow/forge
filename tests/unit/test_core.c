@@ -212,10 +212,123 @@ static void test_diagnostic_byte_boundaries(void) {
     assert(fg_utf8_valid(compressed, strlen(compressed)));
     free(compressed);
 }
+
+static void test_native_tool_schema_and_normalization(void) {
+    char *schema = fg_tool_native_schema();
+    assert(schema);
+    yyjson_doc *document = yyjson_read(schema, strlen(schema), 0);
+    yyjson_val *tools = document ? yyjson_doc_get_root(document) : NULL;
+    size_t tool_count = 0;
+    fg_tools(&tool_count);
+    assert(yyjson_is_arr(tools) && yyjson_arr_size(tools) == tool_count + 2);
+    bool final = false, memory = false;
+    size_t index, maximum;
+    yyjson_val *tool;
+    yyjson_arr_foreach(tools, index, maximum, tool) {
+        assert(!strcmp(fg_json_str(tool, "type"), "function"));
+        yyjson_val *function = yyjson_obj_get(tool, "function");
+        const char *name = fg_json_str(function, "name");
+        yyjson_val *parameters = yyjson_obj_get(function, "parameters");
+        assert(name && fg_json_str(function, "description") && yyjson_is_obj(parameters));
+        assert(yyjson_is_false(yyjson_obj_get(parameters, "additionalProperties")));
+        final |= !strcmp(name, "final");
+        memory |= !strcmp(name, "memory");
+    }
+    assert(final && memory);
+    yyjson_doc_free(document);
+    free(schema);
+
+    const char *message = "{\"role\":\"assistant\",\"content\":\"\","
+                          "\"reasoning_content\":\"inspect first\",\"tool_calls\":[{"
+                          "\"type\":\"function\",\"function\":{\"name\":\"read_file\","
+                          "\"arguments\":\"{\\\"path\\\":\\\"calc.go\\\",\\\"start\\\":1,"
+                          "\\\"end\\\":2}\"}}]}";
+    forge_error error = {0};
+    char *action = NULL;
+    assert(fg_native_action_normalize(message, true, &action, &error) == FORGE_OK);
+    document = yyjson_read(action, strlen(action), 0);
+    yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
+    assert(root && !strcmp(fg_json_str(root, "thought"), "inspect first") &&
+           !strcmp(fg_json_str(root, "tool"), "read_file"));
+    yyjson_val *args = yyjson_obj_get(root, "args");
+    assert(!strcmp(fg_json_str(args, "path"), "calc.go") &&
+           yyjson_get_uint(yyjson_obj_get(args, "start")) == 1 &&
+           yyjson_get_uint(yyjson_obj_get(args, "end")) == 2);
+    yyjson_doc_free(document);
+    free(action);
+
+    action = NULL;
+    assert(fg_native_action_normalize(message, false, &action, &error) == FORGE_OK);
+    assert(!strstr(action, "thought"));
+    free(action);
+
+    fg_buf long_message = {0};
+    assert(fg_buf_puts(&long_message, "{\"role\":\"assistant\",\"content\":\"\","
+                                      "\"reasoning_content\":\""));
+    for (size_t i = 0; i < FG_THOUGHT_MAX_BYTES + 100; i++)
+        assert(fg_buf_puts(&long_message, "x"));
+    assert(fg_buf_puts(&long_message, "\",\"tool_calls\":[{\"type\":\"function\",\"function\":{"
+                                      "\"name\":\"git_status\",\"arguments\":\"{}\"}}]}"));
+    action = NULL;
+    assert(fg_native_action_normalize(long_message.data, true, &action, &error) == FORGE_OK);
+    document = yyjson_read(action, strlen(action), 0);
+    root = document ? yyjson_doc_get_root(document) : NULL;
+    assert(root && strlen(fg_json_str(root, "thought")) == FG_THOUGHT_MAX_BYTES);
+    yyjson_doc_free(document);
+    free(action);
+    fg_buf_clear(&long_message);
+
+    message = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+              "\"id\":\"call_1\",\"type\":\"function\",\"function\":{"
+              "\"name\":\"final\",\"arguments\":{\"answer\":\"done\"}}}]}";
+    action = NULL;
+    assert(fg_native_action_normalize(message, true, &action, &error) == FORGE_OK);
+    assert(!strcmp(action, "{\"final\":\"done\"}"));
+    free(action);
+
+    const char *unsupported = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+                              "\"type\":\"function\",\"function\":{\"name\":\"delete_everything\","
+                              "\"arguments\":\"{}\"}}]}";
+    action = NULL;
+    assert(fg_native_action_normalize(unsupported, true, &action, &error) == FORGE_ERR_UNSUPPORTED);
+    assert(!action && strstr(error.message, "unsupported tool"));
+    const char *parallel = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":["
+                           "{\"type\":\"function\",\"function\":{\"name\":\"git_status\","
+                           "\"arguments\":\"{}\"}},{\"type\":\"function\",\"function\":{"
+                           "\"name\":\"git_diff\",\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(parallel, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "exactly one"));
+    const char *bad_args = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+                           "\"type\":\"function\",\"function\":{\"name\":\"read_file\","
+                           "\"arguments\":\"{\\\"path\\\":\\\"x\\\",\\\"start\\\":1}\"}}]}";
+    assert(fg_native_action_normalize(bad_args, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "missing end"));
+    const char *nul_name = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+                           "\"type\":\"function\",\"function\":{\"name\":\"read_file\\u0000junk\","
+                           "\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(nul_name, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "requires type=function"));
+    const char *extra = "{\"role\":\"assistant\",\"content\":\"\",\"unexpected\":true,"
+                        "\"tool_calls\":[{\"type\":\"function\",\"function\":{"
+                        "\"name\":\"git_status\",\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(extra, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "malformed fields"));
+    const char *missing_content = "{\"role\":\"assistant\",\"unexpected\":true,\"tool_calls\":[{"
+                                  "\"type\":\"function\",\"function\":{\"name\":\"git_status\","
+                                  "\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(missing_content, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "assistant content"));
+    const char *duplicate_role = "{\"role\":\"assistant\",\"role\":\"assistant\",\"tool_calls\":[{"
+                                 "\"type\":\"function\",\"function\":{\"name\":\"git_status\","
+                                 "\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(duplicate_role, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "assistant content"));
+}
 int main(void) {
     test_edit_diffs();
     test_utf8_and_byte_rendering();
     test_diagnostic_byte_boundaries();
+    test_native_tool_schema_and_normalization();
     fg_buf b = {0};
     assert(fg_buf_puts(&b, "abc"));
     assert(fg_buf_printf(&b, "%d", 123));
@@ -330,13 +443,10 @@ int main(void) {
     assert(!fg_json_whitespace_only("", 0));
     assert(!fg_json_whitespace_only(" \n{", 3));
     assert(fg_action_decode_phase("") == FG_ACTION_SELECT);
-    assert(fg_action_decode_phase("{\"tool\":\"read_file\",\"args\":{") ==
-           FG_ACTION_ARGUMENTS);
-    assert(fg_action_decode_phase("{\"tool\":\"apply_patch\",\"args\":{") ==
-           FG_ACTION_PATCH);
+    assert(fg_action_decode_phase("{\"tool\":\"read_file\",\"args\":{") == FG_ACTION_ARGUMENTS);
+    assert(fg_action_decode_phase("{\"tool\":\"apply_patch\",\"args\":{") == FG_ACTION_PATCH);
     assert(fg_action_decode_phase("{\"thought\":\"use { tool carefully\","
-                                  "\"tool\":\"apply_patch\",\"args\":{") ==
-           FG_ACTION_PATCH);
+                                  "\"tool\":\"apply_patch\",\"args\":{") == FG_ACTION_PATCH);
     assert(fg_action_decode_phase("{\"thought\":\"the key \\\"tool\\\" is quoted\"") ==
            FG_ACTION_SELECT);
     assert(fg_action_decode_phase("{\"final\":\"") == FG_ACTION_FINAL);

@@ -136,15 +136,17 @@ struct forge_model {
     const fg_checkpoint_backend *checkpoint;
     fg_checkpoint_cache *cache;
     const forge_checkpoint_cache_request *cache_request;
-    size_t (*count)(forge_model *, const char *);
+    size_t (*count)(forge_model *, const char *), (*count_prompt)(forge_model *, const char *);
     forge_status (*generate)(forge_model *, const char *, const char *,
                              const struct fg_decode_policy *, size_t, forge_token_fn, void *,
                              char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
                              forge_error *);
+    forge_status (*parse_native)(forge_model *, const char *, char **, forge_error *);
     void (*destroy)(forge_model *);
 };
 bool fg_model_instance_init(forge_model *, forge_error *);
 size_t fg_model_count(const char *, void *);
+size_t fg_model_count_prompt(const char *, void *);
 bool fg_llama_init(forge_model *, forge_error *);
 forge_status fg_model_generate(forge_model *, const char *, const char *, size_t, forge_token_fn,
                                void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
@@ -164,6 +166,9 @@ forge_status fg_model_generate_routed_with_cache(forge_model *, const char *, co
 forge_status fg_model_generate_active(forge_model *, const char *, size_t, forge_token_fn, void *,
                                       char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
                                       forge_error *);
+/* Parse a template-native assistant response into an OpenAI-compatible message.
+ * The caller then normalizes that message through fg_native_action_normalize. */
+forge_status fg_model_parse_native(forge_model *, const char *, char **, forge_error *);
 
 /* Internal cache operations run under the generation operation guard. */
 forge_status fg_checkpoint_cache_validate_request(const char *,
@@ -259,7 +264,9 @@ const fg_tool_def *fg_tools(size_t *);
  * empty, and `routed` whether it is a plain-text prefix outside the action JSON.
  * Routed mode leaves the action constrained and uses a lazy grammar trigger. */
 char *fg_tool_schema(bool thought, bool required, bool routed);
+char *fg_tool_native_schema(void);
 char *fg_tool_grammar(bool thought, bool required, bool routed);
+forge_status fg_native_action_normalize(const char *, bool include_thought, char **, forge_error *);
 bool fg_tool_validate(const char *, yyjson_val *, forge_error *);
 uint64_t fg_tool_signature(const char *, yyjson_val *, uint64_t generation,
                            uint64_t diagnostic_hash);

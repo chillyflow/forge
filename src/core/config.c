@@ -347,8 +347,8 @@ static forge_status apply_field(forge_config *config, const config_field *field,
                                     "speculative decoding is not implemented; "
                                     "only false is supported");
         } else if (field->kind == CFG_THINKING) {
-            config->model.thinking = value.u.boolean ? FORGE_THINKING_ENABLED
-                                                     : FORGE_THINKING_DISABLED;
+            config->model.thinking =
+                value.u.boolean ? FORGE_THINKING_ENABLED : FORGE_THINKING_DISABLED;
         } else {
             *(bool *)dest = value.u.boolean;
         }
@@ -588,9 +588,8 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
     if (!config->thought && (config->thought_required || config->thought_routed))
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "Thought routing or required thought needs the thought channel enabled");
-    if (!config->thought_routed &&
-        (config->thought_cue || config->thought_budget || config->thought_budget_unbounded ||
-         config->thought_native))
+    if (!config->thought_routed && (config->thought_cue || config->thought_budget ||
+                                    config->thought_budget_unbounded || config->thought_native))
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "Thought budget and cue controls need thought routing enabled");
     if (config->thought_native &&
@@ -639,6 +638,11 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
                         "inference.temperature must be finite and in [0, 2]");
     if ((unsigned)model->thinking > FORGE_THINKING_DISABLED)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid model thinking mode");
+    if ((unsigned)model->prompt_protocol > FORGE_PROMPT_NATIVE)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid model prompt protocol");
+    if (model->prompt_protocol == FORGE_PROMPT_NATIVE && config->thought_routed)
+        return fg_error(e, FORGE_ERR_ARGUMENT,
+                        "Native prompt protocol cannot be combined with routed JSON thought");
     if (model->model_path && model->script_path)
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "Choose a model path or an explicit script "

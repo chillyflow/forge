@@ -55,6 +55,13 @@ python benchmark/run.py --forge /tools/forge --model /models/coder.gguf \
   --output /results/forge-ablations
 ```
 
+Forge protocol A/B runs use separate output directories with
+`--prompt-protocol flattened` or `--prompt-protocol native`. `flattened` is the
+default. The runner forwards the selected arm to Forge and records it in the
+environment and every result record; `campaign.py` also includes it in the
+protocol lock and campaign manifest. OpenCode and Aider retain their own native
+harness protocols.
+
 Portability checks use new per-model output directories and the same selected
 task subset; never consolidate token counts across model tokenizers.
 

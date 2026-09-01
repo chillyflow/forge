@@ -44,6 +44,7 @@ def main():
     parser.add_argument('--max-turns', type=int, default=16)
     parser.add_argument('--gpu-layers', default='-1')
     parser.add_argument('--chat-template', default='embedded')
+    parser.add_argument('--prompt-protocol', choices=['flattened', 'native'], default='flattened')
     parser.add_argument('--temperature', type=float, default=0.0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--repetitions', type=int, default=3)
@@ -83,6 +84,7 @@ def main():
                           'output_reserve': args.output_reserve,
                           'max_turns': args.max_turns, 'gpu_layers': args.gpu_layers,
                           'chat_template': args.chat_template,
+                          'prompt_protocol': args.prompt_protocol,
                           'temperature': args.temperature, 'seed': args.seed,
                           'repetitions': args.repetitions, 'order_seed': args.order_seed,
                           'lifecycle': args.lifecycle},

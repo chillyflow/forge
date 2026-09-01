@@ -1,6 +1,7 @@
 #include "internal.h"
 #include "chat_template.h"
 #include "llama.h"
+#include <ctype.h>
 #include <math.h>
 typedef struct {
     struct llama_model *model;
@@ -10,6 +11,7 @@ typedef struct {
     size_t count, capacity;
     char *template_name;
     fg_chat_templates *chat_templates;
+    fg_chat_render *last_native_render;
     forge_thinking_mode thinking_mode;
     double load_ms;
     bool can_reuse;
@@ -71,10 +73,9 @@ static char *format_prompt(llama_state *s, const char *prompt,
     if (s->chat_templates) {
         size_t rendered_length = 0;
         char detail[256] = {0};
-        char *rendered = fg_chat_templates_apply(
-            s->chat_templates, prompt,
-            s->thinking_mode == FORGE_THINKING_ENABLED, &rendered_length,
-            detail, sizeof(detail));
+        char *rendered = fg_chat_templates_apply(s->chat_templates, prompt,
+                                                 s->thinking_mode == FORGE_THINKING_ENABLED,
+                                                 &rendered_length, detail, sizeof(detail));
         if (!rendered) {
             fg_error(error, FORGE_ERR_MODEL, "Cannot apply Jinja chat template: %s", detail);
             return NULL;
@@ -109,39 +110,29 @@ static char *format_prompt(llama_state *s, const char *prompt,
     text[got] = 0;
     return text;
 }
-static llama_token *tokenize_allocated(llama_state *s, const char *prompt, int32_t *count,
-                                       const fg_checkpoint_allocator *allocator, size_t *allocated,
-                                       forge_error *error) {
-    size_t text_bytes = 0;
-    char *text = format_prompt(s, prompt, allocator, &text_bytes, error);
-    if (!text)
-        return NULL;
+static llama_token *tokenize_text_allocated(llama_state *s, const char *text, int32_t *count,
+                                            const fg_checkpoint_allocator *allocator,
+                                            size_t *allocated, forge_error *error) {
     size_t len = strlen(text);
     if (len > INT32_MAX) {
-        token_release(allocator, text, text_bytes);
         fg_error(error, FORGE_ERR_LIMIT, "Templated prompt is too large");
         return NULL;
     }
     int32_t n = llama_tokenize(s->vocab, text, (int32_t)len, NULL, 0, true, true);
     if (n >= 0 || n == INT32_MIN) {
-        token_release(allocator, text, text_bytes);
         fg_error(error, FORGE_ERR_MODEL, "Cannot size prompt tokens");
         return NULL;
     }
     n = -n;
     if (n > 1048576) {
-        token_release(allocator, text, text_bytes);
         fg_error(error, FORGE_ERR_LIMIT, "Prompt token count exceeds the runtime bound");
         return NULL;
     }
     *allocated = (size_t)n * sizeof(llama_token);
     llama_token *tokens = token_allocate(allocator, *allocated, error);
-    if (!tokens) {
-        token_release(allocator, text, text_bytes);
+    if (!tokens)
         return NULL;
-    }
     *count = llama_tokenize(s->vocab, text, (int32_t)len, tokens, n, true, true);
-    token_release(allocator, text, text_bytes);
     if (*count < 0 || *count > n) {
         token_release(allocator, tokens, *allocated);
         fg_error(error, FORGE_ERR_MODEL, "Cannot tokenize the complete prompt");
@@ -149,18 +140,140 @@ static llama_token *tokenize_allocated(llama_state *s, const char *prompt, int32
     }
     return tokens;
 }
+static llama_token *tokenize_allocated(llama_state *s, const char *prompt, int32_t *count,
+                                       const fg_checkpoint_allocator *allocator, size_t *allocated,
+                                       forge_error *error) {
+    size_t text_bytes = 0;
+    char *text = format_prompt(s, prompt, allocator, &text_bytes, error);
+    if (!text)
+        return NULL;
+    llama_token *tokens = tokenize_text_allocated(s, text, count, allocator, allocated, error);
+    token_release(allocator, text, text_bytes);
+    return tokens;
+}
 static llama_token *tokenize(llama_state *s, const char *prompt, int32_t *count) {
     size_t bytes = 0;
     return tokenize_allocated(s, prompt, count, NULL, &bytes, NULL);
 }
 static size_t llama_count(forge_model *m, const char *prompt) {
+    llama_state *s = m->backend;
     int32_t count = 0;
-    llama_token *t = tokenize(m->backend, prompt, &count);
-    free(t);
+    llama_token *tokens = tokenize(s, prompt, &count);
+    free(tokens);
+    return count > 0 ? (size_t)count : SIZE_MAX / 4;
+}
+
+static size_t llama_count_prompt(forge_model *m, const char *prompt) {
+    if (m->config.prompt_protocol != FORGE_PROMPT_NATIVE)
+        return llama_count(m, prompt);
+    llama_state *s = m->backend;
+    char detail[256] = {0};
+    fg_chat_render *render = fg_chat_templates_apply_native(
+        s->chat_templates, prompt, s->thinking_mode != FORGE_THINKING_DISABLED, detail,
+        sizeof(detail));
+    size_t length = 0, bytes = 0;
+    const char *text = fg_chat_render_prompt(render, &length);
+    (void)length;
+    int32_t count = 0;
+    llama_token *tokens =
+        text ? tokenize_text_allocated(s, text, &count, NULL, &bytes, NULL) : NULL;
+    free(tokens);
+    fg_chat_render_destroy(render);
     return count > 0 ? (size_t)count : SIZE_MAX / 4;
 }
 static bool interrupted(forge_cancel_fn cancel, void *u, uint64_t deadline) {
     return (cancel && cancel(u)) || (deadline && fg_now_ms() >= deadline);
+}
+
+static forge_status native_grammar_prefill(llama_state *s, struct llama_sampler *grammar,
+                                           const fg_chat_render *render, forge_error *error) {
+    if (!grammar || fg_chat_render_grammar_lazy(render))
+        return FORGE_OK;
+    const char *prefix = fg_chat_render_generation_prompt(render);
+    if (!prefix || !*prefix)
+        return FORGE_OK;
+    size_t length = strlen(prefix);
+    if (length > INT32_MAX)
+        return fg_error(error, FORGE_ERR_LIMIT,
+                        "Native grammar generation prefix exceeds the runtime bound");
+    int32_t count = llama_tokenize(s->vocab, prefix, (int32_t)length, NULL, 0, false, true);
+    if (count >= 0 || count == INT32_MIN)
+        return fg_error(error, FORGE_ERR_MODEL,
+                        "Cannot size native grammar generation-prefix tokens");
+    count = -count;
+    llama_token *tokens = malloc((size_t)count * sizeof(*tokens));
+    if (!tokens)
+        return fg_error(error, FORGE_ERR_MEMORY,
+                        "Cannot allocate native grammar generation-prefix tokens");
+    int32_t got = llama_tokenize(s->vocab, prefix, (int32_t)length, tokens, count, false, true);
+    if (got < 0 || got > count) {
+        free(tokens);
+        return fg_error(error, FORGE_ERR_MODEL, "Cannot tokenize native grammar generation prefix");
+    }
+    for (int32_t i = 0; i < got; i++) {
+        bool skip = false;
+        if (!i) {
+            char small[128], *piece = small;
+            int32_t piece_length =
+                llama_token_to_piece(s->vocab, tokens[i], piece, (int32_t)sizeof(small), 0, true);
+            if (piece_length < 0) {
+                piece = malloc((size_t)-piece_length);
+                if (!piece) {
+                    free(tokens);
+                    return fg_error(error, FORGE_ERR_MEMORY,
+                                    "Cannot inspect native grammar prefix token");
+                }
+                piece_length =
+                    llama_token_to_piece(s->vocab, tokens[i], piece, -piece_length, 0, true);
+            }
+            if (piece_length > 0)
+                skip = isspace((unsigned char)piece[0]) && !isspace((unsigned char)prefix[0]);
+            if (piece != small)
+                free(piece);
+            if (piece_length < 0) {
+                free(tokens);
+                return fg_error(error, FORGE_ERR_MODEL,
+                                "Cannot inspect native grammar prefix token");
+            }
+        }
+        if (!skip)
+            llama_sampler_accept(grammar, tokens[i]);
+    }
+    free(tokens);
+    return FORGE_OK;
+}
+
+static forge_status native_preserved_tokens(llama_state *s, const fg_chat_render *render,
+                                            llama_token *tokens, size_t capacity, size_t *count,
+                                            forge_error *error) {
+    *count = 0;
+    size_t strings = fg_chat_render_preserved_count(render);
+    if (strings > capacity)
+        return fg_error(error, FORGE_ERR_LIMIT,
+                        "Native template returned too many preserved tokens");
+    for (size_t i = 0; i < strings; i++) {
+        const char *text = fg_chat_render_preserved(render, i);
+        llama_token token = LLAMA_TOKEN_NULL;
+        int32_t found =
+            text ? llama_tokenize(s->vocab, text, (int32_t)strlen(text), &token, 1, false, true)
+                 : 0;
+        if (found != 1)
+            continue; /* Matches llama.cpp: only single-token markers are preserved. */
+        bool duplicate = false;
+        for (size_t j = 0; j < *count; j++)
+            duplicate |= tokens[j] == token;
+        if (!duplicate)
+            tokens[(*count)++] = token;
+    }
+    return FORGE_OK;
+}
+
+static bool native_token_is_preserved(llama_token token, const llama_token *preserved,
+                                      size_t count) {
+    for (size_t i = 0; i < count; i++)
+        if (preserved[i] == token)
+            return true;
+    return false;
 }
 static forge_status decode_batch(llama_state *s, const llama_token *tokens, size_t count,
                                  size_t pos, forge_error *e) {
@@ -374,28 +487,78 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
                                    forge_cancel_fn cancel, void *cu, uint64_t deadline,
                                    forge_error *e) {
     llama_state *s = m->backend;
+    bool native = m->config.prompt_protocol == FORGE_PROMPT_NATIVE;
+    fg_chat_render *native_render = NULL;
+    const char *prepared_prompt = prompt;
+    const char *active_grammar = grammar;
     int32_t n = 0;
-    llama_token *tokens = tokenize(s, prompt, &n);
-    if (!tokens)
-        return fg_error(e, FORGE_ERR_MODEL,
-                        "Cannot tokenize prompt or apply chat template; use --chat-template chatml "
-                        "for a compatible model");
+    llama_token *tokens = NULL;
+    fg_chat_render_destroy(s->last_native_render);
+    s->last_native_render = NULL;
+    if (native) {
+        if (policy)
+            return fg_error(e, FORGE_ERR_ARGUMENT,
+                            "Native prompt protocol cannot use routed JSON decoding");
+        char detail[256] = {0};
+        native_render = fg_chat_templates_apply_native(s->chat_templates, prompt,
+                                                       s->thinking_mode != FORGE_THINKING_DISABLED,
+                                                       detail, sizeof(detail));
+        size_t prepared_length = 0;
+        prepared_prompt = fg_chat_render_prompt(native_render, &prepared_length);
+        (void)prepared_length;
+        active_grammar = fg_chat_render_grammar(native_render);
+        size_t token_bytes = 0;
+        if (prepared_prompt)
+            tokens = tokenize_text_allocated(s, prepared_prompt, &n, NULL, &token_bytes, e);
+        if (!native_render || !prepared_prompt || !active_grammar || !tokens) {
+            fg_chat_render_destroy(native_render);
+            if (!e || !e->code)
+                fg_error(e, FORGE_ERR_UNSUPPORTED, "Cannot prepare native roles/tools: %s",
+                         *detail ? detail : "unsupported chat template");
+            return e && e->code ? e->code : FORGE_ERR_MODEL;
+        }
+    } else {
+        tokens = tokenize(s, prompt, &n);
+        if (!tokens)
+            return fg_error(
+                e, FORGE_ERR_MODEL,
+                "Cannot tokenize prompt or apply chat template; use --chat-template chatml "
+                "for a compatible model");
+    }
     if (n <= 0 || (size_t)n > s->capacity || max_tokens > s->capacity - (size_t)n) {
         free(tokens);
+        fg_chat_render_destroy(native_render);
         return fg_error(e, FORGE_ERR_LIMIT, "Prompt plus output reserve exceeds model context");
     }
     fg_checkpoint_cache_operation cache = {0};
-    forge_status status =
-        fg_checkpoint_cache_begin(m, prompt, tokens, (size_t)n, cancel, cu, deadline, &cache, e);
+    forge_checkpoint_cache_request native_request = {0};
+    const forge_checkpoint_cache_request *logical_request = m->cache_request;
+    size_t native_anchor = 0;
+    if (native && logical_request) {
+        native_request = *logical_request;
+        if (logical_request->anchor_count)
+            native_anchor = fg_chat_render_cache_anchor(native_render);
+        native_request.anchor_ends = &native_anchor;
+        native_request.anchor_count = native_anchor ? 1 : 0;
+        m->cache_request = &native_request;
+    }
+    forge_status status = fg_checkpoint_cache_begin(m, prepared_prompt, tokens, (size_t)n, cancel,
+                                                    cu, deadline, &cache, e);
+    m->cache_request = logical_request;
     if (status == FORGE_OK)
         status = prefill_tokens(m, tokens, (size_t)n, max_tokens, stats, cancel, cu, deadline,
                                 &cache, e);
     free(tokens);
-    if (status != FORGE_OK)
+    if (status != FORGE_OK) {
+        fg_chat_render_destroy(native_render);
         return status;
+    }
     struct llama_sampler *sampler = NULL;
     struct llama_sampler *grammar_sampler = NULL;
+    llama_token preserved_tokens[64] = {0};
+    size_t preserved_count = 0;
     fg_buf out = {0};
+    size_t native_emitted = 0;
     sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
     if (!sampler) {
         status = fg_error(e, FORGE_ERR_MEMORY, "Sampler allocation failed");
@@ -445,17 +608,50 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             braces_armed = true;
         }
     }
-    if (grammar) {
-        if (policy) {
+    if (active_grammar) {
+        if (native) {
+            const char *patterns[64] = {0};
+            llama_token trigger_tokens[64] = {0};
+            size_t pattern_count = fg_chat_render_trigger_pattern_count(native_render);
+            size_t trigger_count = fg_chat_render_trigger_token_count(native_render);
+            if (pattern_count > 64 || trigger_count > 64) {
+                status = fg_error(e, FORGE_ERR_LIMIT,
+                                  "Native template returned too many grammar triggers");
+                goto finish;
+            }
+            for (size_t i = 0; i < pattern_count; i++)
+                patterns[i] = fg_chat_render_trigger_pattern(native_render, i);
+            for (size_t i = 0; i < trigger_count; i++)
+                trigger_tokens[i] = fg_chat_render_trigger_token(native_render, i);
+            grammar_sampler = fg_chat_render_grammar_lazy(native_render)
+                                  ? llama_sampler_init_grammar_lazy_patterns(
+                                        s->vocab, active_grammar, "root", patterns, pattern_count,
+                                        trigger_tokens, trigger_count)
+                                  : llama_sampler_init_grammar(s->vocab, active_grammar, "root");
+        } else if (policy) {
             const char *patterns[] = {policy->trigger};
-            grammar_sampler = llama_sampler_init_grammar_lazy_patterns(s->vocab, grammar, "root",
-                                                                       patterns, 1, NULL, 0);
+            grammar_sampler = llama_sampler_init_grammar_lazy_patterns(
+                s->vocab, active_grammar, "root", patterns, 1, NULL, 0);
         } else
-            grammar_sampler = llama_sampler_init_grammar(s->vocab, grammar, "root");
+            grammar_sampler = llama_sampler_init_grammar(s->vocab, active_grammar, "root");
         if (!grammar_sampler) {
-            status = fg_error(e, FORGE_ERR_PARSE,
-                              "Generated tool grammar or trigger was rejected by llama.cpp");
+            status =
+                fg_error(e, FORGE_ERR_PARSE,
+                         native ? "Native template grammar or trigger was rejected by llama.cpp"
+                                : "Generated tool grammar or trigger was rejected by llama.cpp");
             goto finish;
+        }
+        if (native) {
+            status = native_grammar_prefill(s, grammar_sampler, native_render, e);
+            if (status == FORGE_OK)
+                status = native_preserved_tokens(
+                    s, native_render, preserved_tokens,
+                    sizeof(preserved_tokens) / sizeof(*preserved_tokens), &preserved_count, e);
+            if (status != FORGE_OK) {
+                llama_sampler_free(grammar_sampler);
+                grammar_sampler = NULL;
+                goto finish;
+            }
         }
         llama_sampler_chain_add(sampler, grammar_sampler);
     }
@@ -535,7 +731,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
      * forced swap. action_offset marks where the constrained action region
      * begins — the completeness check must never scan reasoning prose, which
      * can legally contain complete JSON objects that never armed the grammar. */
-    bool action_open = !policy && grammar;
+    bool action_open = !native && !policy && active_grammar;
     size_t action_offset = 0;
     for (size_t i = 0; i < sample_budget; i++) {
         /* The action cannot begin while '{' is banned, so while the window
@@ -546,7 +742,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         }
         if (policy && !policy->native_thinking && !action_open && !policy->think_unbounded &&
             i == think_cap) {
-            status = force_action(s, sampler, &grammar_sampler, grammar, awaiting_action,
+            status = force_action(s, sampler, &grammar_sampler, active_grammar, awaiting_action,
                                   &progress_armed, e);
             if (status != FORGE_OK)
                 break;
@@ -562,17 +758,16 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         llama_synchronize(s->ctx);
         uint64_t sampling_start = fg_now_ms();
         /* The greedy fast path reads raw logits and would bypass the bans. */
-        fg_action_phase phase = action_open
-                                    ? fg_action_decode_phase(out.data ? out.data + action_offset : "")
-                                    : FG_ACTION_SELECT;
-        bool structured = action_open &&
-                          (phase == FG_ACTION_SELECT || phase == FG_ACTION_ARGUMENTS);
-        llama_token token =
-            sample_token(s, sampler, grammar_sampler,
-                         !braces_armed && !awaiting_action && !progress_armed &&
-                             m->config.grammar_fast_path &&
-                             (m->config.temperature <= 0 || structured),
-                         stats);
+        fg_action_phase phase =
+            action_open ? fg_action_decode_phase(out.data ? out.data + action_offset : "")
+                        : FG_ACTION_SELECT;
+        bool structured =
+            native || (action_open && (phase == FG_ACTION_SELECT || phase == FG_ACTION_ARGUMENTS));
+        llama_token token = sample_token(
+            s, sampler, grammar_sampler,
+            !braces_armed && !awaiting_action && !progress_armed && m->config.grammar_fast_path &&
+                (m->config.temperature <= 0 || (!native && structured)),
+            stats);
         stats->sampling_ms += (double)(fg_now_ms() - sampling_start);
         if (llama_vocab_is_eog(s->vocab, token)) {
             ended = true;
@@ -580,7 +775,9 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         }
         int32_t cap = 128;
         char small[128], *piece = small;
-        int32_t length = llama_token_to_piece(s->vocab, token, piece, cap, 0, false);
+        bool render_special =
+            native && native_token_is_preserved(token, preserved_tokens, preserved_count);
+        int32_t length = llama_token_to_piece(s->vocab, token, piece, cap, 0, render_special);
         if (length < 0) {
             cap = -length;
             piece = malloc((size_t)cap);
@@ -588,7 +785,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
                 status = FORGE_ERR_MEMORY;
                 break;
             }
-            length = llama_token_to_piece(s->vocab, token, piece, cap, 0, false);
+            length = llama_token_to_piece(s->vocab, token, piece, cap, 0, render_special);
         }
         if (length < 0 || !fg_buf_add(&out, piece, (size_t)FG_MAX(length, 0))) {
             if (piece != small)
@@ -597,7 +794,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             break;
         }
         stats->generated_tokens++;
-        if (action_open) {
+        if (!native && action_open) {
             if (phase == FG_ACTION_SELECT)
                 stats->action_select_tokens++;
             else if (phase == FG_ACTION_ARGUMENTS)
@@ -630,7 +827,28 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             } else
                 stats->think_tokens++;
         }
-        if (cb && !cb(piece, (size_t)length, u)) {
+        if (native) {
+            size_t safe_length = out.len;
+            bool stopped = false;
+            fg_chat_render_scan_stop(native_render, out.data, out.len, native_emitted, &safe_length,
+                                     &stopped);
+            if (safe_length > native_emitted && cb &&
+                !cb(out.data + native_emitted, safe_length - native_emitted, u)) {
+                if (piece != small)
+                    free(piece);
+                status = fg_error(e, FORGE_ERR_CANCELLED, "Token callback cancelled");
+                break;
+            }
+            native_emitted = safe_length;
+            if (stopped) {
+                out.len = safe_length;
+                out.data[out.len] = 0;
+                if (piece != small)
+                    free(piece);
+                ended = true;
+                break;
+            }
+        } else if (cb && !cb(piece, (size_t)length, u)) {
             if (piece != small)
                 free(piece);
             status = fg_error(e, FORGE_ERR_CANCELLED, "Token callback cancelled");
@@ -642,7 +860,8 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
          * still keeps whitespace legal (root ends in ws), so waiting for an
          * end token can burn the rest of the budget. Objects can only close
          * on a '}' piece, and the scan starts at the constrained region. */
-        if (grammar && action_open && closing && fg_action_complete(out.data + action_offset)) {
+        if (!native && active_grammar && action_open && closing &&
+            fg_action_complete(out.data + action_offset)) {
             stats->action_stops++;
             ended = true;
             break;
@@ -652,15 +871,32 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             break;
         s->tokens[s->count++] = token;
     }
+    if (native && status == FORGE_OK && native_emitted < out.len) {
+        if (cb && !cb(out.data + native_emitted, out.len - native_emitted, u))
+            status = fg_error(e, FORGE_ERR_CANCELLED, "Token callback cancelled");
+        else
+            native_emitted = out.len;
+    }
     stats->decode_ms += (double)(fg_now_ms() - begin);
-    if (status == FORGE_OK && grammar && !ended) {
-        bool complete =
-            policy && action_open && fg_action_complete(out.data ? out.data + action_offset : "");
-        yyjson_doc *d = policy ? NULL : yyjson_read(out.data ? out.data : "", out.len, 0);
-        if (!complete && !d)
-            status =
-                fg_error(e, FORGE_ERR_LIMIT, "Generation limit reached before a complete action");
-        yyjson_doc_free(d);
+    if (status == FORGE_OK && active_grammar && !ended) {
+        if (native) {
+            char detail[256] = {0};
+            char *parsed = fg_chat_render_parse(native_render, out.data ? out.data : "", detail,
+                                                sizeof(detail));
+            if (!parsed)
+                status = fg_error(e, FORGE_ERR_LIMIT,
+                                  "Generation limit reached before one complete native call: %s",
+                                  *detail ? detail : "native parser rejected the output");
+            free(parsed);
+        } else {
+            bool complete = policy && action_open &&
+                            fg_action_complete(out.data ? out.data + action_offset : "");
+            yyjson_doc *d = policy ? NULL : yyjson_read(out.data ? out.data : "", out.len, 0);
+            if (!complete && !d)
+                status = fg_error(e, FORGE_ERR_LIMIT,
+                                  "Generation limit reached before a complete action");
+            yyjson_doc_free(d);
+        }
     }
 finish:
     if (sampler)
@@ -668,10 +904,19 @@ finish:
     if (status != FORGE_OK) {
         clear_live_state(m);
         fg_buf_clear(&out);
+        fg_chat_render_destroy(native_render);
         return status;
     }
     *output = fg_buf_take(&out);
-    return *output ? FORGE_OK : fg_error(e, FORGE_ERR_MEMORY, "Output allocation failed");
+    if (!*output) {
+        fg_chat_render_destroy(native_render);
+        return fg_error(e, FORGE_ERR_MEMORY, "Output allocation failed");
+    }
+    if (native) {
+        s->last_native_render = native_render;
+        native_render = NULL;
+    }
+    return FORGE_OK;
 }
 static forge_status checkpoint_supported(forge_model *m, forge_error *e) {
     llama_state *s = m->backend;
@@ -690,12 +935,34 @@ static forge_status checkpoint_prefill(forge_model *m, const char *prompt, int32
                                        forge_cancel_fn cancel, void *user, uint64_t deadline,
                                        forge_error *e) {
     llama_state *s = m->backend;
+    fg_chat_render *native_render = NULL;
+    const char *prepared_prompt = prompt;
     *out_tokens = NULL;
     *out_count = 0;
     if (interrupted(cancel, user, deadline))
         return fg_error(e, FORGE_ERR_CANCELLED, "Checkpoint cancelled before tokenization");
     int32_t count = 0;
-    llama_token *tokens = tokenize(s, prompt, &count);
+    llama_token *tokens = NULL;
+    if (m->config.prompt_protocol == FORGE_PROMPT_NATIVE) {
+        char detail[256] = {0};
+        native_render = fg_chat_templates_apply_native(s->chat_templates, prompt,
+                                                       s->thinking_mode != FORGE_THINKING_DISABLED,
+                                                       detail, sizeof(detail));
+        size_t length = 0;
+        prepared_prompt = fg_chat_render_prompt(native_render, &length);
+        (void)length;
+        size_t allocated = 0;
+        if (prepared_prompt)
+            tokens = tokenize_text_allocated(s, prepared_prompt, &count, NULL, &allocated, e);
+        if (!native_render || !prepared_prompt || !tokens) {
+            fg_chat_render_destroy(native_render);
+            if (!e || !e->code)
+                fg_error(e, FORGE_ERR_UNSUPPORTED, "Cannot prepare native checkpoint prompt: %s",
+                         *detail ? detail : "unsupported chat template");
+            return e && e->code ? e->code : FORGE_ERR_MODEL;
+        }
+    } else
+        tokens = tokenize(s, prompt, &count);
     if (!tokens)
         return fg_error(e, FORGE_ERR_MODEL,
                         "Cannot tokenize checkpoint prompt or apply chat template");
@@ -707,9 +974,11 @@ static forge_status checkpoint_prefill(forge_model *m, const char *prompt, int32
                      "Physical checkpoint requires a complete sequence starting at position 0");
     if (status != FORGE_OK) {
         free(tokens);
+        fg_chat_render_destroy(native_render);
         clear_live_state(m);
         return status;
     }
+    fg_chat_render_destroy(native_render);
     *out_tokens = tokens;
     *out_count = (size_t)count;
     return FORGE_OK;
@@ -763,7 +1032,9 @@ checkpoint_probe_prefix(forge_model *m, const char *prompt, size_t end, const in
     int32_t count = 0;
     size_t token_bytes = 0;
     llama_token *tokens =
-        tokenize_allocated(m->backend, prefix, &count, allocator, &token_bytes, error);
+        m->config.prompt_protocol == FORGE_PROMPT_NATIVE
+            ? tokenize_text_allocated(m->backend, prefix, &count, allocator, &token_bytes, error)
+            : tokenize_allocated(m->backend, prefix, &count, allocator, &token_bytes, error);
     token_release(allocator, prefix, end + 1);
     if (!tokens)
         return error && error->code ? error->code : FORGE_ERR_MODEL;
@@ -788,12 +1059,60 @@ static void llama_destroy(forge_model *m) {
             llama_model_free(s->model);
         free(s->tokens);
         free(s->template_name);
+        fg_chat_render_destroy(s->last_native_render);
         fg_chat_templates_destroy(s->chat_templates);
         free(s->brace_ban);
         free(s->eog_ban);
         free(s->whitespace_ban);
         free(s);
     }
+}
+
+static bool native_protocol_probe(forge_model *m, llama_state *s, forge_error *error) {
+    char *tools = fg_tool_native_schema();
+    fg_buf request = {0};
+    bool built = tools && fg_buf_printf(&request,
+                                        "{\"protocol\":\"forge-native-v1\",\"tools\":%s,"
+                                        "\"anchor_message_count\":1,\"messages\":["
+                                        "{\"role\":\"system\",\"content\":\"Forge\"},"
+                                        "{\"role\":\"user\",\"content\":\"Probe\"}]}",
+                                        tools);
+    free(tools);
+    if (!built) {
+        fg_buf_clear(&request);
+        fg_error(error, FORGE_ERR_MEMORY, "Cannot allocate native protocol probe");
+        return false;
+    }
+    char detail[256] = {0};
+    fg_chat_render *render = fg_chat_templates_apply_native(
+        s->chat_templates, request.data, m->config.thinking != FORGE_THINKING_DISABLED, detail,
+        sizeof(detail));
+    fg_buf_clear(&request);
+    if (!render) {
+        fg_error(error, FORGE_ERR_UNSUPPORTED,
+                 "Native prompt protocol is unsupported by the selected chat template: %s",
+                 *detail ? detail : "roles, tools, grammar, or parser unavailable");
+        return false;
+    }
+    fg_chat_render_destroy(render);
+    return true;
+}
+
+static forge_status llama_parse_native(forge_model *m, const char *response, char **message,
+                                       forge_error *error) {
+    if (!m || !response || !message)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Missing native response input");
+    llama_state *s = m->backend;
+    *message = NULL;
+    if (!s || !s->last_native_render)
+        return fg_error(error, FORGE_ERR_CONFLICT,
+                        "Native response parser has no matching rendered prompt");
+    char detail[256] = {0};
+    *message = fg_chat_render_parse(s->last_native_render, response, detail, sizeof(detail));
+    if (!*message)
+        return fg_error(error, FORGE_ERR_PARSE, "Cannot parse native tool call: %s",
+                        *detail ? detail : "chat-template parser rejected the response");
+    return FORGE_OK;
 }
 bool fg_llama_init(forge_model *m, forge_error *e) {
     uint64_t start = fg_now_ms();
@@ -839,19 +1158,23 @@ bool fg_llama_init(forge_model *m, forge_error *e) {
         return false;
     }
     s->thinking_mode = m->config.thinking;
-    if (m->config.thinking != FORGE_THINKING_AUTO) {
+    if (m->config.prompt_protocol == FORGE_PROMPT_NATIVE ||
+        m->config.thinking != FORGE_THINKING_AUTO) {
         char detail[256] = {0};
-        s->chat_templates = fg_chat_templates_create(
-            s->model, m->config.chat_template, detail, sizeof(detail));
+        s->chat_templates =
+            fg_chat_templates_create(s->model, m->config.chat_template, detail, sizeof(detail));
         if (!s->chat_templates) {
             fg_error(e, FORGE_ERR_MODEL, "Cannot initialize Jinja chat template: %s", detail);
             return false;
         }
-        if (!fg_chat_templates_support_thinking(s->chat_templates)) {
+        if (m->config.thinking != FORGE_THINKING_AUTO &&
+            !fg_chat_templates_support_thinking(s->chat_templates)) {
             fg_error(e, FORGE_ERR_MODEL,
                      "The selected chat template does not support enable_thinking");
             return false;
         }
+        if (m->config.prompt_protocol == FORGE_PROMPT_NATIVE && !native_protocol_probe(m, s, e))
+            return false;
     }
     s->can_reuse = !llama_model_is_recurrent(s->model) && !llama_model_is_hybrid(s->model);
     if (llama_model_has_encoder(s->model) || !llama_model_has_decoder(s->model))
@@ -868,7 +1191,9 @@ bool fg_llama_init(forge_model *m, forge_error *e) {
         s->checkpoint_unsupported = "models without sequence memory";
     s->load_ms = (double)(fg_now_ms() - start);
     m->count = llama_count;
+    m->count_prompt = llama_count_prompt;
     m->generate = llama_generate;
+    m->parse_native = llama_parse_native;
     m->checkpoint = &checkpoint_backend;
     return true;
 }

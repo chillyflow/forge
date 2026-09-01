@@ -25,9 +25,22 @@ static size_t script_count(forge_model *m, const char *text) {
     (void)m;
     return (strlen(text) + 3) / 4;
 }
+static forge_status script_parse_native(forge_model *m, const char *response, char **message,
+                                        forge_error *error) {
+    (void)m;
+    if (!response || !message)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Invalid scripted native response");
+    *message = fg_strdup(response);
+    return *message ? FORGE_OK
+                    : fg_error(error, FORGE_ERR_MEMORY, "Cannot copy scripted native response");
+}
 size_t fg_model_count(const char *text, void *model) {
     forge_model *m = model;
     return m->count(m, text);
+}
+size_t fg_model_count_prompt(const char *text, void *model) {
+    forge_model *m = model;
+    return (m->count_prompt ? m->count_prompt : m->count)(m, text);
 }
 static forge_status script_generate(forge_model *m, const char *prompt, const char *grammar,
                                     const fg_decode_policy *policy, size_t max_tokens,
@@ -78,6 +91,7 @@ static forge_status script_generate(forge_model *m, const char *prompt, const ch
 forge_model *forge_model_load(const forge_model_config *config, forge_error *e) {
     if (!config || config->context_tokens < 128 || config->context_tokens > 1048576 ||
         (unsigned)config->thinking > FORGE_THINKING_DISABLED ||
+        (unsigned)config->prompt_protocol > FORGE_PROMPT_NATIVE ||
         (!config->model_path == !config->script_path)) {
         fg_error(
             e, FORGE_ERR_ARGUMENT,
@@ -108,7 +122,9 @@ forge_model *forge_model_load(const forge_model_config *config, forge_error *e) 
             return NULL;
         }
         m->count = script_count;
+        m->count_prompt = script_count;
         m->generate = script_generate;
+        m->parse_native = script_parse_native;
         return m;
     }
 #ifdef FORGE_WITH_LLAMA
@@ -124,6 +140,17 @@ forge_model *forge_model_load(const forge_model_config *config, forge_error *e) 
              "only for tests.");
     return NULL;
 #endif
+}
+
+forge_status fg_model_parse_native(forge_model *model, const char *response, char **message,
+                                   forge_error *error) {
+    if (!model || !response || !message || model->config.prompt_protocol != FORGE_PROMPT_NATIVE)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Invalid native response parse request");
+    *message = NULL;
+    if (!model->parse_native)
+        return fg_error(error, FORGE_ERR_UNSUPPORTED,
+                        "The selected backend cannot parse native tool calls");
+    return model->parse_native(model, response, message, error);
 }
 void forge_model_destroy(forge_model *m) {
     if (m) {

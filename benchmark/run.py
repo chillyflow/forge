@@ -64,6 +64,7 @@ VARIANTS = {
         'flags': ['--thought-native', '--disable-thinking', '--thought-decode-only'],
         'thought_cue': '', 'thought_budget': 'native-disabled'},
 }
+PROMPT_PROTOCOLS = ('flattened', 'native')
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -77,6 +78,8 @@ def main():
     parser.add_argument('--gpu-layers', default='-1')
     parser.add_argument('--chat-template', default=None,
                         help='llama.cpp chat template name; default uses the template embedded in the GGUF')
+    parser.add_argument('--prompt-protocol', choices=PROMPT_PROTOCOLS, default='flattened',
+                        help='Forge prompt/tool protocol arm; default preserves flattened prompts')
     parser.add_argument('--context', default='16384')
     parser.add_argument('--output-reserve', type=int, default=2048)
     parser.add_argument('--temperature', type=float, default=0.0)
@@ -90,6 +93,12 @@ def main():
     parser.add_argument('--no-randomize', action='store_true')
     parser.add_argument('--gpu-index', type=int, default=0)
     args = parser.parse_args()
+    incompatible = [variant for variant in args.variants
+                    if any(flag in ('--thought-routed', '--thought-native')
+                           for flag in VARIANTS[variant]['flags'])]
+    if args.prompt_protocol == 'native' and incompatible:
+        parser.error('--prompt-protocol native is incompatible with variants: ' +
+                     ', '.join(incompatible))
     forge, model = args.forge.resolve(), args.model.resolve()
     if not forge.is_file() or not model.is_file():
         parser.error('forge and model must exist')
@@ -113,6 +122,7 @@ def main():
     metadata = {'schema_version': 2, 'harness': 'forge',
                 'model_file': model.name, 'model_sha256': digest(model), 'gpu_layers': args.gpu_layers,
                 'chat_template': args.chat_template or 'embedded',
+                'prompt_protocol': args.prompt_protocol,
                 'forge_binary_sha256': digest(forge),
                 'forge_runtime_bundle': runtime_bundle(forge),
                 'fixture_preparation': FIXTURE_PREPARATION,
@@ -146,6 +156,7 @@ def main():
             before_protected = snapshot_protected(root, task)
             command = [str(forge), 'run', task['prompt'], '--workspace', str(root),
                        '--model', str(model), '--gpu-layers', args.gpu_layers,
+                       '--prompt-protocol', args.prompt_protocol,
                        '--context', args.context, '--output-reserve', str(args.output_reserve),
                        '--temperature', str(args.temperature), '--seed', str(args.seed),
                        '--allow-write', '--allow-exec', '--json', '--max-turns',
@@ -187,6 +198,7 @@ def main():
                       'end_to_end_seconds': end_to_end}
             record = {'schema_version': 2, 'run_id': run_id, 'task': task['id'],
                       'variant': variant, 'repetition': repetition, 'order_index': order_index,
+                      'prompt_protocol': args.prompt_protocol,
                       'order_seed': args.order_seed, 'returncode': process_result['returncode'],
                       'wall_seconds': end_to_end, 'timing': timing, 'passed': passed,
                       'protected_files_unchanged': unchanged,

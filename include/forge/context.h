@@ -30,6 +30,11 @@ typedef struct {
 } forge_segment_view;
 typedef size_t (*forge_count_tokens_fn)(const char *, void *);
 forge_context *forge_context_create(size_t capacity, size_t reserve, forge_count_tokens_fn, void *);
+/* Select the logical prompt renderer. The default is FORGE_PROMPT_FLATTENED. */
+forge_status forge_context_set_prompt_protocol(forge_context *, forge_prompt_protocol);
+/* Override counting for the complete rendered prompt while retaining the
+ * create-time callback for individual segment costs. */
+forge_status forge_context_set_prompt_counter(forge_context *, forge_count_tokens_fn);
 uint64_t forge_context_add(forge_context *, forge_segment_kind, const char *, int priority,
                            bool pinned, uint64_t dependency, uint64_t generation);
 forge_status forge_context_update(forge_context *, uint64_t id, const char *, uint64_t generation);
