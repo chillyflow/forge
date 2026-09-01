@@ -1,0 +1,13 @@
+# Project-scoped MCP configuration for Serena. Codex loads this file only when
+# this repository is trusted.
+[mcp_servers.serena]
+command = "serena"
+args = [
+  "start-mcp-server",
+  "--project-from-cwd",
+  "--context=codex",
+  "--open-web-dashboard",
+  "false",
+]
+startup_timeout_sec = 90
+tool_timeout_sec = 240
