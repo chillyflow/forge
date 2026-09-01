@@ -21,7 +21,7 @@ def version(command):
 
 def source_identity(root):
     benchmark = root / 'benchmark'
-    paths = sorted([*benchmark.glob('*.py'), benchmark / 'README.md',
+    paths = sorted([*benchmark.glob('*.py'), *benchmark.glob('*.md'),
                     benchmark / 'requirements-aider.txt'])
     return {path.relative_to(root).as_posix(): {'sha256': digest(path),
                                                 'bytes': path.stat().st_size}

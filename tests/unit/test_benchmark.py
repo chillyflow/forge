@@ -129,23 +129,59 @@ class FixtureTests(unittest.TestCase):
         records = []
         for repetition, seconds in enumerate((1.0, 2.0, 6.0), 1):
             records.append({'task': 'a', 'repetition': repetition, 'passed': repetition != 3,
-                            'wall_seconds': seconds,
-                            'timing': {'end_to_end_seconds': seconds, 'agent_seconds': seconds - .2,
+                            'wall_seconds': seconds, 'language': 'python', 'category': 'api',
+                            'timing': {'end_to_end_seconds': seconds,
+                                       'agent_seconds': seconds - .2,
                                        'startup_seconds': .1, 'verification_seconds': .1},
-                            'metrics': {'generated_tokens': 10 * repetition},
+                            'metrics': {'prompt_tokens': 100,
+                                        'generated_tokens': 10 * repetition},
                             'fixture_preparation': 'v2', 'fixture_sha256': 'same',
                             'fixture_files': {'a.py': 'hash'},
+                            'protected_files': {'test_a.py': 'protected'},
                             'resource_usage': {'peak_process_tree_rss_bytes': 100 * repetition,
                                                'peak_gpu_used_bytes': 200 * repetition}})
         summary = REPORT.summarize(records)
         self.assertEqual(summary['passed'], 2)
         self.assertEqual(summary['end_to_end_seconds']['p50'], 2.0)
         self.assertGreater(summary['end_to_end_seconds']['stdev'], 0)
+        self.assertEqual(summary['pass_rate_ci']['estimate'], 2 / 3)
+        self.assertIn('python', summary['per_language'])
+        self.assertIn('api', summary['per_category'])
+        comparisons = REPORT.pairwise_comparisons(
+            {'one': records, 'two': [dict(record) for record in records]})
+        self.assertEqual(comparisons['two minus one']['both_passed_pairs'], 2)
+        self.assertEqual(
+            comparisons['two minus one']['matched_end_to_end_difference_seconds'], 0.0)
         REPORT.validate_groups({'one': records, 'two': [dict(record) for record in records]})
         changed = [dict(record) for record in records]
         changed[0]['fixture_sha256'] = 'different'
         with self.assertRaises(ValueError):
             REPORT.validate_groups({'one': records, 'two': changed})
+
+
+    def test_measurement_gate_rejects_zero_tokens_and_order_drift(self):
+        records = []
+        for task, repetition, order_index in BENCH.schedule(['a', 'b'], 2, 7):
+            records.append({
+                'schema_version': 2, 'run_id': f'{task}-r{repetition:03d}',
+                'task': task, 'repetition': repetition, 'order_index': order_index,
+                'order_seed': 7, 'passed': True, 'protected_files_unchanged': True,
+                'timing': {'lifecycle': 'cold', 'startup_seconds': .1,
+                           'agent_seconds': .2, 'verification_seconds': .1,
+                           'end_to_end_seconds': .4},
+                'metrics': {'prompt_tokens': 10, 'generated_tokens': 2},
+                'resource_usage': {'peak_process_tree_rss_bytes': 100,
+                                   'peak_gpu_used_bytes': 200},
+            })
+        REPORT.validate_measurements({'harness': records})
+        zero = json.loads(json.dumps(records))
+        zero[0]['metrics']['generated_tokens'] = 0
+        with self.assertRaises(ValueError):
+            REPORT.validate_measurements({'harness': zero})
+        reordered = list(records)
+        reordered[0], reordered[1] = reordered[1], reordered[0]
+        with self.assertRaises(ValueError):
+            REPORT.validate_measurements({'harness': reordered})
 
     def test_hash_changes_with_content_or_path(self):
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:

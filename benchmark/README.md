@@ -77,6 +77,11 @@ and checks an independent verifier after the model finishes. Modifying the
 original test file invalidates the result. Raw session artifacts are copied to
 the output directory before removing the runner-owned temporary checkout.
 
+The primary endpoints, interval method, matched-pair rule, subgroup reporting,
+measurement-invalid conditions, and claim scope are frozen in
+[`ANALYSIS.md`](ANALYSIS.md). The repeated parity gate validates the measurement
+layer only and is excluded from the primary 29-task dataset.
+
 ```sh
 python benchmark/run.py --forge ../build/forge --model /models/coder.gguf \
   --suite smoke --tasks add clamp --variants optimized no-kv no-semantic \
