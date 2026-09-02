@@ -10,7 +10,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import (check_tools, digest, load_tasks, materialize, runtime_bundle, write_json)
+from common import (check_tools, digest, load_tasks, materialize, platform_metadata,
+                    runtime_bundle, write_json)
 from aider import PINNED_AIDER_VERSION, parse_version
 
 
@@ -22,7 +23,9 @@ def version(command):
 def source_identity(root):
     benchmark = root / 'benchmark'
     paths = sorted([*benchmark.glob('*.py'), *benchmark.glob('*.md'),
-                    benchmark / 'requirements-aider.txt'])
+                    benchmark / 'requirements-aider.txt', root / 'CMakeLists.txt',
+                    *root.glob('cmake/**/*'), *root.glob('src/**/*'),
+                    *root.glob('include/**/*')])
     return {path.relative_to(root).as_posix(): {'sha256': digest(path),
                                                 'bytes': path.stat().st_size}
             for path in paths if path.is_file()}
@@ -39,6 +42,8 @@ def main():
     parser.add_argument('--suite', default='all')
     parser.add_argument('--tasks', nargs='*', default=[])
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--require-clean', action='store_true',
+                        help='Refuse a freeze with tracked or untracked Git changes')
     parser.add_argument('--context', type=int, default=16384)
     parser.add_argument('--output-reserve', type=int, default=2048)
     parser.add_argument('--max-turns', type=int, default=16)
@@ -51,6 +56,11 @@ def main():
     parser.add_argument('--order-seed', type=int, default=20260831)
     parser.add_argument('--lifecycle', choices=['cold', 'warm'], default='cold')
     args = parser.parse_args()
+    root = Path(__file__).resolve().parents[1]
+    git_revision = version(['git', '-C', str(root), 'rev-parse', 'HEAD'])
+    git_status = version(['git', '-C', str(root), 'status', '--short', '--untracked-files=all'])
+    if args.require_clean and git_status:
+        parser.error('A clean revision is required; commit changes or use a clean checkout')
     paths = {name: path.resolve() for name, path in {
         'forge': args.forge, 'opencode': args.opencode, 'aider': args.aider,
         'server': args.server, 'model': args.model}.items()}
@@ -59,7 +69,6 @@ def main():
             parser.error(f'{name} does not exist: {path}')
     tasks = load_tasks(args.task_dir, args.suite, args.tasks)
     check_tools(tasks)
-    root = Path(__file__).resolve().parents[1]
     task_identity = {}
     for path, task in tasks:
         with tempfile.TemporaryDirectory(prefix='forge-freeze-') as temporary:
@@ -72,13 +81,13 @@ def main():
     aider_python = paths['aider'].parent / ('python.exe' if os.name == 'nt' else 'python')
     packages = (version([str(aider_python), '-m', 'pip', 'freeze', '--all']).splitlines()
                 if aider_python.is_file() else [])
-    git_revision = version(['git', '-C', str(root), 'rev-parse', 'HEAD'])
-    git_status = version(['git', '-C', str(root), 'status', '--short'])
     frozen = {
         'schema_version': 1,
         'git_revision': git_revision,
         'git_status_at_freeze': git_status.splitlines(),
         'source_files': source_identity(root),
+        'clean_revision_required': args.require_clean,
+        'hardware': platform_metadata(),
         'configuration': {'suite': args.suite, 'tasks': args.tasks or 'all',
                           'context_tokens': args.context,
                           'output_reserve': args.output_reserve,
@@ -103,6 +112,10 @@ def main():
                   'sha256': digest(paths['model'])},
         'tasks': task_identity,
     }
+    if args.require_clean and (
+            version(['git', '-C', str(root), 'rev-parse', 'HEAD']) != git_revision or
+            version(['git', '-C', str(root), 'status', '--short', '--untracked-files=all'])):
+        parser.error('Source changed while freezing; no protocol lock written')
     encoded = json.dumps(frozen, sort_keys=True, separators=(',', ':')).encode('utf-8')
     frozen['protocol_sha256'] = hashlib.sha256(encoded).hexdigest()
     frozen['created_utc'] = datetime.now(timezone.utc).isoformat()

@@ -328,6 +328,7 @@ class FixtureTests(unittest.TestCase):
                         FREEZE,
                         load_tasks=mock.Mock(return_value=[(task_path, task)]),
                         check_tools=mock.Mock(),
+                        platform_metadata=mock.Mock(return_value={'gpu': 'test device'}),
                         source_identity=mock.Mock(return_value={}),
                         runtime_bundle=mock.Mock(return_value={'files': []}),
                         version=mock.Mock(return_value=FREEZE.PINNED_AIDER_VERSION)):
@@ -353,7 +354,8 @@ class FixtureTests(unittest.TestCase):
                 commands[label] = command
                 return 0
 
-            argv = ['campaign.py', '--output', str(output)]
+            argv = ['campaign.py', '--output', str(output), '--task-dir', str(root / 'holdout'),
+                    '--require-clean']
             for name, path in binaries.items():
                 argv += [f'--{name}', str(path)]
             with mock.patch.object(CAMPAIGN, 'execute', execute), \
@@ -365,8 +367,27 @@ class FixtureTests(unittest.TestCase):
                 self.assertEqual(commands[label][index + 1], 'native')
             self.assertNotIn('--prompt-protocol', commands['opencode'])
             self.assertNotIn('--prompt-protocol', commands['aider'])
+            for label in ('preflight', 'freeze', 'forge', 'opencode', 'aider'):
+                index = commands[label].index('--task-dir')
+                self.assertEqual(pathlib.Path(commands[label][index + 1]), root / 'holdout')
+            self.assertIn('--require-clean', commands['freeze'])
             campaign = json.loads((output / 'campaign.json').read_text(encoding='utf-8'))
             self.assertEqual(campaign['prompt_protocol'], 'native')
+
+    def test_clean_freeze_rejects_dirty_source_before_loading_tasks(self):
+        argv = ['freeze.py', '--require-clean', '--output', 'unused.json']
+        for name in ('forge', 'opencode', 'aider', 'server', 'model'):
+            argv += [f'--{name}', 'unused']
+        for status in (' M src/core/agent.c', '?? benchmark/new_task.json'):
+            with self.subTest(status=status), \
+                    mock.patch.object(FREEZE.sys, 'argv', argv), \
+                    mock.patch.object(FREEZE, 'version', side_effect=['abc123', status]), \
+                    mock.patch.object(FREEZE, 'load_tasks') as load, \
+                    contextlib.redirect_stderr(io.StringIO()), \
+                    self.assertRaises(SystemExit) as raised:
+                FREEZE.main()
+            self.assertEqual(raised.exception.code, 2)
+            load.assert_not_called()
 
     def test_consolidation_checks_complete_fixture_sets(self):
         environment: dict = {key: 'same' for key in CONSOLIDATE.IDENTITY}

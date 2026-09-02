@@ -48,6 +48,10 @@ The per-segment estimate is the caller's token count plus the existing 16-token
 framing allowance. The complete rendered prompt is counted again and must fit
 `capacity - reserve`; the final check is authoritative when token boundaries or
 framing differ from the sum of estimates.
+If template overhead makes that prompt too large, the planner removes optional
+admissions in reverse selection order and recounts after each removal. Shared
+dependencies, pinned closures, and native call/result pairs remain intact.
+It returns a limit error if the rendered pinned prompt alone cannot fit.
 
 ## Metadata, updates, and invalidation
 

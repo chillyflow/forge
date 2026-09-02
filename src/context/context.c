@@ -620,8 +620,10 @@ char *forge_context_plan(forge_context *c, size_t *tokens, size_t *evicted, forg
     work.nodes = malloc(n * sizeof(*work.nodes));
     work.seen = calloc(n, sizeof(*work.seen));
     bool *considered = calloc(n, sizeof(*considered));
+    size_t *admitted = calloc(n, sizeof(*admitted));
+    size_t bundles = 0;
     char *out = NULL;
-    if (!work.stack || !work.nodes || !work.seen || !considered) {
+    if (!work.stack || !work.nodes || !work.seen || !considered || !admitted) {
         fg_error(e, FORGE_ERR_MEMORY, "Context closure allocation failed");
         goto finish;
     }
@@ -665,25 +667,42 @@ char *forge_context_plan(forge_context *c, size_t *tokens, size_t *evicted, forg
         size_t cost;
         if (collect_bundle(c, best, &work, &cost) == FORGE_OK && cost <= budget - used) {
             used += cost;
+            bundles++;
+            for (size_t j = 0; j < work.count; j++)
+                admitted[work.nodes[j]] = bundles;
             select_bundle(c, &work);
         }
+    }
+    size_t actual = 0;
+    for (;;) {
+        out = render_selected(c);
+        if (!out) {
+            fg_error(e, FORGE_ERR_MEMORY, "Prompt allocation failed");
+            goto finish;
+        }
+        actual = c->count_prompt_tokens(out, c->user);
+        if (actual <= budget)
+            break;
+        free(out);
+        out = NULL;
+        if (!bundles) {
+            fg_error(e, FORGE_ERR_LIMIT, "Rendered pinned prompt exceeds context budget");
+            goto finish;
+        }
+        /* Template overhead is not additive. Undo optional admissions in reverse
+         * priority order until the complete prompt fits. An admission contains
+         * only newly selected nodes: shared parents from earlier admissions and
+         * the entire pinned closure remain selected. Native calls/results thus
+         * stay paired, and no selected node loses a dependency. */
+        for (size_t i = 0; i < c->count; i++)
+            if (admitted[i] == bundles)
+                c->items[i].view.selected = false;
+        bundles--;
     }
     size_t dropped = 0;
     for (size_t i = 0; i < c->count; i++)
         if (!c->items[i].view.selected && !c->items[i].view.stale)
             dropped++;
-    out = render_selected(c);
-    if (!out) {
-        fg_error(e, FORGE_ERR_MEMORY, "Prompt allocation failed");
-        goto finish;
-    }
-    size_t actual = c->count_prompt_tokens(out, c->user);
-    if (actual > budget) {
-        free(out);
-        out = NULL;
-        fg_error(e, FORGE_ERR_LIMIT, "Rendered prompt exceeds context budget");
-        goto finish;
-    }
     if (tokens)
         *tokens = actual;
     if (evicted)
@@ -696,6 +715,7 @@ finish:
     free(work.nodes);
     free(work.seen);
     free(considered);
+    free(admitted);
     if (!out)
         clear_selection(c);
     return out;

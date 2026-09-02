@@ -18,6 +18,18 @@ static size_t count_complete_prompt(const char *text, void *user) {
     (void)user;
     return 7;
 }
+static size_t count_template_overhead(const char *text, void *user) {
+    (void)user;
+    return strlen(text) + 200;
+}
+static size_t count_native_messages(const char *text, void *user) {
+    (void)user;
+    yyjson_doc *doc = yyjson_read(text, strlen(text), 0);
+    assert(doc);
+    size_t count = yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "messages"));
+    yyjson_doc_free(doc);
+    return count * 100;
+}
 static forge_segment_view view(const forge_context *c, size_t index) {
     forge_segment_view v = {0};
     assert(forge_context_get(c, index, &v));
@@ -673,6 +685,54 @@ static void test_native_rejects_ambiguous_result_pairing(void) {
     forge_context_destroy(native);
 }
 
+static void test_rendered_budget_compaction(void) {
+    forge_context *c = forge_context_create(301, 1, count_chars, NULL);
+    assert(c && forge_context_set_prompt_counter(c, count_template_overhead) == FORGE_OK);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "goal", 100, true, 0, 0));
+    uint64_t shared = forge_context_add(c, FORGE_SEG_SOURCE, "shared", 0, false, 0, 0);
+    assert(shared);
+    assert(forge_context_add(c, FORGE_SEG_SOURCE, "keep", 100, false, shared, 0));
+    assert(forge_context_add(c, FORGE_SEG_SOURCE,
+                             "drop: optional evidence with enough text to exhaust the rendered "
+                             "budget while the estimates still allow the whole dependency graph",
+                             0, false, shared, 0));
+    size_t tokens = 0, evicted = 0;
+    char *prompt = render(c, &tokens, &evicted);
+    assert(tokens == strlen(prompt) + 200 && tokens <= 300 && evicted == 1);
+    assert(view(c, 0).selected && view(c, 1).selected && view(c, 2).selected);
+    assert(!view(c, 3).selected && !strstr(prompt, "drop:"));
+    free(prompt);
+    forge_context_pin(c, view(c, 3).id, true);
+    forge_error error = {0};
+    assert(!forge_context_plan(c, &tokens, &evicted, &error));
+    assert(error.code == FORGE_ERR_LIMIT && !tokens && !evicted);
+    for (size_t i = 0; i < forge_context_size(c); i++)
+        assert(!view(c, i).selected);
+    forge_context_destroy(c);
+
+    c = forge_context_create(501, 1, count_chars, NULL);
+    assert(c && forge_context_set_prompt_protocol(c, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    assert(forge_context_set_prompt_counter(c, count_native_messages) == FORGE_OK);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "goal", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TOOLS, "[]", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TASK, "task", 100, true, 0, 0));
+    uint64_t action = forge_context_add(c, FORGE_SEG_ACTION,
+                                        "{\"tool\":\"read_file\",\"args\":{\"path\":\"old.c\"}}",
+                                        80, false, 0, 1);
+    assert(action && forge_context_add(c, FORGE_SEG_RESULT, "old", 80, false, action, 1));
+    action = forge_context_add(c, FORGE_SEG_ACTION,
+                               "{\"tool\":\"read_file\",\"args\":{\"path\":\"new.c\"}}", 80, false,
+                               0, 2);
+    assert(action && forge_context_add(c, FORGE_SEG_RESULT, "current", 100, true, action, 2));
+    prompt = render(c, &tokens, &evicted);
+    assert(tokens == 400 && evicted == 2);
+    assert(!view(c, 3).selected && !view(c, 4).selected);
+    assert(view(c, 5).selected && view(c, 6).selected);
+    assert(strstr(prompt, "new.c") && !strstr(prompt, "old.c"));
+    free(prompt);
+    forge_context_destroy(c);
+}
+
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -689,6 +749,7 @@ int main(void) {
     test_stable_cache_anchor();
     test_flattened_bytes_and_native_role_pairs();
     test_native_rejects_ambiguous_result_pairing();
+    test_rendered_budget_compaction();
     puts("Context DAG and snapshot tests passed");
     return 0;
 }

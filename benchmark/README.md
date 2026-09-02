@@ -112,6 +112,14 @@ prompt and verifier.
 
 ## Reporting
 
+The [September 2 holdout protocol](holdout/2026-09-02/ANALYSIS.md) defines a
+separate 12-task evaluation population. `campaign.py --task-dir PATH` forwards
+that population to preflight, freeze, and every harness. Use `--require-clean`
+for promotion runs; freeze refuses tracked or untracked source changes and
+checks the revision again after hashing. Output must be outside the source
+tree or in an ignored directory. The lock includes production source hashes
+and hardware metadata as well as the existing runtime and fixture identities.
+
 The [tranche-2 native development report](results/2026-09-02-tranche2-native/README.md)
 publishes the 261-run matrix, task-cluster intervals, timing/token tables,
 failed-workspace sources and original freeze lock. It also records why the

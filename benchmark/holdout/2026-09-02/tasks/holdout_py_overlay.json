@@ -1,0 +1,21 @@
+{
+  "id": "holdout_py_overlay",
+  "suite": "holdout-2026-09-02",
+  "language": "python",
+  "category": "api",
+  "prompt": "overlay recursively combines configuration dictionaries. Override values replace defaults; nested dictionaries merge, None deletes a key, and lists replace in full. The returned data must share no mutable containers with either input. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-v"
+  ],
+  "files": {
+    "service.py": "from copy import deepcopy\ndef overlay(base, changes):\n    result = deepcopy(base)\n    for key, value in changes.items():\n        if value is None:\n            result.pop(key, None)\n        elif isinstance(value, dict) and isinstance(result.get(key), dict):\n            result[key] = overlay(result[key], value)\n        else:\n            result[key] = value\n    return result\n",
+    "test_service.py": "import unittest\nfrom service import overlay\nclass Overlay(unittest.TestCase):\n    def test_merge_and_delete(self):\n        base = {'db': {'port': 1, 'host': 'local'}, 'tags': ['base'], 'remove': 1}\n        changes = {'db': {'port': 2}, 'tags': ['new'], 'remove': None}\n        result = overlay(base, changes)\n        self.assertEqual(result, {'db': {'port': 2, 'host': 'local'}, 'tags': ['new']})\n        result['tags'].append('later')\n        result['db']['host'] = 'elsewhere'\n        self.assertEqual(changes['tags'], ['new'])\n        self.assertEqual(base['db']['host'], 'local')\n    def test_container_replacement(self):\n        changes = {'x': {'nested': []}}\n        result = overlay({'x': 1}, changes)\n        result['x']['nested'].append(3)\n        self.assertEqual(changes['x']['nested'], [])\n        self.assertEqual(overlay({'a': 2}, {'absent': None}), {'a': 2})\n"
+  },
+  "oracle_files": {
+    "service.py": "from copy import deepcopy\ndef overlay(base, changes):\n    result = deepcopy(base)\n    for key, value in changes.items():\n        if value is None:\n            result.pop(key, None)\n        elif isinstance(value, dict) and isinstance(result.get(key), dict):\n            result[key] = overlay(result[key], value)\n        else:\n            result[key] = deepcopy(value)\n    return result\n"
+  }
+}

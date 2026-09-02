@@ -28,6 +28,8 @@ def main():
     parser.add_argument('--server', type=Path, required=True)
     parser.add_argument('--model', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--task-dir', type=Path, default=Path(__file__).parent / 'tasks')
+    parser.add_argument('--require-clean', action='store_true')
     parser.add_argument('--tasks', nargs='*')
     parser.add_argument('--repetitions', type=int)
     parser.add_argument('--order-seed', type=int, default=20260831)
@@ -63,7 +65,8 @@ def main():
         env['PATH'] = str(bundled_go) + os.pathsep + env.get('PATH', '')
     python = sys.executable
     directory = Path(__file__).resolve().parent
-    common = ['--suite', 'all', '--repetitions', str(repetitions),
+    common = ['--task-dir', str(args.task_dir.resolve()),
+              '--suite', 'all', '--repetitions', str(repetitions),
               '--order-seed', str(args.order_seed), '--timeout', str(args.timeout),
               '--verification-timeout', str(args.verification_timeout),
               '--context', str(args.context), '--output-reserve', str(args.output_reserve),
@@ -76,6 +79,7 @@ def main():
         common += ['--chat-template', args.chat_template]
     codes = {}
     preflight = [python, str(directory / 'preflight.py'), '--suite', 'all',
+                 '--task-dir', str(args.task_dir.resolve()),
                  '--output', str(output / 'preflight.json')]
     if tasks:
         preflight += ['--tasks', *tasks]
@@ -88,6 +92,7 @@ def main():
     freeze = [python, str(directory / 'freeze.py'), '--forge', str(args.forge.resolve()),
               '--opencode', str(args.opencode.resolve()), '--aider', str(args.aider.resolve()),
               '--server', str(args.server.resolve()), '--model', str(args.model.resolve()),
+              '--task-dir', str(args.task_dir.resolve()),
               '--suite', 'all', '--output', str(output / 'protocol-lock.json'),
               '--context', str(args.context), '--output-reserve', str(args.output_reserve),
               '--max-turns', str(args.max_turns), '--gpu-layers', args.gpu_layers,
@@ -96,6 +101,8 @@ def main():
               '--temperature', str(args.temperature), '--seed', str(args.seed),
               '--repetitions', str(repetitions), '--order-seed', str(args.order_seed),
               '--lifecycle', 'cold']
+    if args.require_clean:
+        freeze += ['--require-clean']
     if tasks:
         freeze += ['--tasks', *tasks]
     codes['freeze'] = execute('freeze', freeze, env)
@@ -125,6 +132,8 @@ def main():
                   '--run', f'Aider={output / "aider"}', '--output', str(output / 'report')]
         codes['report'] = execute('report', report, env)
     write_json(output / 'campaign.json', {'schema_version': 1, 'mode': args.mode,
+                                          'task_dir': str(args.task_dir.resolve()),
+                                          'require_clean': args.require_clean,
                                           'tasks': tasks or 'all',
                                           'prompt_protocol': args.prompt_protocol,
                                           'repetitions': repetitions,
