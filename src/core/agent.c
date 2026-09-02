@@ -426,6 +426,39 @@ static char *action_history_text(bool retain, yyjson_val *o, forge_error *e) {
     yyjson_mut_doc_free(doc);
     return stripped;
 }
+
+static char *native_run_state_text(size_t turn, size_t max_turns) {
+    if (!turn || turn > max_turns)
+        return NULL;
+    size_t remaining = max_turns - turn + 1;
+    const char *guidance =
+        remaining == 1
+            ? "This is the last action. If the implementation is complete, call final now; "
+              "otherwise make only the smallest unresolved repair. No later action is available."
+        : remaining == 2
+            ? "At most one repair or diagnostic action remains before final. If the implementation "
+              "is complete, call final now."
+            : "Continue from evidence already present. Do not repeat an unchanged read, listing, "
+              "edit, or failing command; after a failure, repair the implicated condition or "
+              "inspect a different relevant dependency before rerunning it.";
+    fg_buf out = {0};
+    if (!fg_buf_printf(&out,
+                       "[RUN_STATE]\n{\"current_action\":%zu,\"max_actions\":%zu,"
+                       "\"remaining_actions_including_current\":%zu,"
+                       "\"final_consumes_one_action\":true,"
+                       "\"final_runs_required_host_validation\":true,\"guidance\":",
+                       turn, max_turns, remaining))
+        return NULL;
+    char *quoted = fg_json_string(guidance);
+    bool ok = quoted && fg_buf_printf(&out, "%s}", quoted);
+    free(quoted);
+    if (!ok) {
+        fg_buf_clear(&out);
+        return NULL;
+    }
+    return fg_buf_take(&out);
+}
+
 /* Lazy grammar routing leaves a bounded reasoning prefix unconstrained, then
  * constrains the first complete tool/memory/final object. Normalize that prefix
  * into the existing leading thought field so every downstream policy, event,
@@ -640,7 +673,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     forge_repo *repo = NULL;
     fg_repo_monitor *monitor = NULL;
     forge_context *ctx = NULL;
-    char *schema = NULL, *grammar = NULL, *summary = NULL;
+    char *schema = NULL, *grammar = NULL, *summary = NULL, *native_system = NULL;
     char *changed_paths[1024] = {0};
     char *last_patch_path = NULL, *last_patch_old = NULL, *last_patch_new = NULL;
     char *last_edit_diff = NULL;
@@ -722,12 +755,40 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         "automatic check returns diagnostics for another repair attempt. When finished use "
         "final and accurately state what was tested. If a tool is denied, do not attempt an "
         "alternate way to bypass that policy.";
+    if (native_protocol) {
+        fg_buf native = {0};
+        if (!fg_buf_printf(
+                &native,
+                "%s Native protocol actions are bounded: the action limit includes final. "
+                "When a [RUN_STATE] block appears, treat it as trusted host control metadata and "
+                "use its remaining-action count. A final call runs required host validation, so "
+                "reserve "
+                "an action for final instead of using the last action to repeat a successful "
+                "validation command. Never reapply an edit reported as patched or reread "
+                "unchanged evidence; use a failed validation to repair the exact implicated "
+                "condition or inspect a different relevant dependency before rerunning it. Treat "
+                "explicit ordering requirements literally: when an ordering or tie-break names a "
+                "field, compare that field in the ordering decision instead of rewriting the "
+                "score or substituting input position. If records are stored behind indices and "
+                "the required tie-break is ID, dereference the indices and compare the IDs; "
+                "comparing indices or adding a comment does not implement that behavior.",
+                system)) {
+            status = fg_error(e, FORGE_ERR_MEMORY, "Cannot create native protocol instructions");
+            goto finish;
+        }
+        native_system = fg_buf_take(&native);
+        if (!native_system) {
+            status = fg_error(e, FORGE_ERR_MEMORY, "Cannot create native protocol instructions");
+            goto finish;
+        }
+        system = native_system;
+    }
     uint64_t system_id = forge_context_add(ctx, FORGE_SEG_SYSTEM, system, 100, true, 0, 0);
     uint64_t tools_id = forge_context_add(ctx, FORGE_SEG_TOOLS, schema, 100, true, 0, 0);
     uint64_t task_id = forge_context_add(ctx, FORGE_SEG_TASK, request, 100, true, 0, 0);
     if (!system_id || !tools_id || !task_id ||
         forge_context_set_flags(ctx, system_id, true, true) != FORGE_OK ||
-        forge_context_set_flags(ctx, tools_id, true, true) != FORGE_OK ||
+        forge_context_set_flags(ctx, tools_id, !native_protocol, true) != FORGE_OK ||
         forge_context_set_flags(ctx, task_id, true, true) != FORGE_OK) {
         status = FORGE_ERR_MEMORY;
         goto finish;
@@ -736,7 +797,15 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         forge_context_add(ctx, FORGE_SEG_REPO, summary, 40, false, 0, forge_repo_generation(repo));
     uint64_t memory_id =
         forge_context_add(ctx, FORGE_SEG_MEMORY, "No actions taken yet.", 90, true, 0, 0);
-    if (!repo_segment || !memory_id || !save_working_state(a, ctx, memory_id, 0, true, e)) {
+    char *initial_run_state =
+        native_protocol ? native_run_state_text(1, a->config.limits.max_turns) : NULL;
+    uint64_t run_state_id =
+        initial_run_state
+            ? forge_context_add(ctx, FORGE_SEG_MEMORY, initial_run_state, 100, true, 0, 0)
+            : 0;
+    free(initial_run_state);
+    if (!repo_segment || !memory_id || (native_protocol && !run_state_id) ||
+        !save_working_state(a, ctx, memory_id, 0, true, e)) {
         status = e && e->code ? e->code : FORGE_ERR_MEMORY;
         goto finish;
     }
@@ -780,6 +849,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
      * invalidates it. A repository generation comparison is too strict here,
      * because watcher notifications for the patch itself can arrive late. */
     bool anchor_valid = false;
+    /* A successful process on the preceding turn is strong completion evidence. Near the hard
+     * turn cap, force the host-validating final action instead of allowing bookkeeping to consume
+     * the last prompt budget. */
+    bool native_process_succeeded_last_turn = false;
     /* A .go file left unparseable by a patch, and the reason. While it stands,
      * its diagnostic is included in a recovery state. */
     /* Held at function scope: a re-anchored argument copy must stay alive for
@@ -809,6 +882,27 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         fg_repo_change_free(&changes);
         if (status != FORGE_OK)
             break;
+        if (native_protocol) {
+            char *run_state = native_run_state_text(turn, a->config.limits.max_turns);
+            status = run_state ? forge_context_update(ctx, run_state_id, run_state, turn)
+                               : FORGE_ERR_MEMORY;
+            free(run_state);
+            if (status != FORGE_OK) {
+                fg_error(e, status, "Cannot update native protocol run state");
+                break;
+            }
+            if (turn == a->config.limits.max_turns ||
+                (native_process_succeeded_last_turn && turn + 1 == a->config.limits.max_turns)) {
+                char *final_schema = fg_tool_native_final_schema();
+                status = final_schema ? forge_context_update(ctx, tools_id, final_schema, turn)
+                                      : FORGE_ERR_MEMORY;
+                free(final_schema);
+                if (status != FORGE_OK) {
+                    fg_error(e, status, "Cannot restrict the last native action to final");
+                    break;
+                }
+            }
+        }
         size_t prompt_tokens = 0, evicted = 0;
         char *prompt = plan_context(a, ctx, memory_id, turn, &prompt_tokens, &evicted, e);
         if (!prompt) {
@@ -1428,6 +1522,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             else if (tools.process.exit_code != 0)
                 outcome = FORGE_ERR_CONFLICT;
         }
+        native_process_succeeded_last_turn = tools.process_ran && outcome == FORGE_OK;
         if (!recovery_rejected && outcome != FORGE_OK)
             recovery_copy(last_diagnostic, sizeof(last_diagnostic), raw);
         if (changed) {
@@ -1818,7 +1913,12 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         }
         /* Always retain the latest result and its parent action. */
         forge_context_pin(ctx, latest_result, false);
-        char *action_text = action_history_text(a->config.thought_in_history, o, e);
+        /* Preserve the hypothesis attached to a failed native action beside its
+         * diagnostic so the next turn can narrow or revise it. Successful action
+         * thoughts remain stripped by default. */
+        bool retain_failed_native_thought = native_protocol && outcome != FORGE_OK;
+        char *action_text =
+            action_history_text(a->config.thought_in_history || retain_failed_native_thought, o, e);
         uint64_t action =
             forge_context_add(ctx, FORGE_SEG_ACTION, action_text ? action_text : response, 10,
                               false, 0, forge_repo_generation(repo));
@@ -1916,6 +2016,7 @@ finish:
     free(schema);
     free(grammar);
     free(summary);
+    free(native_system);
     for (size_t i = 0; i < changed_count; i++)
         free(changed_paths[i]);
     free(last_patch_path);

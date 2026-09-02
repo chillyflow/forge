@@ -56,11 +56,11 @@ python benchmark/run.py --forge /tools/forge --model /models/coder.gguf \
 ```
 
 Forge protocol A/B runs use separate output directories with
-`--prompt-protocol flattened` or `--prompt-protocol native`. `flattened` is the
-default. The runner forwards the selected arm to Forge and records it in the
-environment and every result record; `campaign.py` also includes it in the
-protocol lock and campaign manifest. OpenCode and Aider retain their own native
-harness protocols.
+`--prompt-protocol native` or `--prompt-protocol flattened`. `native` is the
+default; flattened remains the byte-compatible legacy arm. The runner forwards
+the selected arm to Forge and records it in the environment and every result
+record; `campaign.py` also includes it in the protocol lock and campaign
+manifest. OpenCode and Aider retain their own native harness protocols.
 
 Portability checks use new per-model output directories and the same selected
 task subset; never consolidate token counts across model tokenizers.
@@ -111,6 +111,11 @@ Do not point native `forge bench` at a valuable checkout without reviewing the
 prompt and verifier.
 
 ## Reporting
+
+The [tranche-2 native development report](results/2026-09-02-tranche2-native/README.md)
+publishes the 261-run matrix, task-cluster intervals, timing/token tables,
+failed-workspace sources and original freeze lock. It also records why the
+positive Forge/OpenCode interval does not close the clean-holdout promotion gate.
 
 Report GGUF filename/SHA-256, llama.cpp revision, GPU/driver, context size, output
 budget, GPU layers, sampling settings, harness version, verification command,

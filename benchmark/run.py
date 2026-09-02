@@ -78,8 +78,8 @@ def main():
     parser.add_argument('--gpu-layers', default='-1')
     parser.add_argument('--chat-template', default=None,
                         help='llama.cpp chat template name; default uses the template embedded in the GGUF')
-    parser.add_argument('--prompt-protocol', choices=PROMPT_PROTOCOLS, default='flattened',
-                        help='Forge prompt/tool protocol arm; default preserves flattened prompts')
+    parser.add_argument('--prompt-protocol', choices=PROMPT_PROTOCOLS, default='native',
+                        help='Forge prompt/tool protocol arm; default uses native roles/tools')
     parser.add_argument('--context', default='16384')
     parser.add_argument('--output-reserve', type=int, default=2048)
     parser.add_argument('--temperature', type=float, default=0.0)

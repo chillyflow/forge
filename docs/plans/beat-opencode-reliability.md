@@ -28,6 +28,27 @@ The four first-line regression clusters are:
 
 ## Tranches
 
+### September 2 checkpoint
+
+The [tranche-2 development campaign](../../benchmark/results/2026-09-02-tranche2-native/README.md)
+records Forge 83/87, OpenCode 71/87, and Aider 69/87. The task-cluster bootstrap
+interval for Forge minus OpenCode is +13.79 percentage points
+[+3.45, +27.59]; matched successful-pair E2E time favors Forge by a median
+5.46 seconds [4.04, 6.62]. All scheduled failures remain included.
+
+This does not close promotion gate 5: the campaign froze an uncommitted tree,
+reused development tasks, and includes diagnostic-specific repair guidance.
+OpenCode's resumed execution also has provenance limits documented in the report.
+Keep the original promotion requirements below unchanged.
+
+Same-binary gate 11 passed the four regression tasks at 12/12, and invariant
+gate 3 passed 60/60, both without loop warnings. The full campaign reproduced
+only 11/12 on the regression tasks: quota allocation repaired the code but
+exhausted the prompt budget before completion. Atomic transfers failed 0/3
+against OpenCode's 1/3, so gate 3 remains open. Dependency ordering and event
+replay passed 3/3 each. Next work is the atomic-transfer repair loop, completion
+under prompt pressure, and a new evaluation frozen from a clean revision.
+
 ### Tranche 1 — edit, validate, recover
 
 Deliver together because each feature closes a different part of the same
@@ -102,4 +123,3 @@ Do not prioritize disabling KV reuse, semantic compression, the grammar fast
 path, or compaction: recent ablations showed no correctness gain and generally
 increased latency or token use. Checkpoints and speculation remain later speed
 work; neither is expected to close this accuracy gap.
-

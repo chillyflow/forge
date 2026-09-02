@@ -191,6 +191,7 @@ class ConfigCliTests(unittest.TestCase):
         # fixed script response as stale. Keep both denial assertions and use
         # the real bounded snapshot fallback when supplied by CTest.
         result = self.cli("run", "Check permissions", "--script", fixture, "--json",
+                          "--prompt-protocol", "flattened",
                           executable=FALLBACK_FORGE or FORGE)
         events = [json.loads(line) for line in result.stdout.splitlines()]
         if FALLBACK_FORGE:

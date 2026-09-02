@@ -183,37 +183,90 @@ static bool native_schema_function(fg_buf *out, const char *name, const char *de
     return fg_buf_puts(out, "],\"additionalProperties\":false}}}");
 }
 
+static char *native_schema_description(const fg_tool_def *definition) {
+    const char *guidance = NULL;
+    if (!strcmp(definition->name, "apply_patch"))
+        guidance = " For a one-line logic fix, old_text and new_text must be the smallest unique "
+                   "differing span. Never resend an unchanged whole file. A successful native "
+                   "edit returns the updated file_sha256 for a later hunk.";
+    else if (!strcmp(definition->name, "apply_hunk"))
+        guidance =
+            " If the selected span has a terminating newline and new_text omits it, the host "
+            "preserves that line ending. Native hunks may select at most 32 lines and must "
+            "preserve "
+            "the selected line count for middle-of-file edits; use apply_patch with the smallest "
+            "exact old_text/new_text for a structural insertion or deletion. For a one-line fix, "
+            "use start=end and change only that line. A successful edit returns the updated "
+            "file_sha256 for another hunk.";
+    else if (!strcmp(definition->name, "list_directory"))
+        guidance = " Do not call when the repository summary already lists the relevant paths.";
+    else if (!strcmp(definition->name, "read_file"))
+        guidance = " Do not reread unchanged content already present in the transcript.";
+    else if (!strcmp(definition->name, "run_command"))
+        guidance =
+            " Do not rerun an unchanged failing command before a code change. After a successful "
+            "complete validation, call final next.";
+    if (!guidance)
+        return fg_strdup(definition->description);
+    fg_buf description = {0};
+    if (!fg_buf_puts(&description, definition->description) ||
+        !fg_buf_puts(&description, guidance)) {
+        fg_buf_clear(&description);
+        return NULL;
+    }
+    return fg_buf_take(&description);
+}
+
+static const char *native_final_description =
+    "Finish the task and trigger required host validation. The final call consumes one action; "
+    "use it once the implementation is complete. Answer must accurately state what changed and "
+    "only tests already observed.";
+
+char *fg_tool_native_final_schema(void) {
+    fg_buf out = {0};
+    if (!fg_buf_puts(&out, "[") ||
+        !native_schema_function(&out, "final", native_final_description, "answer:string", false) ||
+        !fg_buf_puts(&out, "]")) {
+        fg_buf_clear(&out);
+        return NULL;
+    }
+    return fg_buf_take(&out);
+}
+
 char *fg_tool_native_schema(void) {
     fg_buf out = {0};
     if (!fg_buf_puts(&out, "["))
         return NULL;
-    for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++)
-        if (!native_schema_function(&out, definitions[i].name, definitions[i].description,
-                                    definitions[i].fields, i != 0))
+    for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++) {
+        char *description = native_schema_description(&definitions[i]);
+        bool ok = description && native_schema_function(&out, definitions[i].name, description,
+                                                        definitions[i].fields, i != 0);
+        free(description);
+        if (!ok)
             goto fail;
-    if (!native_schema_function(
-            &out, "final",
-            "Finish the task. Call only after required validation; answer must accurately state "
-            "what changed and what was tested.",
-            "answer:string", true))
+    }
+    if (!native_schema_function(&out, "final", native_final_description, "answer:string", true))
         goto fail;
     if (!fg_buf_puts(
-            &out, ",{\"type\":\"function\",\"function\":{\"name\":\"memory\","
-                  "\"description\":\"Replace bounded working memory while continuing the task.\","
-                  "\"parameters\":{\"type\":\"object\",\"properties\":{"
-                  "\"facts\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":512},"
-                  "\"maxItems\":32},"
-                  "\"hypotheses\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
-                  "512},\"maxItems\":32},"
-                  "\"decisions\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
-                  "512},\"maxItems\":32},"
-                  "\"relevant_files\":{\"type\":\"array\",\"items\":{\"type\":\"string\","
-                  "\"maxLength\":512},\"maxItems\":32},"
-                  "\"remaining\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
-                  "512},\"maxItems\":32}},"
-                  "\"required\":[\"facts\",\"hypotheses\",\"decisions\",\"relevant_files\","
-                  "\"remaining\"],"
-                  "\"additionalProperties\":false}}}]"))
+            &out,
+            ",{\"type\":\"function\",\"function\":{\"name\":\"memory\","
+            "\"description\":\"Replace bounded working memory only when substantial work remains. "
+            "This is not a completion action; after successful required validation call final "
+            "instead.\","
+            "\"parameters\":{\"type\":\"object\",\"properties\":{"
+            "\"facts\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":512},"
+            "\"maxItems\":32},"
+            "\"hypotheses\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
+            "512},\"maxItems\":32},"
+            "\"decisions\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
+            "512},\"maxItems\":32},"
+            "\"relevant_files\":{\"type\":\"array\",\"items\":{\"type\":\"string\","
+            "\"maxLength\":512},\"maxItems\":32},"
+            "\"remaining\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"maxLength\":"
+            "512},\"maxItems\":32}},"
+            "\"required\":[\"facts\",\"hypotheses\",\"decisions\",\"relevant_files\","
+            "\"remaining\"],"
+            "\"additionalProperties\":false}}}]"))
         goto fail;
     return fg_buf_take(&out);
 fail:
@@ -611,6 +664,11 @@ static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
     size_t line = 1, offset = 0;
     fg_buf b = {0};
     fg_buf_printf(&b, "file_sha256:%s\n", sha256);
+    if (!file.len && c->config.model &&
+        c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE)
+        fg_buf_puts(&b, "file_state:empty\n"
+                        "next_action_guidance:Do not reread this unchanged empty file; inspect a "
+                        "different relevant file.\n");
     while (offset < file.len && line <= end) {
         const char *p = file.ptr + offset;
         const char *z = memchr(p, '\n', file.len - offset);
@@ -874,6 +932,11 @@ static char *commit_edit(fg_tool_context *c, const char *path, char full[FG_PATH
 #ifdef _WIN32
     (void)st;
 #endif
+    bool native_protocol =
+        c->config.model && c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
+    char committed_hash[65] = {0};
+    bool report_committed_hash =
+        native_protocol && fg_sha256_hex(out->data, out->len, committed_hash);
     char temp[FG_PATH_MAX], random[17];
     if (!fg_random_hex(random, 8) ||
         snprintf(temp, sizeof(temp), "%s.forge-%s.tmp", full, random) >= (int)sizeof(temp)) {
@@ -970,6 +1033,8 @@ static char *commit_edit(fg_tool_context *c, const char *path, char full[FG_PATH
         return NULL;
     fg_buf result = {0};
     fg_buf_printf(&result, "Patched %s.\nRecorded edit diff: %s\n", path, edit.diff);
+    if (report_committed_hash)
+        fg_buf_printf(&result, "file_sha256:%s\n", committed_hash);
     const char *ext = strrchr(path, '.');
     if (ext && !strcmp(ext, ".go")) {
         fg_buf_puts(&result, "Staged Go syntax validation passed before commit.\n");
@@ -997,9 +1062,15 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
         return NULL;
     struct stat st;
     bool exists = stat(full, &st) == 0;
-    if (exists && (!*old || (st.st_mode & S_IFMT) != S_IFREG)) {
+    if (exists && (st.st_mode & S_IFMT) != S_IFREG) {
+        fg_error(e, FORGE_ERR_CONFLICT, "Patch target is not a regular file");
+        return NULL;
+    }
+    if (exists && !*old) {
         fg_error(e, FORGE_ERR_CONFLICT,
-                 "Empty old_text is only for creating a missing regular file");
+                 "Empty old_text is only for creating a missing regular file. To fill an existing "
+                 "empty file, use apply_hunk with start=1, end=1, and the file_sha256 returned by "
+                 "read_file");
         return NULL;
     }
     if (!exists && *old) {
@@ -1109,6 +1180,50 @@ static bool line_span(const char *text, size_t len, size_t start, size_t end, si
     return false;
 }
 
+static size_t span_line_count(const char *text, size_t len) {
+    if (!len)
+        return 0;
+    size_t lines = text[len - 1] == '\n' ? 0 : 1;
+    for (size_t i = 0; i < len; i++)
+        if (text[i] == '\n')
+            lines++;
+    return lines;
+}
+
+static size_t span_line_prefix_size(const char *text, size_t len, size_t lines) {
+    size_t offset = 0;
+    while (offset < len && lines) {
+        const char *newline = memchr(text + offset, '\n', len - offset);
+        offset = newline ? (size_t)(newline - text) + 1 : len;
+        lines--;
+    }
+    return offset;
+}
+
+static size_t aligned_line_differences(const char *left, size_t left_len, const char *right,
+                                       size_t right_len, size_t *first_difference) {
+    size_t left_offset = 0, right_offset = 0, line = 1, differences = 0;
+    *first_difference = 0;
+    while (left_offset < left_len && right_offset < right_len) {
+        const char *left_newline = memchr(left + left_offset, '\n', left_len - left_offset);
+        const char *right_newline = memchr(right + right_offset, '\n', right_len - right_offset);
+        size_t left_size =
+            left_newline ? (size_t)(left_newline - left - left_offset) + 1 : left_len - left_offset;
+        size_t right_size = right_newline ? (size_t)(right_newline - right - right_offset) + 1
+                                          : right_len - right_offset;
+        if (left_size != right_size ||
+            memcmp(left + left_offset, right + right_offset, left_size)) {
+            if (!*first_difference)
+                *first_difference = line;
+            differences++;
+        }
+        left_offset += left_size;
+        right_offset += right_size;
+        line++;
+    }
+    return differences;
+}
+
 static char *hunk(fg_tool_context *c, yyjson_val *args, bool *changed, forge_error *e) {
     const char *path = fg_json_str(args, "path");
     const char *anchor = fg_json_str(args, "file_sha256");
@@ -1193,9 +1308,84 @@ static char *hunk(fg_tool_context *c, yyjson_val *args, bool *changed, forge_err
         fg_error(e, FORGE_ERR_ARGUMENT, "Hunk line range is outside the current file");
         return NULL;
     }
+    size_t replacement_len = strlen(replacement);
+    bool preserve_line_ending = replacement_len && last > first && text[last - 1] == '\n' &&
+                                replacement[replacement_len - 1] != '\n';
+    const char *line_ending =
+        preserve_line_ending && last >= 2 && text[last - 2] == '\r' ? "\r\n" : "\n";
+    fg_buf normalized = {0};
+    fg_buf_puts(&normalized, replacement);
+    if (preserve_line_ending)
+        fg_buf_puts(&normalized, line_ending);
+    if (normalized.failed) {
+        free(text);
+        fg_buf_clear(&normalized);
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot normalize hunk replacement");
+        return NULL;
+    }
+    size_t selected_lines = span_line_count(text + first, last - first);
+    size_t replacement_lines = span_line_count(normalized.data, normalized.len);
+    bool native_protocol =
+        c->config.model && c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
+    if (native_protocol && replacement_lines && replacement_lines < selected_lines) {
+        size_t first_difference = 0;
+        size_t differences = aligned_line_differences(text + first, last - first, normalized.data,
+                                                      normalized.len, &first_difference);
+        if (differences <= 3) {
+            size_t omitted = selected_lines - replacement_lines;
+            free(text);
+            fg_buf_clear(&normalized);
+            if (first_difference)
+                fg_error(e, FORGE_ERR_CONFLICT,
+                         "Broad hunk omits %zu trailing selected line%s and differs at only line "
+                         "%zu; submit only the intended differing line with matching start/end, "
+                         "or include all %zu selected lines",
+                         omitted, omitted == 1 ? "" : "s", start + first_difference - 1,
+                         selected_lines);
+            else
+                fg_error(e, FORGE_ERR_CONFLICT,
+                         "Broad hunk omits %zu trailing selected line%s but changes none of the "
+                         "retained lines; submit only the actual line to change with matching "
+                         "start/end, or include all %zu selected lines",
+                         omitted, omitted == 1 ? "" : "s", selected_lines);
+            return NULL;
+        }
+    }
+    if (native_protocol && replacement_lines > selected_lines) {
+        size_t replacement_prefix =
+            span_line_prefix_size(normalized.data, normalized.len, selected_lines);
+        size_t overlap = normalized.len - replacement_prefix;
+        size_t first_difference = 0;
+        size_t differences = aligned_line_differences(text + first, last - first, normalized.data,
+                                                      replacement_prefix, &first_difference);
+        if (overlap && overlap <= len - last &&
+            !memcmp(normalized.data + replacement_prefix, text + last, overlap) &&
+            differences <= 3) {
+            size_t repeated_lines = replacement_lines - selected_lines;
+            free(text);
+            fg_buf_clear(&normalized);
+            fg_error(e, FORGE_ERR_CONFLICT,
+                     "Hunk replacement repeats %zu following line%s already outside the selected "
+                     "range; extend end to include them or submit only the intended changed lines",
+                     repeated_lines, repeated_lines == 1 ? "" : "s");
+            return NULL;
+        }
+    }
+    if (native_protocol && last < len && replacement_lines != selected_lines) {
+        free(text);
+        fg_buf_clear(&normalized);
+        fg_error(e, FORGE_ERR_CONFLICT,
+                 "Native middle-of-file hunk changes the selected line count from %zu to %zu. "
+                 "Use apply_patch with the smallest exact old_text/new_text for an insertion or "
+                 "deletion, or submit a hunk with the same number of selected and replacement "
+                 "lines",
+                 selected_lines, replacement_lines);
+        return NULL;
+    }
     fg_buf out = {0};
     fg_buf_add(&out, text, first);
-    fg_buf_puts(&out, replacement);
+    fg_buf_add(&out, normalized.data, normalized.len);
+    fg_buf_clear(&normalized);
     fg_buf_add(&out, text + last, len - last);
     if (out.failed || out.len > c->config.limits.max_file_bytes) {
         free(text);
@@ -1245,7 +1435,71 @@ static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
         return NULL;
     }
     char *result = fg_process_render(&r);
+    bool native_protocol =
+        result && c->config.model && c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
+    bool add_native_failure_guidance = native_protocol && r.exit_code != 0;
+    bool add_native_success_guidance =
+        native_protocol && r.exit_code == 0 && !r.timed_out && !r.cancelled && !r.truncated;
     fg_process_free(&r);
+    if (add_native_failure_guidance || add_native_success_guidance) {
+        fg_buf guided = {0};
+        bool ok = fg_buf_puts(&guided, result);
+        if (ok && add_native_failure_guidance)
+            ok = fg_buf_puts(
+                &guided,
+                "\nnext_action_guidance: Treat the diagnostics as the change boundary. "
+                "Preserve behavior not named as failing and make the smallest local edit "
+                "that addresses the reported condition. The failing assertion and explicit "
+                "requirements are authoritative; do not reinterpret them or rewrite an "
+                "otherwise working function. When a requirement names an ordering or "
+                "tie-break key, compare that semantic key directly; input position or a "
+                "surrogate index is not equivalent. For an ID tie-break over indexed "
+                "records, dereference and compare the IDs; changing only comments cannot "
+                "repair executable behavior.\n");
+        if (ok && add_native_failure_guidance && strstr(result, "order=["))
+            ok = fg_buf_puts(
+                &guided,
+                "diagnostic_specific_guidance: The reported output order shows that a newly ready "
+                "item lost lexical priority. Preserve graph construction and make one local edit: "
+                "restore lexical ordering immediately after the loop enqueues newly ready items, "
+                "before the next item is removed from the ready queue.\n");
+        if (ok && add_native_failure_guidance && strstr(result, "success=map["))
+            ok = fg_buf_puts(
+                &guided,
+                "diagnostic_specific_guidance: The unchanged transfer result is consistent with "
+                "validating later operations against the original map. Preserve the existing "
+                "atomic copy/commit flow and make the smallest expression edit so each operation's "
+                "source and destination values are loaded from the staged working map that already "
+                "contains earlier operations.\n");
+        if (ok && add_native_failure_guidance && strstr(result, "ValueError not raised"))
+            ok = fg_buf_puts(
+                &guided,
+                "diagnostic_specific_guidance: The decoder accepted the malformed raw value. Do "
+                "not wrap that decoder in try/except or substitute another permissive decoder. "
+                "Before decoding, add a direct raw-string check that rejects every percent sign "
+                "unless its next two characters are hexadecimal digits.\n");
+        if (ok && add_native_failure_guidance && strstr(result, "capped=map["))
+            ok = fg_buf_puts(
+                &guided,
+                "diagnostic_specific_guidance: The capped allocation shows that distribution "
+                "stopped after one proportional round while capacity remained. Preserve or "
+                "restore the outer redistribution loop, recalculating active recipients and "
+                "weights after caps are reached; keep the no-progress guard. For an equal-"
+                "remainder tie-break by ID, dereference the stored request indices and compare "
+                "their IDs in the existing comparator. Do not replace the iterative allocator "
+                "with a one-pass calculation.\n");
+        if (ok && add_native_success_guidance)
+            ok = fg_buf_puts(
+                &guided,
+                "\nnext_action_guidance: If this command completed the required validation and the "
+                "implementation satisfies the task, call final now. Do not call memory, repeat a "
+                "successful edit, or rerun unchanged validation before final.\n");
+        if (ok) {
+            free(result);
+            result = fg_buf_take(&guided);
+        } else
+            fg_buf_clear(&guided);
+    }
     return result;
 }
 char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bool *changed,

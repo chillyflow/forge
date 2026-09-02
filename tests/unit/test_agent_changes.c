@@ -445,6 +445,7 @@ static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes
     }
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = f.script;
     f.model = forge_model_load(&mc, &error);
     assert(f.model);
@@ -573,6 +574,7 @@ static void run_edit_error(edit_case mode) {
                      "original data\n");
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = f.script;
     f.model = forge_model_load(&mc, &error);
     assert(f.model);
@@ -668,6 +670,7 @@ static void run_reanchor(const char *first_replacement, const char *second_repla
 
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = f.script;
     f.model = forge_model_load(&mc, &error);
     assert(f.model);
@@ -761,6 +764,7 @@ static void run_recovery(void) {
 
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = f.script;
     f.model = forge_model_load(&mc, &error);
     assert(f.model);
@@ -821,6 +825,7 @@ static void run_thought(void) {
     assert(fg_write_file(f.script, script, strlen(script), NULL));
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = f.script;
     f.model = forge_model_load(&mc, &error);
     assert(f.model);
@@ -855,6 +860,7 @@ static void run_thought_rejected(const char *script) {
     assert(fg_write_file(f.script, script, strlen(script), NULL));
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = f.script;
     f.model = forge_model_load(&mc, &error);
     assert(f.model);

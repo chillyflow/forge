@@ -100,8 +100,10 @@ typedef struct {
     float temperature;
     bool reuse_prefix, grammar_fast_path;
     forge_thinking_mode thinking; /* Jinja enable_thinking control; AUTO preserves legacy. */
-    /* FLATTENED preserves the original single-user-message protocol byte for byte.
-     * NATIVE renders structured roles and function schemas through llama.cpp. */
+    /* NATIVE is selected by forge_default_model_config() and renders structured roles and
+     * function schemas through llama.cpp. FLATTENED preserves the original single-user-message
+     * protocol byte for byte; the enum values remain stable for source and snapshot compatibility.
+     */
     forge_prompt_protocol prompt_protocol;
 } forge_model_config;
 typedef struct forge_model forge_model;

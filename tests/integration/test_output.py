@@ -26,7 +26,7 @@ class OutputTests(unittest.TestCase):
         result = subprocess.run(
             [FORGE, "run", "Inspect the recorded command output.", "--script", str(script),
              "--workspace", str(self.root), "--no-config", "--allow-exec", "--json",
-             "--no-auto-validation",
+             "--no-auto-validation", "--prompt-protocol", "flattened",
              "--context", "65536", "--output-reserve", "1024", *options],
             capture_output=True, timeout=90,
         )

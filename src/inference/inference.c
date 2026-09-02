@@ -10,6 +10,7 @@ forge_model_config forge_default_model_config(void) {
     config.reuse_prefix = true;
     config.grammar_fast_path = true;
     config.thinking = FORGE_THINKING_AUTO;
+    config.prompt_protocol = FORGE_PROMPT_NATIVE;
     return config;
 }
 bool fg_model_instance_init(forge_model *m, forge_error *e) {

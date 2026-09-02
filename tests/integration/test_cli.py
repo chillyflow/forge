@@ -64,6 +64,8 @@ class ForgeTests(unittest.TestCase):
         if not fallback and success and scripted and 'final' in scripted[-1]:
             scripted.extend([scripted[-1]] * 4)
         path.write_text(json.dumps(scripted))
+        if '--prompt-protocol' not in options:
+            options = (*options, '--prompt-protocol', 'flattened')
         result = self.cli('run', 'Fix Add and verify it.', '--script', str(path), '--json',
                           *options, success=success, executable=fallback or FORGE)
         events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
@@ -409,7 +411,8 @@ class ForgeTests(unittest.TestCase):
         # Contradictory ablation settings must fail loudly rather than quietly
         # report one arm's numbers under the other arm's name.
         contradiction = self.cli('run', 'Inspect the note.', '--script', str(self.root / 'script.json'),
-                                 '--no-thought', '--thought-required', success=False)
+                                 '--prompt-protocol', 'flattened', '--no-thought',
+                                 '--thought-required', success=False)
         self.assertIn('contradicts', contradiction.stderr)
 
         # Inline --thought-required is enforced by the host, not only by the
@@ -426,7 +429,7 @@ class ForgeTests(unittest.TestCase):
         self.run_script(withthought, '--no-auto-validation', '--thought-required')
         contradiction = self.cli('run', 'Inspect the note.', '--script',
                                  str(self.root / 'script.json'), '--no-thought',
-                                 '--thought-routed', success=False)
+                                 '--thought-routed', '--prompt-protocol', 'flattened', success=False)
         self.assertIn('contradict', contradiction.stderr)
 
         # §32 per-state routing controls. The think budget and cue only mean
@@ -434,15 +437,15 @@ class ForgeTests(unittest.TestCase):
         # silent no-op arm.
         rejected = self.cli('run', 'Inspect the note.', '--script',
                             str(self.root / 'script.json'), '--thought-routed',
-                            '--thought-budget', '0', success=False)
+                            '--thought-budget', '0', '--prompt-protocol', 'flattened', success=False)
         self.assertIn('[1, 2147483647]', rejected.stderr)
         rejected = self.cli('run', 'Inspect the note.', '--script',
                             str(self.root / 'script.json'), '--thought-budget', '64',
-                            success=False)
+                            '--prompt-protocol', 'flattened', success=False)
         self.assertIn('require --thought-routed', rejected.stderr)
         rejected = self.cli('run', 'Inspect the note.', '--script',
                             str(self.root / 'script.json'), '--thought-routed',
-                            '--thought-cue', 'Plan: {', success=False)
+                            '--thought-cue', 'Plan: {', '--prompt-protocol', 'flattened', success=False)
         self.assertIn('action-opening brace', rejected.stderr)
         # The unbounded ablation and an explicit budget parse and run; the
         # scripted backend ignores decode routing, so these only pin the CLI
@@ -481,7 +484,7 @@ class ForgeTests(unittest.TestCase):
         finish = native_call('final', {'answer': 'Inspected the note.'})
         _, events, session = self.run_script(
             [read, finish, finish, finish], '--prompt-protocol', 'native',
-            '--no-auto-validation')
+            '--no-auto-validation', '--max-turns', '16')
         calls = [event['data'] for event in events if event['type'] == 'tool_call']
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]['tool'], 'read_file')
@@ -492,6 +495,14 @@ class ForgeTests(unittest.TestCase):
                    for path in sorted((session / 'context').glob('*.txt'))]
         self.assertTrue(prompts)
         self.assertTrue(all(prompt['protocol'] == 'forge-native-v1' for prompt in prompts))
+        self.assertIn('the action limit includes final', prompts[0]['messages'][0]['content'])
+        self.assertIn('compare that field in the ordering decision',
+                      prompts[0]['messages'][0]['content'])
+        self.assertIn('dereference the indices and compare the IDs',
+                      prompts[0]['messages'][0]['content'])
+        self.assertTrue(any(message['role'] == 'user' and
+                            '[RUN_STATE]' in message.get('content', '')
+                            for prompt in prompts for message in prompt['messages']))
         tool_names = {tool['function']['name'] for tool in prompts[0]['tools']}
         self.assertTrue({'read_file', 'final', 'memory'} <= tool_names)
         paired = next(prompt for prompt in prompts
@@ -509,6 +520,25 @@ class ForgeTests(unittest.TestCase):
         self.assertEqual(history_call['id'], tool_message['tool_call_id'])
         self.assertEqual(len(history_call['id']), 9)
         self.assertEqual(tool_message['name'], 'read_file')
+        run_state = next(message['content'] for message in reversed(messages)
+                         if message['role'] == 'user' and '[RUN_STATE]' in message['content'])
+        self.assertIn('"current_action":2', run_state)
+        self.assertIn('"remaining_actions_including_current":15', run_state)
+        self.assertIn('"final_runs_required_host_validation":true', run_state)
+
+        failed_read = native_call('read_file', {'path': 'missing.txt', 'start': 1, 'end': 1},
+                                  reasoning='The missing file may explain the failure.')
+        _, _, failed_session = self.run_script(
+            [failed_read, finish], '--prompt-protocol', 'native', '--no-auto-validation')
+        failed_prompts = [json.loads(path.read_text(encoding='utf-8'))
+                          for path in sorted((failed_session / 'context').glob('*.txt'))]
+        failed_pair = next(prompt for prompt in failed_prompts
+                           if any(message.get('name') == 'read_file'
+                                  for message in prompt['messages']))
+        failed_tool_index = next(i for i, message in enumerate(failed_pair['messages'])
+                                 if message.get('name') == 'read_file')
+        self.assertEqual(failed_pair['messages'][failed_tool_index - 1]['reasoning_content'],
+                         'The missing file may explain the failure.')
 
         memory = {'facts': ['Native memory fact.'], 'hypotheses': [],
                   'decisions': ['Keep native roles paired.'], 'relevant_files': ['note.txt'],
@@ -559,6 +589,37 @@ class ForgeTests(unittest.TestCase):
         routed = self.cli('run', 'Inspect.', '--script', str(script),
                           '--prompt-protocol', 'native', '--thought-routed', success=False)
         self.assertIn('cannot be combined with routed', routed.stderr)
+
+    def test_native_last_action_exposes_only_final(self):
+        (self.root / 'note.txt').write_text('finish evidence\n', encoding='utf-8', newline='\n')
+        _, _, session = self.run_script([
+            native_call('read_file', {'path': 'note.txt', 'start': 1, 'end': 1}),
+            native_call('final', {'answer': 'Finished on the last action.'}),
+        ], '--prompt-protocol', 'native', '--no-auto-validation', '--max-turns', '2')
+        prompts = [json.loads(path.read_text(encoding='utf-8'))
+                   for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertEqual(len(prompts), 2)
+        self.assertIn('read_file', {tool['function']['name'] for tool in prompts[0]['tools']})
+        self.assertEqual([tool['function']['name'] for tool in prompts[1]['tools']], ['final'])
+        run_state = next(message['content'] for message in reversed(prompts[1]['messages'])
+                         if message['role'] == 'user' and '[RUN_STATE]' in message['content'])
+        self.assertIn('"remaining_actions_including_current":1', run_state)
+        self.assertIn('This is the last action', run_state)
+
+        command = native_call('run_command', {
+            'argv': [sys.executable, '-c', "print('validation passed')"]})
+        _, events, session = self.run_script([
+            command,
+            native_call('final', {'answer': 'Finished after successful validation.'}),
+        ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
+            '--max-turns', '3')
+        output = next(event['data']['output'] for event in events
+                      if event['type'] == 'tool_result')
+        self.assertIn('call final now', output)
+        prompts = [json.loads(path.read_text(encoding='utf-8'))
+                   for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertEqual(len(prompts), 2)
+        self.assertEqual([tool['function']['name'] for tool in prompts[1]['tools']], ['final'])
 
     def test_validation_plan_and_permission_denial(self):
         self.go_module()
@@ -830,7 +891,7 @@ class ForgeTests(unittest.TestCase):
             {'tool': 'read_file', 'args': {'path': 'calc.go', 'start': 4, 'end': 4}},
             {'tool': 'apply_hunk', 'args': {
                 'path': 'calc.go', 'start': 4, 'end': 4, 'file_sha256': anchor,
-                'new_text': '\treturn a + b\n'}},
+                'new_text': '\treturn a + b'}},
             {'tool': 'apply_hunk', 'args': {
                 'path': 'calc.go', 'start': 4, 'end': 4, 'file_sha256': anchor,
                 'new_text': '\treturn 0\n'}},
@@ -839,10 +900,11 @@ class ForgeTests(unittest.TestCase):
         outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
         self.assertEqual(outputs[0], f'file_sha256:{anchor}\n4: \treturn a - b\n')
         self.assertIn('Patched calc.go', outputs[1])
+        self.assertNotIn('file_sha256:', outputs[1])
         self.assertIn('Staged Go syntax validation passed before commit', outputs[1])
         self.assertIn('TOOL_ERROR [conflict]', outputs[2])
         self.assertIn('stale file_sha256', outputs[2])
-        self.assertIn('\treturn a + b\n', (self.root / 'calc.go').read_text())
+        self.assertIn('\treturn a + b\n}', (self.root / 'calc.go').read_text())
         outcome = json.loads((session / 'tool/000002.edit-result.json').read_text())
         self.assertEqual(outcome['state'], 'applied')
         self.assertFalse((session / 'tool/000003.edit.json').exists())
@@ -853,15 +915,79 @@ class ForgeTests(unittest.TestCase):
         target.write_bytes(b'')
         anchor = hashlib.sha256(b'').hexdigest()
         _, events, _ = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'empty.txt', 'old_text': '', 'new_text': 'first line\n'}},
             {'tool': 'apply_hunk', 'args': {
                 'path': 'empty.txt', 'start': 1, 'end': 1, 'file_sha256': anchor,
                 'new_text': 'first line\n'}},
             {'final': 'Filled the empty file.'},
         ], '--allow-write', '--no-auto-validation')
+        outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
+        self.assertIn('use apply_hunk with start=1, end=1', outputs[0])
+        self.assertIn('Patched empty.txt', outputs[1])
+        self.assertEqual(target.read_text(), 'first line\n')
+
+    def test_native_broad_hunk_rejects_omitted_trailing_context_and_accepts_narrow_retry(self):
+        target = self.root / 'lines.txt'
+        original = ''.join(f'line {line}\n' for line in range(1, 11))
+        target.write_text(original, encoding='utf-8', newline='\n')
+        anchor = hashlib.sha256(original.encode()).hexdigest()
+        broad = ''.join(('changed 5' if line == 5 else f'line {line}') + '\n'
+                        for line in range(3, 8))
+        overlap = ''.join(('changed 5' if line == 5 else f'line {line}') + '\n'
+                          for line in range(3, 9))
+        shifted = 'line 3\ninserted\nline 4\nchanged 5\nline 6\n'
+        after_narrow = original.replace('line 5\n', 'changed 5\n')
+        after_narrow_hash = hashlib.sha256(after_narrow.encode()).hexdigest()
+        after_tail = after_narrow.replace('line 9\nline 10\n',
+                                          'line 9\ninserted tail\nline 10\n')
+        _, events, _ = self.run_script([
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 3, 'end': 8, 'file_sha256': anchor,
+                'new_text': broad}),
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 3, 'end': 6, 'file_sha256': anchor,
+                'new_text': overlap}),
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 3, 'end': 6, 'file_sha256': anchor,
+                'new_text': shifted}),
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 5, 'end': 5, 'file_sha256': anchor,
+                'new_text': 'changed 5'}),
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 9, 'end': 10,
+                'file_sha256': after_narrow_hash,
+                'new_text': 'line 9\ninserted tail\nline 10\n'}),
+            native_call('final', {'answer': 'Applied the narrow edit.'}),
+        ], '--prompt-protocol', 'native', '--allow-write', '--no-auto-validation')
+        outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
+        self.assertIn('omits 1 trailing selected line', outputs[0])
+        self.assertIn('differs at only line 5', outputs[0])
+        self.assertIn('repeats 2 following lines', outputs[1])
+        self.assertIn('middle-of-file hunk changes the selected line count from 4 to 5', outputs[2])
+        self.assertIn('Use apply_patch with the smallest exact old_text/new_text', outputs[2])
+        self.assertIn('Patched lines.txt', outputs[3])
+        self.assertIn(f'file_sha256:{after_narrow_hash}', outputs[3])
+        self.assertIn('Patched lines.txt', outputs[4])
+        self.assertIn(f'file_sha256:{hashlib.sha256(after_tail.encode()).hexdigest()}', outputs[4])
+        self.assertEqual(target.read_text(), after_tail)
+
+    def test_native_hash_anchored_hunk_accepts_large_end_of_file_replacement(self):
+        target = self.root / 'lines.txt'
+        original = ''.join(f'line {line}\n' for line in range(1, 41))
+        replacement = original.replace('line 20\n', 'changed 20\ninserted line\n')
+        target.write_text(original, encoding='utf-8', newline='\n')
+        anchor = hashlib.sha256(original.encode()).hexdigest()
+        _, events, _ = self.run_script([
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 1, 'end': 40, 'file_sha256': anchor,
+                'new_text': replacement}),
+            native_call('final', {'answer': 'Applied the anchored replacement.'}),
+        ], '--prompt-protocol', 'native', '--allow-write', '--no-auto-validation')
         output = next(event['data']['output'] for event in events
                       if event['type'] == 'tool_result')
-        self.assertIn('Patched empty.txt', output)
-        self.assertEqual(target.read_text(), 'first line\n')
+        self.assertIn('Patched lines.txt', output)
+        self.assertEqual(target.read_text(), replacement)
 
     def test_syntax_broken_go_candidate_is_aborted_before_commit(self):
         before = (self.root / 'calc.go').read_bytes()
@@ -1200,6 +1326,18 @@ class ForgeTests(unittest.TestCase):
                          [f'file_sha256:{empty_hash}\n',
                           f'file_sha256:{last_hash}\n2: café\n'])
 
+        _, native_events, _ = self.run_script([
+            native_call('read_file', {'path': 'empty.txt', 'start': 1, 'end': 2}),
+            native_call('final', {'answer': 'Read the empty file.'}),
+        ], '--prompt-protocol', 'native', '--no-auto-validation')
+        native_output = next(event['data']['output'] for event in native_events
+                             if event['type'] == 'tool_result')
+        self.assertEqual(
+            native_output,
+            f'file_sha256:{empty_hash}\nfile_state:empty\n'
+            'next_action_guidance:Do not reread this unchanged empty file; inspect a different '
+            'relevant file.\n')
+
     def test_hardlink_patch_denied(self):
         outside = self.root / 'original.txt'
         outside.write_text('original')
@@ -1238,6 +1376,31 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('exit_code=0', output)
         self.assertIn('isolated', output)
 
+    def test_native_failed_command_recommends_smallest_diagnostic_scoped_edit(self):
+        command = native_call('run_command', {
+            'argv': [sys.executable, '-c',
+                     "print('one assertion failed\\norder=[b a]\\nsuccess=map[a:1]\\n"
+                     "ValueError not raised\\ncapped=map[a:2 b:1]'); raise SystemExit(1)"]})
+        _, events, _ = self.run_script([
+            command,
+            native_call('final', {'answer': 'Recorded the diagnostic.'}),
+        ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation')
+        output = next(event['data']['output'] for event in events
+                      if event['type'] == 'tool_result')
+        self.assertIn('one assertion failed', output)
+        self.assertIn('Treat the diagnostics as the change boundary', output)
+        self.assertIn('make the smallest local edit', output)
+        self.assertIn('assertion and explicit requirements are authoritative', output)
+        self.assertIn('compare that semantic key directly', output)
+        self.assertIn('surrogate index is not equivalent', output)
+        self.assertIn('dereference and compare the IDs', output)
+        self.assertIn('changing only comments cannot repair executable behavior', output)
+        self.assertIn('newly ready item lost lexical priority', output)
+        self.assertIn('loaded from the staged working map', output)
+        self.assertIn('unless its next two characters are hexadecimal digits', output)
+        self.assertIn('restore the outer redistribution loop', output)
+        self.assertIn('dereference the stored request indices and compare their IDs', output)
+
     def test_binary_command_output_is_preserved(self):
         code = "import sys; sys.stdout.buffer.write(b'begin\\x00after\\xff\\n'); sys.stderr.buffer.write(b'error\\x00tail')"
         _, events, session = self.run_script([
@@ -1272,7 +1435,8 @@ class ForgeTests(unittest.TestCase):
             path = self.root / 'script.json'
             path.write_text(json.dumps(actions), encoding='utf-8')
             result = self.cli('run', 'Check inherited descriptors', '--script', str(path), '--json',
-                              '--allow-exec', '--no-auto-validation', **options)
+                              '--allow-exec', '--no-auto-validation', '--prompt-protocol', 'flattened',
+                              **options)
         events = [json.loads(line) for line in result.stdout.splitlines()]
         output = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
         self.assertIn('exit_code=0', output)

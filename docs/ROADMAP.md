@@ -39,7 +39,10 @@ tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-re
 - Transactional TOML profiles/configuration and metadata-only hardware planning.
 - Source-context invalidation after known edits.
 - Session artifacts, metrics, context inspection and read-only replay.
-- Isolated Go benchmark runner, ten fixtures, independent verification/ablations.
+- Isolated Go/Python benchmark runners, 29 synthetic fixtures, independent
+  verification, repeated Forge/OpenCode/Aider measurements and mechanism ablations.
+- Native system/user/assistant/tool prompt protocol, action-budget guidance,
+  guarded line hunks and explicit flattened-protocol compatibility.
 - Cross-platform core CI, sanitizers, and direct-backend compilation.
 
 ## Partial: do not overstate these
@@ -57,12 +60,12 @@ tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-re
 | Observability | Tokens, reuse, durations, bytes, plans, arena/index/watch counters | Full event/profile reporting and integrated peak RSS/VRAM collection |
 | Configuration | TOML profiles/CLI precedence and hardware estimates | Additional models, KV/draft planning and measured fit coverage |
 | Library ABI | Opaque types and ownership rules | Stable ABI guarantee/install package |
-| Benchmark release | Ten fixtures, local measurements, initial OpenCode comparison | 25–50 diverse tasks, repeated robust comparisons |
+| Benchmark release | 29 synthetic Go/Python tasks, three repetitions across Forge/OpenCode/Aider, task-cluster intervals and timing/token/failure evidence | Clean frozen holdout after development, remaining reliability gates and larger repository tasks |
 
 ## Required remaining work
 
-1. Broaden the equal-model/equal-hardware OpenCode comparison, align timing
-   boundaries, preserve failure evidence and repeat measurements on larger tasks.
+1. Close the atomic-transfer and completion-budget failures, then run a new
+   holdout from a clean frozen revision; extend comparisons to larger repository tasks.
 2. Resolved repository relationships, structural diff impact and progressive retrieval.
 3. Dependency-aware cached summaries and larger-repository watcher measurements.
 4. Automatic semantic checkpoint selection/eviction and persisted session resume.
@@ -72,8 +75,8 @@ tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-re
 8. Strict OS isolation, resource quotas, race-resistant filesystem handles.
 9. Broader scoped-memory adoption, asynchronous processes, full event replay,
    stable packaged `libforge` ABI and richer backpressure.
-10. Compact tool-protocol comparison, decoding-mode routing, additional model
-    classes, a second established harness and all required ablations.
+10. Extend native tool-protocol and decoding-mode comparisons to additional model
+    classes and complete the remaining required ablations.
 
 ## Deliberately deferred, as in the plan
 
@@ -86,6 +89,13 @@ The design's v0.1 performance gate remains a real measured reduction in prompt
 processing against an established local harness using the same GGUF/hardware.
 Its v1.0 gate additionally requires broad platform/language support and published
 task-success/timing evidence. Neither follows from the development version alone.
+
+The [tranche-2 campaign](../benchmark/results/2026-09-02-tranche2-native/README.md)
+records Forge 83/87 versus OpenCode 71/87 and Aider 69/87, with a positive
+task-cluster interval and lower median latency than OpenCode. The dirty freeze,
+development-task reuse, diagnostic-specific guidance, and resumed comparison
+leg prevent a fresh-holdout promotion claim. Forge's remaining failures are
+three atomic-transfer runs and one quota-allocation completion failure.
 
 The [normalized comparison](../benchmark/results/2026-08-28-normalized/README.md)
 records 10/10 repairs for both Forge and OpenCode, with less evaluated prompt

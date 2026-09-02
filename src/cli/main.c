@@ -53,7 +53,7 @@ static void usage(void) {
          "  --temperature N      finite sampling temperature 0..2\n"
          "  --seed N             sampling seed 0..4294967295\n"
          "  --chat-template NAME override unsupported model chat template\n"
-         "  --prompt-protocol NAME  flattened (default) or native roles/tools\n"
+         "  --prompt-protocol NAME  native roles/tools (default) or flattened compatibility\n"
          "  --enable-thinking | --disable-thinking  set Jinja template thinking control\n"
          "  --allow-write        permit repository patches\n"
          "  --allow-exec         permit UNSANDBOXED commands, including repository code\n"

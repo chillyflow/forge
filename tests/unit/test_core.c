@@ -221,7 +221,8 @@ static void test_native_tool_schema_and_normalization(void) {
     size_t tool_count = 0;
     fg_tools(&tool_count);
     assert(yyjson_is_arr(tools) && yyjson_arr_size(tools) == tool_count + 2);
-    bool final = false, memory = false;
+    bool final = false, memory = false, hunk_newline = false, hunk_structure = false,
+         hunk_hash = false, patch_minimal = false, patch_hash = false;
     size_t index, maximum;
     yyjson_val *tool;
     yyjson_arr_foreach(tools, index, maximum, tool) {
@@ -229,12 +230,32 @@ static void test_native_tool_schema_and_normalization(void) {
         yyjson_val *function = yyjson_obj_get(tool, "function");
         const char *name = fg_json_str(function, "name");
         yyjson_val *parameters = yyjson_obj_get(function, "parameters");
-        assert(name && fg_json_str(function, "description") && yyjson_is_obj(parameters));
+        const char *description = fg_json_str(function, "description");
+        assert(name && description && yyjson_is_obj(parameters));
         assert(yyjson_is_false(yyjson_obj_get(parameters, "additionalProperties")));
-        final |= !strcmp(name, "final");
-        memory |= !strcmp(name, "memory");
+        final |= !strcmp(name, "final") && strstr(description, "trigger required host validation");
+        memory |= !strcmp(name, "memory") && strstr(description, "not a completion action");
+        hunk_newline |=
+            !strcmp(name, "apply_hunk") && strstr(description, "host preserves that line ending");
+        hunk_structure |=
+            !strcmp(name, "apply_hunk") && strstr(description, "preserve the selected line count");
+        hunk_hash |= !strcmp(name, "apply_hunk") && strstr(description, "updated file_sha256");
+        patch_minimal |=
+            !strcmp(name, "apply_patch") && strstr(description, "smallest unique differing span");
+        patch_hash |= !strcmp(name, "apply_patch") && strstr(description, "updated file_sha256");
     }
-    assert(final && memory);
+    assert(final && memory && hunk_newline && hunk_structure && hunk_hash && patch_minimal &&
+           patch_hash);
+    yyjson_doc_free(document);
+    free(schema);
+
+    schema = fg_tool_native_final_schema();
+    assert(schema);
+    document = yyjson_read(schema, strlen(schema), 0);
+    tools = document ? yyjson_doc_get_root(document) : NULL;
+    assert(yyjson_is_arr(tools) && yyjson_arr_size(tools) == 1);
+    yyjson_val *only = yyjson_arr_get_first(tools);
+    assert(only && !strcmp(fg_json_str(yyjson_obj_get(only, "function"), "name"), "final"));
     yyjson_doc_free(document);
     free(schema);
 
@@ -325,6 +346,8 @@ static void test_native_tool_schema_and_normalization(void) {
     assert(!action && strstr(error.message, "assistant content"));
 }
 int main(void) {
+    forge_model_config defaults = forge_default_model_config();
+    assert(defaults.prompt_protocol == FORGE_PROMPT_NATIVE);
     test_edit_diffs();
     test_utf8_and_byte_rendering();
     test_diagnostic_byte_boundaries();

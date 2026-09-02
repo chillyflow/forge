@@ -44,7 +44,7 @@ def main():
     parser.add_argument('--max-turns', type=int, default=16)
     parser.add_argument('--gpu-layers', default='-1')
     parser.add_argument('--chat-template', default='embedded')
-    parser.add_argument('--prompt-protocol', choices=['flattened', 'native'], default='flattened')
+    parser.add_argument('--prompt-protocol', choices=['flattened', 'native'], default='native')
     parser.add_argument('--temperature', type=float, default=0.0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--repetitions', type=int, default=3)

@@ -241,9 +241,9 @@ class FixtureTests(unittest.TestCase):
             forge, model = root / 'forge.exe', root / 'model.gguf'
             forge.write_bytes(b'forge')
             model.write_bytes(b'model')
-            for requested in (None, 'native'):
+            for requested in (None, 'flattened'):
                 with self.subTest(requested=requested):
-                    arm = requested or 'flattened'
+                    arm = requested or 'native'
                     output = root / f'output-{arm}'
                     commands = []
 
@@ -315,8 +315,8 @@ class FixtureTests(unittest.TestCase):
             task_path = root / 'one.json'
             task_path.write_text('{}\n', encoding='utf-8')
             freezes = {}
-            for requested in (None, 'native'):
-                arm = requested or 'flattened'
+            for requested in (None, 'flattened'):
+                arm = requested or 'native'
                 output = root / f'protocol-{arm}.json'
                 argv = ['freeze.py']
                 for name, path in binaries.items():
@@ -353,7 +353,7 @@ class FixtureTests(unittest.TestCase):
                 commands[label] = command
                 return 0
 
-            argv = ['campaign.py', '--output', str(output), '--prompt-protocol', 'native']
+            argv = ['campaign.py', '--output', str(output)]
             for name, path in binaries.items():
                 argv += [f'--{name}', str(path)]
             with mock.patch.object(CAMPAIGN, 'execute', execute), \

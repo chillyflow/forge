@@ -126,7 +126,8 @@ class GitPolicyTests(unittest.TestCase):
         previous = set(sessions.iterdir()) if sessions.exists() else set()
         result = self.cli(
             "run", "Inspect the test repository without changing it.",
-            "--script", str(script), "--json", "--max-turns", "6", *options,
+            "--script", str(script), "--json", "--max-turns", "6",
+            "--prompt-protocol", "flattened", *options,
         )
         events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
         created = set(sessions.iterdir()) - previous

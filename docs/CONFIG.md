@@ -89,8 +89,10 @@ template rendering; it does not enable routed reasoning by itself.
 The reasoning channel is CLI-only. `--no-thought`, `--thought-required`,
 `--thought-routed`, `--thought-native`, `--thought-history`, `--thought-decode-only`,
 `--thought-budget`, `--no-thought-budget` and `--thought-cue` are the whole
-surface, and a thought is dropped from later prompts unless `--thought-history`
-is given. The budget and cue controls require `--thought-routed`; a budget of 0
+surface. Successful-action thoughts are dropped from later prompts unless
+`--thought-history` is given; the native protocol retains a failed action's
+thought beside its diagnostic for recovery. The budget and cue controls require
+`--thought-routed`; a budget of 0
 and a cue containing `{` are rejected, and when both budget flags are given the
 last one wins. The routed default is at most 256 reasoning tokens, reduced to
 half the remaining per-turn budget when smaller. `--thought-native` selects a
@@ -98,6 +100,12 @@ cue-free lazy grammar and enables template thinking; a later
 `--disable-thinking` creates the matched safe baseline. The standalone
 `--enable-thinking` / `--disable-thinking` switches override
 `model.enable_thinking` by normal CLI precedence.
+
+`--prompt-protocol native` is the default and renders structured roles and
+function schemas through the model's chat template. `--prompt-protocol flattened`
+selects the legacy single-user-message protocol. Native prompts include host
+action-budget state and reserve the last action for `final`, which runs required
+host validation. The protocol setting is separate from `--thought-native`.
 
 Checkpoint CLI overrides are `--checkpoint-cache`, `--no-checkpoint-cache`,
 `--checkpoint-cache-bytes`, `--checkpoint-cache-entries`,
