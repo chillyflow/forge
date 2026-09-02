@@ -124,8 +124,11 @@ static void validate_native_tools(const json &tools) {
         has_final |= name == "final";
         has_memory |= name == "memory";
     }
-    if (!has_final || !has_memory)
-        throw std::invalid_argument("Native function schemas must include final and memory");
+    /* The agent restricts the last action to final. Keep the ordinary registry
+     * contract, while accepting that intentionally narrower terminal schema. */
+    if (!has_final || (!has_memory && names.size() != 1))
+        throw std::invalid_argument(
+            "Native function schemas must include final and memory, or only final");
 }
 
 extern "C" fg_chat_templates *fg_chat_templates_create(const struct llama_model *model,

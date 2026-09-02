@@ -53,6 +53,12 @@ admissions in reverse selection order and recounts after each removal. Shared
 dependencies, pinned closures, and native call/result pairs remain intact.
 It returns a limit error if the rendered pinned prompt alone cannot fit.
 
+The native template also accepts the host's final-only tool registry at the
+action limit. Earlier tool calls remain valid history, while the next call is
+restricted to final and still runs host validation. Requiring the ordinary
+memory tool in this terminal registry previously rejected a valid prompt and
+surfaced as an apparent context-budget failure.
+
 ## Metadata, updates, and invalidation
 
 `forge_segment_view` exposes `immutable`, `cacheable`, `stale`, `source_hash`,

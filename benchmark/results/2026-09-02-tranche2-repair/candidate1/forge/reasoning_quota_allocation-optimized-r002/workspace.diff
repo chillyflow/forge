@@ -1,0 +1,13 @@
+diff --git a/repair.go b/repair.go
+index 6fe9102..bbd1c76 100644
+--- a/repair.go
++++ b/repair.go
+@@ -69,7 +69,7 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 		}
+ 		sort.SliceStable(shares, func(i, j int) bool {
+ 			if shares[i].remainder == shares[j].remainder {
+-				return shares[i].index < shares[j].index
++				return requests[shares[i].index].ID < requests[shares[j].index].ID
+ 			}
+ 			return shares[i].remainder > shares[j].remainder
+ 		})

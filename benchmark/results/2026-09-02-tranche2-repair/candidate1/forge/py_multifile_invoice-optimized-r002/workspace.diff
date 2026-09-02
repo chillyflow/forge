@@ -1,0 +1,18 @@
+diff --git a/billing/invoice.py b/billing/invoice.py
+index db15891..48e06b3 100644
+--- a/billing/invoice.py
++++ b/billing/invoice.py
+@@ -1,4 +1,4 @@
+ from .money import money
+ 
+ def total(subtotal, discount_rate, shipping):
+-    return money((subtotal + shipping) * (1 - discount_rate))
++    return money((subtotal * (1 - discount_rate)) + shipping)
+diff --git a/billing/money.py b/billing/money.py
+index 7b06c11..7076fd3 100644
+--- a/billing/money.py
++++ b/billing/money.py
+@@ -1,2 +1,2 @@
+ def money(value):
+-    return round(value, 1)
++    return round(value, 2)

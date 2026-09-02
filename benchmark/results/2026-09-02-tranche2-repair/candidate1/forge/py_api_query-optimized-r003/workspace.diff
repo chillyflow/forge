@@ -1,0 +1,15 @@
+diff --git a/web/query.py b/web/query.py
+index 3650649..207935d 100644
+--- a/web/query.py
++++ b/web/query.py
+@@ -1,5 +1,8 @@
+ from urllib.parse import parse_qs
+ 
+ def parse_query(value):
+-    parsed = parse_qs(value)
+-    return {key: values[0] for key, values in parsed.items()}
++    try:
++        parsed = parse_qs(value, keep_blank_values=True)
++        return {key: values[-1] for key, values in parsed.items()}
++    except ValueError:
++        raise ValueError("Invalid percent-encoding")

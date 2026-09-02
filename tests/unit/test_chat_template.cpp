@@ -85,6 +85,37 @@ int main() {
     assert(fg_chat_render_grammar(render) && *fg_chat_render_grammar(render));
     assert(fg_chat_render_generation_prompt(render) && *fg_chat_render_generation_prompt(render));
 
+    /* Final-action pressure narrows the registry, but historical calls remain
+     * valid. Exercise the real native template, not just the scripted backend. */
+    std::string terminal_request(request);
+    size_t memory_schema =
+        terminal_request.find(",{\"type\":\"function\",\"function\":{\"name\":\"memory\"");
+    size_t tools_end = terminal_request.find("],\"anchor_message_count\"", memory_schema);
+    assert(memory_schema != std::string::npos && tools_end != std::string::npos);
+    terminal_request.erase(memory_schema, tools_end - memory_schema);
+    size_t historical_name =
+        terminal_request.find("\"name\":\"final\"", terminal_request.find("\"messages\""));
+    assert(historical_name != std::string::npos);
+    terminal_request.replace(historical_name, std::strlen("\"name\":\"final\""),
+                             "\"name\":\"memory\"");
+    historical_name = terminal_request.find("\"name\":\"final\"", historical_name);
+    assert(historical_name != std::string::npos);
+    terminal_request.replace(historical_name, std::strlen("\"name\":\"final\""),
+                             "\"name\":\"memory\"");
+    fg_chat_render *terminal = fg_chat_templates_apply_native(templates, terminal_request.c_str(),
+                                                              true, error, sizeof(error));
+    if (!terminal)
+        std::fprintf(stderr, "terminal native template failed: %s\n", error);
+    assert(terminal && fg_chat_render_prompt(terminal, &length));
+    const char *terminal_call = "<tool_call>\n<function=final>\n<parameter=answer>\ndone\n"
+                                "</parameter>\n</function>\n</tool_call>";
+    char *terminal_parsed = fg_chat_render_parse(terminal, terminal_call, error, sizeof(error));
+    assert(terminal_parsed && std::strstr(terminal_parsed, "\"name\":\"final\""));
+    std::free(terminal_parsed);
+    const char *memory_call = "<tool_call>\n<function=memory>\n</function>\n</tool_call>";
+    assert(!fg_chat_render_parse(terminal, memory_call, error, sizeof(error)));
+    fg_chat_render_destroy(terminal);
+
     const char *raw = "<tool_call>\n<function=final>\n<parameter=answer>\ndone\n</parameter>\n"
                       "</function>\n</tool_call>";
     char *parsed = fg_chat_render_parse(render, raw, error, sizeof(error));
