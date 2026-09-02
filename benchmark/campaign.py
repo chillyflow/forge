@@ -127,8 +127,8 @@ def main():
         codes[label] = execute(label, command, env)
     if all((output / name / 'results.json').is_file() for name in commands):
         report = [python, str(directory / 'report.py'),
-                  '--run', f'Forge={output / "forge"}',
                   '--run', f'OpenCode={output / "opencode"}',
+                  '--run', f'Forge={output / "forge"}',
                   '--run', f'Aider={output / "aider"}', '--output', str(output / 'report')]
         codes['report'] = execute('report', report, env)
     write_json(output / 'campaign.json', {'schema_version': 1, 'mode': args.mode,

@@ -110,8 +110,8 @@ def main():
              got,err=BuildWaves(map[string][]string{"a":{},"b":{"a","a"}})
              if err!=nil || !reflect.DeepEqual(got,[][]string{{"a"},{"b"}}) { t.Fatal(got,err) }
          }
-         ''', [('if ok { ready=append(ready,job) }',
-                'if ok { ready=append(ready,job); done[job]=true }')])
+         ''', [('if !done[p] { ok=false }',
+                'if !done[p] && len(deps[p])>0 { ok=false }')])
 
     case('holdout_go_projection', 'go', 'replay',
          'Project consumes versioned key updates in arrival order. Only a strictly newer revision '

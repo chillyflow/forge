@@ -23,6 +23,7 @@ def version(command):
 def source_identity(root):
     benchmark = root / 'benchmark'
     paths = sorted([*benchmark.glob('*.py'), *benchmark.glob('*.md'),
+                    *benchmark.glob('holdout/**/*.md'),
                     benchmark / 'requirements-aider.txt', root / 'CMakeLists.txt',
                     *root.glob('cmake/**/*'), *root.glob('src/**/*'),
                     *root.glob('include/**/*')])
