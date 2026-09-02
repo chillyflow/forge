@@ -1,0 +1,26 @@
+diff --git a/service.go b/service.go
+index 72d3000..6246d44 100644
+--- a/service.go
++++ b/service.go
+@@ -10,8 +10,19 @@ func ResolveMount(request string, mounts []string) (string, string, bool) {
+ 	best := ""
+ 	for _, raw := range mounts {
+ 		mount := path.Clean("/" + raw)
+-		if (mount == "/" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {
+-			best = mount
++		if mount == "/" {
++			if len(mount) > len(best) {
++				best = mount
++			}
++		} else if strings.HasPrefix(request, mount) {
++			// Check that we have a full path component match
++			// If request is "/apple" and mount is "/app", this should not match
++			// But if request is "/apple" and mount is "/apple", this should match
++			if len(request) == len(mount) || strings.HasPrefix(request[len(mount):], "/") {
++				if len(mount) > len(best) {
++					best = mount
++				}
++			}
+ 		}
+ 	}
+ 	if best == "" {

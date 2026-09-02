@@ -1,0 +1,11 @@
+diff --git a/service.py b/service.py
+index c3e705c..118d0df 100644
+--- a/service.py
++++ b/service.py
+@@ -1,4 +1,5 @@
+ import csv
+ import io
++
+ def read_records(text):
+-    return list(csv.reader(text.splitlines()))
++    return list(csv.reader(io.StringIO(text)))

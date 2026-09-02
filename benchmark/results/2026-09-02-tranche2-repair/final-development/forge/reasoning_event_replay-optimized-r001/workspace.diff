@@ -1,0 +1,16 @@
+diff --git a/repair.go b/repair.go
+index b301ff5..3819a25 100644
+--- a/repair.go
++++ b/repair.go
+@@ -16,7 +16,10 @@ func ReplayEvents(events []Event) (map[string]int, bool) {
+ 		if event.ID == "" || event.Key == "" {
+ 			return nil, false
+ 		}
+-		if _, ok := seen[event.ID]; ok {
++		if existing, ok := seen[event.ID]; ok {
++			if existing != event {
++				return nil, false
++			}
+ 			continue
+ 		}
+ 		if event.Seq != expected {

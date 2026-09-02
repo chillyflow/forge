@@ -120,6 +120,13 @@ checks the revision again after hashing. Output must be outside the source
 tree or in an ignored directory. The lock includes production source hashes
 and hardware metadata as well as the existing runtime and fixture identities.
 
+The [repair and fresh-holdout report](results/2026-09-02-tranche2-repair/README.md)
+records final development gates at 12/12 and 60/60, then all 108 clean-frozen
+holdout runs. Descriptive totals were Forge 30/36, OpenCode 29/36 and Aider 21/36.
+The reporter rejected the comparison because OpenCode changed a protected test;
+no replacement interval or passing promotion claim was produced. Every result,
+the offending diff and the validation rejection remain published as evidence.
+
 The [tranche-2 native development report](results/2026-09-02-tranche2-native/README.md)
 publishes the 261-run matrix, task-cluster intervals, timing/token tables,
 failed-workspace sources and original freeze lock. It also records why the

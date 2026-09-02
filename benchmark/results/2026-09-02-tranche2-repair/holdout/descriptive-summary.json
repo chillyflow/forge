@@ -1,0 +1,74 @@
+{
+  "status": "descriptive_only_rejected_evaluation",
+  "confidence_intervals": null,
+  "reason": "Protected-file mutation invalidates the preregistered comparison. No records excluded or replaced.",
+  "median_definition": "statistics.median of timing.end_to_end_seconds across every scheduled record",
+  "groups": {
+    "forge": {
+      "runs": 36,
+      "passed": 30,
+      "all_run_median_end_to_end_seconds": 23.390999999974156,
+      "tasks": {
+        "holdout_go_build_waves": 3,
+        "holdout_go_lru": 3,
+        "holdout_go_mounts": 3,
+        "holdout_go_projection": 3,
+        "holdout_go_reservations": 3,
+        "holdout_go_window": 0,
+        "holdout_py_closure": 3,
+        "holdout_py_overlay": 3,
+        "holdout_py_queue": 3,
+        "holdout_py_records": 3,
+        "holdout_py_retractions": 0,
+        "holdout_py_versions": 3
+      }
+    },
+    "opencode": {
+      "runs": 36,
+      "passed": 29,
+      "all_run_median_end_to_end_seconds": 32.429500000027474,
+      "tasks": {
+        "holdout_go_build_waves": 3,
+        "holdout_go_lru": 3,
+        "holdout_go_mounts": 3,
+        "holdout_go_projection": 3,
+        "holdout_go_reservations": 3,
+        "holdout_go_window": 1,
+        "holdout_py_closure": 3,
+        "holdout_py_overlay": 0,
+        "holdout_py_queue": 3,
+        "holdout_py_records": 3,
+        "holdout_py_retractions": 1,
+        "holdout_py_versions": 3
+      }
+    },
+    "aider": {
+      "runs": 36,
+      "passed": 21,
+      "all_run_median_end_to_end_seconds": 16.202499999984866,
+      "tasks": {
+        "holdout_go_build_waves": 3,
+        "holdout_go_lru": 3,
+        "holdout_go_mounts": 3,
+        "holdout_go_projection": 0,
+        "holdout_go_reservations": 0,
+        "holdout_go_window": 3,
+        "holdout_py_closure": 0,
+        "holdout_py_overlay": 0,
+        "holdout_py_queue": 3,
+        "holdout_py_records": 3,
+        "holdout_py_retractions": 0,
+        "holdout_py_versions": 3
+      }
+    }
+  },
+  "measurement_violations": [
+    {
+      "harness": "opencode",
+      "run_id": "holdout_go_window-opencode-r001",
+      "reasons": [
+        "protected file changed"
+      ]
+    }
+  ]
+}

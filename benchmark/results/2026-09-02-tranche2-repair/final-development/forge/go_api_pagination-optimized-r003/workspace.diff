@@ -1,0 +1,31 @@
+diff --git a/api/handler.go b/api/handler.go
+index e06b492..676cbca 100644
+--- a/api/handler.go
++++ b/api/handler.go
+@@ -8,15 +8,23 @@ import (
+ 
+ func ListHandler(values []string) http.HandlerFunc {
+ 	return func(w http.ResponseWriter, r *http.Request) {
+-		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+-		size, _ := strconv.Atoi(r.URL.Query().Get("size"))
++		page, pageErr := strconv.Atoi(r.URL.Query().Get("page"))
++		size, sizeErr := strconv.Atoi(r.URL.Query().Get("size"))
+ 		if page < 1 {
+ 			page = 1
+ 		}
+ 		if size < 1 {
+ 			size = 10
+ 		}
+-		start := page * size
++		if sizeErr != nil {
++			w.WriteHeader(http.StatusBadRequest)
++			return
++		}
++		if pageErr != nil {
++			w.WriteHeader(http.StatusBadRequest)
++			return
++		}
++		start := (page - 1) * size
+ 		if start > len(values) {
+ 			start = len(values)
+ 		}

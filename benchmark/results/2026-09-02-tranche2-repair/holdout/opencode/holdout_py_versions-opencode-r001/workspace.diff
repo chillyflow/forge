@@ -1,0 +1,21 @@
+diff --git a/service.py b/service.py
+index ecad096..db72433 100644
+--- a/service.py
++++ b/service.py
+@@ -1,9 +1,12 @@
+ def commit(documents, updates):
+-    staged = documents
++    # First, validate all updates can be applied
++    new_documents = documents.copy()
+     for key, expected, value in updates:
+-        if key not in staged or staged[key][0] != expected:
++        if key not in new_documents or new_documents[key][0] != expected:
+             return False
+-        staged[key] = (expected + 1, value)
++        new_documents[key] = (expected + 1, value)
++    
++    # All updates are valid, apply them atomically
+     documents.clear()
+-    documents.update(staged)
++    documents.update(new_documents)
+     return True

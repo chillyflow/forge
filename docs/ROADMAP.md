@@ -39,8 +39,9 @@ tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-re
 - Transactional TOML profiles/configuration and metadata-only hardware planning.
 - Source-context invalidation after known edits.
 - Session artifacts, metrics, context inspection and read-only replay.
-- Isolated Go/Python benchmark runners, 29 synthetic fixtures, independent
-  verification, repeated Forge/OpenCode/Aider measurements and mechanism ablations.
+- Isolated Go/Python benchmark runners, 29 development and 12 new holdout
+  synthetic fixtures, independent verification, repeated Forge/OpenCode/Aider
+  measurements, clean freeze enforcement, evidence audits and mechanism ablations.
 - Native system/user/assistant/tool prompt protocol, action-budget guidance,
   guarded line hunks and explicit flattened-protocol compatibility.
 - Cross-platform core CI, sanitizers, and direct-backend compilation.
@@ -60,12 +61,13 @@ tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-re
 | Observability | Tokens, reuse, durations, bytes, plans, arena/index/watch counters | Full event/profile reporting and integrated peak RSS/VRAM collection |
 | Configuration | TOML profiles/CLI precedence and hardware estimates | Additional models, KV/draft planning and measured fit coverage |
 | Library ABI | Opaque types and ownership rules | Stable ABI guarantee/install package |
-| Benchmark release | 29 synthetic Go/Python tasks, three repetitions across Forge/OpenCode/Aider, task-cluster intervals and timing/token/failure evidence | Clean frozen holdout after development, remaining reliability gates and larger repository tasks |
+| Benchmark release | Development matrix plus a clean-frozen 12-task holdout, three repetitions across Forge/OpenCode/Aider, retained timing/token/failure evidence and explicit rejection of invalid measurements | Valid fresh comparative holdout, remaining reliability gates and larger repository tasks |
 
 ## Required remaining work
 
-1. Close the atomic-transfer and completion-budget failures, then run a new
-   holdout from a clean frozen revision; extend comparisons to larger repository tasks.
+1. Close the new retraction and rolling-window reliability failures and preserve
+   protected fixtures across comparison harnesses, then evaluate another untouched
+   clean-frozen holdout after tuning; extend comparisons to larger repository tasks.
 2. Resolved repository relationships, structural diff impact and progressive retrieval.
 3. Dependency-aware cached summaries and larger-repository watcher measurements.
 4. Automatic semantic checkpoint selection/eviction and persisted session resume.
@@ -90,12 +92,21 @@ processing against an established local harness using the same GGUF/hardware.
 Its v1.0 gate additionally requires broad platform/language support and published
 task-success/timing evidence. Neither follows from the development version alone.
 
-The [tranche-2 campaign](../benchmark/results/2026-09-02-tranche2-native/README.md)
+The earlier [tranche-2 campaign](../benchmark/results/2026-09-02-tranche2-native/README.md)
 records Forge 83/87 versus OpenCode 71/87 and Aider 69/87, with a positive
 task-cluster interval and lower median latency than OpenCode. The dirty freeze,
 development-task reuse, diagnostic-specific guidance, and resumed comparison
-leg prevent a fresh-holdout promotion claim. Forge's remaining failures are
-three atomic-transfer runs and one quota-allocation completion failure.
+leg prevent a fresh-holdout promotion claim.
+
+The [subsequent repair and holdout](../benchmark/results/2026-09-02-tranche2-repair/README.md)
+fixed the identified atomic-transfer and quota-completion failures: both passed
+3/3 in the final 83/87 development matrix, with regression gates 12/12 and
+invariants 60/60. The new clean-frozen holdout recorded Forge 30/36, OpenCode
+29/36 and Aider 21/36. Forge failed retractions and rolling windows 0/3 each;
+OpenCode passed one retraction repetition. OpenCode also edited a protected
+test's diagnostic message, so the frozen reporter rejected the comparison and
+produced no confidence interval. All 108 runs and that violation are retained.
+Tranche 2 remains unaccepted; a development lead cannot satisfy the fresh gate.
 
 The [normalized comparison](../benchmark/results/2026-08-28-normalized/README.md)
 records 10/10 repairs for both Forge and OpenCode, with less evaluated prompt

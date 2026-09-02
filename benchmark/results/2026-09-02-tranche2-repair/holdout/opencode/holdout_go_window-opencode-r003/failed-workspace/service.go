@@ -1,0 +1,33 @@
+package holdout
+
+type sample struct{ at, value int }
+type Window struct {
+	Width   int
+	samples []sample
+	last    int
+	started bool
+}
+
+func (w *Window) Add(now, value int) (int, bool) {
+	if w.started && now < w.last {
+		return 0, false
+	}
+	if w.started && now == w.last {
+		// For equal timestamps, we should still accept the value but not update last
+		// This allows for multiple samples at the same timestamp
+	} else {
+		w.last = now
+		w.started = true
+	}
+	w.samples = append(w.samples, sample{now, value})
+	first := 0
+	for first < len(w.samples) && w.samples[first].at < now-w.Width {
+		first++
+	}
+	w.samples = w.samples[first:]
+	sum := 0
+	for _, s := range w.samples {
+		sum += s.value
+	}
+	return sum, true
+}

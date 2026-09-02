@@ -1,0 +1,20 @@
+diff --git a/service.go b/service.go
+index 0826199..33ebd1c 100644
+--- a/service.go
++++ b/service.go
+@@ -12,8 +12,13 @@ func (w *Window) Add(now, value int) (int, bool) {
+ 	if w.started && now < w.last {
+ 		return 0, false
+ 	}
+-	w.last = now
+-	w.started = true
++	if w.started && now == w.last {
++		// For equal timestamps, we should still accept the value but not update last
++		// This allows for multiple samples at the same timestamp
++	} else {
++		w.last = now
++		w.started = true
++	}
+ 	w.samples = append(w.samples, sample{now, value})
+ 	first := 0
+ 	for first < len(w.samples) && w.samples[first].at < now-w.Width {

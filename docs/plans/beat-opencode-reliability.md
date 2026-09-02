@@ -46,8 +46,40 @@ gate 3 passed 60/60, both without loop warnings. The full campaign reproduced
 only 11/12 on the regression tasks: quota allocation repaired the code but
 exhausted the prompt budget before completion. Atomic transfers failed 0/3
 against OpenCode's 1/3, so gate 3 remains open. Dependency ordering and event
-replay passed 3/3 each. Next work is the atomic-transfer repair loop, completion
-under prompt pressure, and a new evaluation frozen from a clean revision.
+replay passed 3/3 each. That checkpoint required the atomic-transfer repair loop,
+completion under prompt pressure, and a new evaluation frozen from a clean revision.
+
+### September 2 clean repair and holdout
+
+The [repair and holdout report](../../benchmark/results/2026-09-02-tranche2-repair/README.md)
+records the final candidate at clean revision `5222616`. Rendered-context
+budgeting now removes optional bundles before failing, and native template
+validation accepts the host's final-only registry. Repair instructions require
+baseline tests and tracing the first incorrect expression before editing.
+
+The final development matrix passed 83/87: all four regression tasks 12/12,
+all invariants 60/60, atomic transfers 3/3, quota allocation 3/3, dependency
+ordering 3/3, and event replay 2/3. Regression and invariant sets had no loop
+warnings. Four failures remain in that matrix; earlier candidates' successes
+are not substituted for them.
+
+A separately authored, preregistered 12-task holdout completed all 108 scheduled
+runs from that clean revision: Forge 30/36, OpenCode 29/36, and Aider 21/36.
+Forge passed both atomic and both dependency tasks 3/3, but lost retractions
+0/3 to OpenCode's 1/3 and failed rolling windows 0/3. The latter exhausted
+generation before making an edit; the retraction repairs remained incorrect.
+
+The comparison is rejected: OpenCode changed a protected test's diagnostic
+message in `holdout_go_window-opencode-r001`. The frozen rule invalidates any
+protected-file mutation. The reporter refused to calculate confidence intervals;
+all records, the mutation, and the rejection are retained. No repetition was
+replaced or excluded. The small descriptive point-estimate lead is not acceptance.
+
+Tranche 2 remains open. Next work is the retraction repair loop, rolling-window
+generation exhaustion, and protected-fixture integrity across harnesses, followed
+by another untouched, clean-frozen holdout after tuning. Keep all promotion
+thresholds below unchanged. Forge remains a development preview regardless of
+these local reliability fixes.
 
 ### Tranche 1 — edit, validate, recover
 

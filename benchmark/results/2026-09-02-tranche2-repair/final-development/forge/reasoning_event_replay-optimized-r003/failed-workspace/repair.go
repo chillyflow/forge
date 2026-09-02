@@ -1,0 +1,48 @@
+package repair
+
+type Event struct {
+	Seq           int
+	ID, Kind, Key string
+	Delta         int
+}
+
+func ReplayEvents(events []Event) (map[string]int, bool) {
+	state := map[string]int{}
+	seen := map[string]Event{}
+	expected := 1
+	maxInt := int(^uint(0) >> 1)
+	minInt := -maxInt - 1
+	for _, event := range events {
+		if event.ID == "" || event.Key == "" {
+			return nil, false
+		}
+		if event.Seq != expected {
+			return nil, false
+		}
+		expected++
+		// Check if this is a duplicate event with same ID but different payload
+		if existing, ok := seen[event.ID]; ok {
+			if existing != event {
+				return nil, false
+			}
+			continue
+		}
+		seen[event.ID] = event
+		switch event.Kind {
+		case "Add":
+			current := state[event.Key]
+			if event.Delta > 0 && current > maxInt-event.Delta || event.Delta < 0 && current < minInt-event.Delta {
+				return nil, false
+			}
+			state[event.Key] = current + event.Delta
+		case "Delete":
+			if event.Delta != 0 {
+				return nil, false
+			}
+			delete(state, event.Key)
+		default:
+			return nil, false
+		}
+	}
+	return state, true
+}

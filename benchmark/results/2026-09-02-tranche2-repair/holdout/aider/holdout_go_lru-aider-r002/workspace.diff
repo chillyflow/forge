@@ -1,0 +1,60 @@
+diff --git a/service.go b/service.go
+index b4e4cbb..d2e0f47 100644
+--- a/service.go
++++ b/service.go
+@@ -7,14 +7,17 @@ type Cache struct {
+ }
+ 
+ func (c *Cache) touch(key string) {
++	// Remove the key if it already exists in the order
+ 	for i, k := range c.order {
+ 		if k == key {
+ 			c.order = append(c.order[:i], c.order[i+1:]...)
+ 			break
+ 		}
+ 	}
++	// Add the key to the end (most recently used)
+ 	c.order = append(c.order, key)
+ }
++
+ func (c *Cache) Get(key string) (int, bool) {
+ 	value, ok := c.values[key]
+ 	if ok {
+@@ -22,20 +25,32 @@ func (c *Cache) Get(key string) (int, bool) {
+ 	}
+ 	return value, ok
+ }
++
+ func (c *Cache) Put(key string, value int) {
+ 	if c.Capacity <= 0 {
+ 		return
+ 	}
++	
+ 	if c.values == nil {
+ 		c.values = map[string]int{}
+ 	}
++	
+ 	_, exists := c.values[key]
+ 	c.values[key] = value
+-	if !exists {
++	
++	if exists {
++		// Key already exists, just update its position
+ 		c.touch(key)
+-	}
+-	if len(c.values) > c.Capacity {
+-		delete(c.values, c.order[0])
+-		c.order = c.order[1:]
++	} else {
++		// New key, add it to the order
++		c.touch(key)
++		
++		// Check if we need to evict the least recently used item
++		if len(c.values) > c.Capacity {
++			// Remove the least recently used item (first in order)
++			lruKey := c.order[0]
++			delete(c.values, lruKey)
++			c.order = c.order[1:]
++		}
+ 	}
+ }

@@ -1,0 +1,35 @@
+diff --git a/service.go b/service.go
+index 631ecfa..cba7d90 100644
+--- a/service.go
++++ b/service.go
+@@ -3,7 +3,14 @@ package holdout
+ type Booking struct{ Seat, Customer string }
+ 
+ func Reserve(bookings map[string]string, batch []Booking) bool {
++	if len(batch) == 0 {
++		return true
++	}
++
++	// Validate entire batch first
+ 	pending := make(map[string]string)
++	seenSeats := make(map[string]bool)
++
+ 	for _, b := range batch {
+ 		if b.Seat == "" || b.Customer == "" {
+ 			return false
+@@ -11,9 +18,14 @@ func Reserve(bookings map[string]string, batch []Booking) bool {
+ 		if _, exists := bookings[b.Seat]; exists {
+ 			return false
+ 		}
+-		// Reservations in this batch will be committed together.
++		if seenSeats[b.Seat] {
++			return false
++		}
++		seenSeats[b.Seat] = true
+ 		pending[b.Seat] = b.Customer
+ 	}
++
++	// Apply all reservations if validation passed
+ 	for seat, customer := range pending {
+ 		bookings[seat] = customer
+ 	}

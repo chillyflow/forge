@@ -1,0 +1,67 @@
+diff --git a/service.go b/service.go
+index 65970f3..376900b 100644
+--- a/service.go
++++ b/service.go
+@@ -8,33 +8,57 @@ import (
+ func BuildWaves(deps map[string][]string) ([][]string, error) {
+ 	done := map[string]bool{}
+ 	waves := [][]string{}
++	
++	// Create a copy of deps to avoid modifying the original
++	remaining := make(map[string][]string)
++	for job, prerequisites := range deps {
++		remaining[job] = append([]string(nil), prerequisites...)
++	}
++	
+ 	for len(done) < len(deps) {
+ 		ready := []string{}
+-		for job, prerequisites := range deps {
++		
++		// Find all jobs that are ready to run (all prerequisites done)
++		for job, prerequisites := range remaining {
+ 			if done[job] {
+ 				continue
+ 			}
+-			ok := true
++			
++			// Check if all prerequisites are satisfied
++			allDone := true
+ 			for _, p := range prerequisites {
++				// Check if prerequisite exists
+ 				if _, exists := deps[p]; !exists {
+ 					return nil, fmt.Errorf("missing %s", p)
+ 				}
+-				if !done[p] && len(deps[p]) > 0 {
+-					ok = false
++				// Check if prerequisite is done
++				if !done[p] {
++					allDone = false
+ 				}
+ 			}
+-			if ok {
++			
++			if allDone {
+ 				ready = append(ready, job)
+ 			}
+ 		}
++		
++		// If no jobs are ready, there must be a cycle
+ 		if len(ready) == 0 {
+ 			return nil, fmt.Errorf("cycle")
+ 		}
++		
++		// Sort the ready jobs lexicographically
+ 		sort.Strings(ready)
++		
++		// Mark all ready jobs as done
+ 		for _, job := range ready {
+ 			done[job] = true
++			delete(remaining, job)
+ 		}
++		
++		// Add this wave to the result
+ 		waves = append(waves, ready)
+ 	}
++	
+ 	return waves, nil
+ }

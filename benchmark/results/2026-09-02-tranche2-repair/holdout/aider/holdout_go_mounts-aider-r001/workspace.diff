@@ -1,0 +1,41 @@
+diff --git a/service.go b/service.go
+index 72d3000..d82d2be 100644
+--- a/service.go
++++ b/service.go
+@@ -8,14 +8,33 @@ import (
+ func ResolveMount(request string, mounts []string) (string, string, bool) {
+ 	request = path.Clean("/" + request)
+ 	best := ""
++	bestMount := ""
++	
+ 	for _, raw := range mounts {
+ 		mount := path.Clean("/" + raw)
+-		if (mount == "/" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {
+-			best = mount
++		// Check if request starts with mount or is exactly the mount
++		if mount == "/" || strings.HasPrefix(request, mount+"/") || request == mount {
++			// If this mount is longer than the current best, or if we have no best yet
++			if len(mount) > len(best) {
++				best = mount
++				bestMount = mount
++			}
+ 		}
+ 	}
++	
+ 	if best == "" {
+ 		return "", "", false
+ 	}
+-	return best, strings.TrimPrefix(strings.TrimPrefix(request, best), "/"), true
++	
++	// Extract the remaining path
++	rest := ""
++	if request == best {
++		rest = ""
++	} else if strings.HasPrefix(request, best+"/") {
++		rest = strings.TrimPrefix(request, best+"/")
++	} else if best == "/" {
++		rest = strings.TrimPrefix(request, "/")
++	}
++	
++	return bestMount, rest, true
+ }

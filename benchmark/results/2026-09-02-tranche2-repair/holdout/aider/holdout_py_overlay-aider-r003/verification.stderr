@@ -1,0 +1,39 @@
+test_container_replacement (test_service.Overlay.test_container_replacement) ... FAIL
+test_merge_and_delete (test_service.Overlay.test_merge_and_delete) ... FAIL
+
+======================================================================
+FAIL: test_container_replacement (test_service.Overlay.test_container_replacement)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-aider-gugjltd6\test_service.py", line 17, in test_container_replacement
+    self.assertEqual(changes['x']['nested'], [])
+AssertionError: Lists differ: [3] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+3
+
+- [3]
+?  -
+
++ []
+
+======================================================================
+FAIL: test_merge_and_delete (test_service.Overlay.test_merge_and_delete)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-aider-gugjltd6\test_service.py", line 11, in test_merge_and_delete
+    self.assertEqual(changes['tags'], ['new'])
+AssertionError: Lists differ: ['new', 'later'] != ['new']
+
+First list contains 1 additional elements.
+First extra element 1:
+'later'
+
+- ['new', 'later']
++ ['new']
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+FAILED (failures=2)
