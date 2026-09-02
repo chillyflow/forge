@@ -1,0 +1,29 @@
+diff --git a/web/query.py b/web/query.py
+index 3650649..127b6b0 100644
+--- a/web/query.py
++++ b/web/query.py
+@@ -1,5 +1,21 @@
+-from urllib.parse import parse_qs
++from urllib.parse import parse_qs, urlparse
++import re
+ 
+ def parse_query(value):
+-    parsed = parse_qs(value)
+-    return {key: values[0] for key, values in parsed.items()}
++    # Check for malformed percent escapes before parsing
++    if value and '%' in value:
++        # Pattern to match malformed percent escapes (not followed by two hex digits)
++        malformed_pattern = re.compile(r'%[^0-9A-Fa-f]|%[0-9A-Fa-f][^0-9A-Fa-f]')
++        if malformed_pattern.search(value):
++            raise ValueError("Malformed percent escape")
++    
++    # Parse the query string, keeping blank values and allowing multiple values
++    parsed = parse_qs(value, keep_blank_values=True)
++    
++    # Return the last value for repeated keys
++    result = {}
++    for key, values in parsed.items():
++        if values:  # Only add if there are values
++            result[key] = values[-1]  # Get the last value
++    
++    return result

@@ -1,0 +1,22 @@
+diff --git a/graph/order.py b/graph/order.py
+index bd2041b..a360131 100644
+--- a/graph/order.py
++++ b/graph/order.py
+@@ -1,11 +1,15 @@
+ def topological_order(graph):
+-    result, visiting = [], set()
++    result, visiting, visited = [], set(), set()
+     def visit(node):
+-        if node in visiting:
++        if node in visited:
+             return
++        if node in visiting:
++            raise ValueError("cycle detected")
+         visiting.add(node)
+         for dependency in graph.get(node, []):
+             visit(dependency)
++        visiting.remove(node)
++        visited.add(node)
+         result.append(node)
+     for node in graph:
+         visit(node)

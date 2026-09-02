@@ -1,0 +1,14 @@
+diff --git a/repair.go b/repair.go
+index cd3d231..dc60c54 100644
+--- a/repair.go
++++ b/repair.go
+@@ -5,5 +5,8 @@ func Average(xs []int) float64 {
+ 	for _, v := range xs {
+ 		sum += v
+ 	}
+-	return float64(sum / len(xs))
++	if len(xs) == 0 {
++		return 0
++	}
++	return float64(sum) / float64(len(xs))
+ }
