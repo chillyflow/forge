@@ -344,7 +344,7 @@ static void test_initial_timeout_and_files(void) {
     bool saw_rename = false;
     uint64_t rename_deadline = fg_now_ms() + 4000;
     while (!saw_rename && fg_now_ms() < rename_deadline) {
-        doc = poll_batch(watch, 100, FG_MAX_JSON);
+        doc = poll_batch(watch, 0, FG_MAX_JSON);
         yyjson_val *events = yyjson_obj_get(yyjson_doc_get_root(doc), "events"), *event;
         size_t i, count;
         yyjson_arr_foreach(events, i, count, event) {
@@ -354,6 +354,8 @@ static void test_initial_timeout_and_files(void) {
                     (yyjson_get_uint(yyjson_obj_get(event, "flags")) & FORGE_WATCH_RENAMED) != 0;
         }
         yyjson_doc_free(doc);
+        if (!saw_rename)
+            pause_poll();
     }
     assert(saw_rename);
 #endif
@@ -369,12 +371,13 @@ static void test_initial_timeout_and_files(void) {
 static yyjson_doc *wait_rescan(forge_watch *watch, size_t maximum) {
     uint64_t deadline = fg_now_ms() + 4000;
     while (fg_now_ms() < deadline) {
-        yyjson_doc *doc = poll_batch(watch, 100, maximum);
+        yyjson_doc *doc = poll_batch(watch, 0, maximum);
         if (flag(doc, "rescan_required"))
             return doc;
         if (yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")))
             describe_batch("native delivery while awaiting rescan", doc);
         yyjson_doc_free(doc);
+        pause_poll();
     }
     assert(!"Expected filesystem rescan signal");
     return NULL;
@@ -592,7 +595,7 @@ static void test_event_byte_and_native_work_limits(void) {
     uint64_t deadline = fg_now_ms() + 4000;
     yyjson_doc *doc;
     while (!overflow && !(one && two) && fg_now_ms() < deadline) {
-        doc = poll_batch(watch, 100, limits.max_bytes);
+        doc = poll_batch(watch, 0, limits.max_bytes);
         yyjson_val *events = yyjson_obj_get(yyjson_doc_get_root(doc), "events");
         assert(yyjson_arr_size(events) <= 1);
         if (flag(doc, "rescan_required")) {
@@ -608,6 +611,8 @@ static void test_event_byte_and_native_work_limits(void) {
             two |= !strcmp(fg_json_str(event, "path"), "two.txt");
         }
         yyjson_doc_free(doc);
+        if (!overflow && !(one && two))
+            pause_poll();
     }
     assert(overflow || (one && two));
     forge_watch_destroy(watch);
