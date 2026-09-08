@@ -107,6 +107,36 @@ recovery from ineffective edits while preserving failing evidence and allowing
 legitimate reverts or changed validation inputs. Keep thinking defaults,
 budgets, fixture-hint removals, and all promotion thresholds unchanged.
 
+### September 8 failed repair recovery
+
+The [recovery development report](../../benchmark/results/2026-09-08-repair-recovery/README.md)
+records the Windows expected-path fix, stable native watcher test deadlines, and
+five passing CI jobs. Recovery retains failed workspace contents, validation
+inputs and assertions across edit tools while permitting legitimate reverts and
+changed dependencies. The existing planner supplies actual test runners before
+the first action, and applied repairs receive fresh validation after a failure.
+Deterministic regressions, the full GPU suite and the separate native model probe
+passed.
+
+The retained `7660bf1` source passed 7/10 development variants, gaining distractor
+retractions but losing the prior paraphrased pass. The focused failing-three run
+was 0/3; none of those records was replaced. A later traceback-locals experiment
+fell to 5/10 and was reverted, with all its evidence retained.
+
+The retained binary then passed only 10/12 regression runs and 59/60 invariant
+runs. Transfer failed repetitions 2 and 3; pagination failed repetition 3. These
+all exhausted 16 turns. Protected files were unchanged throughout all 111
+executions, with no crashes or task timeouts, but repair reliability and pass
+preservation remain unproved. Source, runtime, tasks and model settings matched
+their frozen identities. Neither broader gate can borrow the earlier 12/12 or
+60/60 results from another binary.
+
+Failed-state recognition fired in a transfer failure but did not lead to a
+correct repair. Next investigate how recovery directs the next substantive edit
+after repeated failed evidence, retaining legitimate changes across files. Do
+not restore fixture-specific hints, change thinking defaults or budgets, lower
+the gates, or launch a full campaign or new comparative holdout yet.
+
 ### Tranche 1 — edit, validate, recover
 
 Deliver together because each feature closes a different part of the same

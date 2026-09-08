@@ -1,0 +1,516 @@
+[
+  {
+    "run_id": "py_compiler_syntax-optimized-r001",
+    "task": "py_compiler_syntax",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 9,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./tests/test_evaluate.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./tests/test_evaluate.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./tests/test_evaluate.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 28.89000000001397
+  },
+  {
+    "run_id": "reasoning_quota_allocation-optimized-r002",
+    "task": "reasoning_quota_allocation",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 9,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "./..."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "./..."
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 31.766000000061467
+  },
+  {
+    "run_id": "reasoning_quota_allocation-optimized-r001",
+    "task": "reasoning_quota_allocation",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 10,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "./..."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "./..."
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 7,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [conflict]: Broad hunk omits 13 trailing selected lines and differs at only line 72; submit only the intended differing line with matching start/end, or include all 19 selected lines",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 33.375000000116415
+  },
+  {
+    "run_id": "py_compiler_syntax-optimized-r003",
+    "task": "py_compiler_syntax",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 11,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./tests/test_evaluate.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./tests/test_evaluate.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./tests/test_evaluate.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 32.95299999997951
+  },
+  {
+    "run_id": "reasoning_quota_allocation-optimized-r003",
+    "task": "reasoning_quota_allocation",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 12,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "./..."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "./..."
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 7,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [parse]: Proposed Go edit rejected before commit: syntax error at repair.go:91:1 (missing syntax)",
+        "duration_ms": 0.0,
+        "status": "parse"
+      },
+      {
+        "id": 9,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [conflict]: Native middle-of-file hunk changes the selected line count from 6 to 7. Use apply_patch with the smallest exact old_text/new_text for an insertion or deletion, or submit a hunk with the same number of selected and replacement lines",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 41.40500000002794
+  },
+  {
+    "run_id": "go_multifile_transfer-optimized-r001",
+    "task": "go_multifile_transfer",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 13,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "./ledger"
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "./ledger"
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "./ledger"
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "./ledger"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 40.65599999995902
+  },
+  {
+    "run_id": "py_compiler_syntax-optimized-r002",
+    "task": "py_compiler_syntax",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 9,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./tests/test_evaluate.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./tests/test_evaluate.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./tests/test_evaluate.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 25.65500000002794
+  },
+  {
+    "run_id": "reasoning_route_specificity-optimized-r002",
+    "task": "reasoning_route_specificity",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 9,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ],
+      [
+        "gofmt",
+        "-w",
+        "./repair.go"
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 31.108999999938533
+  },
+  {
+    "run_id": "go_multifile_transfer-optimized-r002",
+    "task": "go_multifile_transfer",
+    "passed": false,
+    "status": "limit",
+    "returncode": 1,
+    "turns": 16,
+    "loop_warnings": 1,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "./ledger"
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "./ledger"
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "./ledger"
+      ],
+      [
+        "go",
+        "test",
+        "-v",
+        "./ledger"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 8,
+        "name": "apply_patch",
+        "output": "TOOL_ERROR [conflict]: No edit performed: old_text and new_text are identical. Supply different replacement text; encode line breaks as \\n when changing multiple statements.",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      },
+      {
+        "id": 13,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [conflict]: No hunk edit performed: new_text is identical to the selected line span",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 49.625
+  },
+  {
+    "run_id": "go_multifile_transfer-optimized-r003",
+    "task": "go_multifile_transfer",
+    "passed": false,
+    "status": "limit",
+    "returncode": 1,
+    "turns": 16,
+    "loop_warnings": 1,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "./ledger"
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "./ledger"
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "./ledger"
+      ]
+    ],
+    "failed_state_returns": 1,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 56.31200000003446
+  },
+  {
+    "run_id": "reasoning_route_specificity-optimized-r003",
+    "task": "reasoning_route_specificity",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 9,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ],
+      [
+        "gofmt",
+        "-w",
+        "./repair.go"
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 31.109000000054948
+  },
+  {
+    "run_id": "reasoning_route_specificity-optimized-r001",
+    "task": "reasoning_route_specificity",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 9,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ],
+      [
+        "gofmt",
+        "-w",
+        "./repair.go"
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 30.889999999897555
+  }
+]
