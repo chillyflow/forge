@@ -108,6 +108,8 @@ void fg_validation_result_free(fg_validation_result *result) {
     if (result) {
         free(result->json);
         free(result->summary);
+        fg_input_snapshot_destroy(result->failed_inputs);
+        free(result->failed_command);
         memset(result, 0, sizeof(*result));
     }
 }
@@ -484,6 +486,28 @@ finish:
     metrics->validation_ms += (double)(fg_now_ms() - start);
     if (status != FORGE_OK)
         metrics->validation_failures++;
+    if (status == FORGE_ERR_CONFLICT && evidence_complete &&
+        fg_input_snapshot_equal(before, after)) {
+        /* Retain command identity without generation, timing or diagnostic noise. */
+        yyjson_mut_val *last = yyjson_mut_arr_get_last(commands);
+        yyjson_mut_doc *identity = yyjson_mut_doc_new(NULL);
+        if (last && identity) {
+            yyjson_mut_val *key = yyjson_mut_obj(identity);
+            yyjson_mut_doc_set_root(identity, key);
+            yyjson_mut_obj_add_val(
+                identity, key, "cwd",
+                yyjson_mut_val_mut_copy(identity, yyjson_mut_obj_get(last, "cwd")));
+            yyjson_mut_obj_add_val(
+                identity, key, "argv",
+                yyjson_mut_val_mut_copy(identity, yyjson_mut_obj_get(last, "argv")));
+            result->failed_command = yyjson_mut_write(identity, 0, NULL);
+        }
+        yyjson_mut_doc_free(identity);
+        if (result->failed_command) {
+            result->failed_inputs = before;
+            before = NULL;
+        }
+    }
     fg_input_snapshot_destroy(before);
     fg_input_snapshot_destroy(after);
     free(plan);

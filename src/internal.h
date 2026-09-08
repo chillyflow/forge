@@ -289,6 +289,8 @@ typedef struct {
     size_t commands, stages;
     uint64_t generation;
     char *json, *summary;
+    struct fg_input_snapshot *failed_inputs; /* Complete, stable failed validation inputs. */
+    char *failed_command;
 } fg_validation_result;
 forge_status fg_validation_run(fg_tool_context *, const char *const *, size_t, forge_metrics *,
                                fg_validation_result *, forge_error *);

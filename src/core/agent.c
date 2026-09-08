@@ -2,6 +2,8 @@
 #include "forge/state.h"
 #include "forge/memory.h"
 #include "forge/index.h"
+#include "forge/validation.h"
+#include "input_snapshot.h"
 #include <ctype.h>
 struct forge_agent {
     forge_agent_config config;
@@ -22,6 +24,107 @@ typedef struct {
     char failed_path[FG_PATH_MAX];
     char failed_hypothesis[2049];
 } recovery_mode;
+typedef struct {
+    fg_input_snapshot *inputs;
+    char *command, *diagnostic;
+    size_t turn;
+} failed_workspace;
+typedef struct {
+    failed_workspace entries[8];
+    size_t next, latest;
+} repair_history;
+
+static void failed_workspace_free(failed_workspace *entry) {
+    fg_input_snapshot_destroy(entry->inputs);
+    free(entry->command);
+    free(entry->diagnostic);
+    memset(entry, 0, sizeof(*entry));
+}
+/* Optional loop evidence must not turn an incomplete scan into equality, nor
+ * consume a command's budget. Validation still owns the final correctness gate. */
+static fg_input_snapshot *repair_snapshot(const forge_agent *a, uint64_t deadline) {
+    return fg_input_snapshot_take(a->root, 10000, UINT64_C(64) * 1024 * 1024, a->config.cancelled,
+                                  a->config.userdata, FG_MIN(deadline, fg_now_ms() + 250), NULL);
+}
+/* Takes ownership of inputs; records only host-observed command failures. */
+static void repair_remember(repair_history *history, fg_input_snapshot *inputs, const char *command,
+                            const char *diagnostic, size_t turn) {
+    if (!inputs || !command || !diagnostic || strlen(command) > 8192) {
+        fg_input_snapshot_destroy(inputs);
+        return;
+    }
+    char *key = fg_strdup(command);
+    char *detail = fg_compress_output(diagnostic, 2048, NULL, NULL);
+    if (!key || !detail) {
+        free(key);
+        free(detail);
+        fg_input_snapshot_destroy(inputs);
+        return;
+    }
+    history->latest = history->next++ % 8;
+    failed_workspace *entry = &history->entries[history->latest];
+    failed_workspace_free(entry);
+    *entry = (failed_workspace){inputs, key, detail, turn};
+}
+static void repair_validation(repair_history *history, fg_validation_result *result, size_t turn) {
+    repair_remember(history, result->failed_inputs, result->failed_command, result->summary, turn);
+    result->failed_inputs = NULL;
+}
+static char *repair_evidence(const failed_workspace *entry, bool returned) {
+    fg_buf text = {0};
+    fg_buf_printf(&text,
+                  "%s\nFailure observed on action %zu, input_hash=%016llx.\n"
+                  "run_command inputs: %s\nFailure evidence (historical, not a new test run):\n%s\n"
+                  "Use this assertion to trace the incorrect value before editing. "
+                  "A revert may be an intermediate step in a repair across files. "
+                  "Do not cycle through the same failed implementation; change the implicated "
+                  "condition or a relevant dependency, then validate.\n",
+                  returned ? "FAILED_WORKSPACE_STATE: the edit returned to previously failed "
+                             "contents with identical workspace validation inputs."
+                           : "REPAIR_EVIDENCE: retained failure; current edits remain unverified.",
+                  entry->turn, (unsigned long long)fg_input_snapshot_hash(entry->inputs),
+                  entry->command, entry->diagnostic);
+    return fg_buf_take(&text);
+}
+/* Use the existing planner, including its zero-test-rejecting Python runner.
+ * This is advice before generation, never command execution or verification. */
+static char *validation_guidance(forge_repo *repo) {
+    char *plan = forge_repo_validation_plan(repo, NULL, 0, NULL);
+    yyjson_doc *doc = plan ? yyjson_read(plan, strlen(plan), 0) : NULL;
+    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;
+    yyjson_val *stages = yyjson_obj_get(root, "stages"), *selected = NULL, *stage;
+    size_t i, n;
+    yyjson_arr_foreach(stages, i, n, stage) {
+        const char *name = fg_json_str(stage, "name");
+        yyjson_val *commands = yyjson_obj_get(stage, "commands");
+        if (name && (!strcmp(name, "affected_tests") || !strcmp(name, "broad_tests")) &&
+            yyjson_arr_size(commands)) {
+            selected = commands;
+            break;
+        }
+    }
+    fg_buf text = {0};
+    if (selected) {
+        fg_buf_puts(
+            &text, "VALIDATION_GUIDANCE: planned test runners (cwd and argv below). "
+                   "Run the relevant tests before the first repair. Direct execution of a "
+                   "definition-only Python test file runs no tests. Use these runner arguments; "
+                   "the Python runners reject zero collected tests. Commands still require process "
+                   "authorization. This plan is not evidence that tests passed.\n");
+        yyjson_val *command;
+        yyjson_arr_foreach(selected, i, n, command) {
+            if (i == 3)
+                break;
+            char *json = yyjson_val_write(command, 0, NULL);
+            if (json && strlen(json) <= 2048 && text.len + strlen(json) < 4096)
+                fg_buf_printf(&text, "%s\n", json);
+            free(json);
+        }
+    }
+    yyjson_doc_free(doc);
+    free(plan);
+    return fg_buf_take(&text);
+}
 static void *json_alloc(void *context, size_t bytes) {
     return forge_arena_alloc(context, bytes, NULL);
 }
@@ -302,12 +405,13 @@ static bool validate_stalled_workspace(forge_agent *a, fg_tool_context *tools, f
                                        uint64_t memory_id, size_t turn, char *const *changed_paths,
                                        size_t changed_count, bool *unknown_changes,
                                        char last_diagnostic[4097], uint64_t *diagnostic_hash,
-                                       forge_error *e) {
+                                       repair_history *history, forge_error *e) {
     fg_validation_result verification = {0};
     forge_error verify_error = {0};
     forge_status verified = fg_validation_run(
         tools, *unknown_changes ? NULL : (const char *const *)changed_paths,
         *unknown_changes ? 0 : changed_count, &a->metrics, &verification, &verify_error);
+    repair_validation(history, &verification, turn);
     uint64_t generation = forge_repo_generation(repo);
     if (generation != verification.generation || verification.inputs_changed)
         *unknown_changes = true;
@@ -680,6 +784,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     char *broken_path = NULL, *broken_detail = NULL;
     char last_diagnostic[4097] = "";
     recovery_mode recovery = {0};
+    repair_history history = {0};
+    uint64_t evidence_id = 0, guidance_id = 0, guidance_generation = 0;
     bool stall_validation_attempted = false;
     uint64_t stall_validation_generation = 0;
     yyjson_doc *reanchored_doc = NULL;
@@ -838,11 +944,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     uint64_t signatures[64] = {0}, latest_result = 0, diagnostic_hash = 0;
     size_t signature_count = 0;
     uint64_t previous_validation_failure = 0;
-    /* Content-level ring of applied patches, independent of repository
-     * generation and diagnostics: re-proposing an identical edit is rejected
-     * before execution instead of burning turns. */
-    uint64_t edit_keys[64] = {0};
-    size_t edit_key_count = 0;
+    uint64_t last_edit_strategy = 0;
     /* Process tools advance repository generation even when indexed bytes are
      * unchanged. Retain their context-free strategies until a real edit or an
      * observed external change so repeated commands still enter recovery. */
@@ -881,10 +983,35 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         if (changes.changed) {
             anchor_valid = false; /* The file may no longer match the anchor. */
             process_key_count = 0;
+            last_edit_strategy = 0;
         }
         fg_repo_change_free(&changes);
         if (status != FORGE_OK)
             break;
+        if (guidance_generation != forge_repo_generation(repo)) {
+            char *guidance = validation_guidance(repo);
+            if (guidance && *guidance) {
+                if (!guidance_id)
+                    guidance_id =
+                        forge_context_add(ctx, FORGE_SEG_MEMORY, guidance, 85, true, 0, 0);
+                else
+                    forge_context_update(ctx, guidance_id, guidance, turn);
+            } else if (guidance_id)
+                forge_context_update(ctx, guidance_id, "No current test runner was planned.", turn);
+            free(guidance);
+            guidance_generation = forge_repo_generation(repo);
+        }
+        if (history.next) {
+            char *evidence = repair_evidence(&history.entries[history.latest], false);
+            if (evidence) {
+                if (!evidence_id)
+                    evidence_id =
+                        forge_context_add(ctx, FORGE_SEG_MEMORY, evidence, 95, true, 0, 0);
+                else
+                    forge_context_update(ctx, evidence_id, evidence, turn);
+            }
+            free(evidence);
+        }
         if (native_protocol) {
             char *run_state = native_run_state_text(turn, a->config.limits.max_turns);
             status = run_state ? forge_context_update(ctx, run_state_id, run_state, turn)
@@ -985,8 +1112,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                                                  &during_generation, &unknown_changes, e))
             status = e && e->code ? e->code : FORGE_ERR_IO;
         bool stale_response = during_generation.changed;
-        if (stale_response)
+        if (stale_response) {
             process_key_count = 0;
+            last_edit_strategy = 0;
+        }
         fg_repo_change_free(&during_generation);
         if (status != FORGE_OK || stale_response) {
             free(response);
@@ -1066,8 +1195,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                                                      &final_changes, &unknown_changes, e))
                 status = e && e->code ? e->code : FORGE_ERR_IO;
             bool stale_final = final_changes.changed;
-            if (stale_final)
+            if (stale_final) {
                 process_key_count = 0;
+                last_edit_strategy = 0;
+            }
             fg_repo_change_free(&final_changes);
             if (status != FORGE_OK) {
                 yyjson_doc_free(d);
@@ -1097,6 +1228,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 forge_status verified = fg_validation_run(
                     &tools, unknown_changes ? NULL : (const char *const *)changed_paths,
                     unknown_changes ? 0 : changed_count, &a->metrics, &verification, &verify_error);
+                repair_validation(&history, &verification, turn);
                 uint64_t generation = forge_repo_generation(repo);
                 if (generation != verification.generation || verification.inputs_changed)
                     unknown_changes = true;
@@ -1315,16 +1447,11 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             if (signatures[j] == signature)
                 hits++;
         signatures[signature_count++ % 64] = signature;
-        bool identical_edit = false;
-        if (!strcmp(tool, "apply_patch") || !strcmp(tool, "apply_hunk")) {
-            /* Exclude generation/diagnostics so an exact replay is recognized
-             * immediately after the first edit advanced repository state. */
-            for (size_t j = 0; j < FG_MIN(edit_key_count, 64); j++)
-                if (edit_keys[j] == strategy_signature)
-                    identical_edit = true;
-            if (!identical_edit)
-                edit_keys[edit_key_count++ % 64] = strategy_signature;
-        }
+        bool identical_edit = strategy_signature == last_edit_strategy;
+        /* Repeated source states are compared after edits against failed input
+         * snapshots. A lifetime blacklist of action arguments forbids valid
+         * reverts and repairs after another input changes. Tool-level no-op and
+         * stale-anchor checks still reject ineffective edits before commit. */
         bool identical_process = false;
         if (process_action_name(tool)) {
             for (size_t j = 0; j < FG_MIN(process_key_count, 64); j++)
@@ -1445,7 +1572,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             stall_validation_generation = current_generation;
             if (!validate_stalled_workspace(a, &tools, repo, ctx, repo_segment, memory_id, turn,
                                             changed_paths, changed_count, &unknown_changes,
-                                            last_diagnostic, &diagnostic_hash, e)) {
+                                            last_diagnostic, &diagnostic_hash, &history, e)) {
                 yyjson_doc_free(d);
                 free(response);
                 status = e && e->code ? e->code : FORGE_ERR_IO;
@@ -1488,7 +1615,46 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 status = FORGE_ERR_IO;
                 break;
             }
+            fg_input_snapshot *before_command = !strcmp(tool, "run_command") && a->config.allow_exec
+                                                    ? repair_snapshot(a, deadline)
+                                                    : NULL;
             raw = fg_tool_execute(&tools, tool, args, &changed, &tool_error);
+            if (before_command && tools.process_ran && !tool_error.code && raw &&
+                tools.process.exit_code != 0 && !tools.process.timed_out &&
+                !tools.process.cancelled && !tools.process.truncated) {
+                fg_input_snapshot *after_command = repair_snapshot(a, deadline);
+                if (fg_input_snapshot_equal(before_command, after_command)) {
+                    char *command = yyjson_val_write(args, 0, NULL);
+                    repair_remember(&history, after_command, command, raw, turn);
+                    after_command = NULL;
+                    free(command);
+                }
+                fg_input_snapshot_destroy(after_command);
+            }
+            fg_input_snapshot_destroy(before_command);
+            if (changed && history.next) {
+                fg_input_snapshot *current = repair_snapshot(a, deadline);
+                for (size_t j = 0; j < FG_MIN(history.next, 8); j++) {
+                    failed_workspace *entry = &history.entries[(history.next - 1 - j) % 8];
+                    if (!fg_input_snapshot_equal(current, entry->inputs))
+                        continue;
+                    history.latest = (history.next - 1 - j) % 8;
+                    char *notice = repair_evidence(entry, true);
+                    if (notice) {
+                        fg_buf merged = {0};
+                        fg_buf_printf(&merged, "%s\n%s", notice, raw ? raw : "");
+                        free(raw);
+                        raw = fg_buf_take(&merged);
+                        a->metrics.loop_warnings++;
+                        if (!state(a, FORGE_AGENT_RECOVERY, e) ||
+                            !event_text(a, "failed_workspace_state", notice, e))
+                            tools.evidence_failed = true;
+                        free(notice);
+                    }
+                    break;
+                }
+                fg_input_snapshot_destroy(current);
+            }
         }
         double tool_ms = (double)(fg_now_ms() - tool_start);
         a->metrics.tool_ms += tool_ms;
@@ -1554,7 +1720,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             if (!strcmp(tool, "apply_patch") || !strcmp(tool, "apply_hunk")) {
                 char *updated_diff = recovery_edit_diff(a, tools.call_id);
                 if (updated_diff) {
-                    fg_buf history = {0};
+                    fg_buf edit_history = {0};
                     if (last_edit_diff) {
                         size_t history_length = strlen(last_edit_diff);
                         size_t retained = FG_MIN(history_length, (size_t)12288);
@@ -1564,15 +1730,15 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                             retained--;
                         }
                         if (history_start != last_edit_diff)
-                            fg_buf_puts(&history, "[older committed edits omitted]\n");
-                        fg_buf_add(&history, history_start, retained);
-                        fg_buf_puts(&history, "\n");
+                            fg_buf_puts(&edit_history, "[older committed edits omitted]\n");
+                        fg_buf_add(&edit_history, history_start, retained);
+                        fg_buf_puts(&edit_history, "\n");
                     }
-                    size_t room = history.len < 16384 ? 16384 - history.len : 0;
-                    fg_buf_add(&history, updated_diff, FG_MIN(strlen(updated_diff), room));
+                    size_t room = edit_history.len < 16384 ? 16384 - edit_history.len : 0;
+                    fg_buf_add(&edit_history, updated_diff, FG_MIN(strlen(updated_diff), room));
                     free(updated_diff);
                     free(last_edit_diff);
-                    last_edit_diff = fg_buf_take(&history);
+                    last_edit_diff = fg_buf_take(&edit_history);
                 }
             }
             if (!strcmp(tool, "apply_patch")) {
@@ -1751,12 +1917,14 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             }
         }
         if (tools.process_ran) {
+            last_edit_strategy = 0;
             unknown_changes = true; /* Commands may change unindexed test/data inputs. */
             anchor_valid = false;   /* The command may have rewritten the file. */
             if (!strcmp(tool, "run_command"))
                 validation_required = true;
         }
         if (changed) {
+            last_edit_strategy = strategy_signature;
             validation_required = true;
             process_key_count = 0;
         }
@@ -2026,6 +2194,8 @@ finish:
     free(last_edit_diff);
     free(broken_path);
     free(broken_detail);
+    for (size_t i = 0; i < 8; i++)
+        failed_workspace_free(&history.entries[i]);
     yyjson_doc_free(reanchored_doc);
     forge_context_destroy(ctx);
     fg_repo_monitor_destroy(monitor);

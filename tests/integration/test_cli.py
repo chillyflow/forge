@@ -1107,6 +1107,125 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('Staged Go syntax validation passed before commit', output)
         self.assertEqual((self.root / 'calc.go').read_bytes(), candidate)
 
+    def test_failed_workspace_states_survive_edit_tool_changes(self):
+        self.require_python()
+        for changed_input in (None, 'dependency.txt', 'test_input.txt'):
+            with self.subTest(changed_input=changed_input):
+                (self.root / 'calc.go').unlink(missing_ok=True)
+                (self.root / 'caller.go').unlink(missing_ok=True)
+                (self.root / 'worker.py').write_text('value = 1\n', newline='\n')
+                for name in ('dependency.txt', 'test_input.txt'):
+                    (self.root / name).write_text('1\n', newline='\n')
+                command = {'tool': 'run_command', 'args': {'argv': [
+                    sys.executable, '-B', '-c',
+                    'import worker; assert worker.value == 3, "repair assertion: expected 3"']}}
+                actions = [
+                    {'tool': 'apply_patch', 'args': {
+                        'path': 'worker.py', 'old_text': 'value = 1', 'new_text': 'value = 2'}},
+                    command,
+                    {'tool': 'apply_patch', 'args': {
+                        'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 1'}},
+                ]
+                if changed_input:
+                    actions.append({'tool': 'apply_patch', 'args': {
+                        'path': changed_input, 'old_text': '1', 'new_text': '2'}})
+                actions += [
+                    {'tool': 'apply_hunk', 'args': {
+                        'path': 'worker.py', 'start': 1, 'end': 1,
+                        'file_sha256': hashlib.sha256(b'value = 1\n').hexdigest(),
+                        'new_text': 'value = 2\n'}},
+                    {'tool': 'apply_patch', 'args': {
+                        'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 3'}},
+                    {'final': 'Recovered.'},
+                ]
+                _, events, session = self.run_script(
+                    actions, '--allow-write', '--allow-exec', '--no-auto-validation',
+                    fallback_watch=True)
+                matches = [e['data'] for e in events if e['type'] == 'failed_workspace_state']
+                self.assertEqual(len(matches), 0 if changed_input else 1)
+                if not changed_input:
+                    self.assertIn('repair assertion: expected 3', matches[0])
+                    self.assertIn('run_command', matches[0])
+                self.assertEqual((self.root / 'worker.py').read_text(), 'value = 3\n')
+                # Failure evidence stays in the prompt across the intervening revert.
+                self.assertIn('repair assertion: expected 3',
+                              (session / 'context/0004.txt').read_text())
+
+    def test_reapplying_edit_after_a_legitimate_revert_is_allowed(self):
+        edit = {'tool': 'apply_patch', 'args': {
+            'path': 'calc.go', 'old_text': 'a - b', 'new_text': 'a + b'}}
+        _, events, _ = self.run_script([
+            edit,
+            {'tool': 'apply_patch', 'args': {
+                'path': 'calc.go', 'old_text': 'a + b', 'new_text': 'a - b'}},
+            edit,
+            {'final': 'Reapplied a valid repair.'},
+        ], '--allow-write', '--no-auto-validation', fallback_watch=True)
+        self.assertEqual(len([e for e in events if e['type'] == 'edit_result' and
+                              e['data']['state'] == 'applied']), 3)
+        self.assertFalse(any(e['type'] == 'failed_workspace_state' for e in events))
+
+    def test_validation_runner_is_visible_before_first_action(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nclass Tests(unittest.TestCase):\n'
+            '    def test_value(self): self.assertEqual(1, 2)\n', newline='\n')
+        _, _, session = self.run_script([{'final': 'Inspected.'}],
+                                        '--no-auto-validation', fallback_watch=True)
+        prompt = (session / 'context/0001.txt').read_text()
+        self.assertIn('VALIDATION_GUIDANCE', prompt)
+        self.assertIn('unittest', prompt)
+        self.assertIn('test_worker.py', prompt)
+        self.assertIn('definition-only', prompt)
+
+    def test_failed_automatic_validation_tracks_contents_and_keeps_assertion(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text('value = 1\n', newline='\n')
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nfrom worker import value\nclass Tests(unittest.TestCase):\n'
+            '    def test_value(self): self.assertEqual(value, 3, "expected three")\n', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 1', 'new_text': 'value = 2'}},
+            {'final': 'Check the first candidate.'},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 1'}},
+            {'tool': 'apply_hunk', 'args': {
+                'path': 'worker.py', 'start': 1, 'end': 1,
+                'file_sha256': hashlib.sha256(b'value = 1\n').hexdigest(),
+                'new_text': 'value = 2\n'}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'absent', 'new_text': 'still absent'}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 3'}},
+            {'final': 'Validated the actual repair.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        matches = [e['data'] for e in events if e['type'] == 'failed_workspace_state']
+        self.assertEqual(len(matches), 1)
+        self.assertIn('2 != 3', matches[0])
+        self.assertIn('test_worker.py', matches[0])
+        prompt = (session / 'context/0006.txt').read_text()
+        self.assertIn('REPAIR_EVIDENCE', prompt)
+        self.assertIn('expected three', prompt)
+        self.assertTrue(json.loads((session / 'validation/latest.json').read_text())['passed'])
+
+    def test_mutating_failed_command_does_not_label_post_command_contents_failed(self):
+        (self.root / 'state.txt').write_text('old\n', newline='\n')
+        _, events, _ = self.run_script([
+            {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c',
+                'from pathlib import Path; Path("state.txt").write_text("failed\\n"); exit(1)']}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'state.txt', 'old_text': 'failed', 'new_text': 'old'}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'state.txt', 'old_text': 'old', 'new_text': 'failed'}},
+            {'final': 'Mutation is not stable failure evidence.'},
+        ], '--allow-write', '--allow-exec', '--no-auto-validation', fallback_watch=True)
+        self.assertFalse(any(e['type'] == 'failed_workspace_state' for e in events))
+
     def test_python_first_stall_runs_validation_and_pins_failure(self):
         if not any(shutil.which(name) for name in ('python', 'python3', 'py')):
             self.skipTest('Python executable discovery is needed for automatic validation')

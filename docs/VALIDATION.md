@@ -255,9 +255,11 @@ detect changes; they are not cryptographic authentication.
 ## Repeated-action recovery
 
 The agent enters `FORGE_AGENT_RECOVERY` on the second canonical occurrence of
-an action in the same repository-generation and diagnostic state. An exact
-replay of an already applied patch also enters recovery even though the first
-patch advanced the generation. Process actions are compared by context-free
+an action in the same repository-generation and diagnostic state. An immediate
+replay of the last applied edit also enters recovery even though the edit
+advanced the generation. An intervening edit, command or observed external
+change clears that edit identity, allowing legitimate reverts and reapplication.
+Process actions are compared by context-free
 strategy until a real edit or observed external change, because merely launching
 a command advances Forge's repository generation. The repeated tool is rejected
 without execution; recovery replaces the former fatal repeated-action counter.
@@ -283,6 +285,37 @@ I/O/parse failures still terminate. The packet preserves both a preceding tool
 failure and the stall-validation result. Finalization requires
 `verification.passed`; a successful planner call whose result is
 `not_applicable` cannot authorize a final answer.
+
+Before the first action, and after repository generation changes, the existing
+validation planner supplies a bounded `VALIDATION_GUIDANCE` context with test
+runner commands. This includes the Python runner that rejects zero collected
+tests. Planning does not execute a command, grant process permission, or mark
+validation passed.
+
+The session retains up to eight failed workspace snapshots with the command
+arguments, working directory (workspace root for manual commands), and bounded
+failure output. Only a completed nonzero command or failed automatic validation
+with identical before/after input snapshots can establish a failed state.
+Rejected edits, denied commands, interrupted processes, and commands that change
+inputs cannot establish one. Input comparison covers sorted paths, lengths and
+content hashes, including unindexed tests, configuration and data; generation
+bumps and tool names do not define equality. Only root `.git/` and `.forge/`
+metadata are excluded, as in verification snapshots.
+
+An applied edit that returns to one of those input snapshots emits
+`failed_workspace_state`, increments `loop_warnings`, and places the earlier
+command and failure ahead of the edit result. This is an advisory recovery
+transition: the edit remains applied, so a legitimate revert can be followed by
+a repair in another file. Changing another input prevents an equality match.
+The latest failure also stays in a pinned `REPAIR_EVIDENCE` context across reads
+and rejected edits, labeled historical rather than a new validation result.
+
+Optional recovery scans are limited to 10,000 files, 64 MiB and 250 ms per scan;
+an incomplete scan never proves equality. Automatic failure snapshots reuse
+verification's complete input evidence. Command identities are bounded to 8 KiB
+and diagnostics to 2 KiB. These checks do not fingerprint external services,
+environment changes or installed dependencies, and cannot establish semantic
+equivalence between different source contents. Normal validation remains required.
 
 ## Conservative fallbacks and limits
 
