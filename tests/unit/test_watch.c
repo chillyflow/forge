@@ -433,13 +433,32 @@ static void test_metadata_exclusions(void) {
     watch = create(&f, &limits);
     initial(&f, &watch, &limits);
     fixture_write(&f, ".forge/deep/long-metadata-path.bin", "ignored", 7);
-    doc = poll_batch(watch, 100, FG_MAX_JSON);
-    if (flag(doc, "rescan_required") ||
-        yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")))
-        describe_batch("unexpected metadata exclusion batch", doc);
-    assert(!flag(doc, "rescan_required"));
-    assert(yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")) == 0);
-    yyjson_doc_free(doc);
+    /* Verify actual delivery beside the excluded subtree. A callback arriving
+     * at the exact end of a timed poll may correctly report deadline loss.
+     * Nonblocking polls retain native work limits without conflating that
+     * timing contract with metadata exclusion. */
+    fixture_write(&f, "ok", "visible", 7);
+    bool delivered = false;
+    uint64_t until = fg_now_ms() + 2000;
+    while (!delivered && fg_now_ms() < until) {
+        doc = poll_batch(watch, 0, FG_MAX_JSON);
+        if (flag(doc, "rescan_required"))
+            describe_batch("unexpected metadata exclusion batch", doc);
+        assert(!flag(doc, "rescan_required"));
+        events = yyjson_obj_get(yyjson_doc_get_root(doc), "events");
+        yyjson_arr_foreach(events, i, count, event) {
+            assert(!strcmp(fg_json_str(event, "path"), "ok"));
+            delivered = true;
+        }
+        yyjson_doc_free(doc);
+#ifdef _WIN32
+        Sleep(5);
+#else
+        struct timespec pause = {0, 5000000};
+        nanosleep(&pause, NULL);
+#endif
+    }
+    assert(delivered);
     forge_watch_destroy(watch);
     fixture_finish(&f);
 }
