@@ -928,6 +928,8 @@ static bool validate_go_candidate(const char *path, const char *text, size_t len
     return false;
 }
 
+static size_t span_line_count(const char *text, size_t len);
+
 static char *commit_edit(fg_tool_context *c, const char *path, char full[FG_PATH_MAX], bool exists,
                          const struct stat *st, char *text, size_t len, fg_buf *out, bool *changed,
                          forge_error *e) {
@@ -939,6 +941,7 @@ static char *commit_edit(fg_tool_context *c, const char *path, char full[FG_PATH
     char committed_hash[65] = {0};
     bool report_committed_hash =
         native_protocol && fg_sha256_hex(out->data, out->len, committed_hash);
+    size_t committed_lines = span_line_count(out->data, out->len);
     char temp[FG_PATH_MAX], random[17];
     if (!fg_random_hex(random, 8) ||
         snprintf(temp, sizeof(temp), "%s.forge-%s.tmp", full, random) >= (int)sizeof(temp)) {
@@ -1036,7 +1039,8 @@ static char *commit_edit(fg_tool_context *c, const char *path, char full[FG_PATH
     fg_buf result = {0};
     fg_buf_printf(&result, "Patched %s.\nRecorded edit diff: %s\n", path, edit.diff);
     if (report_committed_hash)
-        fg_buf_printf(&result, "file_sha256:%s\n", committed_hash);
+        fg_buf_printf(&result, "file_sha256:%s\nfile_line_count:%zu\n", committed_hash,
+                      committed_lines);
     const char *ext = strrchr(path, '.');
     if (ext && !strcmp(ext, ".go")) {
         fg_buf_puts(&result, "Staged Go syntax validation passed before commit.\n");
@@ -1288,6 +1292,8 @@ static char *hunk(fg_tool_context *c, yyjson_val *args, bool *changed, forge_err
                       "TOOL_ERROR [conflict]: stale file_sha256 for %s; current file_sha256 is "
                       "%s. Current selected content follows; use this hash for a revised hunk.\n",
                       path, current);
+        fg_buf_printf(&report, "No edit performed. file_sha256:%s\nfile_line_count:%zu\n", current,
+                      span_line_count(text, len));
         size_t first = 0, last = 0;
         if (line_span(text, len, start, end, &first, &last)) {
             size_t show = FG_MIN(last - first, (size_t)8192);
@@ -1306,8 +1312,13 @@ static char *hunk(fg_tool_context *c, yyjson_val *args, bool *changed, forge_err
     }
     size_t first = 0, last = 0;
     if (!line_span(text, len, start, end, &first, &last)) {
+        size_t lines = span_line_count(text, len);
         free(text);
-        fg_error(e, FORGE_ERR_ARGUMENT, "Hunk line range is outside the current file");
+        fg_error(e, FORGE_ERR_ARGUMENT,
+                 "Hunk line range is outside the current file. No edit performed. "
+                 "file_sha256:%s\nfile_line_count:%zu\nUse bounds within the current file, "
+                 "or an exact apply_patch against committed content.",
+                 current, lines);
         return NULL;
     }
     size_t replacement_len = strlen(replacement);

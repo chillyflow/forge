@@ -312,6 +312,16 @@ and rejected edits, labeled historical rather than a new validation result.
 Completed failure output is retained even if inputs changed or a snapshot was
 unavailable, with `stable_inputs=false`; that evidence cannot trigger a state match.
 
+Once a completed validation failure has been observed, each subsequently applied
+edit runs the existing staged validator before the next model turn, when execution
+and automatic validation are enabled. Its current verdict and bounded diagnostic
+are included in the edit result as `POST_EDIT_VALIDATION` and in working state.
+This uses the existing command and session deadlines; it does not extend the
+model turn budget. A final answer still requires the normal final validation.
+Rejected hunks report the current file hash and line count and explicitly state
+that no edit was performed, so a proposed replacement cannot be mistaken for the
+current contents.
+
 Optional recovery scans are limited to 10,000 files, 64 MiB and 250 ms per scan;
 an incomplete scan never proves equality. Automatic failure snapshots reuse
 verification's complete input evidence. Command identities are bounded to 8 KiB

@@ -786,7 +786,7 @@ class ForgeTests(unittest.TestCase):
             {'final': 'The corrected result passed verification.'},
         ], '--allow-write', '--allow-exec', fallback_watch=True)
         reports = [e['data'] for e in events if e['type'] == 'validation_result']
-        self.assertEqual([report['passed'] for report in reports], [False, True])
+        self.assertEqual([report['passed'] for report in reports], [False, True, True])
         self.assertEqual([e['data'] for e in events if e['type'] == 'message'],
                          ['The corrected result passed verification.'])
         state = json.loads((session / 'working_state.json').read_text())
@@ -849,7 +849,7 @@ class ForgeTests(unittest.TestCase):
             {'final': 'Restored the fixture and verified it.'},
         ], '--allow-exec', '--allow-write', fallback_watch=True)
         reports = [event['data'] for event in events if event['type'] == 'validation_result']
-        self.assertEqual([report['passed'] for report in reports], [False, True])
+        self.assertEqual([report['passed'] for report in reports], [False, True, True])
         self.assertTrue(all(report['inputs_checked'] for report in reports))
         self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
                          ['Restored the fixture and verified it.'])
@@ -1179,6 +1179,49 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('unittest', prompt)
         self.assertIn('test_worker.py', prompt)
         self.assertIn('definition-only', prompt)
+
+    def test_failed_repair_is_rechecked_immediately_after_edit(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text('value = 1\n', newline='\n')
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nfrom worker import value\nclass Tests(unittest.TestCase):\n'
+            '    def test_value(self): self.assertEqual(value, 3)\n', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'run_command', 'args': {'argv': [sys.executable, '-B', '-m',
+                                                     'unittest', 'test_worker', '-v']}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 1', 'new_text': 'value = 2'}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 3'}},
+            {'final': 'Repaired and validated.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        outputs = [e['data']['output'] for e in events if e['type'] == 'tool_result']
+        self.assertIn('2 != 3', outputs[1])
+        self.assertIn('POST_EDIT_VALIDATION', outputs[1])
+        self.assertIn('Automatic staged validation passed', outputs[2])
+        self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
+                         'passed')
+
+    def test_rejected_hunk_reports_current_bounds_without_applying_candidate(self):
+        target = self.root / 'lines.txt'
+        target.write_bytes(b'first\nsecond\nlast\n')
+        anchor = hashlib.sha256(target.read_bytes()).hexdigest()
+        _, events, _ = self.run_script([
+            native_call('apply_hunk', {'path': 'lines.txt', 'start': 1, 'end': 10,
+                                       'file_sha256': anchor, 'new_text': 'rejected\n'}),
+            native_call('apply_hunk', {'path': 'lines.txt', 'start': 2, 'end': 2,
+                                       'file_sha256': anchor, 'new_text': 'repaired\n'}),
+            native_call('final', {'answer': 'Applied the narrow retry.'}),
+        ], '--allow-write', '--no-auto-validation', '--prompt-protocol', 'native',
+           fallback_watch=True)
+        outputs = [e['data']['output'] for e in events if e['type'] == 'tool_result']
+        self.assertIn('No edit performed', outputs[0])
+        self.assertIn('file_line_count:3', outputs[0])
+        self.assertIn(f'file_sha256:{anchor}', outputs[0])
+        self.assertIn('file_line_count:3', outputs[1])
+        self.assertEqual(target.read_bytes(), b'first\nrepaired\nlast\n')
 
     def test_failed_automatic_validation_tracks_contents_and_keeps_assertion(self):
         self.require_python()

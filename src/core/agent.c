@@ -81,7 +81,8 @@ static char *repair_evidence(const failed_workspace *entry, bool returned) {
                   "condition or a relevant dependency, then validate.\n",
                   returned ? "FAILED_WORKSPACE_STATE: the edit returned to previously failed "
                              "contents with identical workspace validation inputs."
-                           : "REPAIR_EVIDENCE: retained failure; current edits remain unverified.",
+                           : "REPAIR_EVIDENCE: retained historical failure; consult current host "
+                             "validation for the latest verdict.",
                   entry->turn, (unsigned long long)fg_input_snapshot_hash(entry->inputs),
                   entry->inputs ? "true" : "false", entry->command, entry->diagnostic);
     return fg_buf_take(&text);
@@ -405,7 +406,9 @@ static bool validate_stalled_workspace(forge_agent *a, fg_tool_context *tools, f
                                        uint64_t memory_id, size_t turn, char *const *changed_paths,
                                        size_t changed_count, bool *unknown_changes,
                                        char last_diagnostic[4097], uint64_t *diagnostic_hash,
-                                       repair_history *history, forge_error *e) {
+                                       repair_history *history,
+                                       forge_state_validation_status *verdict, char **feedback,
+                                       forge_error *e) {
     fg_validation_result verification = {0};
     forge_error verify_error = {0};
     forge_status verified = fg_validation_run(
@@ -437,6 +440,8 @@ static bool validate_stalled_workspace(forge_agent *a, fg_tool_context *tools, f
         : verified != FORGE_OK       ? FORGE_STATE_FAILED
         : verification.passed        ? FORGE_STATE_PASSED
                                      : FORGE_STATE_NOT_APPLICABLE;
+    if (verdict)
+        *verdict = validation_status;
     if (forge_working_state_set_validation(a->working_state, generation, validation_status, summary,
                                            e) != FORGE_OK ||
         !save_working_state(a, ctx, memory_id, turn, true, e)) {
@@ -444,9 +449,11 @@ static bool validate_stalled_workspace(forge_agent *a, fg_tool_context *tools, f
         return false;
     }
     fg_buf diagnostic = {0};
-    if (last_diagnostic[0] && strcmp(last_diagnostic, summary))
+    if (!feedback && last_diagnostic[0] && strcmp(last_diagnostic, summary))
         recovery_excerpt(&diagnostic, "last_tool_diagnostic", last_diagnostic, 1800);
-    recovery_excerpt(&diagnostic, "stall_validation_diagnostic", summary, 1800);
+    recovery_excerpt(&diagnostic,
+                     feedback ? "post_edit_validation_diagnostic" : "stall_validation_diagnostic",
+                     summary, 1800);
     char *combined = fg_buf_take(&diagnostic);
     if (!combined) {
         fg_validation_result_free(&verification);
@@ -456,7 +463,13 @@ static bool validate_stalled_workspace(forge_agent *a, fg_tool_context *tools, f
     recovery_copy(last_diagnostic, 4097, combined);
     *diagnostic_hash = fg_diagnostic_hash(combined);
     free(combined);
+    if (feedback)
+        *feedback = fg_strdup(summary);
     fg_validation_result_free(&verification);
+    if (feedback && !*feedback) {
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot retain post-edit validation feedback");
+        return false;
+    }
     if (verified != FORGE_OK && verified != FORGE_ERR_CONFLICT && verified != FORGE_ERR_NOT_FOUND &&
         verified != FORGE_ERR_POLICY) {
         if (e)
@@ -1555,6 +1568,9 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             args = patch_args;
         char *raw = NULL;
         bool changed = false;
+        bool post_edit_checked = false;
+        forge_state_validation_status post_edit_verdict = FORGE_STATE_UNVERIFIED;
+        uint64_t post_edit_generation = 0;
         forge_error tool_error = {0};
         uint64_t tool_start = fg_now_ms();
         tools.process_ran = false;
@@ -1572,7 +1588,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             stall_validation_generation = current_generation;
             if (!validate_stalled_workspace(a, &tools, repo, ctx, repo_segment, memory_id, turn,
                                             changed_paths, changed_count, &unknown_changes,
-                                            last_diagnostic, &diagnostic_hash, &history, e)) {
+                                            last_diagnostic, &diagnostic_hash, &history, NULL, NULL,
+                                            e)) {
                 yyjson_doc_free(d);
                 free(response);
                 status = e && e->code ? e->code : FORGE_ERR_IO;
@@ -1986,6 +2003,42 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
              * file identity, invalidate all source-dependent views immediately. */
             forge_context_invalidate(ctx, 0, forge_repo_generation(repo));
         }
+        if (changed && history.next && a->config.allow_exec && !a->config.skip_validation) {
+            /* A repaired failed check should provide evidence in this edit's
+             * result, before another model turn is spent on a stale read or
+             * an ineffective replacement. Use the same planner, policy and
+             * remaining wall/command limits as ordinary host validation. */
+            char *feedback = NULL;
+            bool checked = validate_stalled_workspace(
+                a, &tools, repo, ctx, repo_segment, memory_id, turn, changed_paths, changed_count,
+                &unknown_changes, last_diagnostic, &diagnostic_hash, &history, &post_edit_verdict,
+                &feedback, e);
+            stall_validation_attempted = true;
+            stall_validation_generation = forge_repo_generation(repo);
+            anchor_valid = false; /* Even validation commands may rewrite inputs. */
+            last_edit_strategy = 0;
+            if (!checked) {
+                free(feedback);
+                free(raw);
+                yyjson_doc_free(d);
+                free(response);
+                status = e && e->code ? e->code : FORGE_ERR_IO;
+                break;
+            }
+            fg_buf checked_edit = {0};
+            post_edit_checked = true;
+            post_edit_generation = forge_repo_generation(repo);
+            fg_buf_printf(&checked_edit, "%s\nPOST_EDIT_VALIDATION:\n%s\n", raw, feedback);
+            free(feedback);
+            free(raw);
+            raw = fg_buf_take(&checked_edit);
+            if (!raw) {
+                yyjson_doc_free(d);
+                free(response);
+                status = fg_error(e, FORGE_ERR_MEMORY, "Cannot append repair validation result");
+                break;
+            }
+        }
         size_t raw_len = strlen(raw);
         a->metrics.raw_tool_bytes += raw_len;
         a->metrics.raw_tool_tokens += fg_model_count(raw, a->config.model);
@@ -2122,13 +2175,20 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             forge_repo_generation(repo),
             changed};
         status = forge_working_state_observe(a->working_state, &observation, e);
+        /* The observation describes the edit before the check. Restore the
+         * host verdict taken afterward, only for that same generation. */
+        if (status == FORGE_OK && post_edit_checked &&
+            post_edit_generation == forge_repo_generation(repo))
+            status = forge_working_state_set_validation(a->working_state, post_edit_generation,
+                                                        post_edit_verdict, last_diagnostic, e);
         if (status == FORGE_OK && tools.process_ran)
             status = forge_working_state_set_validation(
                 a->working_state, forge_repo_generation(repo), FORGE_STATE_UNVERIFIED,
                 "A command ran; workspace inputs require fresh validation.", e);
         /* Keep the full audit state current. Refresh its prompt view after
          * compaction; live chronological tool results already retain new evidence. */
-        if (status == FORGE_OK && !save_working_state(a, ctx, memory_id, turn, evicted != 0, e))
+        if (status == FORGE_OK &&
+            !save_working_state(a, ctx, memory_id, turn, post_edit_checked || evicted != 0, e))
             status = e && e->code ? e->code : FORGE_ERR_IO;
         if (status == FORGE_OK && tools.evidence_failed)
             status = fg_error(e, FORGE_ERR_IO,
