@@ -413,7 +413,7 @@ class FixtureTests(unittest.TestCase):
             self.assertNotIn('--prompt-protocol', commands['aider'])
             for label in ('preflight', 'freeze', 'forge', 'opencode', 'aider'):
                 index = commands[label].index('--task-dir')
-                self.assertEqual(pathlib.Path(commands[label][index + 1]), root / 'holdout')
+                self.assertEqual(pathlib.Path(commands[label][index + 1]), (root / 'holdout').resolve())
             self.assertIn('--require-clean', commands['freeze'])
             campaign = json.loads((output / 'campaign.json').read_text(encoding='utf-8'))
             self.assertEqual(campaign['prompt_protocol'], 'native')

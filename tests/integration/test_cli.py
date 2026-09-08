@@ -1025,7 +1025,8 @@ class ForgeTests(unittest.TestCase):
                 'file_sha256': after_narrow_hash,
                 'new_text': 'line 9\ninserted tail\nline 10\n'}),
             native_call('final', {'answer': 'Applied the narrow edit.'}),
-        ], '--prompt-protocol', 'native', '--allow-write', '--no-auto-validation')
+        ], '--prompt-protocol', 'native', '--allow-write', '--no-auto-validation',
+           fallback_watch=True)
         outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
         self.assertIn('omits 1 trailing selected line', outputs[0])
         self.assertIn('differs at only line 5', outputs[0])
@@ -1049,7 +1050,8 @@ class ForgeTests(unittest.TestCase):
                 'path': 'lines.txt', 'start': 1, 'end': 40, 'file_sha256': anchor,
                 'new_text': replacement}),
             native_call('final', {'answer': 'Applied the anchored replacement.'}),
-        ], '--prompt-protocol', 'native', '--allow-write', '--no-auto-validation')
+        ], '--prompt-protocol', 'native', '--allow-write', '--no-auto-validation',
+           fallback_watch=True)
         output = next(event['data']['output'] for event in events
                       if event['type'] == 'tool_result')
         self.assertIn('Patched lines.txt', output)
@@ -1072,7 +1074,7 @@ class ForgeTests(unittest.TestCase):
             for candidate in candidates
         ] + [
             {'final': 'The invalid candidate was rejected.'},
-        ], '--allow-write', '--no-auto-validation')
+        ], '--allow-write', '--no-auto-validation', fallback_watch=True)
         outputs = [event['data']['output'] for event in events
                    if event['type'] == 'tool_result']
         self.assertEqual(len(outputs), len(candidates))
