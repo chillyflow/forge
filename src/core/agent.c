@@ -49,7 +49,7 @@ static fg_input_snapshot *repair_snapshot(const forge_agent *a, uint64_t deadlin
 /* Takes ownership of inputs; records only host-observed command failures. */
 static void repair_remember(repair_history *history, fg_input_snapshot *inputs, const char *command,
                             const char *diagnostic, size_t turn) {
-    if (!inputs || !command || !diagnostic || strlen(command) > 8192) {
+    if (!command || !diagnostic || strlen(command) > 8192) {
         fg_input_snapshot_destroy(inputs);
         return;
     }
@@ -73,7 +73,7 @@ static void repair_validation(repair_history *history, fg_validation_result *res
 static char *repair_evidence(const failed_workspace *entry, bool returned) {
     fg_buf text = {0};
     fg_buf_printf(&text,
-                  "%s\nFailure observed on action %zu, input_hash=%016llx.\n"
+                  "%s\nFailure observed on action %zu, input_hash=%016llx, stable_inputs=%s.\n"
                   "run_command inputs: %s\nFailure evidence (historical, not a new test run):\n%s\n"
                   "Use this assertion to trace the incorrect value before editing. "
                   "A revert may be an intermediate step in a repair across files. "
@@ -83,7 +83,7 @@ static char *repair_evidence(const failed_workspace *entry, bool returned) {
                              "contents with identical workspace validation inputs."
                            : "REPAIR_EVIDENCE: retained failure; current edits remain unverified.",
                   entry->turn, (unsigned long long)fg_input_snapshot_hash(entry->inputs),
-                  entry->command, entry->diagnostic);
+                  entry->inputs ? "true" : "false", entry->command, entry->diagnostic);
     return fg_buf_take(&text);
 }
 /* Use the existing planner, including its zero-test-rejecting Python runner.
@@ -1619,17 +1619,20 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                                                     ? repair_snapshot(a, deadline)
                                                     : NULL;
             raw = fg_tool_execute(&tools, tool, args, &changed, &tool_error);
-            if (before_command && tools.process_ran && !tool_error.code && raw &&
-                tools.process.exit_code != 0 && !tools.process.timed_out &&
-                !tools.process.cancelled && !tools.process.truncated) {
-                fg_input_snapshot *after_command = repair_snapshot(a, deadline);
-                if (fg_input_snapshot_equal(before_command, after_command)) {
-                    char *command = yyjson_val_write(args, 0, NULL);
-                    repair_remember(&history, after_command, command, raw, turn);
+            if (tools.process_ran && !tool_error.code && raw && tools.process.exit_code != 0 &&
+                !tools.process.timed_out && !tools.process.cancelled && !tools.process.truncated) {
+                fg_input_snapshot *after_command =
+                    before_command ? repair_snapshot(a, deadline) : NULL;
+                if (!fg_input_snapshot_equal(before_command, after_command)) {
+                    fg_input_snapshot_destroy(after_command);
                     after_command = NULL;
-                    free(command);
                 }
-                fg_input_snapshot_destroy(after_command);
+                /* Failure output is still useful when a command mutated inputs
+                 * or a bounded snapshot was unavailable. Only equality evidence
+                 * requires stable, complete input snapshots. */
+                char *command = yyjson_val_write(args, 0, NULL);
+                repair_remember(&history, after_command, command, raw, turn);
+                free(command);
             }
             fg_input_snapshot_destroy(before_command);
             if (changed && history.next) {

@@ -1215,7 +1215,7 @@ class ForgeTests(unittest.TestCase):
 
     def test_mutating_failed_command_does_not_label_post_command_contents_failed(self):
         (self.root / 'state.txt').write_text('old\n', newline='\n')
-        _, events, _ = self.run_script([
+        _, events, session = self.run_script([
             {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c',
                 'from pathlib import Path; Path("state.txt").write_text("failed\\n"); exit(1)']}},
             {'tool': 'apply_patch', 'args': {
@@ -1225,6 +1225,9 @@ class ForgeTests(unittest.TestCase):
             {'final': 'Mutation is not stable failure evidence.'},
         ], '--allow-write', '--allow-exec', '--no-auto-validation', fallback_watch=True)
         self.assertFalse(any(e['type'] == 'failed_workspace_state' for e in events))
+        prompt = (session / 'context/0003.txt').read_text()
+        self.assertIn('REPAIR_EVIDENCE', prompt)
+        self.assertIn('stable_inputs=false', prompt)
 
     def test_python_first_stall_runs_validation_and_pins_failure(self):
         if not any(shutil.which(name) for name in ('python', 'python3', 'py')):

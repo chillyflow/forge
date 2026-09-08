@@ -309,6 +309,8 @@ transition: the edit remains applied, so a legitimate revert can be followed by
 a repair in another file. Changing another input prevents an equality match.
 The latest failure also stays in a pinned `REPAIR_EVIDENCE` context across reads
 and rejected edits, labeled historical rather than a new validation result.
+Completed failure output is retained even if inputs changed or a snapshot was
+unavailable, with `stable_inputs=false`; that evidence cannot trigger a state match.
 
 Optional recovery scans are limited to 10,000 files, 64 MiB and 250 ms per scan;
 an incomplete scan never proves equality. Automatic failure snapshots reuse

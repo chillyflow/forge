@@ -486,8 +486,7 @@ finish:
     metrics->validation_ms += (double)(fg_now_ms() - start);
     if (status != FORGE_OK)
         metrics->validation_failures++;
-    if (status == FORGE_ERR_CONFLICT && evidence_complete &&
-        fg_input_snapshot_equal(before, after)) {
+    if (status == FORGE_ERR_CONFLICT && evidence_complete) {
         /* Retain command identity without generation, timing or diagnostic noise. */
         yyjson_mut_val *last = yyjson_mut_arr_get_last(commands);
         yyjson_mut_doc *identity = yyjson_mut_doc_new(NULL);
@@ -503,7 +502,7 @@ finish:
             result->failed_command = yyjson_mut_write(identity, 0, NULL);
         }
         yyjson_mut_doc_free(identity);
-        if (result->failed_command) {
+        if (result->failed_command && fg_input_snapshot_equal(before, after)) {
             result->failed_inputs = before;
             before = NULL;
         }

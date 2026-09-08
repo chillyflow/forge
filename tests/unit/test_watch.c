@@ -218,6 +218,15 @@ static void describe_batch(const char *label, yyjson_doc *doc) {
     free(json);
 }
 
+static void pause_poll(void) {
+#ifdef _WIN32
+    Sleep(5);
+#else
+    struct timespec delay = {0, 5000000};
+    nanosleep(&delay, NULL);
+#endif
+}
+
 static size_t initial(fixture *f, forge_watch **watch, const forge_watch_limits *limits) {
     uint64_t deadline = fg_now_ms() + 4000;
     size_t reopens = 0;
@@ -260,7 +269,12 @@ static void collect(forge_watch *watch, const char *const *paths, size_t count, 
     uint64_t deadline = fg_now_ms() + 4000;
     bool complete = false;
     while (!complete && fg_now_ms() < deadline) {
-        yyjson_doc *doc = poll_batch(watch, 100, FG_MAX_JSON);
+        /* Delivery assertions use the outer deadline. An OS callback at a
+         * per-poll deadline can correctly lose its expiring payload and request
+         * reopening; that separate contract is covered by deadline tests. */
+        yyjson_doc *doc = poll_batch(watch, 0, FG_MAX_JSON);
+        if (flag(doc, "reopen_required"))
+            describe_batch("loss while collecting native events", doc);
         yyjson_val *events = yyjson_obj_get(yyjson_doc_get_root(doc), "events"), *event;
         size_t i, length;
         yyjson_arr_foreach(events, i, length,
@@ -271,6 +285,8 @@ static void collect(forge_watch *watch, const char *const *paths, size_t count, 
         complete = true;
         for (size_t j = 0; j < count; j++)
             complete &= (seen[j] & required) == required;
+        if (!complete)
+            pause_poll();
     }
     if (!complete)
         for (size_t i = 0; i < count; i++)
@@ -451,12 +467,7 @@ static void test_metadata_exclusions(void) {
             delivered = true;
         }
         yyjson_doc_free(doc);
-#ifdef _WIN32
-        Sleep(5);
-#else
-        struct timespec pause = {0, 5000000};
-        nanosleep(&pause, NULL);
-#endif
+        pause_poll();
     }
     assert(delivered);
     forge_watch_destroy(watch);
