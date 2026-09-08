@@ -1,7 +1,9 @@
 # Failed repair recovery development — September 8, 2026
 
-The first two measured recovery candidates each passed **7/10**, but both lost
-the baseline's paraphrased retraction pass. Neither passes the preservation gate.
+The retained recovery candidate passed **7/10**, but lost the baseline's
+paraphrased retraction pass. It does not pass the preservation gate. A later
+traceback-locals experiment regressed to **5/10** and has been reverted; current
+production source matches the earlier `7660bf1` candidate byte for byte.
 Every run is retained; focused-run successes are not substituted into the full
 matrix. No comparative holdout or promotion claim has been made.
 
@@ -42,20 +44,22 @@ hunk. These checks use the existing permissions, deadlines and model budgets.
 | --- | --- | --- | --- | --- |
 | v2: failed states and early runner guidance | `c821b5e` | 1/3 | 7/10 | No: lost paraphrased; gained renamed |
 | v3: immediate revalidation and hunk bounds | `7660bf1` | 0/3 | 7/10 | No: lost paraphrased; gained distractor |
+| v4: unittest traceback locals; reverted | `c5c3f13` | 1/3 | 5/10 | No: lost contrast and paraphrased |
 
 The unmeasured v1 bundle was staged before the stable-input diagnostic fix; no
-model runs were executed with it. The two measured candidates contain all 26
-scheduled runs. Both full matrices retain all five window passes and the
+model runs were executed with it. The three measured candidates contain all 39
+scheduled runs. All retain the five window passes; v2 and v3 also retain the
 contrast retraction pass. All failures exhausted the 16-turn limit. No process
 crashes, task timeouts, or protected-file mutations occurred. All five retraction
 variants selected a real unittest runner on their first command attempt.
 
 The full-matrix median end-to-end times were 37.281 seconds for v2 and 36.1875
-seconds for v3. These development measurements do not establish a latency or
-correctness advantage over another agent. Each full matrix recorded one loop
-warning. Inconsistent results between focused and full runs remain visible.
+seconds for v3, versus 41.875 seconds for the rejected v4. These development
+measurements do not establish a latency or correctness advantage over another
+agent. The v2 and v3 full matrices each recorded one loop warning; v4 recorded
+seven. Inconsistent results between focused and full runs remain visible.
 
-Both candidates used the unchanged ten manifests from
+All candidates used the unchanged ten manifests from
 [repair-validation-v1](../2026-09-08-repair-validation-v1/README.md), the same
 Qwen3-Coder-30B-A3B-Instruct-Q4_K_M model, GPU layers -1, native protocol,
 embedded template, context 16384, output reserve 2048, temperature 0, seed 42,
@@ -73,21 +77,25 @@ directory, including session contexts, tool traces, validation output, diffs,
 local check logs, and every failed workspace. `evidence-inventory.json` records
 every file hash and the archive hash. The archives were reopened and every
 member verified against that inventory. Immutable runtime bundles remain in
-`.scratch/recovery-runtime-v2` and `.scratch/recovery-runtime-v3` locally.
+`.scratch/recovery-runtime-v2`, `-v3` and `-v4` locally.
 
 - [v2 audit](v2/audit.json), [comparison](v2/comparison.json),
   [complete evidence](v2/complete-evidence.zip).
 - [v3 audit](v3/audit.json), [comparison](v3/comparison.json),
   [complete evidence](v3/complete-evidence.zip).
+- [v4 audit](v4/audit.json), [comparison](v4/comparison.json),
+  [complete evidence](v4/complete-evidence.zip).
 
-The traces show an additional diagnostic gap: assertions inside loops report
-the unexpected result but omit the particular failing local input. The next
-bounded candidate enables unittest traceback locals through the existing
-planner, with a deterministic regression that identifies the failed loop input
-without modifying tests. It will use a new clean freeze and the same settings.
+The v4 experiment exposed the actual failing local input without modifying the
+test. Its deterministic regression, full local suite and GPU probe passed, but
+the model still described the right failing order and generated ineffective
+code. Its full matrix lost both prior retraction passes, so the planner change
+and corresponding feature test were reverted. The rejected implementation and
+test remain in commit `c5c3f13`, and every measured outcome remains in v4 evidence.
 
-The 12/12 regression and 60/60 invariant gates have not been rerun for these
-candidates because the cheaper preservation gate failed. Those gates, the
+The 12-run regression and 60-run invariant checks are next being evaluated on
+the original frozen v3 runtime and unchanged development manifests. They cannot
+override its failed repair/preservation gate. Those gates, the
 existing 80/87 development threshold, protected-file integrity, a fresh untouched
 comparative holdout, a positive task-cluster bootstrap lower correctness bound,
 and preserved latency advantage remain open. No earlier gate result is claimed

@@ -292,11 +292,6 @@ runner commands. This includes the Python runner that rejects zero collected
 tests. Planning does not execute a command, grant process permission, or mark
 validation passed.
 
-The unittest runner includes traceback locals in failed checks. This exposes the
-actual failing input of a loop or parameterized test, alongside its assertion,
-without modifying the test. Existing process-output and diagnostic limits still
-apply; successful checks do not dump locals.
-
 The session retains up to eight failed workspace snapshots with the command
 arguments, working directory (workspace root for manual commands), and bounded
 failure output. Only a completed nonzero command or failed automatic validation
