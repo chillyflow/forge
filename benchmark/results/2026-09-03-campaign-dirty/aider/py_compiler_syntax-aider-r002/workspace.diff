@@ -1,0 +1,12 @@
+diff --git a/expr/evaluate.py b/expr/evaluate.py
+index 4f9c7be..2744f78 100644
+--- a/expr/evaluate.py
++++ b/expr/evaluate.py
+@@ -1,6 +1,6 @@
+ import ast
+ 
+-def evaluate(expression)
++def evaluate(expression):
+     node = ast.parse(expression, mode="eval").body
+     if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Add):
+         raise ValueError("unsupported")

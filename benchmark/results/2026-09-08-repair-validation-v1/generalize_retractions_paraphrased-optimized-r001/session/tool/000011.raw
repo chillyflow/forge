@@ -1,0 +1,25 @@
+file_sha256:931adf9aeda3d3bd127eefd7357629de7f46822d1d15cf354adb163a99925481
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     for event in events:
+5:         if event['id'] in seen:
+6:             continue
+7:         seen.add(event['id'])
+8:         if event['kind'] == 'post':
+9:             account, amount = event['account'], event['amount']
+10:             postings[event['id']] = (account, amount)
+11:             totals.setdefault(account, 0)
+12:             if True:
+13:                 totals[account] += amount
+14:         else:
+15:             target = event['target']
+16:             if target in cancelled:
+17:                 continue
+18:             cancelled.add(target)
+19:             if target in postings:
+20:                 account, amount = postings[target]
+21:                 totals[account] -= amount
+22:             # If target is not in postings, it means the post hasn't been seen yet
+23:             # In that case, we still need to mark it as cancelled so when the post comes later, it won't be applied
+24:     return totals

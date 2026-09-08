@@ -20,6 +20,7 @@ struct fg_chat_templates {
 struct fg_chat_render {
     common_chat_params params;
     size_t cache_anchor = 0;
+    bool enable_thinking = false;
     std::vector<std::string> trigger_patterns;
     std::vector<llama_token> trigger_tokens;
 };
@@ -237,7 +238,7 @@ extern "C" fg_chat_render *fg_chat_templates_apply_native(const fg_chat_template
         inputs.tools = common_chat_tools_parse_oaicompat(request.at("tools"));
         inputs.add_generation_prompt = true;
         inputs.use_jinja = true;
-        inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+        inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
         inputs.parallel_tool_calls = false;
         inputs.enable_thinking = enable_thinking;
         inputs.reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
@@ -251,6 +252,7 @@ extern "C" fg_chat_render *fg_chat_templates_apply_native(const fg_chat_template
                 "Selected chat template has no enforceable native tool grammar/parser");
 
         auto render = std::make_unique<fg_chat_render>();
+        render->enable_thinking = enable_thinking;
         render->params = std::move(params);
         for (const auto &trigger : render->params.grammar_triggers) {
             switch (trigger.type) {
@@ -328,6 +330,25 @@ extern "C" const char *fg_chat_render_grammar(const fg_chat_render *render) {
 
 extern "C" bool fg_chat_render_grammar_lazy(const fg_chat_render *render) {
     return render && render->params.grammar_lazy;
+}
+
+extern "C" const char *fg_chat_render_force_prefix(const fg_chat_render *render) {
+    if (!render || render->enable_thinking || !render->params.grammar_lazy)
+        return nullptr;
+    for (const auto &trigger : render->params.grammar_triggers)
+        if (trigger.type == COMMON_GRAMMAR_TRIGGER_TYPE_WORD && !trigger.value.empty())
+            return trigger.value.c_str();
+    return nullptr;
+}
+
+extern "C" bool fg_chat_render_action_started(const fg_chat_render *render, const char *response) {
+    if (!render || !response)
+        return false;
+    for (const auto &trigger : render->params.grammar_triggers)
+        if (trigger.type == COMMON_GRAMMAR_TRIGGER_TYPE_WORD && !trigger.value.empty() &&
+            std::strstr(response, trigger.value.c_str()))
+            return true;
+    return false;
 }
 
 extern "C" const char *fg_chat_render_generation_prompt(const fg_chat_render *render) {

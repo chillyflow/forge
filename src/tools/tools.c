@@ -204,8 +204,10 @@ static char *native_schema_description(const fg_tool_def *definition) {
         guidance = " Do not reread unchanged content already present in the transcript.";
     else if (!strcmp(definition->name, "run_command"))
         guidance =
-            " Do not rerun an unchanged failing command before a code change. After a successful "
-            "complete validation, call final next.";
+            " Invoke tests through their test runner. For Python unittest use python -m unittest "
+            "discover -v or name the test module explicitly; executing a file that only defines "
+            "tests can exit 0 without running them. Do not rerun an unchanged failing command "
+            "before a code change. After a successful complete validation, call final next.";
     if (!guidance)
         return fg_strdup(definition->description);
     fg_buf description = {0};
@@ -1456,44 +1458,15 @@ static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
                 "surrogate index is not equivalent. For an ID tie-break over indexed "
                 "records, dereference and compare the IDs; changing only comments cannot "
                 "repair executable behavior.\n");
-        if (ok && add_native_failure_guidance && strstr(result, "order=["))
-            ok = fg_buf_puts(
-                &guided,
-                "diagnostic_specific_guidance: The reported output order shows that a newly ready "
-                "item lost lexical priority. Preserve graph construction and make one local edit: "
-                "restore lexical ordering immediately after the loop enqueues newly ready items, "
-                "before the next item is removed from the ready queue.\n");
-        if (ok && add_native_failure_guidance && strstr(result, "success=map["))
-            ok = fg_buf_puts(
-                &guided,
-                "diagnostic_specific_guidance: The unchanged transfer result is consistent with "
-                "validating later operations against the original map. Preserve the existing "
-                "atomic copy/commit flow and make the smallest expression edit so each operation's "
-                "source and destination values are loaded from the staged working map that already "
-                "contains earlier operations.\n");
-        if (ok && add_native_failure_guidance && strstr(result, "ValueError not raised"))
-            ok = fg_buf_puts(
-                &guided,
-                "diagnostic_specific_guidance: The decoder accepted the malformed raw value. Do "
-                "not wrap that decoder in try/except or substitute another permissive decoder. "
-                "Before decoding, add a direct raw-string check that rejects every percent sign "
-                "unless its next two characters are hexadecimal digits.\n");
-        if (ok && add_native_failure_guidance && strstr(result, "capped=map["))
-            ok = fg_buf_puts(
-                &guided,
-                "diagnostic_specific_guidance: The capped allocation shows that distribution "
-                "stopped after one proportional round while capacity remained. Preserve or "
-                "restore the outer redistribution loop, recalculating active recipients and "
-                "weights after caps are reached; keep the no-progress guard. For an equal-"
-                "remainder tie-break by ID, dereference the stored request indices and compare "
-                "their IDs in the existing comparator. Do not replace the iterative allocator "
-                "with a one-pass calculation.\n");
         if (ok && add_native_success_guidance)
             ok = fg_buf_puts(
                 &guided,
-                "\nnext_action_guidance: If this command completed the required validation and the "
-                "implementation satisfies the task, call final now. Do not call memory, repeat a "
-                "successful edit, or rerun unchanged validation before final.\n");
+                "\nnext_action_guidance: A successful process exit does not prove that tests ran "
+                "or that the implementation is correct. Confirm that the test runner executed "
+                "the relevant tests; for Python unittest use python -m unittest discover -v or "
+                "an explicit test module, not direct execution of a definition-only test file. "
+                "If required validation actually passed and the task is complete, call final. "
+                "Do not repeat an already verified validation command.\n");
         if (ok) {
             free(result);
             result = fg_buf_take(&guided);

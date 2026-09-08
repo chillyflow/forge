@@ -1,0 +1,19 @@
+file_sha256:b2660d1edb7dd461f36d77f082f16980ff3ccc1538d688dc3dad7274f15defd8
+1: import unittest
+2: from service import overlay
+3: class Overlay(unittest.TestCase):
+4:     def test_merge_and_delete(self):
+5:         base = {'db': {'port': 1, 'host': 'local'}, 'tags': ['base'], 'remove': 1}
+6:         changes = {'db': {'port': 2}, 'tags': ['new'], 'remove': None}
+7:         result = overlay(base, changes)
+8:         self.assertEqual(result, {'db': {'port': 2, 'host': 'local'}, 'tags': ['new']})
+9:         result['tags'].append('later')
+10:         result['db']['host'] = 'elsewhere'
+11:         self.assertEqual(changes['tags'], ['new'])
+12:         self.assertEqual(base['db']['host'], 'local')
+13:     def test_container_replacement(self):
+14:         changes = {'x': {'nested': []}}
+15:         result = overlay({'x': 1}, changes)
+16:         result['x']['nested'].append(3)
+17:         self.assertEqual(changes['x']['nested'], [])
+18:         self.assertEqual(overlay({'a': 2}, {'absent': None}), {'a': 2})

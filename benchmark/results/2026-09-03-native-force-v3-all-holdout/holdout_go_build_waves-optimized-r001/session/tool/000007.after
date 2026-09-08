@@ -1,0 +1,40 @@
+package holdout
+
+import (
+	"fmt"
+	"sort"
+)
+
+func BuildWaves(deps map[string][]string) ([][]string, error) {
+	done := map[string]bool{}
+	waves := [][]string{}
+	for len(done) < len(deps) {
+		ready := []string{}
+		for job, prerequisites := range deps {
+			if done[job] {
+				continue
+			}
+			ok := true
+			for _, p := range prerequisites {
+				if _, exists := deps[p]; !exists {
+					return nil, fmt.Errorf("missing %s", p)
+				}
+				if !done[p] {
+					ok = false
+				}
+			}
+			if ok {
+				ready = append(ready, job)
+			}
+		}
+		if len(ready) == 0 {
+			return nil, fmt.Errorf("cycle")
+		}
+		sort.Strings(ready)
+		for _, job := range ready {
+			done[job] = true
+		}
+		waves = append(waves, ready)
+	}
+	return waves, nil
+}

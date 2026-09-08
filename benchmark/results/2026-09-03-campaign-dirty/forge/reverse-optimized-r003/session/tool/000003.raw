@@ -1,0 +1,15 @@
+file_sha256:6e1ffb3d0f01a657106137c863f693b7fbcc267c8908f40fc9c2d3db20e85b9c
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	xs := []int{1, 2, 3, 4, 5}
+7: 	Reverse(xs)
+8: 	for i, v := range xs {
+9: 		if v != 5-i {
+10: 			t.Fatalf("got %v", xs)
+11: 		}
+12: 	}
+13: 	Reverse(nil)
+14: }

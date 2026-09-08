@@ -1,0 +1,188 @@
+{
+    "schema_version": 1,
+    "attempt": 1,
+    "generation": 5,
+    "applicable": true,
+    "session": "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-ya7l4i8w/.forge/sessions/65766fc1cf3e817c9b0a39cb0cad1870",
+    "plan": {
+        "schema_version": 2,
+        "generation": 5,
+        "language": "python",
+        "status": "planned",
+        "verification_status": "planned",
+        "graph_kind": "none",
+        "sound": false,
+        "applicable": true,
+        "verification_available": true,
+        "broad_verification_required": true,
+        "changed_paths": [],
+        "languages": [
+            "python"
+        ],
+        "missing_tools": [],
+        "modules": [],
+        "packages": [],
+        "edges": [],
+        "affected_packages": [],
+        "reverse_dependents": [],
+        "fallback_reasons": [],
+        "limitations": [
+            "Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.",
+            "pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.",
+            "Python syntax checks compile source without importing code. Python runs use -B and pytest disables its cache provider, but project tests may still mutate inputs and must be rejected if the validation snapshot changes.",
+            "Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration."
+        ],
+        "python": {
+            "applicable": true,
+            "executable_available": true,
+            "executable": "python",
+            "selection_kind": "changed_files_and_filename_related_tests",
+            "syntax_scope": "all_indexed",
+            "source_file_count": 5,
+            "syntax_file_count": 5,
+            "test_file_count": 1,
+            "targeted_test_count": 0,
+            "syntax_scheduled": true,
+            "tests_applicable": true,
+            "tests_scheduled": true,
+            "test_runner": "unittest",
+            "bytecode_writes_disabled": true,
+            "pytest_cache_disabled": false,
+            "targeted_test_files": []
+        },
+        "stages": [
+            {
+                "name": "format",
+                "requires_previous_success": false,
+                "commands": []
+            },
+            {
+                "name": "compile",
+                "requires_previous_success": true,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "python",
+                            "-B",
+                            "-c",
+                            "import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])",
+                            "./app/__init__.py",
+                            "./app/models.py",
+                            "./app/text/__init__.py",
+                            "./app/text/slug.py",
+                            "./tests/test_slug.py"
+                        ],
+                        "require_empty_stdout": false,
+                        "reason": "indexed_python_files_for_unknown_changes"
+                    }
+                ]
+            },
+            {
+                "name": "affected_tests",
+                "requires_previous_success": true,
+                "commands": []
+            },
+            {
+                "name": "dependent_tests",
+                "requires_previous_success": true,
+                "commands": []
+            },
+            {
+                "name": "vet",
+                "requires_previous_success": true,
+                "commands": []
+            },
+            {
+                "name": "broad_tests",
+                "requires_previous_success": true,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "python",
+                            "-B",
+                            "-c",
+                            "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+                            "./tests/test_slug.py"
+                        ],
+                        "require_empty_stdout": false,
+                        "reason": "final_python_unittest_files"
+                    }
+                ]
+            }
+        ],
+        "command_count": 2
+    },
+    "commands": [
+        {
+            "id": 1,
+            "stage": "compile",
+            "cwd": ".",
+            "argv": [
+                "python",
+                "-B",
+                "-c",
+                "import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])",
+                "./app/__init__.py",
+                "./app/models.py",
+                "./app/text/__init__.py",
+                "./app/text/slug.py",
+                "./tests/test_slug.py"
+            ],
+            "require_empty_stdout": false,
+            "started": true,
+            "exit_code": 0,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 47.0,
+            "stdout_bytes": 0,
+            "stderr_bytes": 0,
+            "stdout_artifact": "validation/0001-0001.stdout",
+            "stderr_artifact": "validation/0001-0001.stderr",
+            "status": "ok"
+        },
+        {
+            "id": 2,
+            "stage": "broad_tests",
+            "cwd": ".",
+            "argv": [
+                "python",
+                "-B",
+                "-c",
+                "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+                "./tests/test_slug.py"
+            ],
+            "require_empty_stdout": false,
+            "started": true,
+            "exit_code": 0,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 62.0,
+            "stdout_bytes": 0,
+            "stderr_bytes": 172,
+            "stdout_artifact": "validation/0001-0002.stdout",
+            "stderr_artifact": "validation/0001-0002.stderr",
+            "status": "ok"
+        }
+    ],
+    "generation_after": 5,
+    "commands_attempted": 2,
+    "commands_run": 2,
+    "stages_passed": 2,
+    "inputs_changed": false,
+    "inputs_checked": true,
+    "input_max_files": 100000,
+    "input_max_bytes": 2147483648,
+    "input_hash_before": "ac5c4af2fab6e5f2",
+    "input_hash_after": "ac5c4af2fab6e5f2",
+    "snapshot_ms": 16.0,
+    "duration_ms": 172.0,
+    "passed": true,
+    "checks_passed": true,
+    "evidence_complete": true,
+    "status": "ok",
+    "summary": "Automatic staged validation passed: 2 commands across 2 stages, repository generation=5."
+}

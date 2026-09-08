@@ -14,8 +14,9 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, load_tasks,
-                    materialize, platform_metadata, protected_unchanged, run_monitored,
-                    runtime_bundle, schedule, snapshot_protected, verify_task, write_json)
+                    materialize, platform_metadata, protect_protected, protected_unchanged,
+                    run_monitored, runtime_bundle, schedule, snapshot_protected, verify_task,
+                    write_json)
 
 # Keep experiment policy in one table so the CLI choices, recorded provenance,
 # and command line cannot drift apart.  ``thought_cue`` is the host scaffold
@@ -154,6 +155,7 @@ def main():
             fixture = materialize(root, task)
             initialize_git(root)
             before_protected = snapshot_protected(root, task)
+            protect_protected(root, task, readonly=True)
             command = [str(forge), 'run', task['prompt'], '--workspace', str(root),
                        '--model', str(model), '--gpu-layers', args.gpu_layers,
                        '--prompt-protocol', args.prompt_protocol,
@@ -178,6 +180,7 @@ def main():
             verification = verify_task(root, task, output, timeout=args.verification_timeout,
                                        gpu_index=args.gpu_index)
             unchanged = protected_unchanged(root, before_protected)
+            protect_protected(root, task, readonly=False)
             startup_seconds = (metrics['load_ms'] / 1000.0) if 'load_ms' in metrics else None
             agent_seconds = (max(0.0, process_result['wall_seconds'] - startup_seconds)
                              if startup_seconds is not None else None)

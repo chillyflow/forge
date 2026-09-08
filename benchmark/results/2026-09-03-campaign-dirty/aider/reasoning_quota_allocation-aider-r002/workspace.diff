@@ -1,0 +1,78 @@
+diff --git a/repair.go b/repair.go
+index 6fe9102..ff59423 100644
+--- a/repair.go
++++ b/repair.go
+@@ -6,6 +6,7 @@ type Request struct {
+ 	ID               string
+ 	Min, Max, Weight int
+ }
++
+ type quotaShare struct {
+ 	index, whole int
+ 	remainder    int64
+@@ -35,6 +36,10 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 		return nil, false
+ 	}
+ 	left := capacity - minTotal
++	if left == 0 {
++		return out, true
++	}
++
+ 	for left > 0 {
+ 		weightTotal := int64(0)
+ 		active := []int{}
+@@ -47,6 +52,7 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 		if weightTotal <= 0 {
+ 			return nil, false
+ 		}
++		
+ 		shares := make([]quotaShare, 0, len(active))
+ 		used := 0
+ 		for _, i := range active {
+@@ -57,22 +63,31 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 			if whole > room {
+ 				whole = room
+ 			}
+-			shares = append(shares, quotaShare{i, whole, numerator % weightTotal})
++			remainder := numerator % weightTotal
++			shares = append(shares, quotaShare{i, whole, remainder})
+ 			used += whole
+ 		}
++		
++		// Distribute the whole parts first
+ 		for _, share := range shares {
+ 			out[requests[share.index].ID] += share.whole
+ 		}
+ 		left -= used
++		
++		// If we've used all remaining capacity, we're done
+ 		if left == 0 {
+ 			break
+ 		}
++		
++		// Sort by remainder (descending) with ID as tie-breaker (ascending)
+ 		sort.SliceStable(shares, func(i, j int) bool {
+ 			if shares[i].remainder == shares[j].remainder {
+-				return shares[i].index < shares[j].index
++				return requests[shares[i].index].ID < requests[shares[j].index].ID
+ 			}
+ 			return shares[i].remainder > shares[j].remainder
+ 		})
++		
++		// Distribute remaining units to requests with highest fractional remainders
+ 		progressed := false
+ 		for _, share := range shares {
+ 			id := requests[share.index].ID
+@@ -82,9 +97,12 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 				progressed = true
+ 			}
+ 		}
++		
++		// If no progress was made, we can't satisfy the allocation
+ 		if !progressed {
+ 			return nil, false
+ 		}
+ 	}
++	
+ 	return out, true
+ }

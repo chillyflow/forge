@@ -1,0 +1,20 @@
+file_sha256:5d26c9e6e75c4d1039fd76235997267590574abca872d75667b67477ff53032d
+1: package store
+2: 
+3: type Record struct {
+4: 	ID    string
+5: 	Value int
+6: }
+7: type Store interface{ Get(string) (Record, bool) }
+8: type Memory struct{ records map[string]Record }
+9: 
+10: func New(records []Record) *Memory {
+11: 	m := &Memory{records: map[string]Record{}}
+12: 	for _, r := range records {
+13: 		m.records[r.ID] = r
+14: 	}
+15: 	return m
+16: }
+17: func (m *Memory) Get(id int) (Record, bool) { r, ok := m.records[id]; return r, ok }
+18: 
+19: var _ Store = (*Memory)(nil)

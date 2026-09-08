@@ -1,0 +1,20 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+F
+======================================================================
+FAIL: test_addition_only (tests.test_evaluate.EvaluateTests.test_addition_only)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-oxxy028i\tests\test_evaluate.py", line 8, in test_addition_only
+    with self.assertRaises(ValueError): evaluate("'a' + 'b'")
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (failures=1)
+
+next_action_guidance: Treat the diagnostics as the change boundary. Preserve behavior not named as failing and make the smallest local edit that addresses the reported condition. The failing assertion and explicit requirements are authoritative; do not reinterpret them or rewrite an otherwise working function. When a requirement names an ordering or tie-break key, compare that semantic key directly; input position or a surrogate index is not equivalent. For an ID tie-break over indexed records, dereference and compare the IDs; changing only comments cannot repair executable behavior.
+diagnostic_specific_guidance: The decoder accepted the malformed raw value. Do not wrap that decoder in try/except or substitute another permissive decoder. Before decoding, add a direct raw-string check that rejects every percent sign unless its next two characters are hexadecimal digits.

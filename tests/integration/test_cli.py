@@ -477,6 +477,41 @@ class ForgeTests(unittest.TestCase):
         self.run_script([json.dumps({'final': 'Done.'})], '--no-auto-validation',
                         '--thought-native', '--disable-thinking')
 
+    def test_native_system_instructions_do_not_depend_on_task_keywords(self):
+        script = self.root / 'script.json'
+        script.write_text(json.dumps([native_call('final', {'answer': 'Inspected.'})]))
+        systems = []
+        for request in ('Inspect the repository.', 'Inspect replay and retraction behavior.'):
+            self.cli('run', request, '--script', str(script), '--prompt-protocol', 'native',
+                     '--no-auto-validation', '--max-turns', '2')
+            session = max((self.root / '.forge' / 'sessions').iterdir(),
+                          key=lambda path: path.stat().st_mtime_ns)
+            prompt = json.loads(sorted((session / 'context').glob('*.txt'))[0].read_text(
+                encoding='utf-8'))
+            systems.append(prompt['messages'][0]['content'])
+        self.assertEqual(systems[0], systems[1])
+        self.assertNotIn("totals[account]", systems[0])
+
+    def test_native_failure_guidance_is_independent_of_diagnostic_text(self):
+        guidance = []
+        for diagnostic in ('ordinary failure', 'order=[x]', 'success=map[x:1]',
+                           'ValueError not raised', 'capped=map[x:1]',
+                           'Retractions AssertionError: unrelated failure'):
+            with self.subTest(diagnostic=diagnostic):
+                _, events, _ = self.run_script([
+                    native_call('run_command', {'argv': [sys.executable, '-c',
+                                f'import sys; print({diagnostic!r}); sys.exit(1)']}),
+                    native_call('final', {'answer': 'Recorded failure; no repair claimed.'}),
+                ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
+                   '--no-semantic', fallback_watch=True)
+                output = next(event['data']['output'] for event in events
+                              if event['type'] == 'tool_result')
+                self.assertIn(diagnostic, output)
+                self.assertNotIn('diagnostic_specific_guidance:', output)
+                self.assertIn('next_action_guidance:', output)
+                guidance.append(output.split('next_action_guidance:', 1)[1])
+        self.assertEqual(len(set(guidance)), 1)
+
     def test_native_prompt_protocol_roles_tools_and_explicit_failures(self):
         (self.root / 'note.txt').write_text('native evidence\n', encoding='utf-8', newline='\n')
         read = native_call('read_file', {'path': 'note.txt', 'start': 1, 'end': 1},
@@ -606,20 +641,51 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('"remaining_actions_including_current":1', run_state)
         self.assertIn('This is the last action', run_state)
 
+    def test_native_successful_process_keeps_penultimate_repair_tools(self):
         command = native_call('run_command', {
             'argv': [sys.executable, '-c', "print('validation passed')"]})
         _, events, session = self.run_script([
             command,
-            native_call('final', {'answer': 'Finished after successful validation.'}),
+            native_call('final', {'answer': 'Only the print command succeeded; tests unverified.'}),
         ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
             '--max-turns', '3')
         output = next(event['data']['output'] for event in events
                       if event['type'] == 'tool_result')
-        self.assertIn('call final now', output)
+        self.assertIn('does not prove that tests ran', output)
         prompts = [json.loads(path.read_text(encoding='utf-8'))
                    for path in sorted((session / 'context').glob('*.txt'))]
         self.assertEqual(len(prompts), 2)
-        self.assertEqual([tool['function']['name'] for tool in prompts[1]['tools']], ['final'])
+        self.assertIn('apply_patch', {tool['function']['name'] for tool in prompts[1]['tools']})
+        state = json.loads((session / 'working_state.json').read_text(encoding='utf-8'))
+        self.assertEqual(state['validation']['status'], 'unverified')
+
+    def test_native_definition_only_unittest_is_not_validation_evidence(self):
+        (self.root / 'test_probe.py').write_text(
+            'import unittest\n'
+            'class ProbeCase(unittest.TestCase):\n'
+            '    def test_contract(self):\n'
+            "        self.assertEqual(2 + 2, 5, 'deliberate validation failure')\n",
+            encoding='utf-8', newline='\n')
+        _, events, session = self.run_script([
+            native_call('run_command', {'argv': [sys.executable, 'test_probe.py']}),
+            native_call('run_command', {'argv': [sys.executable, '-m', 'unittest', '-v', 'test_probe']}),
+            native_call('final', {'answer': 'The real runner found a failing test; no repair claimed.'}),
+        ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
+           '--max-turns', '3', '--no-semantic', fallback_watch=True)
+        results = [event['data'] for event in events if event['type'] == 'tool_result']
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]['exit_code'], 0)
+        self.assertEqual(results[0]['stdout_bytes'], 0)
+        self.assertEqual(results[0]['stderr_bytes'], 0)
+        self.assertIn('does not prove that tests ran', results[0]['output'])
+        self.assertIn('python -m unittest', results[0]['output'])
+        self.assertNotEqual(results[1]['exit_code'], 0)
+        self.assertIn('deliberate validation failure', results[1]['output'])
+        self.assertIn('Ran 1 test', results[1]['output'])
+        prompts = [json.loads(path.read_text(encoding='utf-8'))
+                   for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertIn('run_command', {tool['function']['name'] for tool in prompts[1]['tools']})
+        self.assertEqual([tool['function']['name'] for tool in prompts[2]['tools']], ['final'])
 
     def test_validation_plan_and_permission_denial(self):
         self.go_module()
@@ -1395,11 +1461,6 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('surrogate index is not equivalent', output)
         self.assertIn('dereference and compare the IDs', output)
         self.assertIn('changing only comments cannot repair executable behavior', output)
-        self.assertIn('newly ready item lost lexical priority', output)
-        self.assertIn('loaded from the staged working map', output)
-        self.assertIn('unless its next two characters are hexadecimal digits', output)
-        self.assertIn('restore the outer redistribution loop', output)
-        self.assertIn('dereference the stored request indices and compare their IDs', output)
 
     def test_binary_command_output_is_preserved(self):
         code = "import sys; sys.stdout.buffer.write(b'begin\\x00after\\xff\\n'); sys.stderr.buffer.write(b'error\\x00tail')"

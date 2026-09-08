@@ -1,0 +1,23 @@
+TOOL_ERROR [conflict]: stale file_sha256 for ledger.py; current file_sha256 is 79017fec16ec15b275c5e47db8222eb3db2b99b3cd27ef9586cd5be3a227dc51. Current selected content follows; use this hash for a revised hunk.
+def positions_for(messages):
+    visited, voided = set(), set()
+    entries, positions = {}, {}
+    for message in messages:
+        if message['key'] in visited:
+            continue
+        visited.add(message['key'])
+        if message['kind'] == 'post':
+            bucket, delta = message['bucket'], message['delta']
+            entries[message['key']] = (bucket, delta)
+            positions.setdefault(bucket, 0)
+            positions[bucket] += delta
+        else:
+            reference = message['reference']
+            if reference in voided:
+                continue
+            voided.add(reference)
+            if reference in entries:
+                bucket, delta = entries[reference]
+                positions[bucket] -= delta
+                # Remove the entry to prevent double cancellation
+                del entries[reference]

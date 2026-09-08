@@ -11,9 +11,9 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, load_tasks,
-                    materialize, platform_metadata, protected_files, protected_unchanged,
-                    run_monitored, runtime_bundle, schedule, snapshot_protected, verify_task,
-                    write_json)
+                    materialize, platform_metadata, protect_protected, protected_files,
+                    protected_unchanged, run_monitored, runtime_bundle, schedule, snapshot_protected,
+                    verify_task, write_json)
 from opencode import (isolated_environment, metric_record, request, server_command, start_server,
                       stop_server)
 
@@ -158,6 +158,7 @@ def main():
                 fixture = materialize(root, task)
                 initialize_git(root)
                 before_protected = snapshot_protected(root, task)
+                protect_protected(root, task, readonly=True)
                 state = shared_server or start_server(server, model, output, base_env, args)
                 state['env']['OPENAI_API_BASE'] = f'http://127.0.0.1:{state["port"]}/v1'
                 state['env']['OPENAI_API_KEY'] = state['key']
@@ -199,6 +200,7 @@ def main():
                                            gpu_index=args.gpu_index,
                                            extra_pids=verification_extra)
                 unchanged = protected_unchanged(root, before_protected)
+                protect_protected(root, task, readonly=False)
                 end_to_end = (startup_seconds + agent['wall_seconds'] + teardown_seconds +
                               verification['wall_seconds'])
                 passed = agent['returncode'] == 0 and verification['passed'] and unchanged

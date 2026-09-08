@@ -1,0 +1,58 @@
+
+Update git name with: git config user.name "Your Name"
+Update git email with: git config user.email "you@example.com"
+Aider v0.86.2
+Model: openai/forge-local with whole edit format
+Git repo: .git with 3 files
+Repo-map: using 1024 tokens, auto refresh
+Added graph\__init__.py to the chat.
+Added graph\order.py to the chat.
+
+I'll fix the `topological_order` function to:
+
+1. Handle dependency-only nodes (nodes with no dependencies)
+
+2. Raise ValueError on cycles
+
+3. Return all nodes in proper topological order
+
+
+
+Here's the updated file:
+
+
+
+graph\order.py
+
+```diff
+@@ -1,12 +1,24 @@
+ def topological_order(graph):
+-    result, visiting = [], set()
++    result, visiting, visited = [], set(), set()
++    
+     def visit(node):
+         if node in visiting:
++            raise ValueError("Cycle detected")
++        if node in visited:
+             return
+         visiting.add(node)
+         for dependency in graph.get(node, []):
+             visit(dependency)
++        visiting.remove(node)
++        visited.add(node)
+         result.append(node)
++    
+     for node in graph:
+         visit(node)
++    
++    # Add nodes with no dependencies (dependency-only nodes)
++    for node in graph:
++        if node not in visited:
++            visit(node)
++    
+     return result
+```
+
+
+Tokens: 935 sent, 185 received.
+Applied edit to graph\order.py

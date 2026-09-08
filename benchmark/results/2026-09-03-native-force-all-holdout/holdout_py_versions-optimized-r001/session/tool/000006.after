@@ -1,0 +1,11 @@
+def commit(documents, updates):
+    # Create a copy of the documents to stage changes
+    staged = documents.copy()
+    for key, expected, value in updates:
+        if key not in staged or staged[key][0] != expected:
+            return False
+        staged[key] = (expected + 1, value)
+    # Apply all changes atomically
+    documents.clear()
+    documents.update(staged)
+    return True

@@ -1,0 +1,22 @@
+file_sha256:2515320c670737d620357a23e21e8fe5cc7bc3698cb48ba8edf18d1ab81cd371
+1: package holdout
+2: 
+3: type Booking struct{ Seat, Customer string }
+4: 
+5: func Reserve(bookings map[string]string, batch []Booking) bool {
+6: 	pending := make(map[string]string)
+7: 	for _, b := range batch {
+8: 		if b.Seat == "" || b.Customer == "" {
+9: 			return false
+10: 		}
+11: 		if _, exists := bookings[b.Seat]; exists {
+12: 			return false
+13: 		}
+14: 		// Reservations in this batch will be committed together.
+15: 		pending[b.Seat] = b.Customer
+16: 	}
+17: 	for seat, customer := range pending {
+18: 		bookings[seat] = customer
+19: 	}
+20: 	return true
+21: }

@@ -1,0 +1,31 @@
+diff --git a/repair.go b/repair.go
+index 26b0008..74800f5 100644
+--- a/repair.go
++++ b/repair.go
+@@ -32,7 +32,16 @@ func MatchRoute(method, path string, routes []Route) (string, map[string]string,
+ 		for pi < len(pattern) {
+ 			part := pattern[pi]
+ 			if part == "*" {
+-				if pi != len(pattern)-1 || ai >= len(actual) {
++				if pi != len(pattern)-1 {
++					ok = false
++					break
++				}
++				if ai >= len(actual) {
++					ok = false
++					break
++				}
++				// * must capture non-empty suffix
++				if len(actual[ai:]) == 0 {
+ 					ok = false
+ 					break
+ 				}
+@@ -66,7 +75,7 @@ func MatchRoute(method, path string, routes []Route) (string, map[string]string,
+ 			exact = 1
+ 		}
+ 		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+-		if !found || candidate.literals > best.literals {
++		if !found || candidate.literals > best.literals || (candidate.literals == best.literals && candidate.methodExact > best.methodExact) || (candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards < best.wildcards) || (candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards == best.wildcards && candidate.index < best.index) {
+ 			best = candidate
+ 			found = true
+ 		}

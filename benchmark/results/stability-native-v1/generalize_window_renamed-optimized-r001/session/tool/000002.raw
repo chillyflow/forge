@@ -1,0 +1,20 @@
+file_sha256:339834ec036789cdbb1004ab1b466bc12c47bb74cf01945929a2941296852776
+1: package holdout
+2: 
+3: import "testing"
+4: 
+5: func TestAccumulator(t *testing.T) {
+6: 	w := Accumulator{Horizon: 5}
+7: 	for _, tc := range []struct{ at, value, want int }{{0, 3, 3}, {4, 2, 5}, {5, 7, 9}, {5, -2, 7}, {10, 1, 1}} {
+8: 		got, ok := w.Observe(tc.at, tc.value)
+9: 		if !ok || got != tc.want {
+10: 			t.Fatalf("at %d aggregate %d", tc.at, got)
+11: 		}
+12: 	}
+13: 	if _, ok := w.Observe(9, 100); ok {
+14: 		t.Fatal("backdated reading accepted")
+15: 	}
+16: 	if got, ok := w.Observe(10, 2); !ok || got != 3 {
+17: 		t.Fatal(got, ok)
+18: 	}
+19: }

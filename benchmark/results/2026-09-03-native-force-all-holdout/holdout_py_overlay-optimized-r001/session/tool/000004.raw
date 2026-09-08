@@ -1,0 +1,12 @@
+file_sha256:769ab7f3732634fd74f80c4a4543b324da3bfba3343a9241bfaa3fc749019f05
+1: from copy import deepcopy
+2: def overlay(base, changes):
+3:     result = deepcopy(base)
+4:     for key, value in changes.items():
+5:         if value is None:
+6:             result.pop(key, None)
+7:         elif isinstance(value, dict) and isinstance(result.get(key), dict):
+8:             result[key] = overlay(result[key], value)
+9:         else:
+10:             result[key] = value
+11:     return result

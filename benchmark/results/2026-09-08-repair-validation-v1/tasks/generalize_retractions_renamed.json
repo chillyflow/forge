@@ -1,0 +1,31 @@
+{
+  "id": "generalize_retractions_renamed",
+  "suite": "generalization-v1",
+  "language": "python",
+  "category": "replay",
+  "prompt": "positions_for replays entries and retractions. Event IDs are globally idempotent. A retraction cancels its referenced posting exactly once, even if it arrives before that posting. Unmatched retractions have no balance effect; accounts whose entries cancel retain a zero entry. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-v"
+  ],
+  "files": {
+    "ledger.py": "def positions_for(messages):\n    visited, voided = set(), set()\n    entries, positions = {}, {}\n    for message in messages:\n        if message['key'] in visited:\n            continue\n        visited.add(message['key'])\n        if message['kind'] == 'post':\n            bucket, delta = message['bucket'], message['delta']\n            entries[message['key']] = (bucket, delta)\n            positions.setdefault(bucket, 0)\n            if True:\n                positions[bucket] += delta\n        else:\n            reference = message['reference']\n            if reference in voided:\n                continue\n            voided.add(reference)\n            if reference in entries:\n                bucket, delta = entries[reference]\n                positions[bucket] -= delta\n    return positions\n",
+    "test_ledger.py": "import unittest\nfrom ledger import positions_for\ndef post(i, delta): return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}\ndef retract(i, reference): return {'key': i, 'kind': 'retract', 'reference': reference}\nclass JournalCases(unittest.TestCase):\n    def test_order_and_duplicates(self):\n        p = post('p', 7)\n        for messages in [[p, retract('r', 'p')], [retract('r', 'p'), p],\n                       [p, p, retract('r', 'p'), retract('s', 'p')]]:\n            self.assertEqual(positions_for(messages), {'cash': 0})\n    def test_independent_postings(self):\n        self.assertEqual(positions_for([post('a', 7), post('b', -2), retract('r', 'a')]), {'cash': -2})\n        self.assertEqual(positions_for([retract('r', 'missing')]), {})\n        self.assertEqual(positions_for([]), {})\n"
+  },
+  "oracle_files": {
+    "ledger.py": "def positions_for(messages):\n    visited, voided = set(), set()\n    entries, positions = {}, {}\n    for message in messages:\n        if message['key'] in visited:\n            continue\n        visited.add(message['key'])\n        if message['kind'] == 'post':\n            bucket, delta = message['bucket'], message['delta']\n            entries[message['key']] = (bucket, delta)\n            positions.setdefault(bucket, 0)\n            if message['key'] not in voided:\n                positions[bucket] += delta\n        else:\n            reference = message['reference']\n            if reference in voided:\n                continue\n            voided.add(reference)\n            if reference in entries:\n                bucket, delta = entries[reference]\n                positions[bucket] -= delta\n    return positions\n"
+  },
+  "generalization": {
+    "family": "retractions",
+    "variant": "renamed",
+    "relation": "equivalent",
+    "source_task": "holdout_py_retractions",
+    "source_sha256": "bb8f2cfbf349917e31bc2cb9b0465e411709550a9b5e4a6aff2b705171735db2"
+  },
+  "protected_files": [
+    "test_ledger.py"
+  ]
+}

@@ -44,6 +44,10 @@ bool fg_action_complete(const char *text) {
     }
     return false;
 }
+bool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens) {
+    size_t cap = enabled ? FG_MAX((size_t)1, FG_MIN((size_t)256, max_tokens / 2)) : 0;
+    return enabled && !action_begun && generated < max_tokens && generated == cap;
+}
 bool fg_json_whitespace_only(const char *text, size_t length) {
     if (!text || !length)
         return false;

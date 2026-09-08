@@ -465,6 +465,21 @@ int main(void) {
     assert(fg_json_whitespace_only(" \t\r\n", 4));
     assert(!fg_json_whitespace_only("", 0));
     assert(!fg_json_whitespace_only(" \n{", 3));
+    assert(!fg_native_force_due(false, false, 0, 2048));
+    assert(!fg_native_force_due(true, false, 0, 0));
+    assert(!fg_native_force_due(true, false, 0, 1));
+    assert(!fg_native_force_due(true, false, 1, 1));
+    assert(!fg_native_force_due(true, false, 1, 0));
+    const size_t native_budgets[] = {2, 32, 64, 512, 513, 2048};
+    for (size_t i = 0; i < sizeof(native_budgets) / sizeof(*native_budgets); i++) {
+        size_t budget = native_budgets[i];
+        size_t cap = FG_MIN((size_t)256, budget / 2);
+        assert(!fg_native_force_due(true, false, cap - 1, budget));
+        assert(fg_native_force_due(true, false, cap, budget));
+        assert(!fg_native_force_due(true, true, cap, budget));
+        assert(!fg_native_force_due(false, false, cap, budget));
+        assert(!fg_native_force_due(true, false, budget, budget));
+    }
     assert(fg_action_decode_phase("") == FG_ACTION_SELECT);
     assert(fg_action_decode_phase("{\"tool\":\"read_file\",\"args\":{") == FG_ACTION_ARGUMENTS);
     assert(fg_action_decode_phase("{\"tool\":\"apply_patch\",\"args\":{") == FG_ACTION_PATCH);

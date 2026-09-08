@@ -1,0 +1,15 @@
+diff --git a/repair.go b/repair.go
+index 316c0e4..c9a5634 100644
+--- a/repair.go
++++ b/repair.go
+@@ -21,9 +21,7 @@ func UnionIntervals(in []Interval) []Interval {
+ 	for _, current := range out {
+ 		if len(merged) == 0 || current.Lo > merged[len(merged)-1].Hi {
+ 			merged = append(merged, current)
+-			continue
+-		}
+-		if current.Hi > merged[len(merged)-1].Hi {
++		} else if current.Hi > merged[len(merged)-1].Hi {
+ 			merged[len(merged)-1].Hi = current.Hi
+ 		}
+ 	}

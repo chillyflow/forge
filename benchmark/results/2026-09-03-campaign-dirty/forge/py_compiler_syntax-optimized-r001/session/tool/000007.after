@@ -1,0 +1,11 @@
+import ast
+
+def evaluate(expression):
+    node = ast.parse(expression, mode="eval").body
+    if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Add):
+        raise ValueError("unsupported")
+    if not isinstance(node.left, ast.Constant) or not isinstance(node.right, ast.Constant):
+        raise ValueError("unsupported")
+    if not isinstance(node.left.value, int) or not isinstance(node.right.value, int):
+        raise ValueError("unsupported")
+    return node.left.value + node.right.value

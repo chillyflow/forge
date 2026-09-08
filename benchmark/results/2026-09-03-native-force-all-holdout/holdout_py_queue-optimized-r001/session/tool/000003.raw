@@ -1,0 +1,20 @@
+file_sha256:d9f3be92fddd9b54c0575e2e4c081fced52368e51e8a94392a2cd5b47245e67b
+1: import heapq
+2: class Queue:
+3:     def __init__(self):
+4:         self.heap, self.current, self.serial = [], {}, 0
+5:     def schedule(self, key, priority, value):
+6:         self.serial += 1
+7:         self.current[key] = (self.serial, value)
+8:         heapq.heappush(self.heap, (priority, self.serial, key))
+9:     def cancel(self, key):
+10:         self.current.pop(key, None)
+11:     def pop(self):
+12:         while self.heap:
+13:             _, serial, key = heapq.heappop(self.heap)
+14:             entry = self.current.pop(key, None)
+15:             if entry is None or entry[0] != serial:
+16:                 continue
+17:             # Entry was removed while reading it.
+18:             return key, entry[1]
+19:         return None

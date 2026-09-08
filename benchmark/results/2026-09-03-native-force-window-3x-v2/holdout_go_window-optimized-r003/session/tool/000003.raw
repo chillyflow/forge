@@ -1,0 +1,12 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+=== RUN   TestWindow
+    service_test.go:10: at 5 sum 12
+--- FAIL: TestWindow (0.00s)
+FAIL
+exit status 1
+FAIL	holdout	0.174s
+
+stderr:
+
+next_action_guidance: Treat the diagnostics as the change boundary. Preserve behavior not named as failing and make the smallest local edit that addresses the reported condition. The failing assertion and explicit requirements are authoritative; do not reinterpret them or rewrite an otherwise working function. When a requirement names an ordering or tie-break key, compare that semantic key directly; input position or a surrogate index is not equivalent. For an ID tie-break over indexed records, dereference and compare the IDs; changing only comments cannot repair executable behavior.

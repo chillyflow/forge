@@ -1,0 +1,12 @@
+diff --git a/repair.go b/repair.go
+index 9659f9d..8001e34 100644
+--- a/repair.go
++++ b/repair.go
+@@ -47,6 +47,7 @@ func OrderBuild(tasks []string, deps map[string][]string) ([]string, bool) {
+ 				ready = append(ready, dependent)
+ 			}
+ 		}
++		sort.Strings(ready)
+ 	}
+ 	if len(out) != len(tasks) {
+ 		return nil, false

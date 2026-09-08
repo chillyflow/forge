@@ -1,0 +1,56 @@
+diff --git a/repair.go b/repair.go
+index 316c0e4..828c8c1 100644
+--- a/repair.go
++++ b/repair.go
+@@ -5,27 +5,44 @@ import "sort"
+ type Interval struct{ Lo, Hi int }
+ 
+ func UnionIntervals(in []Interval) []Interval {
+-	out := append([]Interval{}, in...)
+-	for i := range out {
+-		if out[i].Lo > out[i].Hi {
+-			out[i].Lo, out[i].Hi = out[i].Hi, out[i].Lo
++	// Create a copy to avoid mutating the input
++	out := make([]Interval, len(in))
++	for i, interval := range in {
++		if interval.Lo > interval.Hi {
++			out[i] = Interval{Lo: interval.Hi, Hi: interval.Lo}
++		} else {
++			out[i] = interval
+ 		}
+ 	}
++	
++	// Sort the intervals
+ 	sort.Slice(out, func(i, j int) bool {
+ 		if out[i].Lo == out[j].Lo {
+ 			return out[i].Hi < out[j].Hi
+ 		}
+ 		return out[i].Lo < out[j].Lo
+ 	})
++	
++	// Merge overlapping and adjacent intervals
+ 	merged := make([]Interval, 0, len(out))
+ 	for _, current := range out {
+-		if len(merged) == 0 || current.Lo > merged[len(merged)-1].Hi {
++		if len(merged) == 0 {
+ 			merged = append(merged, current)
+ 			continue
+ 		}
+-		if current.Hi > merged[len(merged)-1].Hi {
+-			merged[len(merged)-1].Hi = current.Hi
++		
++		// Check if current interval overlaps or is adjacent to the last merged interval
++		last := &merged[len(merged)-1]
++		if current.Lo <= last.Hi {
++			// Overlapping or adjacent - merge them
++			if current.Hi > last.Hi {
++				last.Hi = current.Hi
++			}
++		} else {
++			// Non-overlapping - add as new interval
++			merged = append(merged, current)
+ 		}
+ 	}
++	
+ 	return merged
+ }

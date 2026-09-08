@@ -81,6 +81,32 @@ by another untouched, clean-frozen holdout after tuning. Keep all promotion
 thresholds below unchanged. Forge remains a development preview regardless of
 these local reliability fixes.
 
+### September 8 repair-validation continuation
+
+The [repair-validation development report](../../benchmark/results/2026-09-08-repair-validation-v1/README.md)
+finishes verification of the interrupted change that separates successful
+subprocess execution from evidence that tests ran. Native guidance now directs
+unittest execution through its runner, and a successful command no longer
+removes repair tools on the penultimate turn. The final turn remains final-only.
+
+The GPU Release build, full CTest suite (24 passed, one optional model test
+skipped), and separate Qwen native stability probe passed. All ten development
+fixtures passed preflight. Candidate `c09ead6fee7e` passed 7/10, against the
+stable `5c5242b54af2` baseline's 6/10: paraphrased retractions recovered and all
+six prior passes remained passes. There were no crashes, timeouts, or protected
+file mutations. Model settings, runtime libraries, driver, and fixture identities
+matched; the source remains uncommitted. This single development repetition
+does not close generalization or promotion gates.
+
+All retraction variants switched from definition-only file execution to the real
+unittest runner. Original, renamed, and distractor repairs still reached the
+16-turn limit with incorrect code and loop warnings. Original returned to
+already failed source contents across edit tools; renamed and distractor
+attempted byte-identical replacements. Next investigate task-independent
+recovery from ineffective edits while preserving failing evidence and allowing
+legitimate reverts or changed validation inputs. Keep thinking defaults,
+budgets, fixture-hint removals, and all promotion thresholds unchanged.
+
 ### Tranche 1 — edit, validate, recover
 
 Deliver together because each feature closes a different part of the same

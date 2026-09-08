@@ -1,0 +1,51 @@
+file_sha256:26c22b266782137e863e0c85c92b84893b2a6f25d563a251af2bc0204cb7ea00
+1: package repair
+2: 
+3: import "sort"
+4: 
+5: func OrderBuild(tasks []string, deps map[string][]string) ([]string, bool) {
+6: 	known := map[string]bool{}
+7: 	for _, task := range tasks {
+8: 		if known[task] {
+9: 			return nil, false
+10: 		}
+11: 		known[task] = true
+12: 	}
+13: 	indegree := map[string]int{}
+14: 	next := map[string][]string{}
+15: 	for _, task := range tasks {
+16: 		indegree[task] = 0
+17: 	}
+18: 	for task, requirements := range deps {
+19: 		if !known[task] {
+20: 			return nil, false
+21: 		}
+22: 		seen := map[string]bool{}
+23: 		for _, requirement := range requirements {
+24: 			if !known[requirement] || seen[requirement] {
+25: 				return nil, false
+26: 			}
+27: 			seen[requirement] = true
+28: 			indegree[task]++
+29: 			next[requirement] = append(next[requirement], task)
+30: 		}
+31: 	}
+32: 	ready := []string{}
+33: 	for task, n := range indegree {
+34: 		if n == 0 {
+35: 			ready = append(ready, task)
+36: 		}
+37: 	}
+38: 	sort.Strings(ready)
+39: 	out := []string{}
+40: 	for len(ready) > 0 {
+41: 		task := ready[0]
+42: 		ready = ready[1:]
+43: 		out = append(out, task)
+44: 		for _, dependent := range next[task] {
+45: 			indegree[dependent]--
+46: 			if indegree[dependent] == 0 {
+47: 				ready = append(ready, dependent)
+48: 			}
+49: 		}
+50: 	}

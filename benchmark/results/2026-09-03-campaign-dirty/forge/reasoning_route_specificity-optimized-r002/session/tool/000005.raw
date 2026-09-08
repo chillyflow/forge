@@ -1,0 +1,30 @@
+file_sha256:9471554250a8554f0e7844414502dc350295d427e6137456e9fee73f047c6459
+50: 				params[part[1:]] = actual[ai]
+51: 				wildcards++
+52: 			} else if part == actual[ai] {
+53: 				literals++
+54: 			} else {
+55: 				ok = false
+56: 				break
+57: 			}
+58: 			pi++
+59: 			ai++
+60: 		}
+61: 		if !ok || pi != len(pattern) || ai != len(actual) {
+62: 			continue
+63: 		}
+64: 		exact := 0
+65: 		if route.Method == method {
+66: 			exact = 1
+67: 		}
+68: 		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+69: 		if !found || candidate.literals > best.literals {
+70: 			best = candidate
+71: 			found = true
+72: 		}
+73: 	}
+74: 	if !found {
+75: 		return "", nil, false
+76: 	}
+77: 	return best.name, best.params, true
+78: }

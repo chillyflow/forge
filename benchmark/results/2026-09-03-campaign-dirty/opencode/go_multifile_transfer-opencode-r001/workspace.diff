@@ -1,0 +1,17 @@
+diff --git a/ledger/transfer.go b/ledger/transfer.go
+index 20a3b2e..27e4008 100644
+--- a/ledger/transfer.go
++++ b/ledger/transfer.go
+@@ -3,9 +3,10 @@ package ledger
+ import "errors"
+ 
+ func Transfer(from, to *Ledger, amount int) error {
+-	if !from.debit(amount) {
++	if amount < 0 || from.Balance < amount {
+ 		return errors.New("insufficient funds")
+ 	}
+-	from.Balance += amount
++	from.Balance -= amount
++	to.Balance += amount
+ 	return nil
+ }

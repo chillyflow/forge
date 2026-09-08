@@ -1,0 +1,13 @@
+file_sha256:d5542c0d078f612293f291513c16aa3fbe8148bcc0d4f39eebfd13bf230ca6b4
+20: 	merged := make([]Interval, 0, len(out))
+21: 	for _, current := range out {
+22: 		if len(merged) == 0 || current.Lo > merged[len(merged)-1].Hi {
+23: 			merged = append(merged, current)
+24: 			continue
+25: 		}
+26: 		if current.Hi > merged[len(merged)-1].Hi {
+27: 			merged[len(merged)-1].Hi = current.Hi
+28: 		}
+29: 	}
+30: 	return merged
+31: }

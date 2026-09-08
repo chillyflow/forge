@@ -1,0 +1,33 @@
+file_sha256:70188f15bfd9cd1d9effde3f753c395a713b437773ffa0dd51756b3325f5337c
+1: package holdout
+2: 
+3: import "testing"
+4: 
+5: func TestCache(t *testing.T) {
+6: 	c := Cache{Capacity: 2}
+7: 	c.Put("a", 1)
+8: 	c.Put("b", 2)
+9: 	c.Put("a", 3)
+10: 	c.Put("c", 4)
+11: 	if _, ok := c.Get("b"); ok {
+12: 		t.Fatal("least recent key retained")
+13: 	}
+14: 	if v, ok := c.Get("a"); !ok || v != 3 {
+15: 		t.Fatal("updated key evicted", v, ok)
+16: 	}
+17: 	c.Put("d", 5)
+18: 	if _, ok := c.Get("c"); ok {
+19: 		t.Fatal("Get did not refresh recency")
+20: 	}
+21: 	z := Cache{Capacity: 0}
+22: 	z.Put("x", 1)
+23: 	if _, ok := z.Get("x"); ok {
+24: 		t.Fatal("zero capacity")
+25: 	}
+26: 	one := Cache{Capacity: 1}
+27: 	one.Put("x", 1)
+28: 	one.Put("x", 2)
+29: 	if v, ok := one.Get("x"); !ok || v != 2 {
+30: 		t.Fatal(v, ok)
+31: 	}
+32: }

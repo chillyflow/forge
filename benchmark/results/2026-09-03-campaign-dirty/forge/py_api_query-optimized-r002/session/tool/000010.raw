@@ -1,0 +1,9 @@
+file_sha256:3090947007f21213409e066baeef86c7f62fb63cd29d8e0592f351516bc7b99a
+1: from urllib.parse import parse_qs
+2: 
+3: def parse_query(value):
+4:     try:
+5:         parsed = parse_qs(value, keep_blank_values=True)
+6:         return {key: values[-1] for key, values in parsed.items()}
+7:     except ValueError:
+8:         raise ValueError("Invalid percent-encoding")

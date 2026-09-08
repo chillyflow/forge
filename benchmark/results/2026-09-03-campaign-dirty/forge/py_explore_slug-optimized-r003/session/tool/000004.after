@@ -1,0 +1,21 @@
+import re
+import unicodedata
+
+def slugify(value):
+    # Normalize unicode characters to ASCII
+    value = unicodedata.normalize('NFKD', value)
+    value = value.encode('ascii', 'ignore').decode('ascii')
+    
+    # Replace non-alphanumeric characters with hyphens
+    value = re.sub(r'[^a-zA-Z0-9]+', '-', value)
+    
+    # Remove leading and trailing hyphens
+    value = value.strip('-')
+    
+    # Convert to lowercase
+    value = value.lower()
+    
+    # Ensure only single hyphens
+    value = re.sub(r'-+', '-', value)
+    
+    return value

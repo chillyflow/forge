@@ -1,0 +1,37 @@
+diff --git a/names/normalize.go b/names/normalize.go
+index a1ada4c..8ce00ca 100644
+--- a/names/normalize.go
++++ b/names/normalize.go
+@@ -2,4 +2,4 @@ package names
+ 
+ import "strings"
+ 
+-func Normalize(value string) string { return strings.TrimSpace(value) }
++func Normalize(value string) string { return strings.ToLower(strings.TrimSpace(value)) }
+diff --git a/registry/registry.go b/registry/registry.go
+index c6b4f7b..b9c6dc0 100644
+--- a/registry/registry.go
++++ b/registry/registry.go
+@@ -1,9 +1,20 @@
+ package registry
+ 
+-import "campaign.test/fixture/names"
++import (
++	"strings"
++	"campaign.test/fixture/names"
++)
+ 
+ type Registry struct{ values map[string]int }
+ 
+ func New() *Registry                            { return &Registry{values: map[string]int{}} }
+ func (r *Registry) Put(name string, value int)  { r.values[names.Normalize(name)] = value }
+-func (r *Registry) Get(name string) (int, bool) { value, ok := r.values[name]; return value, ok }
++func (r *Registry) Get(name string) (int, bool) { 
++	normName := names.Normalize(name)
++	for k, v := range r.values {
++		if strings.EqualFold(k, normName) {
++			return v, true
++		}
++	}
++	return 0, false
++}

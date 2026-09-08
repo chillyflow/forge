@@ -255,6 +255,7 @@ void fg_think_bounds(const fg_decode_policy *, size_t max_tokens, size_t *min_th
                      size_t *think_cap);
 fg_action_phase fg_action_decode_phase(const char *text);
 bool fg_json_whitespace_only(const char *text, size_t length);
+bool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens);
 typedef struct {
     const char *name, *description, *fields, *grammar;
     forge_capability capability;

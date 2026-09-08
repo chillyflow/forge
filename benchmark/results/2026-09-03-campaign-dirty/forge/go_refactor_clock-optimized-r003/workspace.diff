@@ -1,0 +1,10 @@
+diff --git a/session/session.go b/session/session.go
+index d4b79f7..c6b9fef 100644
+--- a/session/session.go
++++ b/session/session.go
+@@ -8,4 +8,4 @@ type Session struct {
+ }
+ 
+ func New(expires time.Time, clock Clock) Session { return Session{ExpiresAt: expires, clock: clock} }
+-func (s Session) Expired() bool                  { return time.Now().After(s.ExpiresAt) }
++func (s Session) Expired() bool                  { return s.clock.Now().After(s.ExpiresAt) }

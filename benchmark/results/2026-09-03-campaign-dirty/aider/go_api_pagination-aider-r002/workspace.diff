@@ -1,0 +1,47 @@
+diff --git a/api/handler.go b/api/handler.go
+index e06b492..49e7502 100644
+--- a/api/handler.go
++++ b/api/handler.go
+@@ -8,22 +8,34 @@ import (
+ 
+ func ListHandler(values []string) http.HandlerFunc {
+ 	return func(w http.ResponseWriter, r *http.Request) {
+-		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+-		size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+-		if page < 1 {
+-			page = 1
++		pageStr := r.URL.Query().Get("page")
++		sizeStr := r.URL.Query().Get("size")
++		
++		if pageStr == "" {
++			pageStr = "1"
+ 		}
+-		if size < 1 {
+-			size = 10
++		if sizeStr == "" {
++			sizeStr = "10"
+ 		}
+-		start := page * size
+-		if start > len(values) {
++		
++		page, err1 := strconv.Atoi(pageStr)
++		size, err2 := strconv.Atoi(sizeStr)
++		
++		if err1 != nil || err2 != nil || page < 1 || size < 1 {
++			http.Error(w, "Invalid page or size parameters", http.StatusBadRequest)
++			return
++		}
++		
++		start := (page - 1) * size
++		if start >= len(values) {
+ 			start = len(values)
+ 		}
++		
+ 		end := start + size
+ 		if end > len(values) {
+ 			end = len(values)
+ 		}
++		
+ 		json.NewEncoder(w).Encode(values[start:end])
+ 	}
+ }

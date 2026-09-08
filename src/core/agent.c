@@ -853,10 +853,9 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
      * invalidates it. A repository generation comparison is too strict here,
      * because watcher notifications for the patch itself can arrive late. */
     bool anchor_valid = false;
-    /* A successful process on the preceding turn is strong completion evidence. Near the hard
-     * turn cap, force the host-validating final action instead of allowing bookkeeping to consume
-     * the last prompt budget. */
-    bool native_process_succeeded_last_turn = false;
+    /* A successful process does not prove that tests ran. Near the hard turn cap, keep repair
+     * tools available until the last action, when the host-validating final action must run
+     * instead of allowing bookkeeping to consume the last prompt budget. */
     /* A .go file left unparseable by a patch, and the reason. While it stands,
      * its diagnostic is included in a recovery state. */
     /* Held at function scope: a re-anchored argument copy must stay alive for
@@ -895,8 +894,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 fg_error(e, status, "Cannot update native protocol run state");
                 break;
             }
-            if (turn == a->config.limits.max_turns ||
-                (native_process_succeeded_last_turn && turn + 1 == a->config.limits.max_turns)) {
+            if (turn == a->config.limits.max_turns) {
                 char *final_schema = fg_tool_native_final_schema();
                 status = final_schema ? forge_context_update(ctx, tools_id, final_schema, turn)
                                       : FORGE_ERR_MEMORY;
@@ -1526,7 +1524,6 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             else if (tools.process.exit_code != 0)
                 outcome = FORGE_ERR_CONFLICT;
         }
-        native_process_succeeded_last_turn = tools.process_ran && outcome == FORGE_OK;
         if (!recovery_rejected && outcome != FORGE_OK)
             recovery_copy(last_diagnostic, sizeof(last_diagnostic), raw);
         if (changed) {

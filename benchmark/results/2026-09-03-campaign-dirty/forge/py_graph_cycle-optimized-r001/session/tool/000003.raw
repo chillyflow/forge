@@ -1,0 +1,10 @@
+file_sha256:9761664da420ba0f01118c450cebfcbe3c8ec4d732ca534e0084380902666b47
+1: import unittest
+2: from graph.order import topological_order
+3: 
+4: class OrderTests(unittest.TestCase):
+5:     def test_dependencies_and_cycles(self):
+6:         got=topological_order({"build":["compile"],"compile":["generate"],"test":["compile"]})
+7:         self.assertEqual(set(got),{"build","compile","generate","test"})
+8:         self.assertLess(got.index("generate"),got.index("compile")); self.assertLess(got.index("compile"),got.index("build"))
+9:         with self.assertRaises(ValueError): topological_order({"a":["b"],"b":["a"]})

@@ -1,0 +1,21 @@
+file_sha256:b42203a33d6df19ad596dd39b83c7e73858e61cb3aa51c48183a5e6f7775cbf5
+1: package holdout
+2: 
+3: import (
+4: 	"path"
+5: 	"strings"
+6: )
+7: 
+8: func ResolveMount(request string, mounts []string) (string, string, bool) {
+9: 	request = path.Clean("/" + request)
+10: 	best := ""
+11: 	for _, raw := range mounts {
+12: 		mount := path.Clean("/" + raw)
+13: 		if (mount == "/" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {
+14: 			best = mount
+15: 		}
+16: 	}
+17: 	if best == "" {
+18: 		return "", "", false
+19: 	}
+20: 	return best, strings.TrimPrefix(strings.TrimPrefix(request, best), "/"), true

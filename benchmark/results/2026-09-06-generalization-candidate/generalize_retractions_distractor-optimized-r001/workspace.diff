@@ -1,0 +1,22 @@
+diff --git a/service.py b/service.py
+index b7bbbde..f9f0955 100644
+--- a/service.py
++++ b/service.py
+@@ -9,8 +9,7 @@ def balances(events):
+             account, amount = event['account'], event['amount']
+             postings[event['id']] = (account, amount)
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
++            totals[account] += amount
+         else:
+             target = event['target']
+             if target in cancelled:
+@@ -19,4 +18,7 @@ def balances(events):
+             if target in postings:
+                 account, amount = postings[target]
+                 totals[account] -= amount
++                del postings[target]
++            # If target is not in postings, the retraction is for a non-existent posting
++            # and should be ignored (no balance effect)
+     return totals

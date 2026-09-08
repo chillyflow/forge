@@ -41,6 +41,50 @@ CAMPAIGN_SPEC.loader.exec_module(CAMPAIGN)
 
 
 class FixtureTests(unittest.TestCase):
+    def test_generalization_cases_are_deterministic_and_grouped(self):
+        from generalization import build_tasks
+        tasks = build_tasks()
+        self.assertEqual(tasks, build_tasks())
+        self.assertEqual(len(tasks), 10)
+        self.assertEqual(len({task['id'] for task in tasks}), 10)
+        for family in ('retractions', 'window'):
+            members = [task for task in tasks if task['generalization']['family'] == family]
+            self.assertEqual({task['generalization']['variant'] for task in members},
+                             {'original', 'renamed', 'paraphrased', 'distractor', 'contrast'})
+            self.assertEqual(sum(task['generalization']['relation'] == 'contrast'
+                                 for task in members), 1)
+            for task in members:
+                self.assertEqual(task['suite'], 'generalization-v1')
+                self.assertEqual(len(task['generalization']['source_sha256']), 64)
+                self.assertFalse(set(task['oracle_files']) & set(task['protected_files']))
+
+    def test_generalization_broken_and_oracle_states(self):
+        from generalization import build_tasks
+        if not shutil.which('go') or not shutil.which('gofmt'):
+            self.skipTest('Go and gofmt are needed to verify generalization fixtures')
+        for task in build_tasks():
+            with self.subTest(task=task['id']), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary)
+                BENCH.materialize(root, task)
+                broken = subprocess.run(task['verify'], cwd=root, capture_output=True, timeout=60)
+                self.assertNotEqual(broken.returncode, 0, 'broken fixture unexpectedly passed')
+                repaired = dict(task, files={**task['files'], **task['oracle_files']})
+                BENCH.materialize(root, repaired)
+                oracle = subprocess.run(task['verify'], cwd=root, capture_output=True, timeout=60)
+                self.assertEqual(oracle.returncode, 0,
+                                 (oracle.stdout + oracle.stderr).decode(errors='replace'))
+
+    def test_generalization_output_cannot_overwrite_existing_evidence(self):
+        from generalization import generate
+        with tempfile.TemporaryDirectory() as temporary:
+            output = pathlib.Path(temporary) / 'tasks'
+            generate(output)
+            before = {path.name: path.read_bytes() for path in output.glob('*.json')}
+            with self.assertRaises(FileExistsError):
+                generate(output)
+            self.assertEqual(before, {path.name: path.read_bytes()
+                                      for path in output.glob('*.json')})
+
     def test_reasoning_gated_fixtures_fail_before_and_pass_oracle(self):
         go = shutil.which('go')
         gofmt = shutil.which('gofmt')

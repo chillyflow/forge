@@ -1,0 +1,9 @@
+file_sha256:ef51c35cd6eae8d4a55b372a8d246d93253a20651591b9ba7d7075681beb95f5
+1: package session
+2: 
+3: import "time"
+4: 
+5: type Clock interface{ Now() time.Time }
+6: type SystemClock struct{}
+7: 
+8: func (SystemClock) Now() time.Time { return time.Now() }

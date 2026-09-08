@@ -1,0 +1,21 @@
+file_sha256:0088dc7de494b3f368ffda3d778dbb7f1a29b9bf81b4b6ac5ca35a09d774c9bf
+1: package holdout
+2: 
+3: import (
+4: 	"reflect"
+5: 	"testing"
+6: )
+7: 
+8: func TestReserve(t *testing.T) {
+9: 	for _, batch := range [][]Booking{
+10: 		{{"B", "bob"}, {"B", "bea"}},
+11: 		{{"B", "bob"}, {"A", "bea"}},
+12: 		{{"B", "bob"}, {"C", ""}},
+13: 	} {
+14: 		b := map[string]string{"A": "ann"}
+15: 		if Reserve(b, batch) || !reflect.DeepEqual(b, map[string]string{"A": "ann"}) {
+16: 			t.Fatalf("rejected reservation changed bookings: %v", b)
+17: 		}
+18: 	}
+19: 	b := map[string]string{"A": "ann"}
+20: 	if !Reserve(b, []Booking{{"B", "bob"}, {"C", "cam"}}) || len(b) != 3 {

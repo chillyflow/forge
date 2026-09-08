@@ -1,0 +1,1220 @@
+{"schema_version":1,"type":"state","sequence":1,"elapsed_ms":0,"data":{"state":0}}
+{"schema_version":1,"type":"request","sequence":2,"elapsed_ms":0,"data":"ResolveMount selects the longest matching mount by path components and returns the remaining relative path. Clean paths first. The root mount is a fallback; textual prefixes inside a component do not match. Inspect the code, repair the implementation, and run the tests. Do not modify tests."}
+{"schema_version":1,"type":"repository_scan","sequence":3,"elapsed_ms":47,"data":{"schema_version":1,"backend":"scan","events":[],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":false,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":0,"path_encoding":"utf-8","index_mode":"full","generation":1,"changed":false,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"working_state","sequence":4,"elapsed_ms":47,"data":{"turn":0,"artifact":"context/0000.state.json","hash":12421166225620950412}}
+{"schema_version":1,"type":"context_plan","sequence":5,"elapsed_ms":79,"data":{"turn":1,"artifact":"context/0001.json","hash":5834805688925620752,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":6,"elapsed_ms":79,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":7,"elapsed_ms":79,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":8,"elapsed_ms":1422,"data":"I"}
+{"schema_version":1,"type":"token","sequence":9,"elapsed_ms":1454,"data":"'ll"}
+{"schema_version":1,"type":"token","sequence":10,"elapsed_ms":1500,"data":" analyze"}
+{"schema_version":1,"type":"token","sequence":11,"elapsed_ms":1547,"data":" the"}
+{"schema_version":1,"type":"token","sequence":12,"elapsed_ms":1579,"data":" repository"}
+{"schema_version":1,"type":"token","sequence":13,"elapsed_ms":1610,"data":" files"}
+{"schema_version":1,"type":"token","sequence":14,"elapsed_ms":1657,"data":" to"}
+{"schema_version":1,"type":"token","sequence":15,"elapsed_ms":1688,"data":" understand"}
+{"schema_version":1,"type":"token","sequence":16,"elapsed_ms":1719,"data":" the"}
+{"schema_version":1,"type":"token","sequence":17,"elapsed_ms":1750,"data":" current"}
+{"schema_version":1,"type":"token","sequence":18,"elapsed_ms":1797,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":19,"elapsed_ms":1829,"data":" and"}
+{"schema_version":1,"type":"token","sequence":20,"elapsed_ms":1860,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":21,"elapsed_ms":1907,"data":" the"}
+{"schema_version":1,"type":"token","sequence":22,"elapsed_ms":1938,"data":" Resolve"}
+{"schema_version":1,"type":"token","sequence":23,"elapsed_ms":1985,"data":"Mount"}
+{"schema_version":1,"type":"token","sequence":24,"elapsed_ms":2016,"data":" function"}
+{"schema_version":1,"type":"token","sequence":25,"elapsed_ms":2047,"data":"."}
+{"schema_version":1,"type":"token","sequence":26,"elapsed_ms":2079,"data":" Let"}
+{"schema_version":1,"type":"token","sequence":27,"elapsed_ms":2110,"data":" me"}
+{"schema_version":1,"type":"token","sequence":28,"elapsed_ms":2141,"data":" start"}
+{"schema_version":1,"type":"token","sequence":29,"elapsed_ms":2188,"data":" by"}
+{"schema_version":1,"type":"token","sequence":30,"elapsed_ms":2219,"data":" examining"}
+{"schema_version":1,"type":"token","sequence":31,"elapsed_ms":2250,"data":" the"}
+{"schema_version":1,"type":"token","sequence":32,"elapsed_ms":2282,"data":" service"}
+{"schema_version":1,"type":"token","sequence":33,"elapsed_ms":2313,"data":".go"}
+{"schema_version":1,"type":"token","sequence":34,"elapsed_ms":2344,"data":" file"}
+{"schema_version":1,"type":"token","sequence":35,"elapsed_ms":2391,"data":" to"}
+{"schema_version":1,"type":"token","sequence":36,"elapsed_ms":2422,"data":" see"}
+{"schema_version":1,"type":"token","sequence":37,"elapsed_ms":2454,"data":" the"}
+{"schema_version":1,"type":"token","sequence":38,"elapsed_ms":2485,"data":" current"}
+{"schema_version":1,"type":"token","sequence":39,"elapsed_ms":2532,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":40,"elapsed_ms":2563,"data":".\n"}
+{"schema_version":1,"type":"token","sequence":41,"elapsed_ms":2594,"data":"<tool_call>"}
+{"schema_version":1,"type":"token","sequence":42,"elapsed_ms":2594,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":43,"elapsed_ms":2610,"data":"<"}
+{"schema_version":1,"type":"token","sequence":44,"elapsed_ms":2610,"data":"function"}
+{"schema_version":1,"type":"token","sequence":45,"elapsed_ms":2610,"data":"=read"}
+{"schema_version":1,"type":"token","sequence":46,"elapsed_ms":2625,"data":"_file"}
+{"schema_version":1,"type":"token","sequence":47,"elapsed_ms":2625,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":48,"elapsed_ms":2625,"data":"<"}
+{"schema_version":1,"type":"token","sequence":49,"elapsed_ms":2625,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":50,"elapsed_ms":2641,"data":"=path"}
+{"schema_version":1,"type":"token","sequence":51,"elapsed_ms":2641,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":52,"elapsed_ms":2641,"data":"service"}
+{"schema_version":1,"type":"token","sequence":53,"elapsed_ms":2657,"data":".go"}
+{"schema_version":1,"type":"token","sequence":54,"elapsed_ms":2657,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":55,"elapsed_ms":2657,"data":"</"}
+{"schema_version":1,"type":"token","sequence":56,"elapsed_ms":2672,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":57,"elapsed_ms":2672,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":58,"elapsed_ms":2688,"data":"<"}
+{"schema_version":1,"type":"token","sequence":59,"elapsed_ms":2688,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":60,"elapsed_ms":2688,"data":"=start"}
+{"schema_version":1,"type":"token","sequence":61,"elapsed_ms":2704,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":62,"elapsed_ms":2704,"data":"1"}
+{"schema_version":1,"type":"token","sequence":63,"elapsed_ms":2704,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":64,"elapsed_ms":2719,"data":"</"}
+{"schema_version":1,"type":"token","sequence":65,"elapsed_ms":2719,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":66,"elapsed_ms":2719,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":67,"elapsed_ms":2735,"data":"<"}
+{"schema_version":1,"type":"token","sequence":68,"elapsed_ms":2735,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":69,"elapsed_ms":2735,"data":"=end"}
+{"schema_version":1,"type":"token","sequence":70,"elapsed_ms":2750,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":71,"elapsed_ms":2750,"data":"1"}
+{"schema_version":1,"type":"token","sequence":72,"elapsed_ms":2750,"data":"0"}
+{"schema_version":1,"type":"token","sequence":73,"elapsed_ms":2766,"data":"0"}
+{"schema_version":1,"type":"token","sequence":74,"elapsed_ms":2766,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":75,"elapsed_ms":2766,"data":"</"}
+{"schema_version":1,"type":"token","sequence":76,"elapsed_ms":2782,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":77,"elapsed_ms":2782,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":78,"elapsed_ms":2782,"data":"</"}
+{"schema_version":1,"type":"token","sequence":79,"elapsed_ms":2797,"data":"function"}
+{"schema_version":1,"type":"token","sequence":80,"elapsed_ms":2797,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":81,"elapsed_ms":2797,"data":"</tool_call>"}
+{"schema_version":1,"type":"inference","sequence":82,"elapsed_ms":2813,"data":{"prompt_tokens":3195,"cached_tokens":0,"generated_tokens":74,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":83,"elapsed_ms":2813,"data":"I'll analyze the repository files to understand the current implementation and fix the ResolveMount function. Let me start by examining the service.go file to see the current implementation.\n<tool_call>\n<function=read_file>\n<parameter=path>\nservice.go\n</parameter>\n<parameter=start>\n1\n</parameter>\n<parameter=end>\n100\n</parameter>\n</function>\n</tool_call>"}
+{"schema_version":1,"type":"state","sequence":84,"elapsed_ms":2813,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":85,"elapsed_ms":2813,"data":{"thought":"I'll analyze the repository files to understand the current implementation and fix the ResolveMount function. Let me start by examining the service.go file to see the current implementation.\n","tool":"read_file","args":{"path":"service.go","start":1,"end":100}}}
+{"schema_version":1,"type":"state","sequence":86,"elapsed_ms":2813,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":87,"elapsed_ms":2813,"data":{"id":1,"name":"read_file","output":"file_sha256:b42203a33d6df19ad596dd39b83c7e73858e61cb3aa51c48183a5e6f7775cbf5\n1: package holdout\n2: \n3: import (\n4: \t\"path\"\n5: \t\"strings\"\n6: )\n7: \n8: func ResolveMount(request string, mounts []string) (string, string, bool) {\n9: \trequest = path.Clean(\"/\" + request)\n10: \tbest := \"\"\n11: \tfor _, raw := range mounts {\n12: \t\tmount := path.Clean(\"/\" + raw)\n13: \t\tif (mount == \"/\" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {\n14: \t\t\tbest = mount\n15: \t\t}\n16: \t}\n17: \tif best == \"\" {\n18: \t\treturn \"\", \"\", false\n19: \t}\n20: \treturn best, strings.TrimPrefix(strings.TrimPrefix(request, best), \"/\"), true\n21: }\n","duration_ms":0.0,"status":"ok"}}
+{"schema_version":1,"type":"state","sequence":88,"elapsed_ms":2813,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":89,"elapsed_ms":2813,"data":{"turn":1,"artifact":"context/0001.state.json","hash":6261427580708859289}}
+{"schema_version":1,"type":"state","sequence":90,"elapsed_ms":2813,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":91,"elapsed_ms":2844,"data":{"turn":2,"artifact":"context/0002.json","hash":16207055309879786729,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":92,"elapsed_ms":2844,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":93,"elapsed_ms":2844,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":94,"elapsed_ms":3157,"data":"Let"}
+{"schema_version":1,"type":"token","sequence":95,"elapsed_ms":3204,"data":" me"}
+{"schema_version":1,"type":"token","sequence":96,"elapsed_ms":3235,"data":" analyze"}
+{"schema_version":1,"type":"token","sequence":97,"elapsed_ms":3266,"data":" the"}
+{"schema_version":1,"type":"token","sequence":98,"elapsed_ms":3297,"data":" current"}
+{"schema_version":1,"type":"token","sequence":99,"elapsed_ms":3329,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":100,"elapsed_ms":3375,"data":" of"}
+{"schema_version":1,"type":"token","sequence":101,"elapsed_ms":3407,"data":" `"}
+{"schema_version":1,"type":"token","sequence":102,"elapsed_ms":3438,"data":"Resolve"}
+{"schema_version":1,"type":"token","sequence":103,"elapsed_ms":3469,"data":"Mount"}
+{"schema_version":1,"type":"token","sequence":104,"elapsed_ms":3516,"data":"`"}
+{"schema_version":1,"type":"token","sequence":105,"elapsed_ms":3547,"data":" in"}
+{"schema_version":1,"type":"token","sequence":106,"elapsed_ms":3579,"data":" `"}
+{"schema_version":1,"type":"token","sequence":107,"elapsed_ms":3610,"data":"service"}
+{"schema_version":1,"type":"token","sequence":108,"elapsed_ms":3657,"data":".go"}
+{"schema_version":1,"type":"token","sequence":109,"elapsed_ms":3688,"data":"`"}
+{"schema_version":1,"type":"token","sequence":110,"elapsed_ms":3719,"data":" to"}
+{"schema_version":1,"type":"token","sequence":111,"elapsed_ms":3750,"data":" understand"}
+{"schema_version":1,"type":"token","sequence":112,"elapsed_ms":3797,"data":" what"}
+{"schema_version":1,"type":"token","sequence":113,"elapsed_ms":3829,"data":" needs"}
+{"schema_version":1,"type":"token","sequence":114,"elapsed_ms":3860,"data":" to"}
+{"schema_version":1,"type":"token","sequence":115,"elapsed_ms":3907,"data":" be"}
+{"schema_version":1,"type":"token","sequence":116,"elapsed_ms":3938,"data":" fixed"}
+{"schema_version":1,"type":"token","sequence":117,"elapsed_ms":3969,"data":".\n\n"}
+{"schema_version":1,"type":"token","sequence":118,"elapsed_ms":4016,"data":"Looking"}
+{"schema_version":1,"type":"token","sequence":119,"elapsed_ms":4047,"data":" at"}
+{"schema_version":1,"type":"token","sequence":120,"elapsed_ms":4079,"data":" the"}
+{"schema_version":1,"type":"token","sequence":121,"elapsed_ms":4110,"data":" code"}
+{"schema_version":1,"type":"token","sequence":122,"elapsed_ms":4157,"data":":\n"}
+{"schema_version":1,"type":"token","sequence":123,"elapsed_ms":4188,"data":"1"}
+{"schema_version":1,"type":"token","sequence":124,"elapsed_ms":4219,"data":"."}
+{"schema_version":1,"type":"token","sequence":125,"elapsed_ms":4250,"data":" It"}
+{"schema_version":1,"type":"token","sequence":126,"elapsed_ms":4297,"data":" cleans"}
+{"schema_version":1,"type":"token","sequence":127,"elapsed_ms":4329,"data":" the"}
+{"schema_version":1,"type":"token","sequence":128,"elapsed_ms":4360,"data":" request"}
+{"schema_version":1,"type":"token","sequence":129,"elapsed_ms":4391,"data":" path"}
+{"schema_version":1,"type":"token","sequence":130,"elapsed_ms":4438,"data":" and"}
+{"schema_version":1,"type":"token","sequence":131,"elapsed_ms":4469,"data":" each"}
+{"schema_version":1,"type":"token","sequence":132,"elapsed_ms":4500,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":133,"elapsed_ms":4547,"data":" path"}
+{"schema_version":1,"type":"token","sequence":134,"elapsed_ms":4579,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":135,"elapsed_ms":4610,"data":"2"}
+{"schema_version":1,"type":"token","sequence":136,"elapsed_ms":4657,"data":"."}
+{"schema_version":1,"type":"token","sequence":137,"elapsed_ms":4688,"data":" It"}
+{"schema_version":1,"type":"token","sequence":138,"elapsed_ms":4719,"data":" finds"}
+{"schema_version":1,"type":"token","sequence":139,"elapsed_ms":4750,"data":" the"}
+{"schema_version":1,"type":"token","sequence":140,"elapsed_ms":4797,"data":" longest"}
+{"schema_version":1,"type":"token","sequence":141,"elapsed_ms":4829,"data":" matching"}
+{"schema_version":1,"type":"token","sequence":142,"elapsed_ms":4860,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":143,"elapsed_ms":4907,"data":" by"}
+{"schema_version":1,"type":"token","sequence":144,"elapsed_ms":4938,"data":" checking"}
+{"schema_version":1,"type":"token","sequence":145,"elapsed_ms":4969,"data":" if"}
+{"schema_version":1,"type":"token","sequence":146,"elapsed_ms":5016,"data":" the"}
+{"schema_version":1,"type":"token","sequence":147,"elapsed_ms":5047,"data":" request"}
+{"schema_version":1,"type":"token","sequence":148,"elapsed_ms":5094,"data":" starts"}
+{"schema_version":1,"type":"token","sequence":149,"elapsed_ms":5125,"data":" with"}
+{"schema_version":1,"type":"token","sequence":150,"elapsed_ms":5172,"data":" the"}
+{"schema_version":1,"type":"token","sequence":151,"elapsed_ms":5204,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":152,"elapsed_ms":5235,"data":" path"}
+{"schema_version":1,"type":"token","sequence":153,"elapsed_ms":5266,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":154,"elapsed_ms":5313,"data":"3"}
+{"schema_version":1,"type":"token","sequence":155,"elapsed_ms":5344,"data":"."}
+{"schema_version":1,"type":"token","sequence":156,"elapsed_ms":5375,"data":" It"}
+{"schema_version":1,"type":"token","sequence":157,"elapsed_ms":5407,"data":" returns"}
+{"schema_version":1,"type":"token","sequence":158,"elapsed_ms":5454,"data":" the"}
+{"schema_version":1,"type":"token","sequence":159,"elapsed_ms":5485,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":160,"elapsed_ms":5532,"data":" path"}
+{"schema_version":1,"type":"token","sequence":161,"elapsed_ms":5563,"data":" and"}
+{"schema_version":1,"type":"token","sequence":162,"elapsed_ms":5594,"data":" the"}
+{"schema_version":1,"type":"token","sequence":163,"elapsed_ms":5625,"data":" remaining"}
+{"schema_version":1,"type":"token","sequence":164,"elapsed_ms":5672,"data":" relative"}
+{"schema_version":1,"type":"token","sequence":165,"elapsed_ms":5704,"data":" path"}
+{"schema_version":1,"type":"token","sequence":166,"elapsed_ms":5750,"data":"\n\n"}
+{"schema_version":1,"type":"token","sequence":167,"elapsed_ms":5782,"data":"The"}
+{"schema_version":1,"type":"token","sequence":168,"elapsed_ms":5829,"data":" issue"}
+{"schema_version":1,"type":"token","sequence":169,"elapsed_ms":5860,"data":" seems"}
+{"schema_version":1,"type":"token","sequence":170,"elapsed_ms":5907,"data":" to"}
+{"schema_version":1,"type":"token","sequence":171,"elapsed_ms":5938,"data":" be"}
+{"schema_version":1,"type":"token","sequence":172,"elapsed_ms":5969,"data":" in"}
+{"schema_version":1,"type":"token","sequence":173,"elapsed_ms":6016,"data":" the"}
+{"schema_version":1,"type":"token","sequence":174,"elapsed_ms":6047,"data":" matching"}
+{"schema_version":1,"type":"token","sequence":175,"elapsed_ms":6079,"data":" logic"}
+{"schema_version":1,"type":"token","sequence":176,"elapsed_ms":6125,"data":"."}
+{"schema_version":1,"type":"token","sequence":177,"elapsed_ms":6157,"data":" According"}
+{"schema_version":1,"type":"token","sequence":178,"elapsed_ms":6188,"data":" to"}
+{"schema_version":1,"type":"token","sequence":179,"elapsed_ms":6235,"data":" the"}
+{"schema_version":1,"type":"token","sequence":180,"elapsed_ms":6266,"data":" requirements"}
+{"schema_version":1,"type":"token","sequence":181,"elapsed_ms":6297,"data":":\n"}
+{"schema_version":1,"type":"token","sequence":182,"elapsed_ms":6344,"data":"-"}
+{"schema_version":1,"type":"token","sequence":183,"elapsed_ms":6375,"data":" \""}
+{"schema_version":1,"type":"token","sequence":184,"elapsed_ms":6407,"data":"The"}
+{"schema_version":1,"type":"token","sequence":185,"elapsed_ms":6454,"data":" root"}
+{"schema_version":1,"type":"token","sequence":186,"elapsed_ms":6485,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":187,"elapsed_ms":6516,"data":" is"}
+{"schema_version":1,"type":"token","sequence":188,"elapsed_ms":6563,"data":" a"}
+{"schema_version":1,"type":"token","sequence":189,"elapsed_ms":6594,"data":" fallback"}
+{"schema_version":1,"type":"token","sequence":190,"elapsed_ms":6625,"data":";"}
+{"schema_version":1,"type":"token","sequence":191,"elapsed_ms":6672,"data":" textual"}
+{"schema_version":1,"type":"token","sequence":192,"elapsed_ms":6704,"data":" prefixes"}
+{"schema_version":1,"type":"token","sequence":193,"elapsed_ms":6735,"data":" inside"}
+{"schema_version":1,"type":"token","sequence":194,"elapsed_ms":6766,"data":" a"}
+{"schema_version":1,"type":"token","sequence":195,"elapsed_ms":6813,"data":" component"}
+{"schema_version":1,"type":"token","sequence":196,"elapsed_ms":6844,"data":" do"}
+{"schema_version":1,"type":"token","sequence":197,"elapsed_ms":6891,"data":" not"}
+{"schema_version":1,"type":"token","sequence":198,"elapsed_ms":6922,"data":" match"}
+{"schema_version":1,"type":"token","sequence":199,"elapsed_ms":6954,"data":"\"\n"}
+{"schema_version":1,"type":"token","sequence":200,"elapsed_ms":7000,"data":"-"}
+{"schema_version":1,"type":"token","sequence":201,"elapsed_ms":7032,"data":" This"}
+{"schema_version":1,"type":"token","sequence":202,"elapsed_ms":7063,"data":" suggests"}
+{"schema_version":1,"type":"token","sequence":203,"elapsed_ms":7110,"data":" that"}
+{"schema_version":1,"type":"token","sequence":204,"elapsed_ms":7141,"data":" we"}
+{"schema_version":1,"type":"token","sequence":205,"elapsed_ms":7188,"data":" need"}
+{"schema_version":1,"type":"token","sequence":206,"elapsed_ms":7219,"data":" to"}
+{"schema_version":1,"type":"token","sequence":207,"elapsed_ms":7250,"data":" ensure"}
+{"schema_version":1,"type":"token","sequence":208,"elapsed_ms":7297,"data":" that"}
+{"schema_version":1,"type":"token","sequence":209,"elapsed_ms":7329,"data":" matches"}
+{"schema_version":1,"type":"token","sequence":210,"elapsed_ms":7375,"data":" happen"}
+{"schema_version":1,"type":"token","sequence":211,"elapsed_ms":7407,"data":" at"}
+{"schema_version":1,"type":"token","sequence":212,"elapsed_ms":7438,"data":" component"}
+{"schema_version":1,"type":"token","sequence":213,"elapsed_ms":7485,"data":" boundaries"}
+{"schema_version":1,"type":"token","sequence":214,"elapsed_ms":7516,"data":","}
+{"schema_version":1,"type":"token","sequence":215,"elapsed_ms":7563,"data":" not"}
+{"schema_version":1,"type":"token","sequence":216,"elapsed_ms":7594,"data":" just"}
+{"schema_version":1,"type":"token","sequence":217,"elapsed_ms":7625,"data":" prefix"}
+{"schema_version":1,"type":"token","sequence":218,"elapsed_ms":7672,"data":" matches"}
+{"schema_version":1,"type":"token","sequence":219,"elapsed_ms":7704,"data":"\n\n"}
+{"schema_version":1,"type":"token","sequence":220,"elapsed_ms":7735,"data":"Let"}
+{"schema_version":1,"type":"token","sequence":221,"elapsed_ms":7782,"data":" me"}
+{"schema_version":1,"type":"token","sequence":222,"elapsed_ms":7813,"data":" also"}
+{"schema_version":1,"type":"token","sequence":223,"elapsed_ms":7844,"data":" check"}
+{"schema_version":1,"type":"token","sequence":224,"elapsed_ms":7891,"data":" the"}
+{"schema_version":1,"type":"token","sequence":225,"elapsed_ms":7922,"data":" test"}
+{"schema_version":1,"type":"token","sequence":226,"elapsed_ms":7969,"data":" file"}
+{"schema_version":1,"type":"token","sequence":227,"elapsed_ms":8000,"data":" to"}
+{"schema_version":1,"type":"token","sequence":228,"elapsed_ms":8032,"data":" understand"}
+{"schema_version":1,"type":"token","sequence":229,"elapsed_ms":8063,"data":" the"}
+{"schema_version":1,"type":"token","sequence":230,"elapsed_ms":8110,"data":" expected"}
+{"schema_version":1,"type":"token","sequence":231,"elapsed_ms":8141,"data":" behavior"}
+{"schema_version":1,"type":"token","sequence":232,"elapsed_ms":8172,"data":".\n"}
+{"schema_version":1,"type":"token","sequence":233,"elapsed_ms":8204,"data":"<tool_call>"}
+{"schema_version":1,"type":"token","sequence":234,"elapsed_ms":8219,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":235,"elapsed_ms":8219,"data":"<"}
+{"schema_version":1,"type":"token","sequence":236,"elapsed_ms":8235,"data":"function"}
+{"schema_version":1,"type":"token","sequence":237,"elapsed_ms":8235,"data":"=read"}
+{"schema_version":1,"type":"token","sequence":238,"elapsed_ms":8235,"data":"_file"}
+{"schema_version":1,"type":"token","sequence":239,"elapsed_ms":8250,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":240,"elapsed_ms":8250,"data":"<"}
+{"schema_version":1,"type":"token","sequence":241,"elapsed_ms":8266,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":242,"elapsed_ms":8266,"data":"=path"}
+{"schema_version":1,"type":"token","sequence":243,"elapsed_ms":8282,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":244,"elapsed_ms":8282,"data":"service"}
+{"schema_version":1,"type":"token","sequence":245,"elapsed_ms":8282,"data":"_test"}
+{"schema_version":1,"type":"token","sequence":246,"elapsed_ms":8297,"data":".go"}
+{"schema_version":1,"type":"token","sequence":247,"elapsed_ms":8297,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":248,"elapsed_ms":8313,"data":"</"}
+{"schema_version":1,"type":"token","sequence":249,"elapsed_ms":8313,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":250,"elapsed_ms":8313,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":251,"elapsed_ms":8329,"data":"<"}
+{"schema_version":1,"type":"token","sequence":252,"elapsed_ms":8329,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":253,"elapsed_ms":8344,"data":"=start"}
+{"schema_version":1,"type":"token","sequence":254,"elapsed_ms":8344,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":255,"elapsed_ms":8344,"data":"1"}
+{"schema_version":1,"type":"token","sequence":256,"elapsed_ms":8360,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":257,"elapsed_ms":8360,"data":"</"}
+{"schema_version":1,"type":"token","sequence":258,"elapsed_ms":8375,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":259,"elapsed_ms":8375,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":260,"elapsed_ms":8391,"data":"<"}
+{"schema_version":1,"type":"token","sequence":261,"elapsed_ms":8391,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":262,"elapsed_ms":8391,"data":"=end"}
+{"schema_version":1,"type":"token","sequence":263,"elapsed_ms":8407,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":264,"elapsed_ms":8407,"data":"1"}
+{"schema_version":1,"type":"token","sequence":265,"elapsed_ms":8422,"data":"0"}
+{"schema_version":1,"type":"token","sequence":266,"elapsed_ms":8422,"data":"0"}
+{"schema_version":1,"type":"token","sequence":267,"elapsed_ms":8422,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":268,"elapsed_ms":8438,"data":"</"}
+{"schema_version":1,"type":"token","sequence":269,"elapsed_ms":8438,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":270,"elapsed_ms":8454,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":271,"elapsed_ms":8454,"data":"</"}
+{"schema_version":1,"type":"token","sequence":272,"elapsed_ms":8454,"data":"function"}
+{"schema_version":1,"type":"token","sequence":273,"elapsed_ms":8469,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":274,"elapsed_ms":8469,"data":"</tool_call>"}
+{"schema_version":1,"type":"inference","sequence":275,"elapsed_ms":8469,"data":{"prompt_tokens":3511,"cached_tokens":2848,"generated_tokens":181,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":276,"elapsed_ms":8469,"data":"Let me analyze the current implementation of `ResolveMount` in `service.go` to understand what needs to be fixed.\n\nLooking at the code:\n1. It cleans the request path and each mount path\n2. It finds the longest matching mount by checking if the request starts with the mount path\n3. It returns the mount path and the remaining relative path\n\nThe issue seems to be in the matching logic. According to the requirements:\n- \"The root mount is a fallback; textual prefixes inside a component do not match\"\n- This suggests that we need to ensure that matches happen at component boundaries, not just prefix matches\n\nLet me also check the test file to understand the expected behavior.\n<tool_call>\n<function=read_file>\n<parameter=path>\nservice_test.go\n</parameter>\n<parameter=start>\n1\n</parameter>\n<parameter=end>\n100\n</parameter>\n</function>\n</tool_call>"}
+{"schema_version":1,"type":"state","sequence":277,"elapsed_ms":8469,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":278,"elapsed_ms":8469,"data":{"thought":"Let me analyze the current implementation of `ResolveMount` in `service.go` to understand what needs to be fixed.\n\nLooking at the code:\n1. It cleans the request path and each mount path\n2. It finds the longest matching mount by checking if the request starts with the mount path\n3. It returns the mount path and the remaining relative path\n\nThe issue seems to be in the matching logic. According to the requirements:\n- \"The root mount is a fallback; textual prefixes inside a component do not match\"\n- This suggests that we need to ensure that matches happen at component boundaries, not just prefix matches\n\nLet me also check the test file to understand the expected behavior.\n","tool":"read_file","args":{"path":"service_test.go","start":1,"end":100}}}
+{"schema_version":1,"type":"state","sequence":279,"elapsed_ms":8469,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":280,"elapsed_ms":8485,"data":{"id":2,"name":"read_file","output":"file_sha256:bf70fc4accdc20c7cbdf09357bf6c83789e1e9107a25d49d1414d897dbfefbb2\n1: package holdout\n2: \n3: import \"testing\"\n4: \n5: func TestMounts(t *testing.T) {\n6: \tfor _, tc := range []struct{ request, mount, rest string }{\n7: \t\t{\"/apple/x\", \"/\", \"apple/x\"}, {\"/app/a\", \"/app\", \"a\"}, {\"/app\", \"/app\", \"\"},\n8: \t\t{\"/app/v2/x\", \"/app/v2\", \"x\"}, {\"/app/../apple\", \"/\", \"apple\"},\n9: \t} {\n10: \t\tmount, rest, ok := ResolveMount(tc.request, []string{\"/app\", \"/\", \"/app/v2\"})\n11: \t\tif !ok || mount != tc.mount || rest != tc.rest {\n12: \t\t\tt.Fatalf(\"%s: %q %q %v\", tc.request, mount, rest, ok)\n13: \t\t}\n14: \t}\n15: \tif _, _, ok := ResolveMount(\"/apple\", []string{\"/app\"}); ok {\n16: \t\tt.Fatal(\"partial component matched\")\n17: \t}\n18: }\n","duration_ms":0.0,"status":"ok"}}
+{"schema_version":1,"type":"state","sequence":281,"elapsed_ms":8485,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":282,"elapsed_ms":8485,"data":{"turn":2,"artifact":"context/0002.state.json","hash":2337791122274208848}}
+{"schema_version":1,"type":"state","sequence":283,"elapsed_ms":8485,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":284,"elapsed_ms":8500,"data":{"turn":3,"artifact":"context/0003.json","hash":3182601329158118175,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":285,"elapsed_ms":8500,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":286,"elapsed_ms":8500,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":287,"elapsed_ms":8844,"data":"Let"}
+{"schema_version":1,"type":"token","sequence":288,"elapsed_ms":8875,"data":" me"}
+{"schema_version":1,"type":"token","sequence":289,"elapsed_ms":8922,"data":" analyze"}
+{"schema_version":1,"type":"token","sequence":290,"elapsed_ms":8954,"data":" the"}
+{"schema_version":1,"type":"token","sequence":291,"elapsed_ms":8985,"data":" current"}
+{"schema_version":1,"type":"token","sequence":292,"elapsed_ms":9016,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":293,"elapsed_ms":9063,"data":" and"}
+{"schema_version":1,"type":"token","sequence":294,"elapsed_ms":9094,"data":" the"}
+{"schema_version":1,"type":"token","sequence":295,"elapsed_ms":9125,"data":" test"}
+{"schema_version":1,"type":"token","sequence":296,"elapsed_ms":9172,"data":" cases"}
+{"schema_version":1,"type":"token","sequence":297,"elapsed_ms":9204,"data":" to"}
+{"schema_version":1,"type":"token","sequence":298,"elapsed_ms":9235,"data":" understand"}
+{"schema_version":1,"type":"token","sequence":299,"elapsed_ms":9282,"data":" what"}
+{"schema_version":1,"type":"token","sequence":300,"elapsed_ms":9313,"data":" needs"}
+{"schema_version":1,"type":"token","sequence":301,"elapsed_ms":9344,"data":" to"}
+{"schema_version":1,"type":"token","sequence":302,"elapsed_ms":9391,"data":" be"}
+{"schema_version":1,"type":"token","sequence":303,"elapsed_ms":9422,"data":" fixed"}
+{"schema_version":1,"type":"token","sequence":304,"elapsed_ms":9454,"data":".\n\n"}
+{"schema_version":1,"type":"token","sequence":305,"elapsed_ms":9500,"data":"Looking"}
+{"schema_version":1,"type":"token","sequence":306,"elapsed_ms":9532,"data":" at"}
+{"schema_version":1,"type":"token","sequence":307,"elapsed_ms":9563,"data":" the"}
+{"schema_version":1,"type":"token","sequence":308,"elapsed_ms":9610,"data":" current"}
+{"schema_version":1,"type":"token","sequence":309,"elapsed_ms":9641,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":310,"elapsed_ms":9672,"data":" in"}
+{"schema_version":1,"type":"token","sequence":311,"elapsed_ms":9719,"data":" `"}
+{"schema_version":1,"type":"token","sequence":312,"elapsed_ms":9750,"data":"service"}
+{"schema_version":1,"type":"token","sequence":313,"elapsed_ms":9782,"data":".go"}
+{"schema_version":1,"type":"token","sequence":314,"elapsed_ms":9813,"data":"`"}
+{"schema_version":1,"type":"token","sequence":315,"elapsed_ms":9844,"data":":\n\n"}
+{"schema_version":1,"type":"token","sequence":316,"elapsed_ms":9891,"data":"1"}
+{"schema_version":1,"type":"token","sequence":317,"elapsed_ms":9922,"data":"."}
+{"schema_version":1,"type":"token","sequence":318,"elapsed_ms":9954,"data":" It"}
+{"schema_version":1,"type":"token","sequence":319,"elapsed_ms":10000,"data":" cleans"}
+{"schema_version":1,"type":"token","sequence":320,"elapsed_ms":10032,"data":" the"}
+{"schema_version":1,"type":"token","sequence":321,"elapsed_ms":10063,"data":" request"}
+{"schema_version":1,"type":"token","sequence":322,"elapsed_ms":10110,"data":" path"}
+{"schema_version":1,"type":"token","sequence":323,"elapsed_ms":10141,"data":" and"}
+{"schema_version":1,"type":"token","sequence":324,"elapsed_ms":10172,"data":" each"}
+{"schema_version":1,"type":"token","sequence":325,"elapsed_ms":10204,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":326,"elapsed_ms":10250,"data":" path"}
+{"schema_version":1,"type":"token","sequence":327,"elapsed_ms":10282,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":328,"elapsed_ms":10313,"data":"2"}
+{"schema_version":1,"type":"token","sequence":329,"elapsed_ms":10344,"data":"."}
+{"schema_version":1,"type":"token","sequence":330,"elapsed_ms":10391,"data":" It"}
+{"schema_version":1,"type":"token","sequence":331,"elapsed_ms":10422,"data":" finds"}
+{"schema_version":1,"type":"token","sequence":332,"elapsed_ms":10469,"data":" the"}
+{"schema_version":1,"type":"token","sequence":333,"elapsed_ms":10500,"data":" longest"}
+{"schema_version":1,"type":"token","sequence":334,"elapsed_ms":10532,"data":" matching"}
+{"schema_version":1,"type":"token","sequence":335,"elapsed_ms":10579,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":336,"elapsed_ms":10610,"data":" that"}
+{"schema_version":1,"type":"token","sequence":337,"elapsed_ms":10657,"data":" is"}
+{"schema_version":1,"type":"token","sequence":338,"elapsed_ms":10688,"data":" a"}
+{"schema_version":1,"type":"token","sequence":339,"elapsed_ms":10719,"data":" prefix"}
+{"schema_version":1,"type":"token","sequence":340,"elapsed_ms":10766,"data":" of"}
+{"schema_version":1,"type":"token","sequence":341,"elapsed_ms":10797,"data":" the"}
+{"schema_version":1,"type":"token","sequence":342,"elapsed_ms":10844,"data":" request"}
+{"schema_version":1,"type":"token","sequence":343,"elapsed_ms":10875,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":344,"elapsed_ms":10907,"data":"3"}
+{"schema_version":1,"type":"token","sequence":345,"elapsed_ms":10954,"data":"."}
+{"schema_version":1,"type":"token","sequence":346,"elapsed_ms":10985,"data":" It"}
+{"schema_version":1,"type":"token","sequence":347,"elapsed_ms":11032,"data":" returns"}
+{"schema_version":1,"type":"token","sequence":348,"elapsed_ms":11063,"data":" the"}
+{"schema_version":1,"type":"token","sequence":349,"elapsed_ms":11110,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":350,"elapsed_ms":11141,"data":" path"}
+{"schema_version":1,"type":"token","sequence":351,"elapsed_ms":11172,"data":" and"}
+{"schema_version":1,"type":"token","sequence":352,"elapsed_ms":11219,"data":" the"}
+{"schema_version":1,"type":"token","sequence":353,"elapsed_ms":11250,"data":" remaining"}
+{"schema_version":1,"type":"token","sequence":354,"elapsed_ms":11282,"data":" relative"}
+{"schema_version":1,"type":"token","sequence":355,"elapsed_ms":11329,"data":" path"}
+{"schema_version":1,"type":"token","sequence":356,"elapsed_ms":11360,"data":"\n\n"}
+{"schema_version":1,"type":"token","sequence":357,"elapsed_ms":11391,"data":"Looking"}
+{"schema_version":1,"type":"token","sequence":358,"elapsed_ms":11422,"data":" at"}
+{"schema_version":1,"type":"token","sequence":359,"elapsed_ms":11454,"data":" the"}
+{"schema_version":1,"type":"token","sequence":360,"elapsed_ms":11500,"data":" test"}
+{"schema_version":1,"type":"token","sequence":361,"elapsed_ms":11532,"data":" cases"}
+{"schema_version":1,"type":"token","sequence":362,"elapsed_ms":11563,"data":" in"}
+{"schema_version":1,"type":"token","sequence":363,"elapsed_ms":11594,"data":" `"}
+{"schema_version":1,"type":"token","sequence":364,"elapsed_ms":11641,"data":"service"}
+{"schema_version":1,"type":"token","sequence":365,"elapsed_ms":11672,"data":"_test"}
+{"schema_version":1,"type":"token","sequence":366,"elapsed_ms":11719,"data":".go"}
+{"schema_version":1,"type":"token","sequence":367,"elapsed_ms":11750,"data":"`"}
+{"schema_version":1,"type":"token","sequence":368,"elapsed_ms":11782,"data":":\n"}
+{"schema_version":1,"type":"token","sequence":369,"elapsed_ms":11829,"data":"-"}
+{"schema_version":1,"type":"token","sequence":370,"elapsed_ms":11860,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":371,"elapsed_ms":11891,"data":"apple"}
+{"schema_version":1,"type":"token","sequence":372,"elapsed_ms":11938,"data":"/x"}
+{"schema_version":1,"type":"token","sequence":373,"elapsed_ms":11969,"data":"`"}
+{"schema_version":1,"type":"token","sequence":374,"elapsed_ms":12016,"data":" with"}
+{"schema_version":1,"type":"token","sequence":375,"elapsed_ms":12047,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":376,"elapsed_ms":12079,"data":" `"}
+{"schema_version":1,"type":"token","sequence":377,"elapsed_ms":12125,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":378,"elapsed_ms":12157,"data":"/"}
+{"schema_version":1,"type":"token","sequence":379,"elapsed_ms":12188,"data":"app"}
+{"schema_version":1,"type":"token","sequence":380,"elapsed_ms":12235,"data":"\","}
+{"schema_version":1,"type":"token","sequence":381,"elapsed_ms":12266,"data":" \"/\","}
+{"schema_version":1,"type":"token","sequence":382,"elapsed_ms":12297,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":383,"elapsed_ms":12344,"data":"app"}
+{"schema_version":1,"type":"token","sequence":384,"elapsed_ms":12375,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":385,"elapsed_ms":12407,"data":"2"}
+{"schema_version":1,"type":"token","sequence":386,"elapsed_ms":12454,"data":"\"]"}
+{"schema_version":1,"type":"token","sequence":387,"elapsed_ms":12485,"data":"`"}
+{"schema_version":1,"type":"token","sequence":388,"elapsed_ms":12516,"data":" should"}
+{"schema_version":1,"type":"token","sequence":389,"elapsed_ms":12563,"data":" return"}
+{"schema_version":1,"type":"token","sequence":390,"elapsed_ms":12594,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":391,"elapsed_ms":12625,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":392,"elapsed_ms":12672,"data":"`"}
+{"schema_version":1,"type":"token","sequence":393,"elapsed_ms":12704,"data":" and"}
+{"schema_version":1,"type":"token","sequence":394,"elapsed_ms":12735,"data":" rest"}
+{"schema_version":1,"type":"token","sequence":395,"elapsed_ms":12782,"data":" `"}
+{"schema_version":1,"type":"token","sequence":396,"elapsed_ms":12813,"data":"apple"}
+{"schema_version":1,"type":"token","sequence":397,"elapsed_ms":12844,"data":"/x"}
+{"schema_version":1,"type":"token","sequence":398,"elapsed_ms":12891,"data":"`\n"}
+{"schema_version":1,"type":"token","sequence":399,"elapsed_ms":12922,"data":"-"}
+{"schema_version":1,"type":"token","sequence":400,"elapsed_ms":12969,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":401,"elapsed_ms":13000,"data":"app"}
+{"schema_version":1,"type":"token","sequence":402,"elapsed_ms":13047,"data":"/a"}
+{"schema_version":1,"type":"token","sequence":403,"elapsed_ms":13079,"data":"`"}
+{"schema_version":1,"type":"token","sequence":404,"elapsed_ms":13110,"data":" with"}
+{"schema_version":1,"type":"token","sequence":405,"elapsed_ms":13141,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":406,"elapsed_ms":13172,"data":" `"}
+{"schema_version":1,"type":"token","sequence":407,"elapsed_ms":13204,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":408,"elapsed_ms":13250,"data":"/"}
+{"schema_version":1,"type":"token","sequence":409,"elapsed_ms":13282,"data":"app"}
+{"schema_version":1,"type":"token","sequence":410,"elapsed_ms":13313,"data":"\","}
+{"schema_version":1,"type":"token","sequence":411,"elapsed_ms":13360,"data":" \"/\","}
+{"schema_version":1,"type":"token","sequence":412,"elapsed_ms":13391,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":413,"elapsed_ms":13438,"data":"app"}
+{"schema_version":1,"type":"token","sequence":414,"elapsed_ms":13469,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":415,"elapsed_ms":13500,"data":"2"}
+{"schema_version":1,"type":"token","sequence":416,"elapsed_ms":13547,"data":"\"]"}
+{"schema_version":1,"type":"token","sequence":417,"elapsed_ms":13579,"data":"`"}
+{"schema_version":1,"type":"token","sequence":418,"elapsed_ms":13610,"data":" should"}
+{"schema_version":1,"type":"token","sequence":419,"elapsed_ms":13657,"data":" return"}
+{"schema_version":1,"type":"token","sequence":420,"elapsed_ms":13688,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":421,"elapsed_ms":13735,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":422,"elapsed_ms":13766,"data":"app"}
+{"schema_version":1,"type":"token","sequence":423,"elapsed_ms":13813,"data":"`"}
+{"schema_version":1,"type":"token","sequence":424,"elapsed_ms":13844,"data":" and"}
+{"schema_version":1,"type":"token","sequence":425,"elapsed_ms":13891,"data":" rest"}
+{"schema_version":1,"type":"token","sequence":426,"elapsed_ms":13922,"data":" `"}
+{"schema_version":1,"type":"token","sequence":427,"elapsed_ms":13954,"data":"a"}
+{"schema_version":1,"type":"token","sequence":428,"elapsed_ms":13985,"data":"`\n"}
+{"schema_version":1,"type":"token","sequence":429,"elapsed_ms":14032,"data":"-"}
+{"schema_version":1,"type":"token","sequence":430,"elapsed_ms":14063,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":431,"elapsed_ms":14094,"data":"app"}
+{"schema_version":1,"type":"token","sequence":432,"elapsed_ms":14141,"data":"`"}
+{"schema_version":1,"type":"token","sequence":433,"elapsed_ms":14172,"data":" with"}
+{"schema_version":1,"type":"token","sequence":434,"elapsed_ms":14204,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":435,"elapsed_ms":14250,"data":" `"}
+{"schema_version":1,"type":"token","sequence":436,"elapsed_ms":14282,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":437,"elapsed_ms":14329,"data":"/"}
+{"schema_version":1,"type":"token","sequence":438,"elapsed_ms":14360,"data":"app"}
+{"schema_version":1,"type":"token","sequence":439,"elapsed_ms":14391,"data":"\","}
+{"schema_version":1,"type":"token","sequence":440,"elapsed_ms":14438,"data":" \"/\","}
+{"schema_version":1,"type":"token","sequence":441,"elapsed_ms":14469,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":442,"elapsed_ms":14500,"data":"app"}
+{"schema_version":1,"type":"token","sequence":443,"elapsed_ms":14547,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":444,"elapsed_ms":14579,"data":"2"}
+{"schema_version":1,"type":"token","sequence":445,"elapsed_ms":14625,"data":"\"]"}
+{"schema_version":1,"type":"token","sequence":446,"elapsed_ms":14657,"data":"`"}
+{"schema_version":1,"type":"token","sequence":447,"elapsed_ms":14688,"data":" should"}
+{"schema_version":1,"type":"token","sequence":448,"elapsed_ms":14735,"data":" return"}
+{"schema_version":1,"type":"token","sequence":449,"elapsed_ms":14766,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":450,"elapsed_ms":14797,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":451,"elapsed_ms":14829,"data":"app"}
+{"schema_version":1,"type":"token","sequence":452,"elapsed_ms":14875,"data":"`"}
+{"schema_version":1,"type":"token","sequence":453,"elapsed_ms":14907,"data":" and"}
+{"schema_version":1,"type":"token","sequence":454,"elapsed_ms":14938,"data":" rest"}
+{"schema_version":1,"type":"token","sequence":455,"elapsed_ms":14985,"data":" `"}
+{"schema_version":1,"type":"token","sequence":456,"elapsed_ms":15016,"data":"`\n"}
+{"schema_version":1,"type":"token","sequence":457,"elapsed_ms":15047,"data":"-"}
+{"schema_version":1,"type":"token","sequence":458,"elapsed_ms":15094,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":459,"elapsed_ms":15125,"data":"app"}
+{"schema_version":1,"type":"token","sequence":460,"elapsed_ms":15172,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":461,"elapsed_ms":15204,"data":"2"}
+{"schema_version":1,"type":"token","sequence":462,"elapsed_ms":15235,"data":"/x"}
+{"schema_version":1,"type":"token","sequence":463,"elapsed_ms":15266,"data":"`"}
+{"schema_version":1,"type":"token","sequence":464,"elapsed_ms":15313,"data":" with"}
+{"schema_version":1,"type":"token","sequence":465,"elapsed_ms":15344,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":466,"elapsed_ms":15391,"data":" `"}
+{"schema_version":1,"type":"token","sequence":467,"elapsed_ms":15422,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":468,"elapsed_ms":15454,"data":"/"}
+{"schema_version":1,"type":"token","sequence":469,"elapsed_ms":15485,"data":"app"}
+{"schema_version":1,"type":"token","sequence":470,"elapsed_ms":15532,"data":"\","}
+{"schema_version":1,"type":"token","sequence":471,"elapsed_ms":15563,"data":" \"/\","}
+{"schema_version":1,"type":"token","sequence":472,"elapsed_ms":15594,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":473,"elapsed_ms":15641,"data":"app"}
+{"schema_version":1,"type":"token","sequence":474,"elapsed_ms":15672,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":475,"elapsed_ms":15719,"data":"2"}
+{"schema_version":1,"type":"token","sequence":476,"elapsed_ms":15750,"data":"\"]"}
+{"schema_version":1,"type":"token","sequence":477,"elapsed_ms":15782,"data":"`"}
+{"schema_version":1,"type":"token","sequence":478,"elapsed_ms":15829,"data":" should"}
+{"schema_version":1,"type":"token","sequence":479,"elapsed_ms":15860,"data":" return"}
+{"schema_version":1,"type":"token","sequence":480,"elapsed_ms":15891,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":481,"elapsed_ms":15938,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":482,"elapsed_ms":15985,"data":"app"}
+{"schema_version":1,"type":"token","sequence":483,"elapsed_ms":16016,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":484,"elapsed_ms":16047,"data":"2"}
+{"schema_version":1,"type":"token","sequence":485,"elapsed_ms":16094,"data":"`"}
+{"schema_version":1,"type":"token","sequence":486,"elapsed_ms":16125,"data":" and"}
+{"schema_version":1,"type":"token","sequence":487,"elapsed_ms":16157,"data":" rest"}
+{"schema_version":1,"type":"token","sequence":488,"elapsed_ms":16204,"data":" `"}
+{"schema_version":1,"type":"token","sequence":489,"elapsed_ms":16235,"data":"x"}
+{"schema_version":1,"type":"token","sequence":490,"elapsed_ms":16266,"data":"`\n"}
+{"schema_version":1,"type":"token","sequence":491,"elapsed_ms":16313,"data":"-"}
+{"schema_version":1,"type":"token","sequence":492,"elapsed_ms":16344,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":493,"elapsed_ms":16375,"data":"app"}
+{"schema_version":1,"type":"token","sequence":494,"elapsed_ms":16422,"data":"/../"}
+{"schema_version":1,"type":"token","sequence":495,"elapsed_ms":16454,"data":"apple"}
+{"schema_version":1,"type":"token","sequence":496,"elapsed_ms":16500,"data":"`"}
+{"schema_version":1,"type":"token","sequence":497,"elapsed_ms":16532,"data":" with"}
+{"schema_version":1,"type":"token","sequence":498,"elapsed_ms":16563,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":499,"elapsed_ms":16610,"data":" `"}
+{"schema_version":1,"type":"token","sequence":500,"elapsed_ms":16641,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":501,"elapsed_ms":16688,"data":"/"}
+{"schema_version":1,"type":"token","sequence":502,"elapsed_ms":16719,"data":"app"}
+{"schema_version":1,"type":"token","sequence":503,"elapsed_ms":16750,"data":"\","}
+{"schema_version":1,"type":"token","sequence":504,"elapsed_ms":16797,"data":" \"/\","}
+{"schema_version":1,"type":"token","sequence":505,"elapsed_ms":16829,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":506,"elapsed_ms":16860,"data":"app"}
+{"schema_version":1,"type":"token","sequence":507,"elapsed_ms":16907,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":508,"elapsed_ms":16938,"data":"2"}
+{"schema_version":1,"type":"token","sequence":509,"elapsed_ms":16969,"data":"\"]"}
+{"schema_version":1,"type":"token","sequence":510,"elapsed_ms":17016,"data":"`"}
+{"schema_version":1,"type":"token","sequence":511,"elapsed_ms":17047,"data":" should"}
+{"schema_version":1,"type":"token","sequence":512,"elapsed_ms":17079,"data":" return"}
+{"schema_version":1,"type":"token","sequence":513,"elapsed_ms":17125,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":514,"elapsed_ms":17172,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":515,"elapsed_ms":17204,"data":"`"}
+{"schema_version":1,"type":"token","sequence":516,"elapsed_ms":17250,"data":" and"}
+{"schema_version":1,"type":"token","sequence":517,"elapsed_ms":17282,"data":" rest"}
+{"schema_version":1,"type":"token","sequence":518,"elapsed_ms":17329,"data":" `"}
+{"schema_version":1,"type":"token","sequence":519,"elapsed_ms":17360,"data":"apple"}
+{"schema_version":1,"type":"token","sequence":520,"elapsed_ms":17391,"data":"`\n"}
+{"schema_version":1,"type":"token","sequence":521,"elapsed_ms":17438,"data":"-"}
+{"schema_version":1,"type":"token","sequence":522,"elapsed_ms":17469,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":523,"elapsed_ms":17500,"data":"apple"}
+{"schema_version":1,"type":"token","sequence":524,"elapsed_ms":17547,"data":"`"}
+{"schema_version":1,"type":"token","sequence":525,"elapsed_ms":17579,"data":" with"}
+{"schema_version":1,"type":"token","sequence":526,"elapsed_ms":17610,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":527,"elapsed_ms":17657,"data":" `"}
+{"schema_version":1,"type":"token","sequence":528,"elapsed_ms":17688,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":529,"elapsed_ms":17719,"data":"/"}
+{"schema_version":1,"type":"token","sequence":530,"elapsed_ms":17766,"data":"app"}
+{"schema_version":1,"type":"token","sequence":531,"elapsed_ms":17797,"data":"\"]"}
+{"schema_version":1,"type":"token","sequence":532,"elapsed_ms":17829,"data":"`"}
+{"schema_version":1,"type":"token","sequence":533,"elapsed_ms":17875,"data":" should"}
+{"schema_version":1,"type":"token","sequence":534,"elapsed_ms":17907,"data":" NOT"}
+{"schema_version":1,"type":"token","sequence":535,"elapsed_ms":17954,"data":" match"}
+{"schema_version":1,"type":"token","sequence":536,"elapsed_ms":17985,"data":" ("}
+{"schema_version":1,"type":"token","sequence":537,"elapsed_ms":18016,"data":"partial"}
+{"schema_version":1,"type":"token","sequence":538,"elapsed_ms":18063,"data":" component"}
+{"schema_version":1,"type":"token","sequence":539,"elapsed_ms":18094,"data":" match"}
+{"schema_version":1,"type":"token","sequence":540,"elapsed_ms":18141,"data":" should"}
+{"schema_version":1,"type":"token","sequence":541,"elapsed_ms":18172,"data":" fail"}
+{"schema_version":1,"type":"token","sequence":542,"elapsed_ms":18204,"data":")\n\n"}
+{"schema_version":1,"type":"token","sequence":543,"elapsed_ms":18250,"data":"The"}
+{"schema_version":1,"type":"token","sequence":544,"elapsed_ms":18282,"data":" issue"}
+{"schema_version":1,"type":"token","sequence":545,"elapsed_ms":18313,"data":" is"}
+{"schema_version":1,"type":"token","sequence":546,"elapsed_ms":18360,"data":" in"}
+{"schema_version":1,"type":"token","sequence":547,"elapsed_ms":18391,"data":" the"}
+{"schema_version":1,"type":"token","sequence":548,"elapsed_ms":18438,"data":" prefix"}
+{"schema_version":1,"type":"token","sequence":549,"elapsed_ms":18469,"data":" matching"}
+{"schema_version":1,"type":"token","sequence":550,"elapsed_ms":18500,"data":" logic"}
+{"schema_version":1,"type":"token","sequence":551,"elapsed_ms":18547,"data":"."}
+{"schema_version":1,"type":"token","sequence":552,"elapsed_ms":18579,"data":" The"}
+{"schema_version":1,"type":"token","sequence":553,"elapsed_ms":18625,"data":" current"}
+{"schema_version":1,"type":"token","sequence":554,"elapsed_ms":18657,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":555,"elapsed_ms":18704,"data":" uses"}
+{"schema_version":1,"type":"token","sequence":556,"elapsed_ms":18735,"data":" `"}
+{"schema_version":1,"type":"token","sequence":557,"elapsed_ms":18766,"data":"strings"}
+{"schema_version":1,"type":"token","sequence":558,"elapsed_ms":18797,"data":".HasPrefix"}
+{"schema_version":1,"type":"token","sequence":559,"elapsed_ms":18844,"data":"(request"}
+{"schema_version":1,"type":"token","sequence":560,"elapsed_ms":18875,"data":","}
+{"schema_version":1,"type":"token","sequence":561,"elapsed_ms":18922,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":562,"elapsed_ms":18954,"data":")`"}
+{"schema_version":1,"type":"token","sequence":563,"elapsed_ms":19000,"data":" which"}
+{"schema_version":1,"type":"token","sequence":564,"elapsed_ms":19032,"data":" can"}
+{"schema_version":1,"type":"token","sequence":565,"elapsed_ms":19063,"data":" match"}
+{"schema_version":1,"type":"token","sequence":566,"elapsed_ms":19110,"data":" partial"}
+{"schema_version":1,"type":"token","sequence":567,"elapsed_ms":19141,"data":" components"}
+{"schema_version":1,"type":"token","sequence":568,"elapsed_ms":19172,"data":"."}
+{"schema_version":1,"type":"token","sequence":569,"elapsed_ms":19219,"data":" For"}
+{"schema_version":1,"type":"token","sequence":570,"elapsed_ms":19250,"data":" example"}
+{"schema_version":1,"type":"token","sequence":571,"elapsed_ms":19282,"data":","}
+{"schema_version":1,"type":"token","sequence":572,"elapsed_ms":19329,"data":" if"}
+{"schema_version":1,"type":"token","sequence":573,"elapsed_ms":19360,"data":" we"}
+{"schema_version":1,"type":"token","sequence":574,"elapsed_ms":19391,"data":" have"}
+{"schema_version":1,"type":"token","sequence":575,"elapsed_ms":19438,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":576,"elapsed_ms":19469,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":577,"elapsed_ms":19500,"data":"app"}
+{"schema_version":1,"type":"token","sequence":578,"elapsed_ms":19547,"data":"`"}
+{"schema_version":1,"type":"token","sequence":579,"elapsed_ms":19579,"data":" and"}
+{"schema_version":1,"type":"token","sequence":580,"elapsed_ms":19610,"data":" request"}
+{"schema_version":1,"type":"token","sequence":581,"elapsed_ms":19657,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":582,"elapsed_ms":19688,"data":"apple"}
+{"schema_version":1,"type":"token","sequence":583,"elapsed_ms":19719,"data":"`,"}
+{"schema_version":1,"type":"token","sequence":584,"elapsed_ms":19766,"data":" it"}
+{"schema_version":1,"type":"token","sequence":585,"elapsed_ms":19797,"data":" would"}
+{"schema_version":1,"type":"token","sequence":586,"elapsed_ms":19829,"data":" incorrectly"}
+{"schema_version":1,"type":"token","sequence":587,"elapsed_ms":19875,"data":" match"}
+{"schema_version":1,"type":"token","sequence":588,"elapsed_ms":19907,"data":" because"}
+{"schema_version":1,"type":"token","sequence":589,"elapsed_ms":19938,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":590,"elapsed_ms":19969,"data":"apple"}
+{"schema_version":1,"type":"token","sequence":591,"elapsed_ms":20016,"data":"`"}
+{"schema_version":1,"type":"token","sequence":592,"elapsed_ms":20047,"data":" starts"}
+{"schema_version":1,"type":"token","sequence":593,"elapsed_ms":20094,"data":" with"}
+{"schema_version":1,"type":"token","sequence":594,"elapsed_ms":20125,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":595,"elapsed_ms":20157,"data":"app"}
+{"schema_version":1,"type":"token","sequence":596,"elapsed_ms":20188,"data":"`.\n\n"}
+{"schema_version":1,"type":"token","sequence":597,"elapsed_ms":20235,"data":"The"}
+{"schema_version":1,"type":"token","sequence":598,"elapsed_ms":20266,"data":" correct"}
+{"schema_version":1,"type":"token","sequence":599,"elapsed_ms":20297,"data":" approach"}
+{"schema_version":1,"type":"token","sequence":600,"elapsed_ms":20344,"data":" is"}
+{"schema_version":1,"type":"token","sequence":601,"elapsed_ms":20375,"data":" to"}
+{"schema_version":1,"type":"token","sequence":602,"elapsed_ms":20407,"data":" ensure"}
+{"schema_version":1,"type":"token","sequence":603,"elapsed_ms":20454,"data":" that"}
+{"schema_version":1,"type":"token","sequence":604,"elapsed_ms":20485,"data":" the"}
+{"schema_version":1,"type":"token","sequence":605,"elapsed_ms":20532,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":606,"elapsed_ms":20563,"data":" path"}
+{"schema_version":1,"type":"token","sequence":607,"elapsed_ms":20594,"data":" is"}
+{"schema_version":1,"type":"token","sequence":608,"elapsed_ms":20641,"data":" a"}
+{"schema_version":1,"type":"token","sequence":609,"elapsed_ms":20672,"data":" complete"}
+{"schema_version":1,"type":"token","sequence":610,"elapsed_ms":20704,"data":" component"}
+{"schema_version":1,"type":"token","sequence":611,"elapsed_ms":20750,"data":" match"}
+{"schema_version":1,"type":"token","sequence":612,"elapsed_ms":20782,"data":","}
+{"schema_version":1,"type":"token","sequence":613,"elapsed_ms":20813,"data":" not"}
+{"schema_version":1,"type":"token","sequence":614,"elapsed_ms":20844,"data":" just"}
+{"schema_version":1,"type":"token","sequence":615,"elapsed_ms":20891,"data":" a"}
+{"schema_version":1,"type":"token","sequence":616,"elapsed_ms":20922,"data":" prefix"}
+{"schema_version":1,"type":"token","sequence":617,"elapsed_ms":20954,"data":"."}
+{"schema_version":1,"type":"token","sequence":618,"elapsed_ms":21000,"data":" This"}
+{"schema_version":1,"type":"token","sequence":619,"elapsed_ms":21032,"data":" means"}
+{"schema_version":1,"type":"token","sequence":620,"elapsed_ms":21063,"data":":\n"}
+{"schema_version":1,"type":"token","sequence":621,"elapsed_ms":21110,"data":"1"}
+{"schema_version":1,"type":"token","sequence":622,"elapsed_ms":21141,"data":"."}
+{"schema_version":1,"type":"token","sequence":623,"elapsed_ms":21172,"data":" The"}
+{"schema_version":1,"type":"token","sequence":624,"elapsed_ms":21219,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":625,"elapsed_ms":21250,"data":" should"}
+{"schema_version":1,"type":"token","sequence":626,"elapsed_ms":21282,"data":" be"}
+{"schema_version":1,"type":"token","sequence":627,"elapsed_ms":21329,"data":" a"}
+{"schema_version":1,"type":"token","sequence":628,"elapsed_ms":21360,"data":" prefix"}
+{"schema_version":1,"type":"token","sequence":629,"elapsed_ms":21391,"data":" of"}
+{"schema_version":1,"type":"token","sequence":630,"elapsed_ms":21438,"data":" the"}
+{"schema_version":1,"type":"token","sequence":631,"elapsed_ms":21469,"data":" request"}
+{"schema_version":1,"type":"token","sequence":632,"elapsed_ms":21500,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":633,"elapsed_ms":21547,"data":"2"}
+{"schema_version":1,"type":"token","sequence":634,"elapsed_ms":21579,"data":"."}
+{"schema_version":1,"type":"token","sequence":635,"elapsed_ms":21610,"data":" Either"}
+{"schema_version":1,"type":"token","sequence":636,"elapsed_ms":21657,"data":" the"}
+{"schema_version":1,"type":"token","sequence":637,"elapsed_ms":21688,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":638,"elapsed_ms":21719,"data":" is"}
+{"schema_version":1,"type":"token","sequence":639,"elapsed_ms":21766,"data":" the"}
+{"schema_version":1,"type":"token","sequence":640,"elapsed_ms":21797,"data":" root"}
+{"schema_version":1,"type":"token","sequence":641,"elapsed_ms":21829,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":642,"elapsed_ms":21875,"data":"`"}
+{"schema_version":1,"type":"token","sequence":643,"elapsed_ms":21907,"data":" or"}
+{"schema_version":1,"type":"token","sequence":644,"elapsed_ms":21938,"data":" the"}
+{"schema_version":1,"type":"token","sequence":645,"elapsed_ms":21985,"data":" next"}
+{"schema_version":1,"type":"token","sequence":646,"elapsed_ms":22016,"data":" character"}
+{"schema_version":1,"type":"token","sequence":647,"elapsed_ms":22047,"data":" after"}
+{"schema_version":1,"type":"token","sequence":648,"elapsed_ms":22094,"data":" the"}
+{"schema_version":1,"type":"token","sequence":649,"elapsed_ms":22125,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":650,"elapsed_ms":22157,"data":" in"}
+{"schema_version":1,"type":"token","sequence":651,"elapsed_ms":22204,"data":" the"}
+{"schema_version":1,"type":"token","sequence":652,"elapsed_ms":22235,"data":" request"}
+{"schema_version":1,"type":"token","sequence":653,"elapsed_ms":22266,"data":" should"}
+{"schema_version":1,"type":"token","sequence":654,"elapsed_ms":22313,"data":" be"}
+{"schema_version":1,"type":"token","sequence":655,"elapsed_ms":22360,"data":" `/"}
+{"schema_version":1,"type":"token","sequence":656,"elapsed_ms":22391,"data":"`"}
+{"schema_version":1,"type":"token","sequence":657,"elapsed_ms":22422,"data":" ("}
+{"schema_version":1,"type":"token","sequence":658,"elapsed_ms":22469,"data":"indic"}
+{"schema_version":1,"type":"token","sequence":659,"elapsed_ms":22500,"data":"ating"}
+{"schema_version":1,"type":"token","sequence":660,"elapsed_ms":22532,"data":" a"}
+{"schema_version":1,"type":"token","sequence":661,"elapsed_ms":22579,"data":" component"}
+{"schema_version":1,"type":"token","sequence":662,"elapsed_ms":22610,"data":" boundary"}
+{"schema_version":1,"type":"token","sequence":663,"elapsed_ms":22641,"data":")\n\n"}
+{"schema_version":1,"type":"token","sequence":664,"elapsed_ms":22688,"data":"Let"}
+{"schema_version":1,"type":"token","sequence":665,"elapsed_ms":22719,"data":" me"}
+{"schema_version":1,"type":"token","sequence":666,"elapsed_ms":22750,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":667,"elapsed_ms":22797,"data":" this"}
+{"schema_version":1,"type":"token","sequence":668,"elapsed_ms":22829,"data":":\n"}
+{"schema_version":1,"type":"token","sequence":669,"elapsed_ms":22875,"data":"<tool_call>"}
+{"schema_version":1,"type":"token","sequence":670,"elapsed_ms":22875,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":671,"elapsed_ms":22891,"data":"<"}
+{"schema_version":1,"type":"token","sequence":672,"elapsed_ms":22891,"data":"function"}
+{"schema_version":1,"type":"token","sequence":673,"elapsed_ms":22891,"data":"="}
+{"schema_version":1,"type":"token","sequence":674,"elapsed_ms":22907,"data":"apply"}
+{"schema_version":1,"type":"token","sequence":675,"elapsed_ms":22907,"data":"_patch"}
+{"schema_version":1,"type":"token","sequence":676,"elapsed_ms":22922,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":677,"elapsed_ms":22922,"data":"<"}
+{"schema_version":1,"type":"token","sequence":678,"elapsed_ms":22938,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":679,"elapsed_ms":22938,"data":"=path"}
+{"schema_version":1,"type":"token","sequence":680,"elapsed_ms":22938,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":681,"elapsed_ms":22954,"data":"service"}
+{"schema_version":1,"type":"token","sequence":682,"elapsed_ms":22954,"data":".go"}
+{"schema_version":1,"type":"token","sequence":683,"elapsed_ms":22969,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":684,"elapsed_ms":22969,"data":"</"}
+{"schema_version":1,"type":"token","sequence":685,"elapsed_ms":22985,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":686,"elapsed_ms":22985,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":687,"elapsed_ms":22985,"data":"<"}
+{"schema_version":1,"type":"token","sequence":688,"elapsed_ms":23000,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":689,"elapsed_ms":23000,"data":"="}
+{"schema_version":1,"type":"token","sequence":690,"elapsed_ms":23016,"data":"old"}
+{"schema_version":1,"type":"token","sequence":691,"elapsed_ms":23016,"data":"_text"}
+{"schema_version":1,"type":"token","sequence":692,"elapsed_ms":23016,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":693,"elapsed_ms":23032,"data":"package"}
+{"schema_version":1,"type":"token","sequence":694,"elapsed_ms":23032,"data":" hold"}
+{"schema_version":1,"type":"token","sequence":695,"elapsed_ms":23047,"data":"out"}
+{"schema_version":1,"type":"token","sequence":696,"elapsed_ms":23047,"data":"\n\n"}
+{"schema_version":1,"type":"token","sequence":697,"elapsed_ms":23047,"data":"import"}
+{"schema_version":1,"type":"token","sequence":698,"elapsed_ms":23063,"data":" (\n"}
+{"schema_version":1,"type":"token","sequence":699,"elapsed_ms":23063,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":700,"elapsed_ms":23063,"data":"\"path"}
+{"schema_version":1,"type":"token","sequence":701,"elapsed_ms":23079,"data":"\"\n"}
+{"schema_version":1,"type":"token","sequence":702,"elapsed_ms":23079,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":703,"elapsed_ms":23094,"data":"\"strings"}
+{"schema_version":1,"type":"token","sequence":704,"elapsed_ms":23094,"data":"\"\n"}
+{"schema_version":1,"type":"token","sequence":705,"elapsed_ms":23094,"data":")\n\n"}
+{"schema_version":1,"type":"token","sequence":706,"elapsed_ms":23110,"data":"func"}
+{"schema_version":1,"type":"token","sequence":707,"elapsed_ms":23110,"data":" Resolve"}
+{"schema_version":1,"type":"token","sequence":708,"elapsed_ms":23110,"data":"Mount"}
+{"schema_version":1,"type":"token","sequence":709,"elapsed_ms":23125,"data":"(request"}
+{"schema_version":1,"type":"token","sequence":710,"elapsed_ms":23125,"data":" string"}
+{"schema_version":1,"type":"token","sequence":711,"elapsed_ms":23141,"data":","}
+{"schema_version":1,"type":"token","sequence":712,"elapsed_ms":23141,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":713,"elapsed_ms":23141,"data":" []"}
+{"schema_version":1,"type":"token","sequence":714,"elapsed_ms":23157,"data":"string"}
+{"schema_version":1,"type":"token","sequence":715,"elapsed_ms":23157,"data":")"}
+{"schema_version":1,"type":"token","sequence":716,"elapsed_ms":23157,"data":" ("}
+{"schema_version":1,"type":"token","sequence":717,"elapsed_ms":23172,"data":"string"}
+{"schema_version":1,"type":"token","sequence":718,"elapsed_ms":23172,"data":","}
+{"schema_version":1,"type":"token","sequence":719,"elapsed_ms":23188,"data":" string"}
+{"schema_version":1,"type":"token","sequence":720,"elapsed_ms":23188,"data":","}
+{"schema_version":1,"type":"token","sequence":721,"elapsed_ms":23188,"data":" bool"}
+{"schema_version":1,"type":"token","sequence":722,"elapsed_ms":23204,"data":")"}
+{"schema_version":1,"type":"token","sequence":723,"elapsed_ms":23204,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":724,"elapsed_ms":23219,"data":"\trequest"}
+{"schema_version":1,"type":"token","sequence":725,"elapsed_ms":23219,"data":" ="}
+{"schema_version":1,"type":"token","sequence":726,"elapsed_ms":23219,"data":" path"}
+{"schema_version":1,"type":"token","sequence":727,"elapsed_ms":23235,"data":".C"}
+{"schema_version":1,"type":"token","sequence":728,"elapsed_ms":23235,"data":"lean"}
+{"schema_version":1,"type":"token","sequence":729,"elapsed_ms":23235,"data":"(\"/"}
+{"schema_version":1,"type":"token","sequence":730,"elapsed_ms":23250,"data":"\""}
+{"schema_version":1,"type":"token","sequence":731,"elapsed_ms":23250,"data":" +"}
+{"schema_version":1,"type":"token","sequence":732,"elapsed_ms":23266,"data":" request"}
+{"schema_version":1,"type":"token","sequence":733,"elapsed_ms":23266,"data":")\n"}
+{"schema_version":1,"type":"token","sequence":734,"elapsed_ms":23266,"data":"\tbest"}
+{"schema_version":1,"type":"token","sequence":735,"elapsed_ms":23282,"data":" :="}
+{"schema_version":1,"type":"token","sequence":736,"elapsed_ms":23282,"data":" \"\"\n"}
+{"schema_version":1,"type":"token","sequence":737,"elapsed_ms":23282,"data":"\tfor"}
+{"schema_version":1,"type":"token","sequence":738,"elapsed_ms":23297,"data":" _,"}
+{"schema_version":1,"type":"token","sequence":739,"elapsed_ms":23297,"data":" raw"}
+{"schema_version":1,"type":"token","sequence":740,"elapsed_ms":23313,"data":" :="}
+{"schema_version":1,"type":"token","sequence":741,"elapsed_ms":23313,"data":" range"}
+{"schema_version":1,"type":"token","sequence":742,"elapsed_ms":23313,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":743,"elapsed_ms":23329,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":744,"elapsed_ms":23329,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":745,"elapsed_ms":23344,"data":"\tm"}
+{"schema_version":1,"type":"token","sequence":746,"elapsed_ms":23344,"data":"ount"}
+{"schema_version":1,"type":"token","sequence":747,"elapsed_ms":23344,"data":" :="}
+{"schema_version":1,"type":"token","sequence":748,"elapsed_ms":23360,"data":" path"}
+{"schema_version":1,"type":"token","sequence":749,"elapsed_ms":23360,"data":".C"}
+{"schema_version":1,"type":"token","sequence":750,"elapsed_ms":23360,"data":"lean"}
+{"schema_version":1,"type":"token","sequence":751,"elapsed_ms":23375,"data":"(\"/"}
+{"schema_version":1,"type":"token","sequence":752,"elapsed_ms":23375,"data":"\""}
+{"schema_version":1,"type":"token","sequence":753,"elapsed_ms":23391,"data":" +"}
+{"schema_version":1,"type":"token","sequence":754,"elapsed_ms":23391,"data":" raw"}
+{"schema_version":1,"type":"token","sequence":755,"elapsed_ms":23391,"data":")\n"}
+{"schema_version":1,"type":"token","sequence":756,"elapsed_ms":23407,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":757,"elapsed_ms":23407,"data":"\tif"}
+{"schema_version":1,"type":"token","sequence":758,"elapsed_ms":23407,"data":" ("}
+{"schema_version":1,"type":"token","sequence":759,"elapsed_ms":23422,"data":"mount"}
+{"schema_version":1,"type":"token","sequence":760,"elapsed_ms":23422,"data":" =="}
+{"schema_version":1,"type":"token","sequence":761,"elapsed_ms":23438,"data":" \"/\""}
+{"schema_version":1,"type":"token","sequence":762,"elapsed_ms":23438,"data":" ||"}
+{"schema_version":1,"type":"token","sequence":763,"elapsed_ms":23438,"data":" strings"}
+{"schema_version":1,"type":"token","sequence":764,"elapsed_ms":23454,"data":".HasPrefix"}
+{"schema_version":1,"type":"token","sequence":765,"elapsed_ms":23454,"data":"(request"}
+{"schema_version":1,"type":"token","sequence":766,"elapsed_ms":23454,"data":","}
+{"schema_version":1,"type":"token","sequence":767,"elapsed_ms":23469,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":768,"elapsed_ms":23469,"data":"))"}
+{"schema_version":1,"type":"token","sequence":769,"elapsed_ms":23485,"data":" &&"}
+{"schema_version":1,"type":"token","sequence":770,"elapsed_ms":23485,"data":" len"}
+{"schema_version":1,"type":"token","sequence":771,"elapsed_ms":23500,"data":"(m"}
+{"schema_version":1,"type":"token","sequence":772,"elapsed_ms":23500,"data":"ount"}
+{"schema_version":1,"type":"token","sequence":773,"elapsed_ms":23516,"data":")"}
+{"schema_version":1,"type":"token","sequence":774,"elapsed_ms":23516,"data":" >"}
+{"schema_version":1,"type":"token","sequence":775,"elapsed_ms":23516,"data":" len"}
+{"schema_version":1,"type":"token","sequence":776,"elapsed_ms":23532,"data":"(best"}
+{"schema_version":1,"type":"token","sequence":777,"elapsed_ms":23532,"data":")"}
+{"schema_version":1,"type":"token","sequence":778,"elapsed_ms":23532,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":779,"elapsed_ms":23547,"data":"\t\t"}
+{"schema_version":1,"type":"token","sequence":780,"elapsed_ms":23547,"data":"\tbest"}
+{"schema_version":1,"type":"token","sequence":781,"elapsed_ms":23563,"data":" ="}
+{"schema_version":1,"type":"token","sequence":782,"elapsed_ms":23563,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":783,"elapsed_ms":23563,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":784,"elapsed_ms":23579,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":785,"elapsed_ms":23579,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":786,"elapsed_ms":23579,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":787,"elapsed_ms":23594,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":788,"elapsed_ms":23594,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":789,"elapsed_ms":23610,"data":"\tif"}
+{"schema_version":1,"type":"token","sequence":790,"elapsed_ms":23610,"data":" best"}
+{"schema_version":1,"type":"token","sequence":791,"elapsed_ms":23610,"data":" =="}
+{"schema_version":1,"type":"token","sequence":792,"elapsed_ms":23625,"data":" \"\""}
+{"schema_version":1,"type":"token","sequence":793,"elapsed_ms":23625,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":794,"elapsed_ms":23641,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":795,"elapsed_ms":23641,"data":"\treturn"}
+{"schema_version":1,"type":"token","sequence":796,"elapsed_ms":23641,"data":" \"\","}
+{"schema_version":1,"type":"token","sequence":797,"elapsed_ms":23657,"data":" \"\","}
+{"schema_version":1,"type":"token","sequence":798,"elapsed_ms":23657,"data":" false"}
+{"schema_version":1,"type":"token","sequence":799,"elapsed_ms":23657,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":800,"elapsed_ms":23672,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":801,"elapsed_ms":23672,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":802,"elapsed_ms":23672,"data":"\treturn"}
+{"schema_version":1,"type":"token","sequence":803,"elapsed_ms":23688,"data":" best"}
+{"schema_version":1,"type":"token","sequence":804,"elapsed_ms":23688,"data":","}
+{"schema_version":1,"type":"token","sequence":805,"elapsed_ms":23688,"data":" strings"}
+{"schema_version":1,"type":"token","sequence":806,"elapsed_ms":23704,"data":".Trim"}
+{"schema_version":1,"type":"token","sequence":807,"elapsed_ms":23704,"data":"Prefix"}
+{"schema_version":1,"type":"token","sequence":808,"elapsed_ms":23719,"data":"(strings"}
+{"schema_version":1,"type":"token","sequence":809,"elapsed_ms":23719,"data":".Trim"}
+{"schema_version":1,"type":"token","sequence":810,"elapsed_ms":23719,"data":"Prefix"}
+{"schema_version":1,"type":"token","sequence":811,"elapsed_ms":23735,"data":"(request"}
+{"schema_version":1,"type":"token","sequence":812,"elapsed_ms":23735,"data":","}
+{"schema_version":1,"type":"token","sequence":813,"elapsed_ms":23735,"data":" best"}
+{"schema_version":1,"type":"token","sequence":814,"elapsed_ms":23750,"data":"),"}
+{"schema_version":1,"type":"token","sequence":815,"elapsed_ms":23750,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":816,"elapsed_ms":23750,"data":"\"),"}
+{"schema_version":1,"type":"token","sequence":817,"elapsed_ms":23766,"data":" true"}
+{"schema_version":1,"type":"token","sequence":818,"elapsed_ms":23766,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":819,"elapsed_ms":23782,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":820,"elapsed_ms":23782,"data":"</"}
+{"schema_version":1,"type":"token","sequence":821,"elapsed_ms":23782,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":822,"elapsed_ms":23797,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":823,"elapsed_ms":23797,"data":"<"}
+{"schema_version":1,"type":"token","sequence":824,"elapsed_ms":23797,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":825,"elapsed_ms":23813,"data":"=new"}
+{"schema_version":1,"type":"token","sequence":826,"elapsed_ms":23813,"data":"_text"}
+{"schema_version":1,"type":"token","sequence":827,"elapsed_ms":23829,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":828,"elapsed_ms":23829,"data":"package"}
+{"schema_version":1,"type":"token","sequence":829,"elapsed_ms":23829,"data":" hold"}
+{"schema_version":1,"type":"token","sequence":830,"elapsed_ms":23844,"data":"out"}
+{"schema_version":1,"type":"token","sequence":831,"elapsed_ms":23844,"data":"\n\n"}
+{"schema_version":1,"type":"token","sequence":832,"elapsed_ms":23844,"data":"import"}
+{"schema_version":1,"type":"token","sequence":833,"elapsed_ms":23860,"data":" (\n"}
+{"schema_version":1,"type":"token","sequence":834,"elapsed_ms":23860,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":835,"elapsed_ms":23860,"data":"\"path"}
+{"schema_version":1,"type":"token","sequence":836,"elapsed_ms":23875,"data":"\"\n"}
+{"schema_version":1,"type":"token","sequence":837,"elapsed_ms":23875,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":838,"elapsed_ms":23891,"data":"\"strings"}
+{"schema_version":1,"type":"token","sequence":839,"elapsed_ms":23891,"data":"\"\n"}
+{"schema_version":1,"type":"token","sequence":840,"elapsed_ms":23891,"data":")\n\n"}
+{"schema_version":1,"type":"token","sequence":841,"elapsed_ms":23907,"data":"func"}
+{"schema_version":1,"type":"token","sequence":842,"elapsed_ms":23907,"data":" Resolve"}
+{"schema_version":1,"type":"token","sequence":843,"elapsed_ms":23907,"data":"Mount"}
+{"schema_version":1,"type":"token","sequence":844,"elapsed_ms":23922,"data":"(request"}
+{"schema_version":1,"type":"token","sequence":845,"elapsed_ms":23922,"data":" string"}
+{"schema_version":1,"type":"token","sequence":846,"elapsed_ms":23922,"data":","}
+{"schema_version":1,"type":"token","sequence":847,"elapsed_ms":23938,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":848,"elapsed_ms":23938,"data":" []"}
+{"schema_version":1,"type":"token","sequence":849,"elapsed_ms":23938,"data":"string"}
+{"schema_version":1,"type":"token","sequence":850,"elapsed_ms":23954,"data":")"}
+{"schema_version":1,"type":"token","sequence":851,"elapsed_ms":23954,"data":" ("}
+{"schema_version":1,"type":"token","sequence":852,"elapsed_ms":23969,"data":"string"}
+{"schema_version":1,"type":"token","sequence":853,"elapsed_ms":23969,"data":","}
+{"schema_version":1,"type":"token","sequence":854,"elapsed_ms":23969,"data":" string"}
+{"schema_version":1,"type":"token","sequence":855,"elapsed_ms":23985,"data":","}
+{"schema_version":1,"type":"token","sequence":856,"elapsed_ms":23985,"data":" bool"}
+{"schema_version":1,"type":"token","sequence":857,"elapsed_ms":23985,"data":")"}
+{"schema_version":1,"type":"token","sequence":858,"elapsed_ms":24000,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":859,"elapsed_ms":24000,"data":"\trequest"}
+{"schema_version":1,"type":"token","sequence":860,"elapsed_ms":24000,"data":" ="}
+{"schema_version":1,"type":"token","sequence":861,"elapsed_ms":24016,"data":" path"}
+{"schema_version":1,"type":"token","sequence":862,"elapsed_ms":24016,"data":".C"}
+{"schema_version":1,"type":"token","sequence":863,"elapsed_ms":24032,"data":"lean"}
+{"schema_version":1,"type":"token","sequence":864,"elapsed_ms":24032,"data":"(\"/"}
+{"schema_version":1,"type":"token","sequence":865,"elapsed_ms":24032,"data":"\""}
+{"schema_version":1,"type":"token","sequence":866,"elapsed_ms":24047,"data":" +"}
+{"schema_version":1,"type":"token","sequence":867,"elapsed_ms":24047,"data":" request"}
+{"schema_version":1,"type":"token","sequence":868,"elapsed_ms":24047,"data":")\n"}
+{"schema_version":1,"type":"token","sequence":869,"elapsed_ms":24063,"data":"\tbest"}
+{"schema_version":1,"type":"token","sequence":870,"elapsed_ms":24063,"data":" :="}
+{"schema_version":1,"type":"token","sequence":871,"elapsed_ms":24063,"data":" \"\"\n"}
+{"schema_version":1,"type":"token","sequence":872,"elapsed_ms":24079,"data":"\tfor"}
+{"schema_version":1,"type":"token","sequence":873,"elapsed_ms":24079,"data":" _,"}
+{"schema_version":1,"type":"token","sequence":874,"elapsed_ms":24094,"data":" raw"}
+{"schema_version":1,"type":"token","sequence":875,"elapsed_ms":24094,"data":" :="}
+{"schema_version":1,"type":"token","sequence":876,"elapsed_ms":24094,"data":" range"}
+{"schema_version":1,"type":"token","sequence":877,"elapsed_ms":24110,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":878,"elapsed_ms":24110,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":879,"elapsed_ms":24110,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":880,"elapsed_ms":24125,"data":"\tm"}
+{"schema_version":1,"type":"token","sequence":881,"elapsed_ms":24125,"data":"ount"}
+{"schema_version":1,"type":"token","sequence":882,"elapsed_ms":24125,"data":" :="}
+{"schema_version":1,"type":"token","sequence":883,"elapsed_ms":24141,"data":" path"}
+{"schema_version":1,"type":"token","sequence":884,"elapsed_ms":24141,"data":".C"}
+{"schema_version":1,"type":"token","sequence":885,"elapsed_ms":24157,"data":"lean"}
+{"schema_version":1,"type":"token","sequence":886,"elapsed_ms":24157,"data":"(\"/"}
+{"schema_version":1,"type":"token","sequence":887,"elapsed_ms":24157,"data":"\""}
+{"schema_version":1,"type":"token","sequence":888,"elapsed_ms":24172,"data":" +"}
+{"schema_version":1,"type":"token","sequence":889,"elapsed_ms":24172,"data":" raw"}
+{"schema_version":1,"type":"token","sequence":890,"elapsed_ms":24172,"data":")\n"}
+{"schema_version":1,"type":"token","sequence":891,"elapsed_ms":24188,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":892,"elapsed_ms":24188,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":893,"elapsed_ms":24188,"data":"//"}
+{"schema_version":1,"type":"token","sequence":894,"elapsed_ms":24204,"data":" Check"}
+{"schema_version":1,"type":"token","sequence":895,"elapsed_ms":24204,"data":" if"}
+{"schema_version":1,"type":"token","sequence":896,"elapsed_ms":24219,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":897,"elapsed_ms":24219,"data":" is"}
+{"schema_version":1,"type":"token","sequence":898,"elapsed_ms":24219,"data":" a"}
+{"schema_version":1,"type":"token","sequence":899,"elapsed_ms":24235,"data":" prefix"}
+{"schema_version":1,"type":"token","sequence":900,"elapsed_ms":24235,"data":" of"}
+{"schema_version":1,"type":"token","sequence":901,"elapsed_ms":24235,"data":" request"}
+{"schema_version":1,"type":"token","sequence":902,"elapsed_ms":24250,"data":" and"}
+{"schema_version":1,"type":"token","sequence":903,"elapsed_ms":24250,"data":" is"}
+{"schema_version":1,"type":"token","sequence":904,"elapsed_ms":24266,"data":" either"}
+{"schema_version":1,"type":"token","sequence":905,"elapsed_ms":24266,"data":" root"}
+{"schema_version":1,"type":"token","sequence":906,"elapsed_ms":24266,"data":" or"}
+{"schema_version":1,"type":"token","sequence":907,"elapsed_ms":24282,"data":" at"}
+{"schema_version":1,"type":"token","sequence":908,"elapsed_ms":24282,"data":" a"}
+{"schema_version":1,"type":"token","sequence":909,"elapsed_ms":24282,"data":" component"}
+{"schema_version":1,"type":"token","sequence":910,"elapsed_ms":24297,"data":" boundary"}
+{"schema_version":1,"type":"token","sequence":911,"elapsed_ms":24297,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":912,"elapsed_ms":24297,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":913,"elapsed_ms":24313,"data":"\tif"}
+{"schema_version":1,"type":"token","sequence":914,"elapsed_ms":24313,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":915,"elapsed_ms":24313,"data":" =="}
+{"schema_version":1,"type":"token","sequence":916,"elapsed_ms":24329,"data":" \"/\""}
+{"schema_version":1,"type":"token","sequence":917,"elapsed_ms":24329,"data":" ||"}
+{"schema_version":1,"type":"token","sequence":918,"elapsed_ms":24344,"data":" strings"}
+{"schema_version":1,"type":"token","sequence":919,"elapsed_ms":24344,"data":".HasPrefix"}
+{"schema_version":1,"type":"token","sequence":920,"elapsed_ms":24344,"data":"(request"}
+{"schema_version":1,"type":"token","sequence":921,"elapsed_ms":24360,"data":","}
+{"schema_version":1,"type":"token","sequence":922,"elapsed_ms":24360,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":923,"elapsed_ms":24360,"data":"+\"/"}
+{"schema_version":1,"type":"token","sequence":924,"elapsed_ms":24375,"data":"\")"}
+{"schema_version":1,"type":"token","sequence":925,"elapsed_ms":24375,"data":" ||"}
+{"schema_version":1,"type":"token","sequence":926,"elapsed_ms":24375,"data":" request"}
+{"schema_version":1,"type":"token","sequence":927,"elapsed_ms":24391,"data":" =="}
+{"schema_version":1,"type":"token","sequence":928,"elapsed_ms":24391,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":929,"elapsed_ms":24407,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":930,"elapsed_ms":24407,"data":"\t\t"}
+{"schema_version":1,"type":"token","sequence":931,"elapsed_ms":24407,"data":"\tif"}
+{"schema_version":1,"type":"token","sequence":932,"elapsed_ms":24422,"data":" len"}
+{"schema_version":1,"type":"token","sequence":933,"elapsed_ms":24422,"data":"(m"}
+{"schema_version":1,"type":"token","sequence":934,"elapsed_ms":24422,"data":"ount"}
+{"schema_version":1,"type":"token","sequence":935,"elapsed_ms":24438,"data":")"}
+{"schema_version":1,"type":"token","sequence":936,"elapsed_ms":24438,"data":" >"}
+{"schema_version":1,"type":"token","sequence":937,"elapsed_ms":24438,"data":" len"}
+{"schema_version":1,"type":"token","sequence":938,"elapsed_ms":24454,"data":"(best"}
+{"schema_version":1,"type":"token","sequence":939,"elapsed_ms":24454,"data":")"}
+{"schema_version":1,"type":"token","sequence":940,"elapsed_ms":24469,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":941,"elapsed_ms":24469,"data":"\t\t\t"}
+{"schema_version":1,"type":"token","sequence":942,"elapsed_ms":24469,"data":"\tbest"}
+{"schema_version":1,"type":"token","sequence":943,"elapsed_ms":24485,"data":" ="}
+{"schema_version":1,"type":"token","sequence":944,"elapsed_ms":24485,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":945,"elapsed_ms":24485,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":946,"elapsed_ms":24500,"data":"\t\t"}
+{"schema_version":1,"type":"token","sequence":947,"elapsed_ms":24500,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":948,"elapsed_ms":24500,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":949,"elapsed_ms":24516,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":950,"elapsed_ms":24516,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":951,"elapsed_ms":24532,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":952,"elapsed_ms":24532,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":953,"elapsed_ms":24532,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":954,"elapsed_ms":24547,"data":"\tif"}
+{"schema_version":1,"type":"token","sequence":955,"elapsed_ms":24547,"data":" best"}
+{"schema_version":1,"type":"token","sequence":956,"elapsed_ms":24547,"data":" =="}
+{"schema_version":1,"type":"token","sequence":957,"elapsed_ms":24563,"data":" \"\""}
+{"schema_version":1,"type":"token","sequence":958,"elapsed_ms":24563,"data":" {\n"}
+{"schema_version":1,"type":"token","sequence":959,"elapsed_ms":24563,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":960,"elapsed_ms":24579,"data":"\treturn"}
+{"schema_version":1,"type":"token","sequence":961,"elapsed_ms":24579,"data":" \"\","}
+{"schema_version":1,"type":"token","sequence":962,"elapsed_ms":24594,"data":" \"\","}
+{"schema_version":1,"type":"token","sequence":963,"elapsed_ms":24594,"data":" false"}
+{"schema_version":1,"type":"token","sequence":964,"elapsed_ms":24594,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":965,"elapsed_ms":24610,"data":"\t"}
+{"schema_version":1,"type":"token","sequence":966,"elapsed_ms":24610,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":967,"elapsed_ms":24610,"data":"\treturn"}
+{"schema_version":1,"type":"token","sequence":968,"elapsed_ms":24625,"data":" best"}
+{"schema_version":1,"type":"token","sequence":969,"elapsed_ms":24625,"data":","}
+{"schema_version":1,"type":"token","sequence":970,"elapsed_ms":24625,"data":" strings"}
+{"schema_version":1,"type":"token","sequence":971,"elapsed_ms":24641,"data":".Trim"}
+{"schema_version":1,"type":"token","sequence":972,"elapsed_ms":24641,"data":"Prefix"}
+{"schema_version":1,"type":"token","sequence":973,"elapsed_ms":24641,"data":"(strings"}
+{"schema_version":1,"type":"token","sequence":974,"elapsed_ms":24657,"data":".Trim"}
+{"schema_version":1,"type":"token","sequence":975,"elapsed_ms":24657,"data":"Prefix"}
+{"schema_version":1,"type":"token","sequence":976,"elapsed_ms":24672,"data":"(request"}
+{"schema_version":1,"type":"token","sequence":977,"elapsed_ms":24672,"data":","}
+{"schema_version":1,"type":"token","sequence":978,"elapsed_ms":24672,"data":" best"}
+{"schema_version":1,"type":"token","sequence":979,"elapsed_ms":24688,"data":"),"}
+{"schema_version":1,"type":"token","sequence":980,"elapsed_ms":24688,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":981,"elapsed_ms":24688,"data":"\"),"}
+{"schema_version":1,"type":"token","sequence":982,"elapsed_ms":24704,"data":" true"}
+{"schema_version":1,"type":"token","sequence":983,"elapsed_ms":24704,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":984,"elapsed_ms":24704,"data":"}\n"}
+{"schema_version":1,"type":"token","sequence":985,"elapsed_ms":24719,"data":"</"}
+{"schema_version":1,"type":"token","sequence":986,"elapsed_ms":24719,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":987,"elapsed_ms":24735,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":988,"elapsed_ms":24735,"data":"</"}
+{"schema_version":1,"type":"token","sequence":989,"elapsed_ms":24735,"data":"function"}
+{"schema_version":1,"type":"token","sequence":990,"elapsed_ms":24750,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":991,"elapsed_ms":24750,"data":"</tool_call>"}
+{"schema_version":1,"type":"inference","sequence":992,"elapsed_ms":24750,"data":{"prompt_tokens":3870,"cached_tokens":3163,"generated_tokens":705,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":993,"elapsed_ms":24750,"data":"Let me analyze the current implementation and the test cases to understand what needs to be fixed.\n\nLooking at the current implementation in `service.go`:\n\n1. It cleans the request path and each mount path\n2. It finds the longest matching mount that is a prefix of the request\n3. It returns the mount path and the remaining relative path\n\nLooking at the test cases in `service_test.go`:\n- `/apple/x` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/` and rest `apple/x`\n- `/app/a` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/app` and rest `a`\n- `/app` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/app` and rest ``\n- `/app/v2/x` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/app/v2` and rest `x`\n- `/app/../apple` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/` and rest `apple`\n- `/apple` with mount `[\"/app\"]` should NOT match (partial component match should fail)\n\nThe issue is in the prefix matching logic. The current implementation uses `strings.HasPrefix(request, mount)` which can match partial components. For example, if we have mount `/app` and request `/apple`, it would incorrectly match because `/apple` starts with `/app`.\n\nThe correct approach is to ensure that the mount path is a complete component match, not just a prefix. This means:\n1. The mount should be a prefix of the request\n2. Either the mount is the root `/` or the next character after the mount in the request should be `/` (indicating a component boundary)\n\nLet me fix this:\n<tool_call>\n<function=apply_patch>\n<parameter=path>\nservice.go\n</parameter>\n<parameter=old_text>\npackage holdout\n\nimport (\n\t\"path\"\n\t\"strings\"\n)\n\nfunc ResolveMount(request string, mounts []string) (string, string, bool) {\n\trequest = path.Clean(\"/\" + request)\n\tbest := \"\"\n\tfor _, raw := range mounts {\n\t\tmount := path.Clean(\"/\" + raw)\n\t\tif (mount == \"/\" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {\n\t\t\tbest = mount\n\t\t}\n\t}\n\tif best == \"\" {\n\t\treturn \"\", \"\", false\n\t}\n\treturn best, strings.TrimPrefix(strings.TrimPrefix(request, best), \"/\"), true\n}\n</parameter>\n<parameter=new_text>\npackage holdout\n\nimport (\n\t\"path\"\n\t\"strings\"\n)\n\nfunc ResolveMount(request string, mounts []string) (string, string, bool) {\n\trequest = path.Clean(\"/\" + request)\n\tbest := \"\"\n\tfor _, raw := range mounts {\n\t\tmount := path.Clean(\"/\" + raw)\n\t\t// Check if mount is a prefix of request and is either root or at a component boundary\n\t\tif mount == \"/\" || strings.HasPrefix(request, mount+\"/\") || request == mount {\n\t\t\tif len(mount) > len(best) {\n\t\t\t\tbest = mount\n\t\t\t}\n\t\t}\n\t}\n\tif best == \"\" {\n\t\treturn \"\", \"\", false\n\t}\n\treturn best, strings.TrimPrefix(strings.TrimPrefix(request, best), \"/\"), true\n}\n</parameter>\n</function>\n</tool_call>"}
+{"schema_version":1,"type":"state","sequence":994,"elapsed_ms":24750,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":995,"elapsed_ms":24750,"data":{"thought":"Let me analyze the current implementation and the test cases to understand what needs to be fixed.\n\nLooking at the current implementation in `service.go`:\n\n1. It cleans the request path and each mount path\n2. It finds the longest matching mount that is a prefix of the request\n3. It returns the mount path and the remaining relative path\n\nLooking at the test cases in `service_test.go`:\n- `/apple/x` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/` and rest `apple/x`\n- `/app/a` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/app` and rest `a`\n- `/app` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/app` and rest ``\n- `/app/v2/x` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/app/v2` and rest `x`\n- `/app/../apple` with mounts `[\"/app\", \"/\", \"/app/v2\"]` should return mount `/` and rest `apple`\n- `/apple` with mount `[\"/app\"]` should NOT match (partial component match should fail)\n\nThe issue is in the prefix matching logic. The current implementation uses `strings.HasPrefix(request, mount)` which can match partial components. For example, if we have mount `/app` and request `/apple`, it would incorrectly match because `/apple` starts with `/app`.\n\nThe correct approach is to ensure that the mount path is a complete component match, not just a prefix. This means:\n1. The mount should be a prefix of the request\n2. Either the mount is the root `/` or the next character after the mount in the request should be `/` (indicating a component boundary)\n\nLet me fix this:\n","tool":"apply_patch","args":{"path":"service.go","old_text":"package holdout\n\nimport (\n\t\"path\"\n\t\"strings\"\n)\n\nfunc ResolveMount(request string, mounts []string) (string, string, bool) {\n\trequest = path.Clean(\"/\" + request)\n\tbest := \"\"\n\tfor _, raw := range mounts {\n\t\tmount := path.Clean(\"/\" + raw)\n\t\tif (mount == \"/\" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {\n\t\t\tbest = mount\n\t\t}\n\t}\n\tif best == \"\" {\n\t\treturn \"\", \"\", false\n\t}\n\treturn best, strings.TrimPrefix(strings.TrimPrefix(request, best), \"/\"), true\n}","new_text":"package holdout\n\nimport (\n\t\"path\"\n\t\"strings\"\n)\n\nfunc ResolveMount(request string, mounts []string) (string, string, bool) {\n\trequest = path.Clean(\"/\" + request)\n\tbest := \"\"\n\tfor _, raw := range mounts {\n\t\tmount := path.Clean(\"/\" + raw)\n\t\t// Check if mount is a prefix of request and is either root or at a component boundary\n\t\tif mount == \"/\" || strings.HasPrefix(request, mount+\"/\") || request == mount {\n\t\t\tif len(mount) > len(best) {\n\t\t\t\tbest = mount\n\t\t\t}\n\t\t}\n\t}\n\tif best == \"\" {\n\t\treturn \"\", \"\", false\n\t}\n\treturn best, strings.TrimPrefix(strings.TrimPrefix(request, best), \"/\"), true\n}"}}}
+{"schema_version":1,"type":"state","sequence":996,"elapsed_ms":24750,"data":{"state":4}}
+{"schema_version":1,"type":"edit_prepared","sequence":997,"elapsed_ms":24766,"data":{"schema_version":1,"tool_call":3,"state":"prepared","path":"service.go","scope":"one_agent_text_edit","before_exists":true,"before_bytes":468,"after_bytes":590,"before_artifact":"tool/000003.before","after_artifact":"tool/000003.after","diff_artifact":"tool/000003.patch","diff_format":"unified_full_file","content_only":true,"outcome_artifact":"tool/000003.edit-result.json"}}
+{"schema_version":1,"type":"edit_result","sequence":998,"elapsed_ms":24766,"data":{"schema_version":1,"tool_call":3,"state":"applied","status":"ok","intent_artifact":"tool/000003.edit.json"}}
+{"schema_version":1,"type":"tool_result","sequence":999,"elapsed_ms":24829,"data":{"id":3,"name":"apply_patch","output":"Patched service.go.\nRecorded edit diff: tool/000003.patch\nfile_sha256:fb622ba60a27d0cba44b7683898d9054f5dc195a219bad11830f2189fae6287e\nStaged Go syntax validation passed before commit.\nSuggested targeted validation (requires command approval): compile/test affected Go packages: .; 0 reverse dependents; then vet and full module tests. Use the validation plan for exact argv and module working directories.\n","duration_ms":16.0,"status":"ok"}}
+{"schema_version":1,"type":"state","sequence":1000,"elapsed_ms":24829,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":1001,"elapsed_ms":24829,"data":{"turn":3,"artifact":"context/0003.state.json","hash":8396953792170428003}}
+{"schema_version":1,"type":"state","sequence":1002,"elapsed_ms":24829,"data":{"state":6}}
+{"schema_version":1,"type":"file_change","sequence":1003,"elapsed_ms":24860,"data":{"schema_version":1,"backend":"ReadDirectoryChangesW","events":[{"path":"service.go","flags":53},{"path":"service.go.forge-d8d7fe72d8c0c8b2.tmp","flags":175}],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":false,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":1,"path_encoding":"utf-8","index_mode":"full","generation":3,"changed":true,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"working_state","sequence":1004,"elapsed_ms":24860,"data":{"turn":4,"artifact":"context/0004.state.json","hash":1263538036831490880}}
+{"schema_version":1,"type":"context_plan","sequence":1005,"elapsed_ms":24907,"data":{"turn":4,"artifact":"context/0004.json","hash":759366163486217993,"evicted_segments":2}}
+{"schema_version":1,"type":"state","sequence":1006,"elapsed_ms":24907,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":1007,"elapsed_ms":24907,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":1008,"elapsed_ms":25610,"data":"Let"}
+{"schema_version":1,"type":"token","sequence":1009,"elapsed_ms":25657,"data":" me"}
+{"schema_version":1,"type":"token","sequence":1010,"elapsed_ms":25688,"data":" run"}
+{"schema_version":1,"type":"token","sequence":1011,"elapsed_ms":25719,"data":" the"}
+{"schema_version":1,"type":"token","sequence":1012,"elapsed_ms":25766,"data":" tests"}
+{"schema_version":1,"type":"token","sequence":1013,"elapsed_ms":25797,"data":" to"}
+{"schema_version":1,"type":"token","sequence":1014,"elapsed_ms":25829,"data":" verify"}
+{"schema_version":1,"type":"token","sequence":1015,"elapsed_ms":25875,"data":" that"}
+{"schema_version":1,"type":"token","sequence":1016,"elapsed_ms":25907,"data":" my"}
+{"schema_version":1,"type":"token","sequence":1017,"elapsed_ms":25938,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":1018,"elapsed_ms":25969,"data":" works"}
+{"schema_version":1,"type":"token","sequence":1019,"elapsed_ms":26000,"data":" correctly"}
+{"schema_version":1,"type":"token","sequence":1020,"elapsed_ms":26047,"data":".\n\n"}
+{"schema_version":1,"type":"token","sequence":1021,"elapsed_ms":26079,"data":"<tool_call>"}
+{"schema_version":1,"type":"token","sequence":1022,"elapsed_ms":26079,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":1023,"elapsed_ms":26094,"data":"<"}
+{"schema_version":1,"type":"token","sequence":1024,"elapsed_ms":26094,"data":"function"}
+{"schema_version":1,"type":"token","sequence":1025,"elapsed_ms":26110,"data":"="}
+{"schema_version":1,"type":"token","sequence":1026,"elapsed_ms":26110,"data":"run"}
+{"schema_version":1,"type":"token","sequence":1027,"elapsed_ms":26110,"data":"_command"}
+{"schema_version":1,"type":"token","sequence":1028,"elapsed_ms":26125,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":1029,"elapsed_ms":26125,"data":"<"}
+{"schema_version":1,"type":"token","sequence":1030,"elapsed_ms":26141,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":1031,"elapsed_ms":26141,"data":"="}
+{"schema_version":1,"type":"token","sequence":1032,"elapsed_ms":26157,"data":"argv"}
+{"schema_version":1,"type":"token","sequence":1033,"elapsed_ms":26157,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":1034,"elapsed_ms":26157,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":1035,"elapsed_ms":26172,"data":"go"}
+{"schema_version":1,"type":"token","sequence":1036,"elapsed_ms":26172,"data":"\","}
+{"schema_version":1,"type":"token","sequence":1037,"elapsed_ms":26188,"data":" \""}
+{"schema_version":1,"type":"token","sequence":1038,"elapsed_ms":26188,"data":"test"}
+{"schema_version":1,"type":"token","sequence":1039,"elapsed_ms":26188,"data":"\","}
+{"schema_version":1,"type":"token","sequence":1040,"elapsed_ms":26204,"data":" \".\""}
+{"schema_version":1,"type":"token","sequence":1041,"elapsed_ms":26204,"data":"]\n"}
+{"schema_version":1,"type":"token","sequence":1042,"elapsed_ms":26219,"data":"</"}
+{"schema_version":1,"type":"token","sequence":1043,"elapsed_ms":26219,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":1044,"elapsed_ms":26219,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":1045,"elapsed_ms":26235,"data":"</"}
+{"schema_version":1,"type":"token","sequence":1046,"elapsed_ms":26235,"data":"function"}
+{"schema_version":1,"type":"token","sequence":1047,"elapsed_ms":26235,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":1048,"elapsed_ms":26250,"data":"</tool_call>"}
+{"schema_version":1,"type":"inference","sequence":1049,"elapsed_ms":26250,"data":{"prompt_tokens":4477,"cached_tokens":2858,"generated_tokens":41,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":1050,"elapsed_ms":26250,"data":"Let me run the tests to verify that my fix works correctly.\n\n<tool_call>\n<function=run_command>\n<parameter=argv>\n[\"go\", \"test\", \".\"]\n</parameter>\n</function>\n</tool_call>"}
+{"schema_version":1,"type":"state","sequence":1051,"elapsed_ms":26250,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":1052,"elapsed_ms":26250,"data":{"thought":"Let me run the tests to verify that my fix works correctly.\n\n","tool":"run_command","args":{"argv":["go","test","."]}}}
+{"schema_version":1,"type":"state","sequence":1053,"elapsed_ms":26250,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":1054,"elapsed_ms":27032,"data":{"id":4,"name":"run_command","output":"exit_code=0 timeout=false cancelled=false truncated=false\nstdout:\nok  \tholdout\t0.172s\n\nstderr:\n\nnext_action_guidance: If this command completed the required validation and the implementation satisfies the task, call final now. Do not call memory, repeat a successful edit, or rerun unchanged validation before final.\n","duration_ms":750.0,"status":"ok","exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"stdout_bytes":20,"stderr_bytes":0}}
+{"schema_version":1,"type":"state","sequence":1055,"elapsed_ms":27032,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":1056,"elapsed_ms":27032,"data":{"turn":4,"artifact":"context/0004.state.json","hash":6854831055864157991}}
+{"schema_version":1,"type":"state","sequence":1057,"elapsed_ms":27032,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":1058,"elapsed_ms":27094,"data":{"turn":5,"artifact":"context/0005.json","hash":2403669974812904132,"evicted_segments":2}}
+{"schema_version":1,"type":"state","sequence":1059,"elapsed_ms":27094,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":1060,"elapsed_ms":27094,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":1061,"elapsed_ms":27688,"data":"<tool_call>"}
+{"schema_version":1,"type":"token","sequence":1062,"elapsed_ms":27688,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":1063,"elapsed_ms":27704,"data":"<"}
+{"schema_version":1,"type":"token","sequence":1064,"elapsed_ms":27704,"data":"function"}
+{"schema_version":1,"type":"token","sequence":1065,"elapsed_ms":27719,"data":"="}
+{"schema_version":1,"type":"token","sequence":1066,"elapsed_ms":27719,"data":"final"}
+{"schema_version":1,"type":"token","sequence":1067,"elapsed_ms":27719,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":1068,"elapsed_ms":27735,"data":"<"}
+{"schema_version":1,"type":"token","sequence":1069,"elapsed_ms":27735,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":1070,"elapsed_ms":27735,"data":"="}
+{"schema_version":1,"type":"token","sequence":1071,"elapsed_ms":27750,"data":"answer"}
+{"schema_version":1,"type":"token","sequence":1072,"elapsed_ms":27750,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":1073,"elapsed_ms":27766,"data":"I"}
+{"schema_version":1,"type":"token","sequence":1074,"elapsed_ms":27766,"data":" have"}
+{"schema_version":1,"type":"token","sequence":1075,"elapsed_ms":27766,"data":" resolved"}
+{"schema_version":1,"type":"token","sequence":1076,"elapsed_ms":27782,"data":" the"}
+{"schema_version":1,"type":"token","sequence":1077,"elapsed_ms":27782,"data":" Resolve"}
+{"schema_version":1,"type":"token","sequence":1078,"elapsed_ms":27782,"data":"Mount"}
+{"schema_version":1,"type":"token","sequence":1079,"elapsed_ms":27797,"data":" function"}
+{"schema_version":1,"type":"token","sequence":1080,"elapsed_ms":27797,"data":" in"}
+{"schema_version":1,"type":"token","sequence":1081,"elapsed_ms":27813,"data":" service"}
+{"schema_version":1,"type":"token","sequence":1082,"elapsed_ms":27813,"data":".go"}
+{"schema_version":1,"type":"token","sequence":1083,"elapsed_ms":27813,"data":" to"}
+{"schema_version":1,"type":"token","sequence":1084,"elapsed_ms":27829,"data":" correctly"}
+{"schema_version":1,"type":"token","sequence":1085,"elapsed_ms":27829,"data":" select"}
+{"schema_version":1,"type":"token","sequence":1086,"elapsed_ms":27844,"data":" the"}
+{"schema_version":1,"type":"token","sequence":1087,"elapsed_ms":27844,"data":" longest"}
+{"schema_version":1,"type":"token","sequence":1088,"elapsed_ms":27844,"data":" matching"}
+{"schema_version":1,"type":"token","sequence":1089,"elapsed_ms":27860,"data":" mount"}
+{"schema_version":1,"type":"token","sequence":1090,"elapsed_ms":27860,"data":" by"}
+{"schema_version":1,"type":"token","sequence":1091,"elapsed_ms":27860,"data":" path"}
+{"schema_version":1,"type":"token","sequence":1092,"elapsed_ms":27875,"data":" components"}
+{"schema_version":1,"type":"token","sequence":1093,"elapsed_ms":27875,"data":"."}
+{"schema_version":1,"type":"token","sequence":1094,"elapsed_ms":27875,"data":" The"}
+{"schema_version":1,"type":"token","sequence":1095,"elapsed_ms":27891,"data":" key"}
+{"schema_version":1,"type":"token","sequence":1096,"elapsed_ms":27891,"data":" changes"}
+{"schema_version":1,"type":"token","sequence":1097,"elapsed_ms":27907,"data":" were"}
+{"schema_version":1,"type":"token","sequence":1098,"elapsed_ms":27907,"data":":\n\n"}
+{"schema_version":1,"type":"token","sequence":1099,"elapsed_ms":27907,"data":"1"}
+{"schema_version":1,"type":"token","sequence":1100,"elapsed_ms":27922,"data":"."}
+{"schema_version":1,"type":"token","sequence":1101,"elapsed_ms":27922,"data":" Fixed"}
+{"schema_version":1,"type":"token","sequence":1102,"elapsed_ms":27922,"data":" the"}
+{"schema_version":1,"type":"token","sequence":1103,"elapsed_ms":27938,"data":" prefix"}
+{"schema_version":1,"type":"token","sequence":1104,"elapsed_ms":27938,"data":" matching"}
+{"schema_version":1,"type":"token","sequence":1105,"elapsed_ms":27938,"data":" logic"}
+{"schema_version":1,"type":"token","sequence":1106,"elapsed_ms":27954,"data":" to"}
+{"schema_version":1,"type":"token","sequence":1107,"elapsed_ms":27954,"data":" ensure"}
+{"schema_version":1,"type":"token","sequence":1108,"elapsed_ms":27969,"data":" that"}
+{"schema_version":1,"type":"token","sequence":1109,"elapsed_ms":27969,"data":" mounts"}
+{"schema_version":1,"type":"token","sequence":1110,"elapsed_ms":27969,"data":" are"}
+{"schema_version":1,"type":"token","sequence":1111,"elapsed_ms":27985,"data":" only"}
+{"schema_version":1,"type":"token","sequence":1112,"elapsed_ms":27985,"data":" considered"}
+{"schema_version":1,"type":"token","sequence":1113,"elapsed_ms":27985,"data":" valid"}
+{"schema_version":1,"type":"token","sequence":1114,"elapsed_ms":28000,"data":" when"}
+{"schema_version":1,"type":"token","sequence":1115,"elapsed_ms":28000,"data":" they"}
+{"schema_version":1,"type":"token","sequence":1116,"elapsed_ms":28016,"data":" match"}
+{"schema_version":1,"type":"token","sequence":1117,"elapsed_ms":28016,"data":" at"}
+{"schema_version":1,"type":"token","sequence":1118,"elapsed_ms":28016,"data":" component"}
+{"schema_version":1,"type":"token","sequence":1119,"elapsed_ms":28032,"data":" boundaries"}
+{"schema_version":1,"type":"token","sequence":1120,"elapsed_ms":28032,"data":" ("}
+{"schema_version":1,"type":"token","sequence":1121,"elapsed_ms":28032,"data":"not"}
+{"schema_version":1,"type":"token","sequence":1122,"elapsed_ms":28047,"data":" just"}
+{"schema_version":1,"type":"token","sequence":1123,"elapsed_ms":28047,"data":" textual"}
+{"schema_version":1,"type":"token","sequence":1124,"elapsed_ms":28047,"data":" prefixes"}
+{"schema_version":1,"type":"token","sequence":1125,"elapsed_ms":28063,"data":" within"}
+{"schema_version":1,"type":"token","sequence":1126,"elapsed_ms":28063,"data":" components"}
+{"schema_version":1,"type":"token","sequence":1127,"elapsed_ms":28079,"data":")\n"}
+{"schema_version":1,"type":"token","sequence":1128,"elapsed_ms":28079,"data":"2"}
+{"schema_version":1,"type":"token","sequence":1129,"elapsed_ms":28079,"data":"."}
+{"schema_version":1,"type":"token","sequence":1130,"elapsed_ms":28094,"data":" Added"}
+{"schema_version":1,"type":"token","sequence":1131,"elapsed_ms":28094,"data":" proper"}
+{"schema_version":1,"type":"token","sequence":1132,"elapsed_ms":28094,"data":" handling"}
+{"schema_version":1,"type":"token","sequence":1133,"elapsed_ms":28110,"data":" for"}
+{"schema_version":1,"type":"token","sequence":1134,"elapsed_ms":28110,"data":" exact"}
+{"schema_version":1,"type":"token","sequence":1135,"elapsed_ms":28125,"data":" path"}
+{"schema_version":1,"type":"token","sequence":1136,"elapsed_ms":28125,"data":" matches"}
+{"schema_version":1,"type":"token","sequence":1137,"elapsed_ms":28125,"data":" and"}
+{"schema_version":1,"type":"token","sequence":1138,"elapsed_ms":28141,"data":" component"}
+{"schema_version":1,"type":"token","sequence":1139,"elapsed_ms":28141,"data":" boundary"}
+{"schema_version":1,"type":"token","sequence":1140,"elapsed_ms":28141,"data":" checks"}
+{"schema_version":1,"type":"token","sequence":1141,"elapsed_ms":28157,"data":"\n"}
+{"schema_version":1,"type":"token","sequence":1142,"elapsed_ms":28157,"data":"3"}
+{"schema_version":1,"type":"token","sequence":1143,"elapsed_ms":28157,"data":"."}
+{"schema_version":1,"type":"token","sequence":1144,"elapsed_ms":28172,"data":" The"}
+{"schema_version":1,"type":"token","sequence":1145,"elapsed_ms":28172,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":1146,"elapsed_ms":28188,"data":" now"}
+{"schema_version":1,"type":"token","sequence":1147,"elapsed_ms":28188,"data":" correctly"}
+{"schema_version":1,"type":"token","sequence":1148,"elapsed_ms":28188,"data":" handles"}
+{"schema_version":1,"type":"token","sequence":1149,"elapsed_ms":28204,"data":" cases"}
+{"schema_version":1,"type":"token","sequence":1150,"elapsed_ms":28204,"data":" like"}
+{"schema_version":1,"type":"token","sequence":1151,"elapsed_ms":28204,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":1152,"elapsed_ms":28219,"data":"app"}
+{"schema_version":1,"type":"token","sequence":1153,"elapsed_ms":28219,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":1154,"elapsed_ms":28235,"data":"2"}
+{"schema_version":1,"type":"token","sequence":1155,"elapsed_ms":28235,"data":"/x"}
+{"schema_version":1,"type":"token","sequence":1156,"elapsed_ms":28235,"data":"\""}
+{"schema_version":1,"type":"token","sequence":1157,"elapsed_ms":28250,"data":" matching"}
+{"schema_version":1,"type":"token","sequence":1158,"elapsed_ms":28250,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":1159,"elapsed_ms":28250,"data":"app"}
+{"schema_version":1,"type":"token","sequence":1160,"elapsed_ms":28266,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":1161,"elapsed_ms":28266,"data":"2"}
+{"schema_version":1,"type":"token","sequence":1162,"elapsed_ms":28282,"data":"\""}
+{"schema_version":1,"type":"token","sequence":1163,"elapsed_ms":28282,"data":" but"}
+{"schema_version":1,"type":"token","sequence":1164,"elapsed_ms":28282,"data":" not"}
+{"schema_version":1,"type":"token","sequence":1165,"elapsed_ms":28297,"data":" \"/"}
+{"schema_version":1,"type":"token","sequence":1166,"elapsed_ms":28297,"data":"app"}
+{"schema_version":1,"type":"token","sequence":1167,"elapsed_ms":28297,"data":"/v"}
+{"schema_version":1,"type":"token","sequence":1168,"elapsed_ms":28313,"data":"\""}
+{"schema_version":1,"type":"token","sequence":1169,"elapsed_ms":28313,"data":" ("}
+{"schema_version":1,"type":"token","sequence":1170,"elapsed_ms":28313,"data":"which"}
+{"schema_version":1,"type":"token","sequence":1171,"elapsed_ms":28329,"data":" would"}
+{"schema_version":1,"type":"token","sequence":1172,"elapsed_ms":28329,"data":" be"}
+{"schema_version":1,"type":"token","sequence":1173,"elapsed_ms":28329,"data":" a"}
+{"schema_version":1,"type":"token","sequence":1174,"elapsed_ms":28344,"data":" partial"}
+{"schema_version":1,"type":"token","sequence":1175,"elapsed_ms":28344,"data":" component"}
+{"schema_version":1,"type":"token","sequence":1176,"elapsed_ms":28360,"data":" match"}
+{"schema_version":1,"type":"token","sequence":1177,"elapsed_ms":28360,"data":")\n\n"}
+{"schema_version":1,"type":"token","sequence":1178,"elapsed_ms":28360,"data":"The"}
+{"schema_version":1,"type":"token","sequence":1179,"elapsed_ms":28375,"data":" tests"}
+{"schema_version":1,"type":"token","sequence":1180,"elapsed_ms":28375,"data":" pass"}
+{"schema_version":1,"type":"token","sequence":1181,"elapsed_ms":28375,"data":" with"}
+{"schema_version":1,"type":"token","sequence":1182,"elapsed_ms":28391,"data":" exit"}
+{"schema_version":1,"type":"token","sequence":1183,"elapsed_ms":28391,"data":" code"}
+{"schema_version":1,"type":"token","sequence":1184,"elapsed_ms":28407,"data":" "}
+{"schema_version":1,"type":"token","sequence":1185,"elapsed_ms":28407,"data":"0"}
+{"schema_version":1,"type":"token","sequence":1186,"elapsed_ms":28407,"data":","}
+{"schema_version":1,"type":"token","sequence":1187,"elapsed_ms":28422,"data":" confirming"}
+{"schema_version":1,"type":"token","sequence":1188,"elapsed_ms":28422,"data":" the"}
+{"schema_version":1,"type":"token","sequence":1189,"elapsed_ms":28422,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":1190,"elapsed_ms":28438,"data":" works"}
+{"schema_version":1,"type":"token","sequence":1191,"elapsed_ms":28438,"data":" as"}
+{"schema_version":1,"type":"token","sequence":1192,"elapsed_ms":28454,"data":" expected"}
+{"schema_version":1,"type":"token","sequence":1193,"elapsed_ms":28454,"data":".\n"}
+{"schema_version":1,"type":"token","sequence":1194,"elapsed_ms":28454,"data":"</"}
+{"schema_version":1,"type":"token","sequence":1195,"elapsed_ms":28469,"data":"parameter"}
+{"schema_version":1,"type":"token","sequence":1196,"elapsed_ms":28469,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":1197,"elapsed_ms":28469,"data":"</"}
+{"schema_version":1,"type":"token","sequence":1198,"elapsed_ms":28485,"data":"function"}
+{"schema_version":1,"type":"token","sequence":1199,"elapsed_ms":28485,"data":">\n"}
+{"schema_version":1,"type":"token","sequence":1200,"elapsed_ms":28485,"data":"</tool_call>"}
+{"schema_version":1,"type":"inference","sequence":1201,"elapsed_ms":28500,"data":{"prompt_tokens":4701,"cached_tokens":3323,"generated_tokens":140,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":1202,"elapsed_ms":28500,"data":"<tool_call>\n<function=final>\n<parameter=answer>\nI have resolved the ResolveMount function in service.go to correctly select the longest matching mount by path components. The key changes were:\n\n1. Fixed the prefix matching logic to ensure that mounts are only considered valid when they match at component boundaries (not just textual prefixes within components)\n2. Added proper handling for exact path matches and component boundary checks\n3. The implementation now correctly handles cases like \"/app/v2/x\" matching \"/app/v2\" but not \"/app/v\" (which would be a partial component match)\n\nThe tests pass with exit code 0, confirming the fix works as expected.\n</parameter>\n</function>\n</tool_call>"}
+{"schema_version":1,"type":"repository_scan","sequence":1203,"elapsed_ms":28532,"data":{"schema_version":1,"backend":"ReadDirectoryChangesW","events":[],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":true,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":1,"path_encoding":"utf-8","index_mode":"full","generation":4,"changed":false,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"validation_plan","sequence":1204,"elapsed_ms":28532,"data":{"schema_version":2,"generation":4,"language":"go","status":"planned","verification_status":"planned","graph_kind":"syntactic_package_imports","sound":false,"applicable":true,"verification_available":true,"broad_verification_required":true,"changed_paths":[],"languages":["go"],"missing_tools":[],"modules":[{"directory":".","module_path":"holdout","synthetic":false}],"packages":[{"directory":".","import_path":"holdout","module_directory":".","present":true,"has_tests":true,"affected":true,"dependent":false}],"edges":[],"affected_packages":["."],"reverse_dependents":[],"fallback_reasons":[{"code":"no_changed_paths","path":"","detail":"No changed-file set was supplied; compile, test and vet all indexed packages before final module verification."}],"limitations":["Package imports are syntactic, not type-resolved references or test coverage.","Imports from production and test files are unioned; test-only changes also include reverse dependents conservatively.","Only indexed workspace files and module directives are resolved; generated code, embed inputs, replacement aliases, vendored/external modules and runtime dependencies may escape the graph.","Broad tests cover each indexed module only in the active Go environment; other tags, platforms, toolchains, integration services and modules outside the workspace need separate validation.","The compile check uses go test -run ^$ and may execute package initialization and TestMain. All Go checks require process permission and may access caches or the network."],"python":{"applicable":false,"executable_available":false,"executable":"","selection_kind":"changed_files_and_filename_related_tests","syntax_scope":"changed","source_file_count":0,"syntax_file_count":0,"test_file_count":0,"targeted_test_count":0,"syntax_scheduled":false,"tests_applicable":false,"tests_scheduled":false,"test_runner":"none","bytecode_writes_disabled":true,"pytest_cache_disabled":false,"targeted_test_files":[]},"stages":[{"name":"format","requires_previous_success":false,"commands":[{"cwd":".","argv":["gofmt","-l","./service.go","./service_test.go"],"require_empty_stdout":true,"reason":"indexed_go_files_for_unknown_changes"}]},{"name":"compile","requires_previous_success":true,"commands":[{"cwd":".","argv":["go","test","-json","-count=1","-vet=off","-run","^$","."],"require_empty_stdout":false,"reason":"directly_affected_packages"}]},{"name":"affected_tests","requires_previous_success":true,"commands":[{"cwd":".","argv":["go","test","-json","-count=1","-vet=off","."],"require_empty_stdout":false,"reason":"directly_affected_packages"}]},{"name":"dependent_tests","requires_previous_success":true,"commands":[]},{"name":"vet","requires_previous_success":true,"commands":[{"cwd":".","argv":["go","vet","."],"require_empty_stdout":false,"reason":"affected_and_dependent_packages"}]},{"name":"broad_tests","requires_previous_success":true,"commands":[{"cwd":".","argv":["go","test","-json","-count=1","./..."],"require_empty_stdout":false,"reason":"conservative_fallback_and_final_verification"}]}],"command_count":5}}
+{"schema_version":1,"type":"validation_command_start","sequence":1205,"elapsed_ms":28532,"data":{"id":1,"stage":"format","cwd":".","argv":["gofmt","-l","./service.go","./service_test.go"],"require_empty_stdout":true,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1206,"elapsed_ms":28547,"data":{"id":1,"stage":"format","cwd":".","argv":["gofmt","-l","./service.go","./service_test.go"],"require_empty_stdout":true,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":15.0,"stdout_bytes":0,"stderr_bytes":0,"stdout_artifact":"validation/0001-0001.stdout","stderr_artifact":"validation/0001-0001.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_command_start","sequence":1207,"elapsed_ms":28547,"data":{"id":2,"stage":"compile","cwd":".","argv":["go","test","-json","-count=1","-vet=off","-run","^$","."],"require_empty_stdout":false,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1208,"elapsed_ms":29032,"data":{"id":2,"stage":"compile","cwd":".","argv":["go","test","-json","-count=1","-vet=off","-run","^$","."],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":485.0,"stdout_bytes":567,"stderr_bytes":0,"stdout_artifact":"validation/0001-0002.stdout","stderr_artifact":"validation/0001-0002.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_command_start","sequence":1209,"elapsed_ms":29032,"data":{"id":3,"stage":"affected_tests","cwd":".","argv":["go","test","-json","-count=1","-vet=off","."],"require_empty_stdout":false,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1210,"elapsed_ms":29516,"data":{"id":3,"stage":"affected_tests","cwd":".","argv":["go","test","-json","-count=1","-vet=off","."],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":484.0,"stdout_bytes":956,"stderr_bytes":0,"stdout_artifact":"validation/0001-0003.stdout","stderr_artifact":"validation/0001-0003.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_command_start","sequence":1211,"elapsed_ms":29516,"data":{"id":4,"stage":"vet","cwd":".","argv":["go","vet","."],"require_empty_stdout":false,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1212,"elapsed_ms":29657,"data":{"id":4,"stage":"vet","cwd":".","argv":["go","vet","."],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":141.0,"stdout_bytes":0,"stderr_bytes":0,"stdout_artifact":"validation/0001-0004.stdout","stderr_artifact":"validation/0001-0004.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_command_start","sequence":1213,"elapsed_ms":29657,"data":{"id":5,"stage":"broad_tests","cwd":".","argv":["go","test","-json","-count=1","./..."],"require_empty_stdout":false,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1214,"elapsed_ms":30141,"data":{"id":5,"stage":"broad_tests","cwd":".","argv":["go","test","-json","-count=1","./..."],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":484.0,"stdout_bytes":955,"stderr_bytes":0,"stdout_artifact":"validation/0001-0005.stdout","stderr_artifact":"validation/0001-0005.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_result","sequence":1215,"elapsed_ms":30188,"data":{"schema_version":1,"attempt":1,"generation":4,"applicable":true,"session":"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-8ke43tb2/.forge/sessions/ce8c2c9cf7fa2d75834cf30207432965","plan":{"schema_version":2,"generation":4,"language":"go","status":"planned","verification_status":"planned","graph_kind":"syntactic_package_imports","sound":false,"applicable":true,"verification_available":true,"broad_verification_required":true,"changed_paths":[],"languages":["go"],"missing_tools":[],"modules":[{"directory":".","module_path":"holdout","synthetic":false}],"packages":[{"directory":".","import_path":"holdout","module_directory":".","present":true,"has_tests":true,"affected":true,"dependent":false}],"edges":[],"affected_packages":["."],"reverse_dependents":[],"fallback_reasons":[{"code":"no_changed_paths","path":"","detail":"No changed-file set was supplied; compile, test and vet all indexed packages before final module verification."}],"limitations":["Package imports are syntactic, not type-resolved references or test coverage.","Imports from production and test files are unioned; test-only changes also include reverse dependents conservatively.","Only indexed workspace files and module directives are resolved; generated code, embed inputs, replacement aliases, vendored/external modules and runtime dependencies may escape the graph.","Broad tests cover each indexed module only in the active Go environment; other tags, platforms, toolchains, integration services and modules outside the workspace need separate validation.","The compile check uses go test -run ^$ and may execute package initialization and TestMain. All Go checks require process permission and may access caches or the network."],"python":{"applicable":false,"executable_available":false,"executable":"","selection_kind":"changed_files_and_filename_related_tests","syntax_scope":"changed","source_file_count":0,"syntax_file_count":0,"test_file_count":0,"targeted_test_count":0,"syntax_scheduled":false,"tests_applicable":false,"tests_scheduled":false,"test_runner":"none","bytecode_writes_disabled":true,"pytest_cache_disabled":false,"targeted_test_files":[]},"stages":[{"name":"format","requires_previous_success":false,"commands":[{"cwd":".","argv":["gofmt","-l","./service.go","./service_test.go"],"require_empty_stdout":true,"reason":"indexed_go_files_for_unknown_changes"}]},{"name":"compile","requires_previous_success":true,"commands":[{"cwd":".","argv":["go","test","-json","-count=1","-vet=off","-run","^$","."],"require_empty_stdout":false,"reason":"directly_affected_packages"}]},{"name":"affected_tests","requires_previous_success":true,"commands":[{"cwd":".","argv":["go","test","-json","-count=1","-vet=off","."],"require_empty_stdout":false,"reason":"directly_affected_packages"}]},{"name":"dependent_tests","requires_previous_success":true,"commands":[]},{"name":"vet","requires_previous_success":true,"commands":[{"cwd":".","argv":["go","vet","."],"require_empty_stdout":false,"reason":"affected_and_dependent_packages"}]},{"name":"broad_tests","requires_previous_success":true,"commands":[{"cwd":".","argv":["go","test","-json","-count=1","./..."],"require_empty_stdout":false,"reason":"conservative_fallback_and_final_verification"}]}],"command_count":5},"commands":[{"id":1,"stage":"format","cwd":".","argv":["gofmt","-l","./service.go","./service_test.go"],"require_empty_stdout":true,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":15.0,"stdout_bytes":0,"stderr_bytes":0,"stdout_artifact":"validation/0001-0001.stdout","stderr_artifact":"validation/0001-0001.stderr","status":"ok"},{"id":2,"stage":"compile","cwd":".","argv":["go","test","-json","-count=1","-vet=off","-run","^$","."],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":485.0,"stdout_bytes":567,"stderr_bytes":0,"stdout_artifact":"validation/0001-0002.stdout","stderr_artifact":"validation/0001-0002.stderr","status":"ok"},{"id":3,"stage":"affected_tests","cwd":".","argv":["go","test","-json","-count=1","-vet=off","."],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":484.0,"stdout_bytes":956,"stderr_bytes":0,"stdout_artifact":"validation/0001-0003.stdout","stderr_artifact":"validation/0001-0003.stderr","status":"ok"},{"id":4,"stage":"vet","cwd":".","argv":["go","vet","."],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":141.0,"stdout_bytes":0,"stderr_bytes":0,"stdout_artifact":"validation/0001-0004.stdout","stderr_artifact":"validation/0001-0004.stderr","status":"ok"},{"id":5,"stage":"broad_tests","cwd":".","argv":["go","test","-json","-count=1","./..."],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":484.0,"stdout_bytes":955,"stderr_bytes":0,"stdout_artifact":"validation/0001-0005.stdout","stderr_artifact":"validation/0001-0005.stderr","status":"ok"}],"generation_after":4,"commands_attempted":5,"commands_run":5,"stages_passed":5,"inputs_changed":false,"inputs_checked":true,"input_max_files":100000,"input_max_bytes":2147483648,"input_hash_before":"69aa54150d3538fa","input_hash_after":"69aa54150d3538fa","snapshot_ms":0.0,"duration_ms":1656.0,"passed":true,"checks_passed":true,"evidence_complete":true,"status":"ok","summary":"Automatic staged validation passed: 5 commands across 5 stages, repository generation=4."}}
+{"schema_version":1,"type":"working_state","sequence":1216,"elapsed_ms":30188,"data":{"turn":5,"artifact":"context/0005.state.json","hash":2149430148865570705}}
+{"schema_version":1,"type":"message","sequence":1217,"elapsed_ms":30188,"data":"I have resolved the ResolveMount function in service.go to correctly select the longest matching mount by path components. The key changes were:\n\n1. Fixed the prefix matching logic to ensure that mounts are only considered valid when they match at component boundaries (not just textual prefixes within components)\n2. Added proper handling for exact path matches and component boundary checks\n3. The implementation now correctly handles cases like \"/app/v2/x\" matching \"/app/v2\" but not \"/app/v\" (which would be a partial component match)\n\nThe tests pass with exit code 0, confirming the fix works as expected."}
+{"schema_version":1,"type":"patch_snapshot","sequence":1218,"elapsed_ms":30188,"data":{"artifact":"patch.diff","status":"not_collected","reason":"explicit_git_diff_required"}}
+{"schema_version":1,"type":"state","sequence":1219,"elapsed_ms":30188,"data":{"state":7}}
+{"schema_version":1,"type":"done","sequence":1220,"elapsed_ms":30188,"data":{"schema_version":1,"status":"ok","simulated":false,"prompt_tokens":19754,"generated_tokens":1141,"cached_tokens":12192,"prefill_tokens":7562,"turns":5,"tool_calls":4,"raw_tool_bytes":2064,"visible_tool_bytes":2064,"files_modified":1,"context_evictions":2,"loop_warnings":0,"grammar_fast_tokens":574,"grammar_fallback_tokens":572,"think_tokens":567,"forced_actions":0,"action_stops":0,"action_select_tokens":0,"action_argument_tokens":0,"patch_tokens":0,"final_tokens":0,"memory_tokens":0,"forced_action_progress_tokens":0,"raw_tool_tokens":794,"visible_tool_tokens":794,"files_opened":2,"validation_commands":6,"validation_failures":0,"generation_arena_peak_bytes":65648,"repo_full_scans":5,"repo_delta_scans":1,"filesystem_events":2,"watch_reopens":0,"stale_generations":0,"index_cold_parses":2,"index_incremental_parses":1,"index_cache_hits":1,"index_cache_evictions":0,"peak_index_source_bytes":1638,"peak_index_nodes":768,"checkpoint_lookups":0,"checkpoint_hits":0,"checkpoint_misses":0,"checkpoint_captures":0,"checkpoint_evictions":0,"checkpoint_restored_tokens":0,"checkpoint_reused_tokens":0,"checkpoint_additional_tokens":0,"checkpoint_peak_bytes":0,"load_ms":8140.0,"prefill_ms":2952.0,"decode_ms":24265.0,"sampling_ms":16812.0,"duration_ms":30188.0,"tool_ms":766.0,"validation_ms":1656.0,"index_ms":173.0,"checkpoint_probe_ms":0.0,"checkpoint_capture_ms":0.0,"checkpoint_restore_ms":0.0}}

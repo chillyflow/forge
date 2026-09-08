@@ -1,0 +1,12 @@
+package repair
+
+func Average(xs []int) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	sum := 0
+	for _, v := range xs {
+		sum += v
+	}
+	return float64(sum) / float64(len(xs))
+}

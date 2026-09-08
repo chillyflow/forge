@@ -34,6 +34,8 @@ const char *fg_chat_render_prompt(const fg_chat_render *render, size_t *length);
 size_t fg_chat_render_cache_anchor(const fg_chat_render *render);
 const char *fg_chat_render_grammar(const fg_chat_render *render);
 bool fg_chat_render_grammar_lazy(const fg_chat_render *render);
+const char *fg_chat_render_force_prefix(const fg_chat_render *render);
+bool fg_chat_render_action_started(const fg_chat_render *render, const char *response);
 const char *fg_chat_render_generation_prompt(const fg_chat_render *render);
 size_t fg_chat_render_trigger_pattern_count(const fg_chat_render *render);
 const char *fg_chat_render_trigger_pattern(const fg_chat_render *render, size_t index);

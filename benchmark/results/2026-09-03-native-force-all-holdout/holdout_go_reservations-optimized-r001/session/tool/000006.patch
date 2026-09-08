@@ -1,0 +1,46 @@
+diff --git "a/service.go" "b/service.go"
+--- "a/service.go"
++++ "b/service.go"
+@@ -1,21 +1,21 @@
+-package holdout
+-
+-type Booking struct{ Seat, Customer string }
+-
+-func Reserve(bookings map[string]string, batch []Booking) bool {
+-	pending := make(map[string]string)
+-	for _, b := range batch {
+-		if b.Seat == "" || b.Customer == "" {
+-			return false
+-		}
+-		if _, exists := bookings[b.Seat]; exists {
+-			return false
+-		}
+-		// Reservations in this batch will be committed together.
+-		pending[b.Seat] = b.Customer
+-	}
+-	for seat, customer := range pending {
+-		bookings[seat] = customer
+-	}
+-	return true
+-}
++package holdout
++
++type Booking struct{ Seat, Customer string }
++
++func Reserve(bookings map[string]string, batch []Booking) bool {
++	// Check all bookings in the batch first to ensure none conflict
++	for _, b := range batch {
++		if b.Seat == "" || b.Customer == "" {
++			return false
++		}
++		if _, exists := bookings[b.Seat]; exists {
++			return false
++		}
++	}
++	
++	// All bookings are valid, now add them to the bookings map
++	for _, b := range batch {
++		bookings[b.Seat] = b.Customer
++	}
++	return true
++}

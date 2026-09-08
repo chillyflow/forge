@@ -1,0 +1,21 @@
+file_sha256:df740f4516889906ea4fb58b56bf17aced508269409d9df255549a94cca42033
+1: package repair
+2: 
+3: import (
+4: 	"math"
+5: 	"reflect"
+6: 	"testing"
+7: )
+8: 
+9: func TestApplyTransfers(t *testing.T) {
+10: 	b := map[string]int{"a": 10, "b": 0, "c": 2}
+11: 	if !ApplyTransfers(b, []Transfer{{"a", "b", 7}, {"b", "c", 3}}) || !reflect.DeepEqual(b, map[string]int{"a": 3, "b": 4, "c": 5}) {
+12: 		t.Fatalf("success=%v", b)
+13: 	}
+14: 	for _, batch := range [][]Transfer{{{"a", "b", 4}, {"a", "c", 1}}, {{"a", "missing", 1}}, {{"a", "b", -1}}} {
+15: 		before := map[string]int{"a": 4, "b": 0, "c": 0}
+16: 		got := map[string]int{"a": 4, "b": 0, "c": 0}
+17: 		if ApplyTransfers(got, batch) || !reflect.DeepEqual(got, before) {
+18: 			t.Fatalf("batch %v left %v", batch, got)
+19: 		}
+20: 	}

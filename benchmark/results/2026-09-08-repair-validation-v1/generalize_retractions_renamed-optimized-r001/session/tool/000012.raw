@@ -1,0 +1,23 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+test_independent_postings (test_ledger.JournalCases.test_independent_postings) ... ok
+test_order_and_duplicates (test_ledger.JournalCases.test_order_and_duplicates) ... FAIL
+
+======================================================================
+FAIL: test_order_and_duplicates (test_ledger.JournalCases.test_order_and_duplicates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-pxjqmytn\test_ledger.py", line 10, in test_order_and_duplicates
+    self.assertEqual(positions_for(messages), {'cash': 0})
+AssertionError: {} != {'cash': 0}
+- {}
++ {'cash': 0}
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+FAILED (failures=1)
+
+next_action_guidance: Treat the diagnostics as the change boundary. Preserve behavior not named as failing and make the smallest local edit that addresses the reported condition. The failing assertion and explicit requirements are authoritative; do not reinterpret them or rewrite an otherwise working function. When a requirement names an ordering or tie-break key, compare that semantic key directly; input position or a surrogate index is not equivalent. For an ID tie-break over indexed records, dereference and compare the IDs; changing only comments cannot repair executable behavior.

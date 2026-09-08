@@ -1,0 +1,160 @@
+diff --git "a/repair.go" "b/repair.go"
+--- "a/repair.go"
++++ "b/repair.go"
+@@ -1,78 +1,78 @@
+-package repair
+-
+-import "strings"
+-
+-type Route struct{ Method, Pattern, Name string }
+-type routeMatch struct {
+-	name                                    string
+-	params                                  map[string]string
+-	literals, methodExact, wildcards, index int
+-}
+-
+-func routeSegments(value string) []string {
+-	value = strings.Trim(value, "/")
+-	if value == "" {
+-		return nil
+-	}
+-	return strings.Split(value, "/")
+-}
+-func MatchRoute(method, path string, routes []Route) (string, map[string]string, bool) {
+-	actual := routeSegments(path)
+-	var best routeMatch
+-	found := false
+-	for index, route := range routes {
+-		if route.Method != "*" && route.Method != method {
+-			continue
+-		}
+-		pattern := routeSegments(route.Pattern)
+-		params := map[string]string{}
+-		literals, wildcards := 0, 0
+-		pi, ai := 0, 0
+-		ok := true
+-		for pi < len(pattern) {
+-			part := pattern[pi]
+-			if part == "*" {
+-				if pi != len(pattern)-1 || ai >= len(actual) {
+-					ok = false
+-					break
+-				}
+-				params["*"] = strings.Join(actual[ai:], "/")
+-				wildcards++
+-				ai = len(actual)
+-				pi++
+-				break
+-			}
+-			if ai >= len(actual) {
+-				ok = false
+-				break
+-			}
+-			if strings.HasPrefix(part, ":") && len(part) > 1 {
+-				params[part[1:]] = actual[ai]
+-				wildcards++
+-			} else if part == actual[ai] {
+-				literals++
+-			} else {
+-				ok = false
+-				break
+-			}
+-			pi++
+-			ai++
+-		}
+-		if !ok || pi != len(pattern) || ai != len(actual) {
+-			continue
+-		}
+-		exact := 0
+-		if route.Method == method {
+-			exact = 1
+-		}
+-		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+-		if !found || candidate.literals > best.literals {
+-			best = candidate
+-			found = true
+-		}
+-	}
+-	if !found {
+-		return "", nil, false
+-	}
+-	return best.name, best.params, true
+-}
++package repair
++
++import "strings"
++
++type Route struct{ Method, Pattern, Name string }
++type routeMatch struct {
++	name                                    string
++	params                                  map[string]string
++	literals, methodExact, wildcards, index int
++}
++
++func routeSegments(value string) []string {
++	value = strings.Trim(value, "/")
++	if value == "" {
++		return nil
++	}
++	return strings.Split(value, "/")
++}
++func MatchRoute(method, path string, routes []Route) (string, map[string]string, bool) {
++	actual := routeSegments(path)
++	var best routeMatch
++	found := false
++	for index, route := range routes {
++		if route.Method != "*" && route.Method != method {
++			continue
++		}
++		pattern := routeSegments(route.Pattern)
++		params := map[string]string{}
++		literals, wildcards := 0, 0
++		pi, ai := 0, 0
++		ok := true
++		for pi < len(pattern) {
++			part := pattern[pi]
++			if part == "*" {
++				if pi != len(pattern)-1 || ai >= len(actual) {
++					ok = false
++					break
++				}
++				params["*"] = strings.Join(actual[ai:], "/")
++				wildcards++
++				ai = len(actual)
++				pi++
++				break
++			}
++			if ai >= len(actual) {
++				ok = false
++				break
++			}
++			if strings.HasPrefix(part, ":") && len(part) > 1 {
++				params[part[1:]] = actual[ai]
++				wildcards++
++			} else if part == actual[ai] {
++				literals++
++			} else {
++				ok = false
++				break
++			}
++			pi++
++			ai++
++		}
++		if !ok || pi != len(pattern) || ai != len(actual) {
++			continue
++		}
++		exact := 0
++		if route.Method == method {
++			exact = 1
++		}
++		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
++		if !found || candidate.literals > best.literals || (candidate.literals == best.literals && candidate.methodExact > best.methodExact) || (candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards < best.wildcards) || (candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards == best.wildcards && candidate.index < best.index) {
++			best = candidate
++			found = true
++		}
++	}
++	if !found {
++		return "", nil, false
++	}
++	return best.name, best.params, true
++}

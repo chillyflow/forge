@@ -1,0 +1,12 @@
+diff --git "a/billing/invoice.py" "b/billing/invoice.py"
+--- "a/billing/invoice.py"
++++ "b/billing/invoice.py"
+@@ -1,4 +1,4 @@
+-from .money import money
+-
+-def total(subtotal, discount_rate, shipping):
+-    return money((subtotal + shipping) * (1 - discount_rate))
++from .money import money
++
++def total(subtotal, discount_rate, shipping):
++    return money((subtotal * (1 - discount_rate)) + shipping)

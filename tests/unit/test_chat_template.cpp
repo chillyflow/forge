@@ -1,4 +1,5 @@
 #include "inference/chat_template.h"
+#include "forge/forge.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -25,7 +26,100 @@ static std::string read_native_template() {
     return read_template(FORGE_NATIVE_TEMPLATE_FIXTURE);
 }
 
-int main() {
+struct model_stream {
+    std::string text;
+    bool cancel_at_opener = false;
+};
+
+static bool collect_model(const char *bytes, size_t length, void *userdata) {
+    auto &stream = *static_cast<model_stream *>(userdata);
+    stream.text.append(bytes, length);
+    return !stream.cancel_at_opener || stream.text.find("<tool_call>") == std::string::npos;
+}
+
+static void check_model(const char *path, int gpu_layers) {
+    const char *request =
+        "{\"protocol\":\"forge-native-v1\",\"anchor_message_count\":1,\"tools\":["
+        "{\"type\":\"function\",\"function\":{\"name\":\"final\",\"description\":\"Finish with answer done\","
+        "\"parameters\":{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}},"
+        "\"required\":[\"answer\"],\"additionalProperties\":false}}}],\"messages\":["
+        "{\"role\":\"system\",\"content\":\"Explain in plain text before calling final with answer done.\"},"
+        "{\"role\":\"user\",\"content\":\"Explain hash tables in at least 1000 words of plain text. "
+        "Do not call any tools until the explanation is finished.\"}]}";
+    forge_model_config config = forge_default_model_config();
+    config.model_path = path;
+    config.context_tokens = 4096;
+    config.gpu_layers = gpu_layers;
+    config.thinking = FORGE_THINKING_DISABLED;
+    forge_error error = {};
+    forge_model *model = forge_model_load(&config, &error);
+    if (!model)
+        std::fprintf(stderr, "native model load failed: %s\n", error.message);
+    assert(model);
+    model_stream cancelled;
+    cancelled.cancel_at_opener = true;
+    forge_metrics metrics = {};
+    assert(forge_complete(model, request, 768, collect_model, &cancelled, &metrics, &error) ==
+           FORGE_ERR_CANCELLED);
+    assert(cancelled.text.find("<tool_call>") != std::string::npos);
+    assert(metrics.generated_tokens > 256 && metrics.generated_tokens <= 272);
+    assert(metrics.think_tokens == 256);
+    model_stream limited;
+    error = {};
+    assert(forge_complete(model, request, 768, collect_model, &limited, &metrics, &error) ==
+           FORGE_ERR_LIMIT);
+    assert(metrics.generated_tokens == 768 && metrics.forced_actions == 1);
+    assert(std::strstr(error.message, "before one complete native call"));
+    const std::string arguments = "\"properties\":{\"answer\":{\"type\":\"string\"}},"
+                                  "\"required\":[\"answer\"],";
+    std::string bounded_request(request);
+    size_t position = bounded_request.find(arguments);
+    assert(position != std::string::npos);
+    bounded_request.replace(position, arguments.size(), "\"properties\":{},");
+    request = bounded_request.c_str();
+    model_stream reference;
+    error = {};
+    forge_status status = forge_complete(model, request, 768, collect_model, &reference, &metrics, &error);
+    if (status != FORGE_OK)
+        std::fprintf(stderr, "native generation failed: %s\n", error.message);
+    assert(status == FORGE_OK);
+    assert(!metrics.simulated && metrics.forced_actions == 1 && metrics.generated_tokens <= 768);
+    assert(metrics.think_tokens == 256);
+    char detail[256] = {};
+    std::string source = read_native_template();
+    fg_chat_templates *templates =
+        fg_chat_templates_create(nullptr, source.c_str(), detail, sizeof(detail));
+    fg_chat_render *render =
+        fg_chat_templates_apply_native(templates, request, false, detail, sizeof(detail));
+    char *parsed = fg_chat_render_parse(render, reference.text.c_str(), detail, sizeof(detail));
+    if (!parsed)
+        std::fprintf(stderr, "native model parse failed: %s\n", detail);
+    assert(parsed && std::strstr(parsed, "\"name\":\"final\""));
+    const char *calls = std::strstr(parsed, "\"tool_calls\":");
+    assert(calls);
+    std::string expected_calls(calls);
+    std::free(parsed);
+    model_stream repeated;
+    assert(forge_complete(model, request, 768, collect_model, &repeated, &metrics, &error) == FORGE_OK);
+    assert(metrics.generated_tokens > 256 && metrics.generated_tokens <= 768);
+    assert(metrics.cached_tokens > 0 && metrics.forced_actions == 1);
+    parsed = fg_chat_render_parse(render, repeated.text.c_str(), detail, sizeof(detail));
+    assert(parsed);
+    calls = std::strstr(parsed, "\"tool_calls\":");
+    assert(calls && expected_calls == calls);
+    std::free(parsed);
+    assert(forge_complete(model, request, 768, nullptr, nullptr, &metrics, &error) == FORGE_OK);
+    assert(metrics.generated_tokens > 256 && metrics.generated_tokens <= 768);
+    assert(metrics.cached_tokens > 0 && metrics.forced_actions == 1);
+    fg_chat_render_destroy(render);
+    fg_chat_templates_destroy(templates);
+    forge_model_destroy(model);
+    std::puts("native model checks passed: forced opener, cancellation, budget exhaustion, "
+              "recovery, cached tool-call equivalence, no-callback generation");
+}
+
+int main(int argc, char **argv) {
+    assert(argc == 1 || (argc == 3 && (!std::strcmp(argv[2], "0") || !std::strcmp(argv[2], "-1"))));
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
@@ -84,6 +178,27 @@ int main() {
     assert(fg_chat_render_cache_anchor(render) > 0 && fg_chat_render_cache_anchor(render) < length);
     assert(fg_chat_render_grammar(render) && *fg_chat_render_grammar(render));
     assert(fg_chat_render_generation_prompt(render) && *fg_chat_render_generation_prompt(render));
+    assert(!fg_chat_render_force_prefix(render));
+    assert(!fg_chat_render_force_prefix(nullptr));
+    assert(!fg_chat_render_action_started(render, "reasoning before a call"));
+    assert(!fg_chat_render_action_started(render, "#include <functional>"));
+    assert(fg_chat_render_action_started(render, "inspect first\n<tool_call>"));
+    assert(fg_chat_render_action_started(render, "inspect first\n<function=final>"));
+    fg_chat_render *bounded =
+        fg_chat_templates_apply_native(templates, request, false, error, sizeof(error));
+    assert(bounded && fg_chat_render_force_prefix(bounded));
+    assert(!std::strcmp(fg_chat_render_force_prefix(bounded), "<tool_call>"));
+    assert(fg_chat_render_action_started(bounded, fg_chat_render_force_prefix(bounded)));
+    assert(!fg_chat_render_action_started(bounded, "<tool_cal"));
+    assert(!fg_chat_render_action_started(bounded, ""));
+    assert(!fg_chat_render_action_started(bounded, "<function="));
+    assert(!fg_chat_render_action_started(bounded, "<function=final"));
+    assert(!fg_chat_render_action_started(bounded, "<function=unknown>"));
+    assert(!fg_chat_render_action_started(bounded, "#include <functional>"));
+    assert(!fg_chat_render_action_started(nullptr, "<tool_call>"));
+    assert(!fg_chat_render_action_started(bounded, nullptr));
+    assert(fg_chat_render_action_started(bounded, "<function=memory>"));
+    fg_chat_render_destroy(bounded);
 
     /* Final-action pressure narrows the registry, but historical calls remain
      * valid. Exercise the real native template, not just the scripted backend. */
@@ -180,5 +295,7 @@ int main() {
     assert(stopped && safe_length == std::strlen("done"));
     fg_chat_render_destroy(render);
     fg_chat_templates_destroy(templates);
+    if (argc == 3)
+        check_model(argv[1], std::atoi(argv[2]));
     return 0;
 }

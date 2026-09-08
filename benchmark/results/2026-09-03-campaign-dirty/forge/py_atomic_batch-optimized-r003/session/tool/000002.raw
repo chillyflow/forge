@@ -1,0 +1,10 @@
+file_sha256:fd852e283c83d5fa9fe25987cba4ab206e47d89cc41f399c033eb2d94e4563c6
+1: import unittest
+2: from inventory.model import Inventory
+3: from inventory.batch import apply_batch
+4: 
+5: class BatchTests(unittest.TestCase):
+6:     def test_atomicity(self):
+7:         stock=Inventory({"a":3,"b":1}); self.assertTrue(apply_batch(stock,[("a",-2),("b",2)])); self.assertEqual(stock.quantities,{"a":1,"b":3})
+8:         stock=Inventory({"a":3,"b":1}); self.assertFalse(apply_batch(stock,[("a",-2),("b",-4)])); self.assertEqual(stock.quantities,{"a":3,"b":1})
+9:         self.assertFalse(apply_batch(stock,[("missing",1)])); self.assertEqual(stock.quantities,{"a":3,"b":1})

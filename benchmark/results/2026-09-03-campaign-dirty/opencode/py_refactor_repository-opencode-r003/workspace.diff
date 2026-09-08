@@ -1,0 +1,40 @@
+diff --git a/users/repository.py b/users/repository.py
+index b960e25..eb4d940 100644
+--- a/users/repository.py
++++ b/users/repository.py
+@@ -1,6 +1,13 @@
+-class MemoryRepository:
++from abc import ABC, abstractmethod
++
++class UserRepository(ABC):
++    @abstractmethod
++    def find(self, user_id):
++        pass
++
++class MemoryRepository(UserRepository):
+     def __init__(self, users):
+         self.users = {user["id"]: user for user in users}
+ 
+     def find(self, user_id):
+-        return self.users.get(user_id)
++        return self.users.get(user_id)
+\ No newline at end of file
+diff --git a/users/service.py b/users/service.py
+index 2d199a7..e839226 100644
+--- a/users/service.py
++++ b/users/service.py
+@@ -1,8 +1,11 @@
+-from .repository import MemoryRepository
++from .repository import UserRepository
+ 
+ class UserService:
+-    def __init__(self, repository):
++    def __init__(self, repository: UserRepository):
+         self.repository = repository
+ 
+     def display_name(self, user_id):
+-        return self.repository.users[user_id]["name"].strip().title()
++        user = self.repository.find(user_id)
++        if user is None:
++            return None
++        return user["name"].strip().title()

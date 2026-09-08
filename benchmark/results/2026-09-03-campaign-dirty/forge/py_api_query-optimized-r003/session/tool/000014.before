@@ -1,0 +1,10 @@
+from urllib.parse import parse_qs
+import re
+
+def parse_query(value):
+    # Check for malformed percent-encoding
+    if re.search(r'%[^\w%]', value):
+        raise ValueError("Invalid percent-encoding")
+    
+    parsed = parse_qs(value, keep_blank_values=True)
+    return {key: values[-1] for key, values in parsed.items()}

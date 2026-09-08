@@ -1,0 +1,11 @@
+file_sha256:ec86206fb4e8c598621cff4db75bf13592ebd7075cb6359f460768eef934dd5c
+1: from .repository import MemoryRepository
+2: 
+3: class UserService:
+4:     def __init__(self, repository):
+5:         self.repository = repository
+6: 
+7:     def display_name(self, user_id):
+8:         user = self.repository.find(user_id)
+9:         if user is None:
+10:             return None

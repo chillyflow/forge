@@ -1,0 +1,21 @@
+diff --git a/service.py b/service.py
+index b7bbbde..e91cdf8 100644
+--- a/service.py
++++ b/service.py
+@@ -9,8 +9,7 @@ def balances(events):
+             account, amount = event['account'], event['amount']
+             postings[event['id']] = (account, amount)
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
++            totals[account] += amount
+         else:
+             target = event['target']
+             if target in cancelled:
+@@ -19,4 +18,6 @@ def balances(events):
+             if target in postings:
+                 account, amount = postings[target]
+                 totals[account] -= amount
++    return totals
++            # so that when it arrives, it won't affect the balance
+     return totals

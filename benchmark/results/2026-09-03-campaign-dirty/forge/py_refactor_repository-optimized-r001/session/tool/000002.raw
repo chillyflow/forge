@@ -1,0 +1,7 @@
+file_sha256:f30b46c2fbdb0ed44d5bc82e3596200f9544c30c8f70587dd20a9dd023578ea4
+1: class MemoryRepository:
+2:     def __init__(self, users):
+3:         self.users = {user["id"]: user for user in users}
+4: 
+5:     def find(self, user_id):
+6:         return self.users.get(user_id)

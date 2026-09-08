@@ -1,0 +1,11 @@
+file_sha256:60c4e70533b71c5b7ebe1c4e7a1060fb879be9dd8274af6bd2f5e020ceab943c
+1: import unittest
+2: from service import read_records
+3: class Records(unittest.TestCase):
+4:     def test_embedded_lines(self):
+5:         self.assertEqual(read_records('id,note\r\n1,"hello\r\nworld"\r\n'),
+6:                          [['id', 'note'], ['1', 'hello\r\nworld']])
+7:     def test_quotes_and_blanks(self):
+8:         self.assertEqual(read_records('a,"b,c","d""e",\n'), [['a', 'b,c', 'd"e', '']])
+9:         self.assertEqual(read_records(''), [])
+10:         self.assertEqual(read_records('a,b'), [['a', 'b']])

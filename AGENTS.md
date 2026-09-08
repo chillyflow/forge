@@ -53,3 +53,10 @@ codex mcp get serena
 ```
 
 After an upgrade, compare current Serena client/configuration documentation with `.codex/config.toml` and `.serena/project.yml`; adjust renamed flags or schema fields, rerun all checks above, and update this file if the maintenance procedure changed. After changing `.codex/config.toml`, start a new Codex task so the MCP tool list reloads.
+
+## Local verification
+
+- On this checkout, the CMake launchers in `.tools/bin` require `PYTHONPATH` to include `.tools`. Put `.tools/go/bin` on the process PATH when running CTest so the Go-backed benchmark fixture checks actually run rather than skip.
+- Build and run the full GPU suite with `.tools/bin/cmake.exe --build build-gpu --config Release --parallel` and `.tools/bin/ctest.exe --test-dir build-gpu -C Release --output-on-failure`.
+- The chat-template test has an opt-in Qwen3-Coder real-model probe: `build-gpu/Release/forge_chat_template_unit.exe C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf -1`. The final argument is GPU layers (`-1` for GPU, `0` for CPU); no model is downloaded. It exercises forced opening, callback cancellation, budget exhaustion, recovery, cached tool-call equivalence, and generation without a callback. Ordinary CTest does not run this opt-in portion.
+- Do not require byte-identical free-form prose across cold and cached CUDA generations: the pinned llama.cpp `tools/server/README.md` documents batch-size-dependent logits under `cache_prompt`. Verify parsed tool calls and token bounds separately.

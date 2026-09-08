@@ -1,0 +1,20 @@
+diff --git a/registry/registry.go b/registry/registry.go
+index c6b4f7b..4ed4f04 100644
+--- a/registry/registry.go
++++ b/registry/registry.go
+@@ -1,9 +1,12 @@
+ package registry
+ 
+-import "campaign.test/fixture/names"
++import (
++	"strings"
++	"campaign.test/fixture/names"
++)
+ 
+ type Registry struct{ values map[string]int }
+ 
+ func New() *Registry                            { return &Registry{values: map[string]int{}} }
+-func (r *Registry) Put(name string, value int)  { r.values[names.Normalize(name)] = value }
+-func (r *Registry) Get(name string) (int, bool) { value, ok := r.values[name]; return value, ok }
++func (r *Registry) Put(name string, value int)  { r.values[strings.ToLower(names.Normalize(name))] = value }
++func (r *Registry) Get(name string) (int, bool) { value, ok := r.values[strings.ToLower(names.Normalize(name))]; return value, ok }

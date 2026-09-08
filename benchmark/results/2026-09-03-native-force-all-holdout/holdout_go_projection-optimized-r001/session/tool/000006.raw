@@ -1,0 +1,17 @@
+file_sha256:e1244c5d257582ce2972e37425a0a60df64e7e0e1ad32e2d2a7d919c1fafedeb
+10: func Project(events []Event) map[string]string {
+11: 	values := map[string]string{}
+12: 	revisions := map[string]int{}
+13: 	for _, ev := range events {
+14: 		previous, seen := revisions[ev.Key]
+15: 		if seen && ev.Revision <= previous {
+16: 			continue
+17: 		}
+18: 		revisions[ev.Key] = ev.Revision
+19: 		if ev.Deleted {
+20: 			delete(values, ev.Key)
+21: 			delete(revisions, ev.Key)
+22: 		} else {
+23: 			values[ev.Key] = ev.Value
+24: 		}
+25: 	}

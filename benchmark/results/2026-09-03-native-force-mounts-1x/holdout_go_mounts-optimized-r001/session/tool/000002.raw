@@ -1,0 +1,19 @@
+file_sha256:bf70fc4accdc20c7cbdf09357bf6c83789e1e9107a25d49d1414d897dbfefbb2
+1: package holdout
+2: 
+3: import "testing"
+4: 
+5: func TestMounts(t *testing.T) {
+6: 	for _, tc := range []struct{ request, mount, rest string }{
+7: 		{"/apple/x", "/", "apple/x"}, {"/app/a", "/app", "a"}, {"/app", "/app", ""},
+8: 		{"/app/v2/x", "/app/v2", "x"}, {"/app/../apple", "/", "apple"},
+9: 	} {
+10: 		mount, rest, ok := ResolveMount(tc.request, []string{"/app", "/", "/app/v2"})
+11: 		if !ok || mount != tc.mount || rest != tc.rest {
+12: 			t.Fatalf("%s: %q %q %v", tc.request, mount, rest, ok)
+13: 		}
+14: 	}
+15: 	if _, _, ok := ResolveMount("/apple", []string{"/app"}); ok {
+16: 		t.Fatal("partial component matched")
+17: 	}
+18: }

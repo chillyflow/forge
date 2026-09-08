@@ -140,6 +140,22 @@ def protected_unchanged(root, before):
                for name, value in before.items())
 
 
+def protect_protected(root, task, readonly=True):
+    """Set or clear the read-only attribute on all protected fixture files."""
+    root = Path(root).resolve()
+    mode = 0o444 if readonly else 0o644
+    for name in protected_files(task):
+        path = _safe_path(root, name)
+        if not path.is_file():
+            continue
+        if os.name == 'nt':
+            attr = 1 if readonly else 0
+            if not ctypes.windll.kernel32.SetFileAttributesW(str(path), attr):
+                raise OSError(f'Cannot protect {path}')
+        else:
+            os.chmod(path, mode)
+
+
 def initialize_git(root):
     root = Path(root).resolve()
     subprocess.run(['git', 'init', '-q', str(root)], check=True, capture_output=True)

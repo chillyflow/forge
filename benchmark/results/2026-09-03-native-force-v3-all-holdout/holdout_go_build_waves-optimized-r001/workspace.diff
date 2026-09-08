@@ -1,0 +1,13 @@
+diff --git a/service.go b/service.go
+index 65970f3..45fba19 100644
+--- a/service.go
++++ b/service.go
+@@ -19,7 +19,7 @@ func BuildWaves(deps map[string][]string) ([][]string, error) {
+ 				if _, exists := deps[p]; !exists {
+ 					return nil, fmt.Errorf("missing %s", p)
+ 				}
+-				if !done[p] && len(deps[p]) > 0 {
++				if !done[p] {
+ 					ok = false
+ 				}
+ 			}

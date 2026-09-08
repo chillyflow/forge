@@ -1,0 +1,9 @@
+file_sha256:dacfa312ed2939f91bb5e90a9b254d8f9c0850bb398579a0e0c2bd82623063a8
+1: from .repository import MemoryRepository
+2: 
+3: class UserService:
+4:     def __init__(self, repository):
+5:         self.repository = repository
+6: 
+7:     def display_name(self, user_id):
+8:         return self.repository.users[user_id]["name"].strip().title()

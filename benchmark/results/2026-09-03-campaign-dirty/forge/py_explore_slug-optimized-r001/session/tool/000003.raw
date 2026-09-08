@@ -1,0 +1,8 @@
+file_sha256:bfcd123ba4079ce9aba9ef3e4138384dc4fd9d3f77f9e52d630d5a8b4691088a
+1: import unittest
+2: from app.text.slug import slugify
+3: 
+4: class SlugTests(unittest.TestCase):
+5:     def test_public_form(self):
+6:         self.assertEqual(slugify("  Café, déjà vu!  "), "cafe-deja-vu")
+7:         self.assertEqual(slugify("one---two"), "one-two")

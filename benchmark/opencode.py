@@ -19,8 +19,8 @@ import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import (CREATE_NO_WINDOW, FIXTURE_PREPARATION, ResourceMonitor, check_tools,
                     digest, initialize_git, load_tasks, materialize, platform_metadata,
-                    protected_unchanged, run_monitored, runtime_bundle, schedule, snapshot_protected,
-                    verify_task, write_json)
+                    protect_protected, protected_unchanged, run_monitored, runtime_bundle, schedule,
+                    snapshot_protected, verify_task, write_json)
 
 
 def request(port, path, method='GET', key=''):
@@ -261,6 +261,7 @@ def main():
                 fixture = materialize(root, task)
                 initialize_git(root)
                 before_protected = snapshot_protected(root, task)
+                protect_protected(root, task, readonly=True)
                 state = shared_server or start_server(server, model, output, base_env, args)
                 startup_seconds = state['startup_seconds'] if shared_server is None else 0.0
                 startup_usage = (state['startup_resource_usage'] if shared_server is None else None)
@@ -297,6 +298,7 @@ def main():
                                            gpu_index=args.gpu_index,
                                            extra_pids=verification_extra)
                 unchanged = protected_unchanged(root, before_protected)
+                protect_protected(root, task, readonly=False)
                 end_to_end = (startup_seconds + agent['wall_seconds'] + teardown_seconds +
                               verification['wall_seconds'])
                 passed = agent['returncode'] == 0 and verification['passed'] and unchanged

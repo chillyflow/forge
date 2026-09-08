@@ -1,0 +1,20 @@
+diff --git a/inventory/batch.py b/inventory/batch.py
+index 36e7ed4..bd97261 100644
+--- a/inventory/batch.py
++++ b/inventory/batch.py
+@@ -1,8 +1,13 @@
+ def apply_batch(inventory, adjustments):
++    # Validate all adjustments first
+     for sku, delta in adjustments:
+         if sku not in inventory.quantities:
+             return False
+-        inventory.quantities[sku] += delta
+-        if inventory.quantities[sku] < 0:
++        new_quantity = inventory.quantities[sku] + delta
++        if new_quantity < 0:
+             return False
++    
++    # All adjustments are valid, now apply them
++    for sku, delta in adjustments:
++        inventory.quantities[sku] += delta
+     return True

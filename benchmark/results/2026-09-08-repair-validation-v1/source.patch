@@ -1,0 +1,912 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index b52d16a..0e950c6 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -53,3 +53,10 @@ codex mcp get serena
+ ```
+ 
+ After an upgrade, compare current Serena client/configuration documentation with `.codex/config.toml` and `.serena/project.yml`; adjust renamed flags or schema fields, rerun all checks above, and update this file if the maintenance procedure changed. After changing `.codex/config.toml`, start a new Codex task so the MCP tool list reloads.
++
++## Local verification
++
++- On this checkout, the CMake launchers in `.tools/bin` require `PYTHONPATH` to include `.tools`. Put `.tools/go/bin` on the process PATH when running CTest so the Go-backed benchmark fixture checks actually run rather than skip.
++- Build and run the full GPU suite with `.tools/bin/cmake.exe --build build-gpu --config Release --parallel` and `.tools/bin/ctest.exe --test-dir build-gpu -C Release --output-on-failure`.
++- The chat-template test has an opt-in Qwen3-Coder real-model probe: `build-gpu/Release/forge_chat_template_unit.exe C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf -1`. The final argument is GPU layers (`-1` for GPU, `0` for CPU); no model is downloaded. It exercises forced opening, callback cancellation, budget exhaustion, recovery, cached tool-call equivalence, and generation without a callback. Ordinary CTest does not run this opt-in portion.
++- Do not require byte-identical free-form prose across cold and cached CUDA generations: the pinned llama.cpp `tools/server/README.md` documents batch-size-dependent logits under `cache_prompt`. Verify parsed tool calls and token bounds separately.
+diff --git a/benchmark/aider.py b/benchmark/aider.py
+index 9fb7c4f..73595da 100644
+--- a/benchmark/aider.py
++++ b/benchmark/aider.py
+@@ -11,9 +11,9 @@ import tempfile
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, load_tasks,
+-                    materialize, platform_metadata, protected_files, protected_unchanged,
+-                    run_monitored, runtime_bundle, schedule, snapshot_protected, verify_task,
+-                    write_json)
++                    materialize, platform_metadata, protect_protected, protected_files,
++                    protected_unchanged, run_monitored, runtime_bundle, schedule, snapshot_protected,
++                    verify_task, write_json)
+ from opencode import (isolated_environment, metric_record, request, server_command, start_server,
+                       stop_server)
+ 
+@@ -158,6 +158,7 @@ def main():
+                 fixture = materialize(root, task)
+                 initialize_git(root)
+                 before_protected = snapshot_protected(root, task)
++                protect_protected(root, task, readonly=True)
+                 state = shared_server or start_server(server, model, output, base_env, args)
+                 state['env']['OPENAI_API_BASE'] = f'http://127.0.0.1:{state["port"]}/v1'
+                 state['env']['OPENAI_API_KEY'] = state['key']
+@@ -199,6 +200,7 @@ def main():
+                                            gpu_index=args.gpu_index,
+                                            extra_pids=verification_extra)
+                 unchanged = protected_unchanged(root, before_protected)
++                protect_protected(root, task, readonly=False)
+                 end_to_end = (startup_seconds + agent['wall_seconds'] + teardown_seconds +
+                               verification['wall_seconds'])
+                 passed = agent['returncode'] == 0 and verification['passed'] and unchanged
+diff --git a/benchmark/common.py b/benchmark/common.py
+index 3520334..94b886a 100644
+--- a/benchmark/common.py
++++ b/benchmark/common.py
+@@ -140,6 +140,22 @@ def protected_unchanged(root, before):
+                for name, value in before.items())
+ 
+ 
++def protect_protected(root, task, readonly=True):
++    """Set or clear the read-only attribute on all protected fixture files."""
++    root = Path(root).resolve()
++    mode = 0o444 if readonly else 0o644
++    for name in protected_files(task):
++        path = _safe_path(root, name)
++        if not path.is_file():
++            continue
++        if os.name == 'nt':
++            attr = 1 if readonly else 0
++            if not ctypes.windll.kernel32.SetFileAttributesW(str(path), attr):
++                raise OSError(f'Cannot protect {path}')
++        else:
++            os.chmod(path, mode)
++
++
+ def initialize_git(root):
+     root = Path(root).resolve()
+     subprocess.run(['git', 'init', '-q', str(root)], check=True, capture_output=True)
+diff --git a/benchmark/opencode.py b/benchmark/opencode.py
+index b2dd001..fcb01ac 100644
+--- a/benchmark/opencode.py
++++ b/benchmark/opencode.py
+@@ -19,8 +19,8 @@ import urllib.request
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ from common import (CREATE_NO_WINDOW, FIXTURE_PREPARATION, ResourceMonitor, check_tools,
+                     digest, initialize_git, load_tasks, materialize, platform_metadata,
+-                    protected_unchanged, run_monitored, runtime_bundle, schedule, snapshot_protected,
+-                    verify_task, write_json)
++                    protect_protected, protected_unchanged, run_monitored, runtime_bundle, schedule,
++                    snapshot_protected, verify_task, write_json)
+ 
+ 
+ def request(port, path, method='GET', key=''):
+@@ -261,6 +261,7 @@ def main():
+                 fixture = materialize(root, task)
+                 initialize_git(root)
+                 before_protected = snapshot_protected(root, task)
++                protect_protected(root, task, readonly=True)
+                 state = shared_server or start_server(server, model, output, base_env, args)
+                 startup_seconds = state['startup_seconds'] if shared_server is None else 0.0
+                 startup_usage = (state['startup_resource_usage'] if shared_server is None else None)
+@@ -297,6 +298,7 @@ def main():
+                                            gpu_index=args.gpu_index,
+                                            extra_pids=verification_extra)
+                 unchanged = protected_unchanged(root, before_protected)
++                protect_protected(root, task, readonly=False)
+                 end_to_end = (startup_seconds + agent['wall_seconds'] + teardown_seconds +
+                               verification['wall_seconds'])
+                 passed = agent['returncode'] == 0 and verification['passed'] and unchanged
+diff --git a/benchmark/run.py b/benchmark/run.py
+index fa3d96a..d4a0c90 100644
+--- a/benchmark/run.py
++++ b/benchmark/run.py
+@@ -14,8 +14,9 @@ import tempfile
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, load_tasks,
+-                    materialize, platform_metadata, protected_unchanged, run_monitored,
+-                    runtime_bundle, schedule, snapshot_protected, verify_task, write_json)
++                    materialize, platform_metadata, protect_protected, protected_unchanged,
++                    run_monitored, runtime_bundle, schedule, snapshot_protected, verify_task,
++                    write_json)
+ 
+ # Keep experiment policy in one table so the CLI choices, recorded provenance,
+ # and command line cannot drift apart.  ``thought_cue`` is the host scaffold
+@@ -154,6 +155,7 @@ def main():
+             fixture = materialize(root, task)
+             initialize_git(root)
+             before_protected = snapshot_protected(root, task)
++            protect_protected(root, task, readonly=True)
+             command = [str(forge), 'run', task['prompt'], '--workspace', str(root),
+                        '--model', str(model), '--gpu-layers', args.gpu_layers,
+                        '--prompt-protocol', args.prompt_protocol,
+@@ -178,6 +180,7 @@ def main():
+             verification = verify_task(root, task, output, timeout=args.verification_timeout,
+                                        gpu_index=args.gpu_index)
+             unchanged = protected_unchanged(root, before_protected)
++            protect_protected(root, task, readonly=False)
+             startup_seconds = (metrics['load_ms'] / 1000.0) if 'load_ms' in metrics else None
+             agent_seconds = (max(0.0, process_result['wall_seconds'] - startup_seconds)
+                              if startup_seconds is not None else None)
+diff --git a/src/core/agent.c b/src/core/agent.c
+index 6061908..862a199 100644
+--- a/src/core/agent.c
++++ b/src/core/agent.c
+@@ -853,10 +853,9 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
+      * invalidates it. A repository generation comparison is too strict here,
+      * because watcher notifications for the patch itself can arrive late. */
+     bool anchor_valid = false;
+-    /* A successful process on the preceding turn is strong completion evidence. Near the hard
+-     * turn cap, force the host-validating final action instead of allowing bookkeeping to consume
+-     * the last prompt budget. */
+-    bool native_process_succeeded_last_turn = false;
++    /* A successful process does not prove that tests ran. Near the hard turn cap, keep repair
++     * tools available until the last action, when the host-validating final action must run
++     * instead of allowing bookkeeping to consume the last prompt budget. */
+     /* A .go file left unparseable by a patch, and the reason. While it stands,
+      * its diagnostic is included in a recovery state. */
+     /* Held at function scope: a re-anchored argument copy must stay alive for
+@@ -895,8 +894,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
+                 fg_error(e, status, "Cannot update native protocol run state");
+                 break;
+             }
+-            if (turn == a->config.limits.max_turns ||
+-                (native_process_succeeded_last_turn && turn + 1 == a->config.limits.max_turns)) {
++            if (turn == a->config.limits.max_turns) {
+                 char *final_schema = fg_tool_native_final_schema();
+                 status = final_schema ? forge_context_update(ctx, tools_id, final_schema, turn)
+                                       : FORGE_ERR_MEMORY;
+@@ -1526,7 +1524,6 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
+             else if (tools.process.exit_code != 0)
+                 outcome = FORGE_ERR_CONFLICT;
+         }
+-        native_process_succeeded_last_turn = tools.process_ran && outcome == FORGE_OK;
+         if (!recovery_rejected && outcome != FORGE_OK)
+             recovery_copy(last_diagnostic, sizeof(last_diagnostic), raw);
+         if (changed) {
+diff --git a/src/inference/chat_template.cpp b/src/inference/chat_template.cpp
+index b96db7b..6ee2477 100644
+--- a/src/inference/chat_template.cpp
++++ b/src/inference/chat_template.cpp
+@@ -20,6 +20,7 @@ struct fg_chat_templates {
+ struct fg_chat_render {
+     common_chat_params params;
+     size_t cache_anchor = 0;
++    bool enable_thinking = false;
+     std::vector<std::string> trigger_patterns;
+     std::vector<llama_token> trigger_tokens;
+ };
+@@ -237,7 +238,7 @@ extern "C" fg_chat_render *fg_chat_templates_apply_native(const fg_chat_template
+         inputs.tools = common_chat_tools_parse_oaicompat(request.at("tools"));
+         inputs.add_generation_prompt = true;
+         inputs.use_jinja = true;
+-        inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
++        inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
+         inputs.parallel_tool_calls = false;
+         inputs.enable_thinking = enable_thinking;
+         inputs.reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
+@@ -251,6 +252,7 @@ extern "C" fg_chat_render *fg_chat_templates_apply_native(const fg_chat_template
+                 "Selected chat template has no enforceable native tool grammar/parser");
+ 
+         auto render = std::make_unique<fg_chat_render>();
++        render->enable_thinking = enable_thinking;
+         render->params = std::move(params);
+         for (const auto &trigger : render->params.grammar_triggers) {
+             switch (trigger.type) {
+@@ -330,6 +332,25 @@ extern "C" bool fg_chat_render_grammar_lazy(const fg_chat_render *render) {
+     return render && render->params.grammar_lazy;
+ }
+ 
++extern "C" const char *fg_chat_render_force_prefix(const fg_chat_render *render) {
++    if (!render || render->enable_thinking || !render->params.grammar_lazy)
++        return nullptr;
++    for (const auto &trigger : render->params.grammar_triggers)
++        if (trigger.type == COMMON_GRAMMAR_TRIGGER_TYPE_WORD && !trigger.value.empty())
++            return trigger.value.c_str();
++    return nullptr;
++}
++
++extern "C" bool fg_chat_render_action_started(const fg_chat_render *render, const char *response) {
++    if (!render || !response)
++        return false;
++    for (const auto &trigger : render->params.grammar_triggers)
++        if (trigger.type == COMMON_GRAMMAR_TRIGGER_TYPE_WORD && !trigger.value.empty() &&
++            std::strstr(response, trigger.value.c_str()))
++            return true;
++    return false;
++}
++
+ extern "C" const char *fg_chat_render_generation_prompt(const fg_chat_render *render) {
+     return render ? render->params.generation_prompt.c_str() : nullptr;
+ }
+diff --git a/src/inference/chat_template.h b/src/inference/chat_template.h
+index ab28d7e..4da9cca 100644
+--- a/src/inference/chat_template.h
++++ b/src/inference/chat_template.h
+@@ -34,6 +34,8 @@ const char *fg_chat_render_prompt(const fg_chat_render *render, size_t *length);
+ size_t fg_chat_render_cache_anchor(const fg_chat_render *render);
+ const char *fg_chat_render_grammar(const fg_chat_render *render);
+ bool fg_chat_render_grammar_lazy(const fg_chat_render *render);
++const char *fg_chat_render_force_prefix(const fg_chat_render *render);
++bool fg_chat_render_action_started(const fg_chat_render *render, const char *response);
+ const char *fg_chat_render_generation_prompt(const fg_chat_render *render);
+ size_t fg_chat_render_trigger_pattern_count(const fg_chat_render *render);
+ const char *fg_chat_render_trigger_pattern(const fg_chat_render *render, size_t index);
+diff --git a/src/inference/inference.c b/src/inference/inference.c
+index 0d17e98..e3e7a54 100644
+--- a/src/inference/inference.c
++++ b/src/inference/inference.c
+@@ -9,7 +9,7 @@ forge_model_config forge_default_model_config(void) {
+     config.seed = 42;
+     config.reuse_prefix = true;
+     config.grammar_fast_path = true;
+-    config.thinking = FORGE_THINKING_AUTO;
++    config.thinking = FORGE_THINKING_DISABLED;
+     config.prompt_protocol = FORGE_PROMPT_NATIVE;
+     return config;
+ }
+diff --git a/src/inference/llama_backend.c b/src/inference/llama_backend.c
+index 4c0dbdd..4a2c36f 100644
+--- a/src/inference/llama_backend.c
++++ b/src/inference/llama_backend.c
+@@ -169,7 +169,7 @@ static size_t llama_count_prompt(forge_model *m, const char *prompt) {
+     llama_state *s = m->backend;
+     char detail[256] = {0};
+     fg_chat_render *render = fg_chat_templates_apply_native(
+-        s->chat_templates, prompt, s->thinking_mode != FORGE_THINKING_DISABLED, detail,
++        s->chat_templates, prompt, s->thinking_mode == FORGE_THINKING_ENABLED, detail,
+         sizeof(detail));
+     size_t length = 0, bytes = 0;
+     const char *text = fg_chat_render_prompt(render, &length);
+@@ -481,6 +481,83 @@ static forge_status force_action(llama_state *s, struct llama_sampler *chain,
+     *progress_armed = true;
+     return FORGE_OK;
+ }
++static forge_status native_force_tool_call_open(llama_state *s, struct llama_sampler *sampler,
++                                                struct llama_sampler *grammar,
++                                                const fg_chat_render *render, const char *opener,
++                                                const llama_token *preserved, size_t preserved_count,
++                                                size_t remaining_tokens, fg_buf *out,
++                                                size_t *native_emitted, forge_token_fn cb, void *u,
++                                                forge_metrics *stats, size_t *forced_count,
++                                                bool *stopped, forge_cancel_fn cancel, void *cu,
++                                                uint64_t deadline, forge_error *e) {
++    *forced_count = 0;
++    *stopped = false;
++    if (interrupted(cancel, cu, deadline))
++        return fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled before native opener");
++    if (!grammar || !opener || !*opener)
++        return fg_error(e, FORGE_ERR_ARGUMENT, "No constrained native tool-call opener to force");
++    size_t opener_length = strlen(opener);
++    if (opener_length > INT32_MAX)
++        return fg_error(e, FORGE_ERR_LIMIT, "Native tool-call opener exceeds the runtime bound");
++    llama_token tokens[16];
++    int32_t count = llama_tokenize(s->vocab, opener, (int32_t)opener_length, tokens,
++                                   (int32_t)(sizeof(tokens) / sizeof(*tokens)), false, true);
++    if (count <= 0)
++        return fg_error(e, FORGE_ERR_MODEL, "Native tool-call opener cannot be tokenized");
++    if ((size_t)count >= remaining_tokens)
++        return fg_error(e, FORGE_ERR_LIMIT,
++                        "Not enough turn budget for a native opener and action");
++    if (s->count >= s->capacity || (size_t)count >= s->capacity - s->count)
++        return fg_error(e, FORGE_ERR_LIMIT, "Forced native tool-call opener exceeds context");
++    for (int32_t i = 0; i < count; i++) {
++        if (interrupted(cancel, cu, deadline))
++            return fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled during native opener");
++        llama_token token = tokens[i];
++        llama_token_data candidate = {token, 0.0f, 0.0f};
++        llama_token_data_array candidates = {&candidate, 1, -1, false};
++        llama_sampler_apply(grammar, &candidates);
++        if (candidate.logit == -INFINITY)
++            return fg_error(e, FORGE_ERR_PARSE, "Native grammar rejected the forced opener");
++        bool render_special = native_token_is_preserved(token, preserved, preserved_count);
++        int32_t cap = 128;
++        char small[128], *piece = small;
++        int32_t length =
++            llama_token_to_piece(s->vocab, token, piece, cap, 0, render_special);
++        if (length < 0) {
++            piece = malloc((size_t)-length);
++            if (!piece)
++                return fg_error(e, FORGE_ERR_MEMORY, "Token piece allocation failed");
++            length = llama_token_to_piece(s->vocab, token, piece, -length, 0, render_special);
++        }
++        if (length < 0 || !fg_buf_add(out, piece, (size_t)FG_MAX(length, 0))) {
++            if (piece != small)
++                free(piece);
++            return fg_error(e, FORGE_ERR_MEMORY, "Forced token output failed");
++        }
++        if (piece != small)
++            free(piece);
++        llama_sampler_accept(sampler, token);
++        stats->generated_tokens++;
++        (*forced_count)++;
++        size_t safe_length = out->len;
++        fg_chat_render_scan_stop(render, out->data, out->len, *native_emitted, &safe_length,
++                                 stopped);
++        if (safe_length > *native_emitted && cb &&
++            !cb(out->data + *native_emitted, safe_length - *native_emitted, u))
++            return fg_error(e, FORGE_ERR_CANCELLED, "Token callback cancelled");
++        *native_emitted = safe_length;
++        if (*stopped) {
++            out->len = safe_length;
++            out->data[out->len] = 0;
++            return FORGE_OK;
++        }
++        forge_status status = decode_batch(s, &token, 1, s->count, e);
++        if (status != FORGE_OK)
++            return status;
++        s->tokens[s->count++] = token;
++    }
++    return FORGE_OK;
++}
+ static forge_status llama_generate(forge_model *m, const char *prompt, const char *grammar,
+                                    const fg_decode_policy *policy, size_t max_tokens,
+                                    forge_token_fn cb, void *u, char **output, forge_metrics *stats,
+@@ -501,7 +578,7 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
+                             "Native prompt protocol cannot use routed JSON decoding");
+         char detail[256] = {0};
+         native_render = fg_chat_templates_apply_native(s->chat_templates, prompt,
+-                                                       s->thinking_mode != FORGE_THINKING_DISABLED,
++                                                       s->thinking_mode == FORGE_THINKING_ENABLED,
+                                                        detail, sizeof(detail));
+         size_t prepared_length = 0;
+         prepared_prompt = fg_chat_render_prompt(native_render, &prepared_length);
+@@ -578,6 +655,9 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
+      * padding legal until an end token or the budget (root ends in ws). */
+     size_t min_think = 0, think_cap = 0;
+     const char *cue = NULL;
++    const char *native_force_opener = fg_chat_render_force_prefix(native_render);
++    bool native_force_enabled = native_force_opener != NULL;
++    bool native_action_begun = native && !fg_chat_render_grammar_lazy(native_render);
+     if (policy) {
+         fg_think_bounds(policy, max_tokens, &min_think, &think_cap);
+         cue = policy->native_thinking ? "" : (policy->cue ? policy->cue : FG_THOUGHT_CUE);
+@@ -608,6 +688,22 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
+             braces_armed = true;
+         }
+     }
++    if (native_force_enabled) {
++        if (!action_ban_ready(s, e)) {
++            status = e && e->code ? e->code : FORGE_ERR_MEMORY;
++            goto finish;
++        }
++        struct llama_sampler *ends =
++            llama_sampler_init_logit_bias(llama_vocab_n_tokens(s->vocab), s->eog_ban_count,
++                                          s->eog_ban);
++        if (!ends) {
++            status = fg_error(e, FORGE_ERR_MEMORY,
++                              "Native end-of-generation ban allocation failed");
++            goto finish;
++        }
++        llama_sampler_chain_add(sampler, ends);
++        awaiting_action = true;
++    }
+     if (active_grammar) {
+         if (native) {
+             const char *patterns[64] = {0};
+@@ -751,6 +847,35 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
+             action_offset = out.len;
+             stats->forced_actions++;
+         }
++        if (native && fg_native_force_due(native_force_enabled, native_action_begun, i,
++                                           max_tokens)) {
++            size_t forced_count = 0;
++            status = native_force_tool_call_open(
++                s, sampler, grammar_sampler, native_render, native_force_opener, preserved_tokens,
++                preserved_count, max_tokens - i, &out, &native_emitted, cb, u, stats, &forced_count,
++                &ended, cancel, cu, deadline, e);
++            if (status != FORGE_OK)
++                break;
++            stats->forced_actions++;
++            if (ended)
++                break;
++            native_action_begun = fg_chat_render_action_started(native_render, out.data);
++            if (!native_action_begun) {
++                status = fg_error(e, FORGE_ERR_PARSE, "Forced native opener did not start an action");
++                break;
++            }
++            if (awaiting_action) {
++                llama_sampler_free(llama_sampler_chain_remove(sampler, 0));
++                awaiting_action = false;
++            }
++            if (forced_count > 1) {
++                if (sample_budget > forced_count - 1)
++                    sample_budget -= forced_count - 1;
++                else
++                    sample_budget = 0;
++            }
++            continue;
++        }
+         if (interrupted(cancel, cu, deadline)) {
+             status = fg_error(e, FORGE_ERR_CANCELLED, "Inference cancelled or deadline reached");
+             break;
+@@ -793,6 +918,17 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
+             status = fg_error(e, FORGE_ERR_MEMORY, "Token output failed");
+             break;
+         }
++        if (native && !native_action_begun) {
++            if (fg_chat_render_action_started(native_render, out.data)) {
++                native_action_begun = true;
++                if (awaiting_action) {
++                    llama_sampler_free(llama_sampler_chain_remove(sampler, 0));
++                    awaiting_action = false;
++                }
++            } else {
++                stats->think_tokens++;
++            }
++        }
+         stats->generated_tokens++;
+         if (!native && action_open) {
+             if (phase == FG_ACTION_SELECT)
+@@ -946,7 +1082,7 @@ static forge_status checkpoint_prefill(forge_model *m, const char *prompt, int32
+     if (m->config.prompt_protocol == FORGE_PROMPT_NATIVE) {
+         char detail[256] = {0};
+         native_render = fg_chat_templates_apply_native(s->chat_templates, prompt,
+-                                                       s->thinking_mode != FORGE_THINKING_DISABLED,
++                                                       s->thinking_mode == FORGE_THINKING_ENABLED,
+                                                        detail, sizeof(detail));
+         size_t length = 0;
+         prepared_prompt = fg_chat_render_prompt(native_render, &length);
+@@ -1085,7 +1221,7 @@ static bool native_protocol_probe(forge_model *m, llama_state *s, forge_error *e
+     }
+     char detail[256] = {0};
+     fg_chat_render *render = fg_chat_templates_apply_native(
+-        s->chat_templates, request.data, m->config.thinking != FORGE_THINKING_DISABLED, detail,
++        s->chat_templates, request.data, m->config.thinking == FORGE_THINKING_ENABLED, detail,
+         sizeof(detail));
+     fg_buf_clear(&request);
+     if (!render) {
+@@ -1167,7 +1303,7 @@ bool fg_llama_init(forge_model *m, forge_error *e) {
+             fg_error(e, FORGE_ERR_MODEL, "Cannot initialize Jinja chat template: %s", detail);
+             return false;
+         }
+-        if (m->config.thinking != FORGE_THINKING_AUTO &&
++        if (m->config.thinking == FORGE_THINKING_ENABLED &&
+             !fg_chat_templates_support_thinking(s->chat_templates)) {
+             fg_error(e, FORGE_ERR_MODEL,
+                      "The selected chat template does not support enable_thinking");
+diff --git a/src/inference/routing.c b/src/inference/routing.c
+index 2d47a62..4ee6258 100644
+--- a/src/inference/routing.c
++++ b/src/inference/routing.c
+@@ -44,6 +44,10 @@ bool fg_action_complete(const char *text) {
+     }
+     return false;
+ }
++bool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens) {
++    size_t cap = enabled ? FG_MAX((size_t)1, FG_MIN((size_t)256, max_tokens / 2)) : 0;
++    return enabled && !action_begun && generated < max_tokens && generated == cap;
++}
+ bool fg_json_whitespace_only(const char *text, size_t length) {
+     if (!text || !length)
+         return false;
+diff --git a/src/internal.h b/src/internal.h
+index 15e4175..1e84651 100644
+--- a/src/internal.h
++++ b/src/internal.h
+@@ -255,6 +255,7 @@ void fg_think_bounds(const fg_decode_policy *, size_t max_tokens, size_t *min_th
+                      size_t *think_cap);
+ fg_action_phase fg_action_decode_phase(const char *text);
+ bool fg_json_whitespace_only(const char *text, size_t length);
++bool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens);
+ typedef struct {
+     const char *name, *description, *fields, *grammar;
+     forge_capability capability;
+diff --git a/src/tools/tools.c b/src/tools/tools.c
+index 45a7df7..5c25c9e 100644
+--- a/src/tools/tools.c
++++ b/src/tools/tools.c
+@@ -204,8 +204,10 @@ static char *native_schema_description(const fg_tool_def *definition) {
+         guidance = " Do not reread unchanged content already present in the transcript.";
+     else if (!strcmp(definition->name, "run_command"))
+         guidance =
+-            " Do not rerun an unchanged failing command before a code change. After a successful "
+-            "complete validation, call final next.";
++            " Invoke tests through their test runner. For Python unittest use python -m unittest "
++            "discover -v or name the test module explicitly; executing a file that only defines "
++            "tests can exit 0 without running them. Do not rerun an unchanged failing command "
++            "before a code change. After a successful complete validation, call final next.";
+     if (!guidance)
+         return fg_strdup(definition->description);
+     fg_buf description = {0};
+@@ -1456,44 +1458,15 @@ static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
+                 "surrogate index is not equivalent. For an ID tie-break over indexed "
+                 "records, dereference and compare the IDs; changing only comments cannot "
+                 "repair executable behavior.\n");
+-        if (ok && add_native_failure_guidance && strstr(result, "order=["))
+-            ok = fg_buf_puts(
+-                &guided,
+-                "diagnostic_specific_guidance: The reported output order shows that a newly ready "
+-                "item lost lexical priority. Preserve graph construction and make one local edit: "
+-                "restore lexical ordering immediately after the loop enqueues newly ready items, "
+-                "before the next item is removed from the ready queue.\n");
+-        if (ok && add_native_failure_guidance && strstr(result, "success=map["))
+-            ok = fg_buf_puts(
+-                &guided,
+-                "diagnostic_specific_guidance: The unchanged transfer result is consistent with "
+-                "validating later operations against the original map. Preserve the existing "
+-                "atomic copy/commit flow and make the smallest expression edit so each operation's "
+-                "source and destination values are loaded from the staged working map that already "
+-                "contains earlier operations.\n");
+-        if (ok && add_native_failure_guidance && strstr(result, "ValueError not raised"))
+-            ok = fg_buf_puts(
+-                &guided,
+-                "diagnostic_specific_guidance: The decoder accepted the malformed raw value. Do "
+-                "not wrap that decoder in try/except or substitute another permissive decoder. "
+-                "Before decoding, add a direct raw-string check that rejects every percent sign "
+-                "unless its next two characters are hexadecimal digits.\n");
+-        if (ok && add_native_failure_guidance && strstr(result, "capped=map["))
+-            ok = fg_buf_puts(
+-                &guided,
+-                "diagnostic_specific_guidance: The capped allocation shows that distribution "
+-                "stopped after one proportional round while capacity remained. Preserve or "
+-                "restore the outer redistribution loop, recalculating active recipients and "
+-                "weights after caps are reached; keep the no-progress guard. For an equal-"
+-                "remainder tie-break by ID, dereference the stored request indices and compare "
+-                "their IDs in the existing comparator. Do not replace the iterative allocator "
+-                "with a one-pass calculation.\n");
+         if (ok && add_native_success_guidance)
+             ok = fg_buf_puts(
+                 &guided,
+-                "\nnext_action_guidance: If this command completed the required validation and the "
+-                "implementation satisfies the task, call final now. Do not call memory, repeat a "
+-                "successful edit, or rerun unchanged validation before final.\n");
++                "\nnext_action_guidance: A successful process exit does not prove that tests ran "
++                "or that the implementation is correct. Confirm that the test runner executed "
++                "the relevant tests; for Python unittest use python -m unittest discover -v or "
++                "an explicit test module, not direct execution of a definition-only test file. "
++                "If required validation actually passed and the task is complete, call final. "
++                "Do not repeat an already verified validation command.\n");
+         if (ok) {
+             free(result);
+             result = fg_buf_take(&guided);
+diff --git a/tests/integration/test_cli.py b/tests/integration/test_cli.py
+index ce7c0b5..2987c9a 100644
+--- a/tests/integration/test_cli.py
++++ b/tests/integration/test_cli.py
+@@ -477,6 +477,41 @@ class ForgeTests(unittest.TestCase):
+         self.run_script([json.dumps({'final': 'Done.'})], '--no-auto-validation',
+                         '--thought-native', '--disable-thinking')
+ 
++    def test_native_system_instructions_do_not_depend_on_task_keywords(self):
++        script = self.root / 'script.json'
++        script.write_text(json.dumps([native_call('final', {'answer': 'Inspected.'})]))
++        systems = []
++        for request in ('Inspect the repository.', 'Inspect replay and retraction behavior.'):
++            self.cli('run', request, '--script', str(script), '--prompt-protocol', 'native',
++                     '--no-auto-validation', '--max-turns', '2')
++            session = max((self.root / '.forge' / 'sessions').iterdir(),
++                          key=lambda path: path.stat().st_mtime_ns)
++            prompt = json.loads(sorted((session / 'context').glob('*.txt'))[0].read_text(
++                encoding='utf-8'))
++            systems.append(prompt['messages'][0]['content'])
++        self.assertEqual(systems[0], systems[1])
++        self.assertNotIn("totals[account]", systems[0])
++
++    def test_native_failure_guidance_is_independent_of_diagnostic_text(self):
++        guidance = []
++        for diagnostic in ('ordinary failure', 'order=[x]', 'success=map[x:1]',
++                           'ValueError not raised', 'capped=map[x:1]',
++                           'Retractions AssertionError: unrelated failure'):
++            with self.subTest(diagnostic=diagnostic):
++                _, events, _ = self.run_script([
++                    native_call('run_command', {'argv': [sys.executable, '-c',
++                                f'import sys; print({diagnostic!r}); sys.exit(1)']}),
++                    native_call('final', {'answer': 'Recorded failure; no repair claimed.'}),
++                ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
++                   '--no-semantic', fallback_watch=True)
++                output = next(event['data']['output'] for event in events
++                              if event['type'] == 'tool_result')
++                self.assertIn(diagnostic, output)
++                self.assertNotIn('diagnostic_specific_guidance:', output)
++                self.assertIn('next_action_guidance:', output)
++                guidance.append(output.split('next_action_guidance:', 1)[1])
++        self.assertEqual(len(set(guidance)), 1)
++
+     def test_native_prompt_protocol_roles_tools_and_explicit_failures(self):
+         (self.root / 'note.txt').write_text('native evidence\n', encoding='utf-8', newline='\n')
+         read = native_call('read_file', {'path': 'note.txt', 'start': 1, 'end': 1},
+@@ -606,20 +641,51 @@ class ForgeTests(unittest.TestCase):
+         self.assertIn('"remaining_actions_including_current":1', run_state)
+         self.assertIn('This is the last action', run_state)
+ 
++    def test_native_successful_process_keeps_penultimate_repair_tools(self):
+         command = native_call('run_command', {
+             'argv': [sys.executable, '-c', "print('validation passed')"]})
+         _, events, session = self.run_script([
+             command,
+-            native_call('final', {'answer': 'Finished after successful validation.'}),
++            native_call('final', {'answer': 'Only the print command succeeded; tests unverified.'}),
+         ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
+             '--max-turns', '3')
+         output = next(event['data']['output'] for event in events
+                       if event['type'] == 'tool_result')
+-        self.assertIn('call final now', output)
++        self.assertIn('does not prove that tests ran', output)
+         prompts = [json.loads(path.read_text(encoding='utf-8'))
+                    for path in sorted((session / 'context').glob('*.txt'))]
+         self.assertEqual(len(prompts), 2)
+-        self.assertEqual([tool['function']['name'] for tool in prompts[1]['tools']], ['final'])
++        self.assertIn('apply_patch', {tool['function']['name'] for tool in prompts[1]['tools']})
++        state = json.loads((session / 'working_state.json').read_text(encoding='utf-8'))
++        self.assertEqual(state['validation']['status'], 'unverified')
++
++    def test_native_definition_only_unittest_is_not_validation_evidence(self):
++        (self.root / 'test_probe.py').write_text(
++            'import unittest\n'
++            'class ProbeCase(unittest.TestCase):\n'
++            '    def test_contract(self):\n'
++            "        self.assertEqual(2 + 2, 5, 'deliberate validation failure')\n",
++            encoding='utf-8', newline='\n')
++        _, events, session = self.run_script([
++            native_call('run_command', {'argv': [sys.executable, 'test_probe.py']}),
++            native_call('run_command', {'argv': [sys.executable, '-m', 'unittest', '-v', 'test_probe']}),
++            native_call('final', {'answer': 'The real runner found a failing test; no repair claimed.'}),
++        ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
++           '--max-turns', '3', '--no-semantic', fallback_watch=True)
++        results = [event['data'] for event in events if event['type'] == 'tool_result']
++        self.assertEqual(len(results), 2)
++        self.assertEqual(results[0]['exit_code'], 0)
++        self.assertEqual(results[0]['stdout_bytes'], 0)
++        self.assertEqual(results[0]['stderr_bytes'], 0)
++        self.assertIn('does not prove that tests ran', results[0]['output'])
++        self.assertIn('python -m unittest', results[0]['output'])
++        self.assertNotEqual(results[1]['exit_code'], 0)
++        self.assertIn('deliberate validation failure', results[1]['output'])
++        self.assertIn('Ran 1 test', results[1]['output'])
++        prompts = [json.loads(path.read_text(encoding='utf-8'))
++                   for path in sorted((session / 'context').glob('*.txt'))]
++        self.assertIn('run_command', {tool['function']['name'] for tool in prompts[1]['tools']})
++        self.assertEqual([tool['function']['name'] for tool in prompts[2]['tools']], ['final'])
+ 
+     def test_validation_plan_and_permission_denial(self):
+         self.go_module()
+@@ -1395,11 +1461,6 @@ class ForgeTests(unittest.TestCase):
+         self.assertIn('surrogate index is not equivalent', output)
+         self.assertIn('dereference and compare the IDs', output)
+         self.assertIn('changing only comments cannot repair executable behavior', output)
+-        self.assertIn('newly ready item lost lexical priority', output)
+-        self.assertIn('loaded from the staged working map', output)
+-        self.assertIn('unless its next two characters are hexadecimal digits', output)
+-        self.assertIn('restore the outer redistribution loop', output)
+-        self.assertIn('dereference the stored request indices and compare their IDs', output)
+ 
+     def test_binary_command_output_is_preserved(self):
+         code = "import sys; sys.stdout.buffer.write(b'begin\\x00after\\xff\\n'); sys.stderr.buffer.write(b'error\\x00tail')"
+diff --git a/tests/unit/test_benchmark.py b/tests/unit/test_benchmark.py
+index f3d3454..be2916c 100644
+--- a/tests/unit/test_benchmark.py
++++ b/tests/unit/test_benchmark.py
+@@ -41,6 +41,50 @@ CAMPAIGN_SPEC.loader.exec_module(CAMPAIGN)
+ 
+ 
+ class FixtureTests(unittest.TestCase):
++    def test_generalization_cases_are_deterministic_and_grouped(self):
++        from generalization import build_tasks
++        tasks = build_tasks()
++        self.assertEqual(tasks, build_tasks())
++        self.assertEqual(len(tasks), 10)
++        self.assertEqual(len({task['id'] for task in tasks}), 10)
++        for family in ('retractions', 'window'):
++            members = [task for task in tasks if task['generalization']['family'] == family]
++            self.assertEqual({task['generalization']['variant'] for task in members},
++                             {'original', 'renamed', 'paraphrased', 'distractor', 'contrast'})
++            self.assertEqual(sum(task['generalization']['relation'] == 'contrast'
++                                 for task in members), 1)
++            for task in members:
++                self.assertEqual(task['suite'], 'generalization-v1')
++                self.assertEqual(len(task['generalization']['source_sha256']), 64)
++                self.assertFalse(set(task['oracle_files']) & set(task['protected_files']))
++
++    def test_generalization_broken_and_oracle_states(self):
++        from generalization import build_tasks
++        if not shutil.which('go') or not shutil.which('gofmt'):
++            self.skipTest('Go and gofmt are needed to verify generalization fixtures')
++        for task in build_tasks():
++            with self.subTest(task=task['id']), tempfile.TemporaryDirectory() as temporary:
++                root = pathlib.Path(temporary)
++                BENCH.materialize(root, task)
++                broken = subprocess.run(task['verify'], cwd=root, capture_output=True, timeout=60)
++                self.assertNotEqual(broken.returncode, 0, 'broken fixture unexpectedly passed')
++                repaired = dict(task, files={**task['files'], **task['oracle_files']})
++                BENCH.materialize(root, repaired)
++                oracle = subprocess.run(task['verify'], cwd=root, capture_output=True, timeout=60)
++                self.assertEqual(oracle.returncode, 0,
++                                 (oracle.stdout + oracle.stderr).decode(errors='replace'))
++
++    def test_generalization_output_cannot_overwrite_existing_evidence(self):
++        from generalization import generate
++        with tempfile.TemporaryDirectory() as temporary:
++            output = pathlib.Path(temporary) / 'tasks'
++            generate(output)
++            before = {path.name: path.read_bytes() for path in output.glob('*.json')}
++            with self.assertRaises(FileExistsError):
++                generate(output)
++            self.assertEqual(before, {path.name: path.read_bytes()
++                                      for path in output.glob('*.json')})
++
+     def test_reasoning_gated_fixtures_fail_before_and_pass_oracle(self):
+         go = shutil.which('go')
+         gofmt = shutil.which('gofmt')
+diff --git a/tests/unit/test_chat_template.cpp b/tests/unit/test_chat_template.cpp
+index 109e2f2..3ab3ea4 100644
+--- a/tests/unit/test_chat_template.cpp
++++ b/tests/unit/test_chat_template.cpp
+@@ -1,4 +1,5 @@
+ #include "inference/chat_template.h"
++#include "forge/forge.h"
+ #include <cassert>
+ #include <cstdio>
+ #include <cstdlib>
+@@ -25,7 +26,100 @@ static std::string read_native_template() {
+     return read_template(FORGE_NATIVE_TEMPLATE_FIXTURE);
+ }
+ 
+-int main() {
++struct model_stream {
++    std::string text;
++    bool cancel_at_opener = false;
++};
++
++static bool collect_model(const char *bytes, size_t length, void *userdata) {
++    auto &stream = *static_cast<model_stream *>(userdata);
++    stream.text.append(bytes, length);
++    return !stream.cancel_at_opener || stream.text.find("<tool_call>") == std::string::npos;
++}
++
++static void check_model(const char *path, int gpu_layers) {
++    const char *request =
++        "{\"protocol\":\"forge-native-v1\",\"anchor_message_count\":1,\"tools\":["
++        "{\"type\":\"function\",\"function\":{\"name\":\"final\",\"description\":\"Finish with answer done\","
++        "\"parameters\":{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}},"
++        "\"required\":[\"answer\"],\"additionalProperties\":false}}}],\"messages\":["
++        "{\"role\":\"system\",\"content\":\"Explain in plain text before calling final with answer done.\"},"
++        "{\"role\":\"user\",\"content\":\"Explain hash tables in at least 1000 words of plain text. "
++        "Do not call any tools until the explanation is finished.\"}]}";
++    forge_model_config config = forge_default_model_config();
++    config.model_path = path;
++    config.context_tokens = 4096;
++    config.gpu_layers = gpu_layers;
++    config.thinking = FORGE_THINKING_DISABLED;
++    forge_error error = {};
++    forge_model *model = forge_model_load(&config, &error);
++    if (!model)
++        std::fprintf(stderr, "native model load failed: %s\n", error.message);
++    assert(model);
++    model_stream cancelled;
++    cancelled.cancel_at_opener = true;
++    forge_metrics metrics = {};
++    assert(forge_complete(model, request, 768, collect_model, &cancelled, &metrics, &error) ==
++           FORGE_ERR_CANCELLED);
++    assert(cancelled.text.find("<tool_call>") != std::string::npos);
++    assert(metrics.generated_tokens > 256 && metrics.generated_tokens <= 272);
++    assert(metrics.think_tokens == 256);
++    model_stream limited;
++    error = {};
++    assert(forge_complete(model, request, 768, collect_model, &limited, &metrics, &error) ==
++           FORGE_ERR_LIMIT);
++    assert(metrics.generated_tokens == 768 && metrics.forced_actions == 1);
++    assert(std::strstr(error.message, "before one complete native call"));
++    const std::string arguments = "\"properties\":{\"answer\":{\"type\":\"string\"}},"
++                                  "\"required\":[\"answer\"],";
++    std::string bounded_request(request);
++    size_t position = bounded_request.find(arguments);
++    assert(position != std::string::npos);
++    bounded_request.replace(position, arguments.size(), "\"properties\":{},");
++    request = bounded_request.c_str();
++    model_stream reference;
++    error = {};
++    forge_status status = forge_complete(model, request, 768, collect_model, &reference, &metrics, &error);
++    if (status != FORGE_OK)
++        std::fprintf(stderr, "native generation failed: %s\n", error.message);
++    assert(status == FORGE_OK);
++    assert(!metrics.simulated && metrics.forced_actions == 1 && metrics.generated_tokens <= 768);
++    assert(metrics.think_tokens == 256);
++    char detail[256] = {};
++    std::string source = read_native_template();
++    fg_chat_templates *templates =
++        fg_chat_templates_create(nullptr, source.c_str(), detail, sizeof(detail));
++    fg_chat_render *render =
++        fg_chat_templates_apply_native(templates, request, false, detail, sizeof(detail));
++    char *parsed = fg_chat_render_parse(render, reference.text.c_str(), detail, sizeof(detail));
++    if (!parsed)
++        std::fprintf(stderr, "native model parse failed: %s\n", detail);
++    assert(parsed && std::strstr(parsed, "\"name\":\"final\""));
++    const char *calls = std::strstr(parsed, "\"tool_calls\":");
++    assert(calls);
++    std::string expected_calls(calls);
++    std::free(parsed);
++    model_stream repeated;
++    assert(forge_complete(model, request, 768, collect_model, &repeated, &metrics, &error) == FORGE_OK);
++    assert(metrics.generated_tokens > 256 && metrics.generated_tokens <= 768);
++    assert(metrics.cached_tokens > 0 && metrics.forced_actions == 1);
++    parsed = fg_chat_render_parse(render, repeated.text.c_str(), detail, sizeof(detail));
++    assert(parsed);
++    calls = std::strstr(parsed, "\"tool_calls\":");
++    assert(calls && expected_calls == calls);
++    std::free(parsed);
++    assert(forge_complete(model, request, 768, nullptr, nullptr, &metrics, &error) == FORGE_OK);
++    assert(metrics.generated_tokens > 256 && metrics.generated_tokens <= 768);
++    assert(metrics.cached_tokens > 0 && metrics.forced_actions == 1);
++    fg_chat_render_destroy(render);
++    fg_chat_templates_destroy(templates);
++    forge_model_destroy(model);
++    std::puts("native model checks passed: forced opener, cancellation, budget exhaustion, "
++              "recovery, cached tool-call equivalence, no-callback generation");
++}
++
++int main(int argc, char **argv) {
++    assert(argc == 1 || (argc == 3 && (!std::strcmp(argv[2], "0") || !std::strcmp(argv[2], "-1"))));
+ #ifdef _WIN32
+     _set_error_mode(_OUT_TO_STDERR);
+     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+@@ -84,6 +178,27 @@ int main() {
+     assert(fg_chat_render_cache_anchor(render) > 0 && fg_chat_render_cache_anchor(render) < length);
+     assert(fg_chat_render_grammar(render) && *fg_chat_render_grammar(render));
+     assert(fg_chat_render_generation_prompt(render) && *fg_chat_render_generation_prompt(render));
++    assert(!fg_chat_render_force_prefix(render));
++    assert(!fg_chat_render_force_prefix(nullptr));
++    assert(!fg_chat_render_action_started(render, "reasoning before a call"));
++    assert(!fg_chat_render_action_started(render, "#include <functional>"));
++    assert(fg_chat_render_action_started(render, "inspect first\n<tool_call>"));
++    assert(fg_chat_render_action_started(render, "inspect first\n<function=final>"));
++    fg_chat_render *bounded =
++        fg_chat_templates_apply_native(templates, request, false, error, sizeof(error));
++    assert(bounded && fg_chat_render_force_prefix(bounded));
++    assert(!std::strcmp(fg_chat_render_force_prefix(bounded), "<tool_call>"));
++    assert(fg_chat_render_action_started(bounded, fg_chat_render_force_prefix(bounded)));
++    assert(!fg_chat_render_action_started(bounded, "<tool_cal"));
++    assert(!fg_chat_render_action_started(bounded, ""));
++    assert(!fg_chat_render_action_started(bounded, "<function="));
++    assert(!fg_chat_render_action_started(bounded, "<function=final"));
++    assert(!fg_chat_render_action_started(bounded, "<function=unknown>"));
++    assert(!fg_chat_render_action_started(bounded, "#include <functional>"));
++    assert(!fg_chat_render_action_started(nullptr, "<tool_call>"));
++    assert(!fg_chat_render_action_started(bounded, nullptr));
++    assert(fg_chat_render_action_started(bounded, "<function=memory>"));
++    fg_chat_render_destroy(bounded);
+ 
+     /* Final-action pressure narrows the registry, but historical calls remain
+      * valid. Exercise the real native template, not just the scripted backend. */
+@@ -180,5 +295,7 @@ int main() {
+     assert(stopped && safe_length == std::strlen("done"));
+     fg_chat_render_destroy(render);
+     fg_chat_templates_destroy(templates);
++    if (argc == 3)
++        check_model(argv[1], std::atoi(argv[2]));
+     return 0;
+ }
+diff --git a/tests/unit/test_core.c b/tests/unit/test_core.c
+index 7fc9e1c..cb23965 100644
+--- a/tests/unit/test_core.c
++++ b/tests/unit/test_core.c
+@@ -465,6 +465,21 @@ int main(void) {
+     assert(fg_json_whitespace_only(" \t\r\n", 4));
+     assert(!fg_json_whitespace_only("", 0));
+     assert(!fg_json_whitespace_only(" \n{", 3));
++    assert(!fg_native_force_due(false, false, 0, 2048));
++    assert(!fg_native_force_due(true, false, 0, 0));
++    assert(!fg_native_force_due(true, false, 0, 1));
++    assert(!fg_native_force_due(true, false, 1, 1));
++    assert(!fg_native_force_due(true, false, 1, 0));
++    const size_t native_budgets[] = {2, 32, 64, 512, 513, 2048};
++    for (size_t i = 0; i < sizeof(native_budgets) / sizeof(*native_budgets); i++) {
++        size_t budget = native_budgets[i];
++        size_t cap = FG_MIN((size_t)256, budget / 2);
++        assert(!fg_native_force_due(true, false, cap - 1, budget));
++        assert(fg_native_force_due(true, false, cap, budget));
++        assert(!fg_native_force_due(true, true, cap, budget));
++        assert(!fg_native_force_due(false, false, cap, budget));
++        assert(!fg_native_force_due(true, false, budget, budget));
++    }
+     assert(fg_action_decode_phase("") == FG_ACTION_SELECT);
+     assert(fg_action_decode_phase("{\"tool\":\"read_file\",\"args\":{") == FG_ACTION_ARGUMENTS);
+     assert(fg_action_decode_phase("{\"tool\":\"apply_patch\",\"args\":{") == FG_ACTION_PATCH);
