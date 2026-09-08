@@ -1180,6 +1180,32 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('test_worker.py', prompt)
         self.assertIn('definition-only', prompt)
 
+    def test_planned_python_failure_identifies_failing_loop_input(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text('def accepted(value): return value == 7\n', newline='\n')
+        target = self.root / 'test_worker.py'
+        target.write_text(
+            'import unittest\nfrom worker import accepted\nclass Tests(unittest.TestCase):\n'
+            '    def test_samples(self):\n'
+            '        for sample in [7, 23]:\n'
+            '            self.assertTrue(accepted(sample))\n', newline='\n')
+        before = target.read_bytes()
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value == 7', 'new_text': 'value in (7,)'}},
+            {'final': 'Run the planned checks.'},
+        ], '--allow-exec', '--allow-write', '--max-turns', '2', success=False, fallback_watch=True)
+        reports = [e['data'] for e in events if e['type'] == 'validation_result']
+        self.assertEqual(len(reports), 1)
+        self.assertFalse(reports[0]['passed'])
+        self.assertIn('sample = 23', reports[0]['summary'])
+        self.assertIn('AssertionError', reports[0]['summary'])
+        self.assertIn('tb_locals=True', (session / 'context/0001.txt').read_text())
+        self.assertEqual(target.read_bytes(), before)
+        self.assertFalse((self.root / '__pycache__').exists())
+
     def test_failed_repair_is_rechecked_immediately_after_edit(self):
         self.require_python()
         (self.root / 'calc.go').unlink()

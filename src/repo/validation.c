@@ -659,7 +659,8 @@ static bool vp_python_file_commands(vp_graph *g, yyjson_mut_val *commands, char 
                                     size_t file_count, bool use_pytest, const char *reason) {
     static const char unittest_script[] =
         "import sys,unittest;"
-        "p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);"
+        "p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False,tb_locals="
+        "True);"
         "sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)";
     const char *pytest_argv[] = {g->python_executable, "-B", "-m", "pytest", "-q", "-p",
                                  "no:cacheprovider"};
