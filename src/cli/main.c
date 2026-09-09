@@ -43,6 +43,8 @@ static void usage(void) {
          "  --context N          context capacity (default 16384)\n"
          "  --output-reserve N   per-turn generation budget (default 2048)\n"
          "  --max-turns N        hard agent turn limit (default 32)\n"
+         "  --minimal-agent      experimental basic native tool loop; no automatic validation\n"
+         "                       full history; ignores semantic, compaction and thought-history settings\n"
          "  --max-tokens N       total generated-token limit (default 32768)\n"
          "  --max-input N        total prompt-token limit (default 262144)\n"
          "  --timeout-ms N       command timeout (default 120000)\n"
@@ -112,6 +114,7 @@ static int option_arity(const char *option) {
                                         "--no-semantic",
                                         "--no-compaction",
                                         "--no-thought",
+                                        "--minimal-agent",
                                         "--thought-decode-only",
                                         "--thought-history",
                                         "--thought-required",
@@ -695,6 +698,10 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             ac.compact_context = false;
             continue;
         }
+        if (!strcmp(a, "--minimal-agent")) {
+            ac.minimal_agent = true;
+            continue;
+        }
         if (!strcmp(a, "--no-thought")) {
             ac.thought = false;
             continue;
@@ -889,6 +896,10 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         !ac.thought_routed) {
         fg_error(&error, FORGE_ERR_ARGUMENT,
                  "--thought-budget/--no-thought-budget/--thought-cue require --thought-routed");
+        return failed(&error);
+    }
+    if (ac.minimal_agent && mc.prompt_protocol != FORGE_PROMPT_NATIVE) {
+        fg_error(&error, FORGE_ERR_ARGUMENT, "--minimal-agent requires --prompt-protocol native");
         return failed(&error);
     }
     if (forge_config_validate(config, &error) != FORGE_OK ||

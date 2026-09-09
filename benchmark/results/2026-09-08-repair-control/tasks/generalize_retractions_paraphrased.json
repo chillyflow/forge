@@ -1,0 +1,31 @@
+{
+  "id": "generalize_retractions_paraphrased",
+  "suite": "generalization-v1",
+  "language": "python",
+  "category": "replay",
+  "prompt": "Repair balances: process each globally unique message once. A void notice neutralizes its referenced credit, whether the notice comes before or after that credit. A credit contributes at most once. Unknown references create no accounts; known accounts remain present at zero. Inspect source and run the tests. Do not modify tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-v"
+  ],
+  "files": {
+    "service.py": "def balances(events):\n    seen, cancelled = set(), set()\n    postings, totals = {}, {}\n    for event in events:\n        if event['id'] in seen:\n            continue\n        seen.add(event['id'])\n        if event['kind'] == 'post':\n            account, amount = event['account'], event['amount']\n            postings[event['id']] = (account, amount)\n            totals.setdefault(account, 0)\n            if True:\n                totals[account] += amount\n        else:\n            target = event['target']\n            if target in cancelled:\n                continue\n            cancelled.add(target)\n            if target in postings:\n                account, amount = postings[target]\n                totals[account] -= amount\n    return totals\n",
+    "test_service.py": "import unittest\nfrom service import balances\ndef post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}\ndef retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}\nclass BehaviorChecks(unittest.TestCase):\n    def test_order_and_duplicates(self):\n        p = post('p', 7)\n        for events in [[p, retract('r', 'p')], [retract('r', 'p'), p],\n                       [p, p, retract('r', 'p'), retract('s', 'p')]]:\n            self.assertEqual(balances(events), {'cash': 0})\n    def test_independent_postings(self):\n        self.assertEqual(balances([post('a', 7), post('b', -2), retract('r', 'a')]), {'cash': -2})\n        self.assertEqual(balances([retract('r', 'missing')]), {})\n        self.assertEqual(balances([]), {})\n"
+  },
+  "oracle_files": {
+    "service.py": "def balances(events):\n    seen, cancelled = set(), set()\n    postings, totals = {}, {}\n    for event in events:\n        if event['id'] in seen:\n            continue\n        seen.add(event['id'])\n        if event['kind'] == 'post':\n            account, amount = event['account'], event['amount']\n            postings[event['id']] = (account, amount)\n            totals.setdefault(account, 0)\n            if event['id'] not in cancelled:\n                totals[account] += amount\n        else:\n            target = event['target']\n            if target in cancelled:\n                continue\n            cancelled.add(target)\n            if target in postings:\n                account, amount = postings[target]\n                totals[account] -= amount\n    return totals\n"
+  },
+  "generalization": {
+    "family": "retractions",
+    "variant": "paraphrased",
+    "relation": "equivalent",
+    "source_task": "holdout_py_retractions",
+    "source_sha256": "bb8f2cfbf349917e31bc2cb9b0465e411709550a9b5e4a6aff2b705171735db2"
+  },
+  "protected_files": [
+    "test_service.py"
+  ]
+}

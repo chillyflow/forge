@@ -266,6 +266,7 @@ const fg_tool_def *fg_tools(size_t *);
  * Routed mode leaves the action constrained and uses a lazy grammar trigger. */
 char *fg_tool_schema(bool thought, bool required, bool routed);
 char *fg_tool_native_schema(void);
+char *fg_tool_minimal_native_schema(void);
 char *fg_tool_native_final_schema(void);
 char *fg_tool_grammar(bool thought, bool required, bool routed);
 forge_status fg_native_action_normalize(const char *, bool include_thought, char **, forge_error *);

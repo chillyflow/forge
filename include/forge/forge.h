@@ -151,6 +151,11 @@ typedef struct {
     bool thought_native;
     /* Explicit ablation; ordinary runs verify changed Go/Python workspaces. */
     bool skip_validation;
+    /* Experimental native diagnostic control: append-only basic tool loop,
+     * without semantic context, recovery, compaction or automatic validation.
+     * Retains all model prose as assistant content regardless of thought flags;
+     * does not nominate optional physical checkpoint cache anchors. */
+    bool minimal_agent;
     forge_policy_fn policy;
     forge_cancel_fn cancelled;
     void *userdata;
@@ -166,7 +171,8 @@ forge_status forge_agent_run(forge_agent *, const char *request, forge_event_fn,
                              forge_error *);
 const forge_metrics *forge_agent_metrics(const forge_agent *);
 const char *forge_agent_session(const forge_agent *);
-/* Caller owns the host/model-separated state JSON; available after a run. */
+/* Caller owns host/model-separated state JSON after an ordinary agent run.
+ * The minimal diagnostic control does not create working state. */
 char *forge_agent_working_state(const forge_agent *, forge_error *);
 void forge_agent_destroy(forge_agent *);
 forge_repo *forge_repo_open(const char *workspace, forge_error *);

@@ -1,5 +1,9 @@
 # Benchmark methodology
 
+The [repair control protocol](REPAIR_CONTROL.md) defines the focused comparison
+of the last development-gate checkpoint, current Forge, and a minimal agent.
+Keep this diagnostic separate from the qualification campaign below.
+
 `tasks/*.json` contains 29 deterministic tasks: ten tiny Go smoke repairs, six
 reasoning-gated Go repairs, and thirteen campaign tasks split across Go and
 Python. The campaign set covers multi-file changes, APIs, refactors, compiler or

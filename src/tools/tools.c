@@ -275,6 +275,29 @@ fail:
     fg_buf_clear(&out);
     return NULL;
 }
+char *fg_tool_minimal_native_schema(void) {
+    fg_buf out = {0};
+    bool ok = fg_buf_puts(&out, "[") &&
+              native_schema_function(&out, "read_file", "Read an inclusive 1-based line range.",
+                                     "path:string start:line end:line", false) &&
+              native_schema_function(&out, "apply_patch",
+                                     "Replace one exact unique text span. Empty old_text creates "
+                                     "a new file; the parent directory must exist. JSON strings "
+                                     "encode newlines as \\n. Identical replacements are rejected.",
+                                     "path:string old_text:string new_text:string", true) &&
+              native_schema_function(&out, "run_command", "Run an argv array without a shell.",
+                                     "argv:strings", true) &&
+              native_schema_function(&out, "list_directory",
+                                     "List workspace files recursively, excluding hidden, build, "
+                                     "vendor and dependency directories.", "", true) &&
+              native_schema_function(&out, "final", "Finish and report the result.",
+                                     "answer:string", true) && fg_buf_puts(&out, "]");
+    if (!ok) {
+        fg_buf_clear(&out);
+        return NULL;
+    }
+    return fg_buf_take(&out);
+}
 
 static bool native_known_tool(const char *name) {
     size_t count = 0;
@@ -666,7 +689,7 @@ static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
     size_t line = 1, offset = 0;
     fg_buf b = {0};
     fg_buf_printf(&b, "file_sha256:%s\n", sha256);
-    if (!file.len && c->config.model &&
+    if (!file.len && !c->config.minimal_agent && c->config.model &&
         c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE)
         fg_buf_puts(&b, "file_state:empty\n"
                         "next_action_guidance:Do not reread this unchanged empty file; inspect a "
@@ -981,7 +1004,7 @@ static char *commit_edit(fg_tool_context *c, const char *path, char full[FG_PATH
     }
 
     forge_error syntax = {0};
-    if (!validate_go_candidate(path, out->data, out->len, &syntax)) {
+    if (!c->config.minimal_agent && !validate_go_candidate(path, out->data, out->len, &syntax)) {
         remove(temp);
         forge_error recording = {0};
         if (!fg_edit_finish(c, &edit, false, syntax.code, &recording)) {
@@ -1042,7 +1065,7 @@ static char *commit_edit(fg_tool_context *c, const char *path, char full[FG_PATH
         fg_buf_printf(&result, "file_sha256:%s\nfile_line_count:%zu\n", committed_hash,
                       committed_lines);
     const char *ext = strrchr(path, '.');
-    if (ext && !strcmp(ext, ".go")) {
+    if (!c->config.minimal_agent && ext && !strcmp(ext, ".go")) {
         fg_buf_puts(&result, "Staged Go syntax validation passed before commit.\n");
         char *target = fg_repo_targets(c->repo, path, e);
         if (target) {
@@ -1111,6 +1134,11 @@ static char *patch(fg_tool_context *c, yyjson_val *args, bool *changed, forge_er
     }
     char *match = *old ? strstr(text, old) : text;
     if (!match || (*old && strstr(match + 1, old))) {
+        if (c->config.minimal_agent) {
+            free(text);
+            fg_error(e, FORGE_ERR_CONFLICT, "old_text must match exactly once in %s", path);
+            return NULL;
+        }
         /* Telling the caller to re-read the file is not a usable recovery: once
          * the repository and the last diagnostic are unchanged, a repeated read
          * is rejected as a repeated action, so the agent is instructed to do the
@@ -1449,7 +1477,8 @@ static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
     }
     char *result = fg_process_render(&r);
     bool native_protocol =
-        result && c->config.model && c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
+        result && !c->config.minimal_agent && c->config.model &&
+        c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
     bool add_native_failure_guidance = native_protocol && r.exit_code != 0;
     bool add_native_success_guidance =
         native_protocol && r.exit_code == 0 && !r.timed_out && !r.cancelled && !r.truncated;
@@ -1486,6 +1515,45 @@ static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
     }
     return result;
 }
+typedef struct {
+    fg_tool_context *tools;
+    fg_buf output;
+    bool truncated, cancelled;
+} minimal_listing;
+static bool minimal_list_file(const char *path, void *userdata) {
+    minimal_listing *listing = userdata;
+    fg_tool_context *c = listing->tools;
+    if ((c->config.cancelled && c->config.cancelled(c->config.userdata)) ||
+        (c->deadline && fg_now_ms() >= c->deadline)) {
+        listing->cancelled = true;
+        return false;
+    }
+    if (strlen(path) + 1 > c->config.limits.max_tool_bytes - listing->output.len) {
+        listing->truncated = true;
+        return false;
+    }
+    return fg_buf_printf(&listing->output, "%s\n", path);
+}
+static char *minimal_list_directory(fg_tool_context *c, forge_error *e) {
+    minimal_listing listing = {0};
+    listing.tools = c;
+    bool ok = fg_walk(c->root, "", minimal_list_file, &listing, e);
+    if (listing.cancelled) {
+        fg_buf_clear(&listing.output);
+        fg_error(e, FORGE_ERR_CANCELLED, "File listing cancelled or deadline reached");
+        return NULL;
+    }
+    if (!ok && !listing.truncated) {
+        fg_buf_clear(&listing.output);
+        if (!e || !e->code)
+            fg_error(e, FORGE_ERR_IO, "Cannot list workspace files");
+        return NULL;
+    }
+    if (listing.truncated)
+        fg_buf_puts(&listing.output, "[file listing truncated]\n");
+    return fg_buf_take(&listing.output);
+}
+
 char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bool *changed,
                       forge_error *e) {
     *changed = false;
@@ -1562,7 +1630,8 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
         return forge_repo_retrieve(c->repo, fg_json_str(args, "query"), &options, NULL, e);
     }
     if (!strcmp(name, "list_directory"))
-        return forge_repo_summary(c->repo, e);
+        return c->config.minimal_agent ? minimal_list_directory(c, e)
+                                       : forge_repo_summary(c->repo, e);
     if (!strcmp(name, "expand_output")) {
         size_t id, offset;
         fg_json_uint(args, "id", &id, 0);

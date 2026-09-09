@@ -24,6 +24,7 @@ from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, lo
 # baseline, which deliberately injects no scaffold.
 VARIANTS = {
     'optimized': {'flags': ['--thought-history']},
+    'minimal': {'flags': ['--minimal-agent', '--thought-history']},
     'no-kv': {'flags': ['--no-kv-reuse']},
     'no-semantic': {'flags': ['--no-semantic']},
     'no-compaction': {'flags': ['--no-compaction']},
@@ -89,6 +90,8 @@ def main():
     parser.add_argument('--timeout', type=int, default=600)
     parser.add_argument('--verification-timeout', type=int, default=120)
     parser.add_argument('--max-turns', type=int, default=16)
+    parser.add_argument('--max-tokens', type=int, default=32768)
+    parser.add_argument('--max-input', type=int, default=262144)
     parser.add_argument('--repetitions', type=int, default=1)
     parser.add_argument('--order-seed', type=int, default=20260831)
     parser.add_argument('--no-randomize', action='store_true')
@@ -111,6 +114,8 @@ def main():
         parser.error('--seed must be in [0, 4294967295]')
     if args.repetitions < 1:
         parser.error('--repetitions must be positive')
+    if args.max_tokens < 1 or args.max_input < 1:
+        parser.error('--max-tokens and --max-input must be positive')
     if args.timeout < 1 or args.verification_timeout < 1:
         parser.error('timeouts must be positive')
     try:
@@ -128,6 +133,7 @@ def main():
                 'forge_runtime_bundle': runtime_bundle(forge),
                 'fixture_preparation': FIXTURE_PREPARATION,
                 'context_tokens': int(args.context), 'max_turns': int(args.max_turns),
+                'max_tokens': args.max_tokens, 'max_input': args.max_input,
                 'output_reserve': args.output_reserve,
                 'temperature': args.temperature, 'seed': args.seed,
                 'task_suite': args.suite, 'repetitions': args.repetitions,
@@ -163,6 +169,7 @@ def main():
                        '--temperature', str(args.temperature), '--seed', str(args.seed),
                        '--allow-write', '--allow-exec', '--json', '--max-turns',
                        str(args.max_turns), '--wall-ms', str(args.timeout * 1000),
+                       '--max-tokens', str(args.max_tokens), '--max-input', str(args.max_input),
                        *policy['flags'],
                        *(['--chat-template', args.chat_template] if args.chat_template else [])]
             with (output / 'stdout.jsonl').open('w', encoding='utf-8') as out, \

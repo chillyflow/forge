@@ -398,6 +398,9 @@ static bool native_write_pair(fg_buf *out, bool *first, size_t action_index, con
     yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
     const char *name = fg_json_str(root, "tool");
     const char *thought = fg_json_str(root, "thought");
+    /* The minimal diagnostic control retains all model prose as assistant
+     * content, including on templates that ignore a separate reasoning field. */
+    const char *assistant_content = fg_json_str(root, "assistant_content");
     yyjson_val *arguments = root ? yyjson_obj_get(root, "args") : NULL;
     char *args = NULL;
     if (name && arguments && yyjson_is_obj(arguments))
@@ -432,6 +435,9 @@ static bool native_write_pair(fg_buf *out, bool *first, size_t action_index, con
     bool ok = (*first || fg_buf_puts(out, ",")) && fg_buf_puts(out, "{\"role\":\"assistant\",");
     if (ok && thought)
         ok = fg_buf_puts(out, "\"reasoning_content\":") && native_put_quoted(out, thought) &&
+             fg_buf_puts(out, ",");
+    if (ok && assistant_content)
+        ok = fg_buf_puts(out, "\"content\":") && native_put_quoted(out, assistant_content) &&
              fg_buf_puts(out, ",");
     ok = ok && fg_buf_puts(out, "\"tool_calls\":[{\"id\":") && native_put_quoted(out, call_id) &&
          fg_buf_puts(out, ",\"type\":\"function\",\"function\":{\"name\":") &&

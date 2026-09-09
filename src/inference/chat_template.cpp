@@ -125,11 +125,16 @@ static void validate_native_tools(const json &tools) {
         has_final |= name == "final";
         has_memory |= name == "memory";
     }
-    /* The agent restricts the last action to final. Keep the ordinary registry
-     * contract, while accepting that intentionally narrower terminal schema. */
-    if (!has_final || (!has_memory && names.size() != 1))
-        throw std::invalid_argument(
-            "Native function schemas must include final and memory, or only final");
+    /* Keep the ordinary registry contract and its final-only terminal subset.
+     * The diagnostic control has exactly these five tools and no memory tool. */
+    bool minimal =
+        names.size() == 5 && std::all_of(names.begin(), names.end(), [](const std::string &name) {
+            return name == "read_file" || name == "apply_patch" || name == "run_command" ||
+                   name == "list_directory" || name == "final";
+        });
+    if (!has_final || (!has_memory && names.size() != 1 && !minimal))
+        throw std::invalid_argument("Native function schemas must include final and memory, only "
+                                    "final, or the minimal registry");
 }
 
 extern "C" fg_chat_templates *fg_chat_templates_create(const struct llama_model *model,

@@ -1,11 +1,14 @@
 #include "inference/chat_template.h"
 #include "forge/forge.h"
+#include "forge/context.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <string>
+
+extern "C" char *fg_tool_minimal_native_schema(void);
 
 static void require(bool condition, const char *expression, int line) {
     if (!condition) {
@@ -24,6 +27,89 @@ static std::string read_template(const std::string &path) {
 
 static std::string read_native_template() {
     return read_template(FORGE_NATIVE_TEMPLATE_FIXTURE);
+}
+
+static void check_minimal_native_schema(const fg_chat_templates *templates) {
+    char *schema = fg_tool_minimal_native_schema();
+    assert(schema);
+    std::string schema_text(schema);
+    std::string request = "{\"protocol\":\"forge-native-v1\",\"tools\":" + schema_text +
+                          ",\"anchor_message_count\":0,\"messages\":["
+                          "{\"role\":\"system\",\"content\":\"Use the supplied tools.\"},"
+                          "{\"role\":\"user\",\"content\":\"Inspect service.py.\"}]}";
+    std::free(schema);
+    char error[256] = {};
+    fg_chat_render *render =
+        fg_chat_templates_apply_native(templates, request.c_str(), false, error, sizeof(error));
+    if (!render)
+        std::fprintf(stderr, "minimal native template failed: %s\n", error);
+    assert(render && fg_chat_render_force_prefix(render));
+    const char *read_call = "<tool_call>\n<function=read_file>\n<parameter=path>\nservice.py\n"
+                            "</parameter>\n<parameter=start>\n1\n</parameter>\n"
+                            "<parameter=end>\n20\n</parameter>\n</function>\n</tool_call>";
+    char *parsed = fg_chat_render_parse(render, read_call, error, sizeof(error));
+    assert(parsed && std::strstr(parsed, "\"name\":\"read_file\"") &&
+           std::strstr(parsed, "service.py"));
+    std::free(parsed);
+    std::string preamble(3000, 'x');
+    std::string reasoned = preamble + "::reasoning_tail\n" + read_call;
+    parsed = fg_chat_render_parse(render, reasoned.c_str(), error, sizeof(error));
+    std::string retained = "\"reasoning_content\":\"" + preamble + "::reasoning_tail\\n\"";
+    assert(parsed && std::strstr(parsed, retained.c_str()));
+    std::free(parsed);
+    const char *memory_call = "<tool_call>\n<function=memory>\n</function>\n</tool_call>";
+    assert(!fg_chat_render_parse(render, memory_call, error, sizeof(error)));
+    fg_chat_render_destroy(render);
+
+    /* Check the physical next-turn prompt too: Qwen renders assistant content,
+     * so merely retaining reasoning_content in the logical JSON is insufficient. */
+    forge_context *history = forge_context_create(
+        16384, 2048, [](const char *text, void *) { return std::strlen(text); }, nullptr);
+    assert(history);
+    assert(forge_context_set_prompt_protocol(history, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    assert(
+        forge_context_add(history, FORGE_SEG_SYSTEM, "Use the supplied tools.", 100, true, 0, 0));
+    assert(forge_context_add(history, FORGE_SEG_TOOLS, schema_text.c_str(), 100, true, 0, 0));
+    assert(forge_context_add(history, FORGE_SEG_TASK, "Inspect service.py.", 100, true, 0, 0));
+    std::string action = "{\"assistant_content\":\"" + preamble +
+                         "::reasoning_tail\\n\",\"tool\":\"read_file\",\"args\":{"
+                         "\"path\":\"service.py\",\"start\":1,\"end\":20}}";
+    uint64_t action_id =
+        forge_context_add(history, FORGE_SEG_ACTION, action.c_str(), 100, true, 0, 0);
+    assert(action_id);
+    assert(forge_context_add(history, FORGE_SEG_RESULT, "1: pass", 100, true, action_id, 0));
+    forge_error context_error = {};
+    size_t tokens = 0, evicted = 0;
+    char *next_request = forge_context_plan(history, &tokens, &evicted, &context_error);
+    assert(next_request && !evicted);
+    render = fg_chat_templates_apply_native(templates, next_request, false, error, sizeof(error));
+    std::free(next_request);
+    assert(render);
+    size_t prompt_length = 0;
+    const char *physical = fg_chat_render_prompt(render, &prompt_length);
+    const char *assistant = physical ? std::strstr(physical, "<|im_start|>assistant\n") : nullptr;
+    std::string full_preamble = preamble + "::reasoning_tail\n";
+    assert(assistant && std::strstr(assistant, full_preamble.c_str()));
+    assert(std::strstr(assistant, "<function=read_file>") &&
+           std::strstr(assistant, "<tool_response>\n1: pass"));
+    fg_chat_render_destroy(render);
+    forge_context_destroy(history);
+
+    /* An arbitrary five-tool registry must not bypass the memory contract. */
+    std::string unsupported = request;
+    size_t tool = unsupported.find("\"name\":\"run_command\"");
+    assert(tool != std::string::npos);
+    unsupported.replace(tool, std::strlen("\"name\":\"run_command\""), "\"name\":\"search_text\"");
+    assert(!fg_chat_templates_apply_native(templates, unsupported.c_str(), false, error,
+                                           sizeof(error)));
+    assert(std::strstr(error, "Native function schemas must include"));
+    unsupported = request;
+    tool = unsupported.find("\"name\":\"final\"");
+    assert(tool != std::string::npos);
+    unsupported.replace(tool, std::strlen("\"name\":\"final\""), "\"name\":\"search_text\"");
+    assert(!fg_chat_templates_apply_native(templates, unsupported.c_str(), false, error,
+                                           sizeof(error)));
+    assert(std::strstr(error, "Native function schemas must include"));
 }
 
 struct model_stream {
@@ -165,6 +251,7 @@ int main(int argc, char **argv) {
     std::string native_source = read_native_template();
     templates = fg_chat_templates_create(nullptr, native_source.c_str(), error, sizeof(error));
     assert(templates);
+    check_minimal_native_schema(templates);
     fg_chat_render *render =
         fg_chat_templates_apply_native(templates, request, true, error, sizeof(error));
     assert(render);
