@@ -1,0 +1,471 @@
+[
+  {
+    "run_id": "generalize_window_original-optimized-r001",
+    "task": "generalize_window_original",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 9,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ],
+      [
+        "go",
+        "test",
+        "-v",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 28.405999999959022
+  },
+  {
+    "run_id": "generalize_retractions_distractor-optimized-r001",
+    "task": "generalize_retractions_distractor",
+    "passed": false,
+    "status": "limit",
+    "returncode": 1,
+    "turns": 16,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./test_service.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 12,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [argument]: Hunk line range is outside the current file",
+        "duration_ms": 0.0,
+        "status": "argument"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 48.65599999995902
+  },
+  {
+    "run_id": "generalize_retractions_original-optimized-r001",
+    "task": "generalize_retractions_original",
+    "passed": false,
+    "status": "limit",
+    "returncode": 1,
+    "turns": 16,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./test_service.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-c",
+        "from service import balances; print(balances([{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]))"
+      ],
+      [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-v"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 10,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [argument]: Hunk line range is outside the current file",
+        "duration_ms": 16.0,
+        "status": "argument"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 50.15600000007544
+  },
+  {
+    "run_id": "generalize_window_distractor-optimized-r001",
+    "task": "generalize_window_distractor",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 10,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 28.125
+  },
+  {
+    "run_id": "generalize_retractions_contrast-optimized-r001",
+    "task": "generalize_retractions_contrast",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 13,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./test_service.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-c",
+        "import service; print(service.balances([{'id': 'early', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]))"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 9,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [argument]: Hunk line range is outside the current file",
+        "duration_ms": 0.0,
+        "status": "argument"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 42.03099999995902
+  },
+  {
+    "run_id": "generalize_window_contrast-optimized-r001",
+    "task": "generalize_window_contrast",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 9,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 27.734999999869615
+  },
+  {
+    "run_id": "generalize_window_paraphrased-optimized-r001",
+    "task": "generalize_window_paraphrased",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 10,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ],
+      [
+        "go",
+        "test",
+        "-v"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 32.53099999995902
+  },
+  {
+    "run_id": "generalize_retractions_renamed-optimized-r001",
+    "task": "generalize_retractions_renamed",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 15,
+    "loop_warnings": 1,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./test_ledger.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_ledger.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_ledger.py"
+      ],
+      [
+        "python",
+        "-m",
+        "unittest",
+        "test_ledger.JournalCases.test_order_and_duplicates",
+        "-v"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 9,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [conflict]: Hunk replacement repeats 6 following lines already outside the selected range; extend end to include them or submit only the intended changed lines",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      },
+      {
+        "id": 10,
+        "name": "apply_hunk",
+        "output": "LOOP_DETECTED: RECOVERY_MODE rejected the repeated action without execution. The next action must be materially different: use a different file/symbol or validation command, or submit a changed edit anchored in current content. Repeating the same read with different line bounds or replaying an unchanged patch is not progress.\nrecovery_state: entered_turn=10 failed_tool=apply_hunk remaining_turns=6 remaining_generated_tokens=30973 remaining_input_tokens=208110 remaining_wall_ms=578125\nrelevant_files:\n- \"ledger.py\"\ncurrent_diff (bounded committed edit history, newest last):\nunified_diff (2135 bytes):\n<<<\ndiff --git \"a/ledger.py\" \"b/ledger.py\"\n--- \"a/ledger.py\"\n+++ \"b/ledger.py\"\n@@ -1,22 +1,31 @@\n-def positions_for(messages):\n-    visited, voided = set(), set()\n-    entries, positions = {}, {}\n-    for message in messages:\n-        if message['key'] in visited:\n-            continue\n-        visited.add(message['key'])\n-        if message['kind'] == 'post':\n-            bucket, delta = message['bucket'], message['delta']\n-            entries[message['key']] = (bucket, delta)\n-            positions.setdefault(bucket, 0)\n-            if True:\n-                positions[bucket] += delta\n-        else:\n-            reference = message['reference']\n-            if reference in voided:\n-                continue\n-            voided.add(reference)\n-            if reference in entries:\n-                bucket, delta = entries[reference]\n-                positions[bucket] -= delta\n-    return positions\n+def positions_for(messages):\n+    visited, voided = set(), set()\n+    entries, positions = {}, {}\n+    retractions = {}\n+    for message in messages:\n+        if message['key'] in visited:\n+            continue\n+        visited.add(message['key'])\n+        if message['kind'] == 'post':\n+            bucket, delta = message['bucket'], message['delta']\n+            entries[message['key']] = (bucket, delta)\n+            positions.setdefault(bucket, 0)\n+            positions[bucket] += delta\n+        else:\n+            reference = message['reference']\n+            if reference in voided:\n+                continue\n+            voided.add(reference)\n+            if reference in entries:\n+                bucket, delta = entries[reference]\n+                positions[bucket] -= delta\n+            else:\n+                # Store retraction for later processing\n+                retractions.setdefault(reference, []).append(message)\n+    # Process any pending retractions\n+    for reference, retractions_list in retractions.items():\n+        if reference in entries:\n+            bucket, delta = entries[reference]\n+            for retraction in retractions_list:\n+                positions[bucket] -= delta\n+    return positions\n\n>>>\nlast_diagnostic (350 bytes):\n<<<\nlast_tool_diagnostic (170 bytes):\n<<<\nTOOL_ERROR [conflict]: Hunk replacement repeats 6 following lines already outside the selected range; extend end to include them or submit only the intended changed lines\n>>>\nstall_validation_diagnostic (88 bytes):\n<<<\nAutomatic staged validation passed: 2 commands across 2 stages, repository generation=5.\n>>>\n\n>>>\nfailed_hypothesis (1391 bytes, bounded):\n<<<\n{\"tool\":\"apply_hunk\",\"args\":{\"path\":\"ledger.py\",\"start\":1,\"end\":25,\"file_sha256\":\"ad5f40c5254e33ddd88e03b823570926abc6c34f33196bfe6eeb38c952676d35\",\"new_text\":\"def positions_for(messages):\\n    visited, voided = set(), set()\\n    entries, positions = {}, {}\\n    retractions = {}\\n    for message in messages:\\n        if message['key'] in visited:\\n            continue\\n        visited.add(message['key'])\\n        if message['kind'] == 'post':\\n            bucket, delta = message['bucket'], message['delta']\\n            entries[message['key']] = (bucket, delta)\\n            positions.setdefault(bucket, 0)\\n            positions[bucket] += delta\\n        else:\\n            reference = message['reference']\\n            if reference in voided:\\n                continue\\n            voided.add(reference)\\n            if reference in entries:\\n                bucket, delta = entries[reference]\\n                positions[bucket] -= delta\\n            else:\\n                # Store retraction for later processing\\n  \n>>>\nRECOVERY_REQUIREMENT: do not retry the failed action. Make one materially different next action using the evidence above.\n",
+        "duration_ms": 172.0,
+        "status": "conflict"
+      },
+      {
+        "id": 12,
+        "name": "apply_patch",
+        "output": "TOOL_ERROR [conflict]: No edit performed: old_text and new_text are identical. Supply different replacement text; encode line breaks as \\n when changing multiple statements.",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 47.23399999993853
+  },
+  {
+    "run_id": "generalize_window_renamed-optimized-r001",
+    "task": "generalize_window_renamed",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 8,
+    "loop_warnings": 0,
+    "first_command": [
+      "go",
+      "test",
+      "-json",
+      "-count=1",
+      "-vet=off",
+      "."
+    ],
+    "commands": [
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ],
+      [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-vet=off",
+        "."
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 27.671999999904074
+  },
+  {
+    "run_id": "generalize_retractions_paraphrased-optimized-r001",
+    "task": "generalize_retractions_paraphrased",
+    "passed": false,
+    "status": "limit",
+    "returncode": 1,
+    "turns": 16,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./test_service.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 11,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [conflict]: No hunk edit performed: new_text is identical to the selected line span",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 50.59399999992456
+  }
+]

@@ -1,0 +1,181 @@
+[
+  {
+    "run_id": "generalize_retractions_original-optimized-r001",
+    "task": "generalize_retractions_original",
+    "passed": true,
+    "status": "ok",
+    "returncode": 0,
+    "turns": 14,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./test_service.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 10,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [conflict]: Native middle-of-file hunk changes the selected line count from 25 to 41. Use apply_patch with the smallest exact old_text/new_text for an insertion or deletion, or submit a hunk with the same number of selected and replacement lines",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      },
+      {
+        "id": 11,
+        "name": "apply_patch",
+        "output": "TOOL_ERROR [conflict]: No edit performed: old_text and new_text are identical. Supply different replacement text; encode line breaks as \\n when changing multiple statements.",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 51.187999999849126
+  },
+  {
+    "run_id": "generalize_retractions_renamed-optimized-r001",
+    "task": "generalize_retractions_renamed",
+    "passed": false,
+    "status": "limit",
+    "returncode": 1,
+    "turns": 16,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./test_ledger.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_ledger.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_ledger.py"
+      ],
+      [
+        "python",
+        "-c",
+        "from ledger import positions_for; print(positions_for([{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}]))"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_ledger.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 14,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [conflict]: Native middle-of-file hunk changes the selected line count from 23 to 30. Use apply_patch with the smallest exact old_text/new_text for an insertion or deletion, or submit a hunk with the same number of selected and replacement lines",
+        "duration_ms": 16.0,
+        "status": "conflict"
+      },
+      {
+        "id": 15,
+        "name": "apply_patch",
+        "output": "TOOL_ERROR [conflict]: old_text must match exactly once in ledger.py. It does not match the current content; the file may have changed since you last read it. Current content follows. Copy the text you intend to replace from it verbatim, including only bytes that are present.\ndef positions_for(messages):\n    visited, voided = set(), set()\n    entries, positions = {}, {}\n    for message in messages:\n        if message['key'] in visited:\n            continue\n        visited.add(message['key'])\n        if message['kind'] == 'post':\n            bucket, delta = message['bucket'], message['delta']\n            # If this posting was already voided by a retraction, skip it\n            if message['key'] in voided:\n                continue\n            entries[message['key']] = (bucket, delta)\n            positions.setdefault(bucket, 0)\n            positions[bucket] += delta\n        else:\n            reference = message['reference']\n            if reference in voided:\n                continue\n            voided.add(reference)\n            if reference in entries:\n                bucket, delta = entries[reference]\n                positions[bucket] -= delta\n            # If the referenced posting hasn't arrived yet, we still mark it as voided\n            # so that when it arrives, it won't be processed\n    return positions\n",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 52.75
+  },
+  {
+    "run_id": "generalize_retractions_distractor-optimized-r001",
+    "task": "generalize_retractions_distractor",
+    "passed": false,
+    "status": "limit",
+    "returncode": 1,
+    "turns": 16,
+    "loop_warnings": 0,
+    "first_command": [
+      "python",
+      "-B",
+      "-c",
+      "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+      "./test_service.py"
+    ],
+    "commands": [
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ],
+      [
+        "python",
+        "-B",
+        "-c",
+        "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+        "./test_service.py"
+      ]
+    ],
+    "failed_state_returns": 0,
+    "rejected_edits": [
+      {
+        "id": 10,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [conflict]: stale file_sha256 for service.py; current file_sha256 is 6de2f44802c483154a6c6d5e62a5e55071cea2e6ba9de2d638fd24cdd5103fe8. Current selected content follows; use this hash for a revised hunk.\n[requested line range is no longer present]\n",
+        "duration_ms": 0.0,
+        "status": "conflict"
+      },
+      {
+        "id": 12,
+        "name": "apply_hunk",
+        "output": "TOOL_ERROR [argument]: Hunk line range is outside the current file",
+        "duration_ms": 0.0,
+        "status": "argument"
+      }
+    ],
+    "protected_files_unchanged": true,
+    "end_to_end_seconds": 51.82900000002701
+  }
+]

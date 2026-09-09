@@ -1,0 +1,30 @@
+diff --git a/service.go b/service.go
+index 0826199..eb7dc19 100644
+--- a/service.go
++++ b/service.go
+@@ -16,7 +16,7 @@ func (w *Window) Add(now, value int) (int, bool) {
+ 	w.started = true
+ 	w.samples = append(w.samples, sample{now, value})
+ 	first := 0
+-	for first < len(w.samples) && w.samples[first].at < now-w.Width {
++	for first < len(w.samples) && w.samples[first].at <= now-w.Width {
+ 		first++
+ 	}
+ 	w.samples = w.samples[first:]
+diff --git a/service_test.go b/service_test.go
+index 56baf5d..57fa381 100644
+--- a/service_test.go
++++ b/service_test.go
+@@ -4,10 +4,10 @@ import "testing"
+ 
+ func TestWindow(t *testing.T) {
+ 	w := Window{Width: 5}
+-	for _, tc := range []struct{ at, value, want int }{{0, 3, 3}, {4, 2, 5}, {5, 7, 9}, {5, -2, 7}, {10, 1, 1}} {
++	for i, tc := range []struct{ at, value, want int }{{0, 3, 3}, {4, 2, 5}, {5, 7, 9}, {5, -2, 7}, {10, 1, 1}} {
+ 		got, ok := w.Add(tc.at, tc.value)
+ 		if !ok || got != tc.want {
+-			t.Fatalf("at %d sum %d", tc.at, got)
++			t.Fatalf("test case %d: at %d sum %d, want %d", i, tc.at, got, tc.want)
+ 		}
+ 	}
+ 	if _, ok := w.Add(9, 100); ok {

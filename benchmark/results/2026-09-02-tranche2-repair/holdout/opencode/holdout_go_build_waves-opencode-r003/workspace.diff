@@ -1,0 +1,33 @@
+diff --git a/service.go b/service.go
+index 65970f3..f0054b6 100644
+--- a/service.go
++++ b/service.go
+@@ -8,6 +8,16 @@ import (
+ func BuildWaves(deps map[string][]string) ([][]string, error) {
+ 	done := map[string]bool{}
+ 	waves := [][]string{}
++	
++	// Check for cycles and missing prerequisites first
++	for _, prerequisites := range deps {
++		for _, p := range prerequisites {
++			if _, exists := deps[p]; !exists {
++				return nil, fmt.Errorf("missing %s", p)
++			}
++		}
++	}
++	
+ 	for len(done) < len(deps) {
+ 		ready := []string{}
+ 		for job, prerequisites := range deps {
+@@ -16,10 +26,7 @@ func BuildWaves(deps map[string][]string) ([][]string, error) {
+ 			}
+ 			ok := true
+ 			for _, p := range prerequisites {
+-				if _, exists := deps[p]; !exists {
+-					return nil, fmt.Errorf("missing %s", p)
+-				}
+-				if !done[p] && len(deps[p]) > 0 {
++				if !done[p] {
+ 					ok = false
+ 				}
+ 			}

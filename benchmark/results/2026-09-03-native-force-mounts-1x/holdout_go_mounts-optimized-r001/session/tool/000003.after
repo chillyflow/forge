@@ -1,0 +1,24 @@
+package holdout
+
+import (
+	"path"
+	"strings"
+)
+
+func ResolveMount(request string, mounts []string) (string, string, bool) {
+	request = path.Clean("/" + request)
+	best := ""
+	for _, raw := range mounts {
+		mount := path.Clean("/" + raw)
+		// Check if mount is a prefix of request and is either root or at a component boundary
+		if mount == "/" || strings.HasPrefix(request, mount+"/") || request == mount {
+			if len(mount) > len(best) {
+				best = mount
+			}
+		}
+	}
+	if best == "" {
+		return "", "", false
+	}
+	return best, strings.TrimPrefix(strings.TrimPrefix(request, best), "/"), true
+}

@@ -1,0 +1,40 @@
+diff --git a/repair.go b/repair.go
+index e4ccfb5..c0c8ad5 100644
+--- a/repair.go
++++ b/repair.go
+@@ -6,11 +6,9 @@ type Transfer struct {
+ }
+ 
+ func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+-	next := make(map[string]int, len(balances))
+-	for key, value := range balances {
+-		next[key] = value
+-	}
+ 	maxInt := int(^uint(0) >> 1)
++
++	// First, validate all transfers to ensure atomicity
+ 	for _, tr := range transfers {
+ 		from, fromOK := balances[tr.From]
+ 		to, toOK := balances[tr.To]
+@@ -23,11 +21,17 @@ func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+ 		if to > maxInt-tr.Amount {
+ 			return false
+ 		}
+-		next[tr.From] = from - tr.Amount
+-		next[tr.To] = to + tr.Amount
+ 	}
+-	for key, value := range next {
+-		balances[key] = value
++
++	// If all validations pass, apply transfers
++	for _, tr := range transfers {
++		if tr.From == tr.To {
++			continue
++		}
++		from := balances[tr.From]
++		to := balances[tr.To]
++		balances[tr.From] = from - tr.Amount
++		balances[tr.To] = to + tr.Amount
+ 	}
+ 	return true
+ }

@@ -1,0 +1,16 @@
+file_sha256:3bca47195f326d250075b9e804042277322849291da9ede4cb6f023d17cbcfe6
+1: package holdout
+2: 
+3: import "testing"
+4: 
+5: func TestWindow(t *testing.T) {
+6: 	w := Window{Width: 5}
+7: 	for _, tc := range []struct{ at, value, want int }{{0, 3, 3}, {4, 2, 5}, {5, 7, 12}, {5, -2, 10}, {10, 1, 6}} {
+8: 		got, ok := w.Add(tc.at, tc.value)
+9: 		if !ok || got != tc.want {
+10: 			t.Fatalf("at %d sum %d", tc.at, got)
+11: 		}
+12: 	}
+13: 	if _, ok := w.Add(9, 100); ok {
+14: 		t.Fatal("backdated sample accepted")
+15: 	}

@@ -1,0 +1,14 @@
+diff --git a/service.go b/service.go
+index 631ecfa..0ede383 100644
+--- a/service.go
++++ b/service.go
+@@ -11,6 +11,9 @@ func Reserve(bookings map[string]string, batch []Booking) bool {
+ 		if _, exists := bookings[b.Seat]; exists {
+ 			return false
+ 		}
++		if _, exists := pending[b.Seat]; exists {
++			return false
++		}
+ 		// Reservations in this batch will be committed together.
+ 		pending[b.Seat] = b.Customer
+ 	}

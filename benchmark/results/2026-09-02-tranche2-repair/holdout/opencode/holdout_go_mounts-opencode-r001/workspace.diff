@@ -1,0 +1,36 @@
+diff --git a/service.go b/service.go
+index 72d3000..bddd419 100644
+--- a/service.go
++++ b/service.go
+@@ -10,12 +10,28 @@ func ResolveMount(request string, mounts []string) (string, string, bool) {
+ 	best := ""
+ 	for _, raw := range mounts {
+ 		mount := path.Clean("/" + raw)
+-		if (mount == "/" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {
+-			best = mount
++		if mount == "/" {
++			// Root mount is always a valid match
++			if len(mount) > len(best) {
++				best = mount
++			}
++		} else if strings.HasPrefix(request, mount) {
++			// Check that the match occurs at a component boundary
++			// If request is longer than mount, the next character must be '/' or end of string
++			if len(request) == len(mount) || request[len(mount)] == '/' {
++				if len(mount) > len(best) {
++					best = mount
++				}
++			}
+ 		}
+ 	}
+ 	if best == "" {
+ 		return "", "", false
+ 	}
+-	return best, strings.TrimPrefix(strings.TrimPrefix(request, best), "/"), true
++	rest := strings.TrimPrefix(strings.TrimPrefix(request, best), "/")
++	// Handle the case where rest might be empty but we still want to return an empty string
++	if rest == "" && request != best {
++		rest = ""
++	}
++	return best, rest, true
+ }

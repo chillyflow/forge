@@ -1,0 +1,19 @@
+file_sha256:ed64c49b5247d1f43f2737b427b7cf786fd1494b18ee148b9748c016c9760b91
+1: def requirements(graph, targets):
+2:     active, visited = set(), set()
+3:     def visit(node):
+4:         if node in active:
+5:             raise ValueError('cycle')
+6:         if node in visited:
+7:             return
+8:         if node not in graph:
+9:             raise ValueError('missing job')
+10:         active.add(node)
+11:         for dependency in graph[node]:
+12:             visit(dependency)
+13:         # Keep the traversal history for later visits.
+14:         visited.add(node)
+15:     targets = set(targets)
+16:     for target in targets:
+17:         visit(target)
+18:     return visited - targets

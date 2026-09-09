@@ -5,6 +5,9 @@ Implemented behavior is separate from model accuracy, platform runtime evidence,
 security isolation and performance comparisons. Required phases remain in scope
 until implemented and verified.
 
+The benchmark-driven sequence for closing the current OpenCode accuracy gap is
+tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-reliability.md).
+
 ## Implemented
 
 - C17 library/CLI with isolated llama.cpp types and explicit ownership.
@@ -31,12 +34,16 @@ until implemented and verified.
   generation JSON and file-reading runtime integration.
 - Typed model memory separated from host evidence, token-aware compaction,
   canonical action/diagnostic loop detection and no-op patch conflicts.
-- Go package import/reverse-import planning and automatic six-stage validation.
+- Go package import/reverse-import planning plus automatic Go/Python six-stage validation.
 - Bounded input snapshots and fail-closed validation evidence recording.
 - Transactional TOML profiles/configuration and metadata-only hardware planning.
 - Source-context invalidation after known edits.
 - Session artifacts, metrics, context inspection and read-only replay.
-- Isolated Go benchmark runner, ten fixtures, independent verification/ablations.
+- Isolated Go/Python benchmark runners, 29 development and 12 new holdout
+  synthetic fixtures, independent verification, repeated Forge/OpenCode/Aider
+  measurements, clean freeze enforcement, evidence audits and mechanism ablations.
+- Native system/user/assistant/tool prompt protocol, action-budget guidance,
+  guarded line hunks and explicit flattened-protocol compatibility.
 - Cross-platform core CI, sanitizers, and direct-backend compilation.
 
 ## Partial: do not overstate these
@@ -47,19 +54,20 @@ until implemented and verified.
 | Repository graph | Go declarations, occurrences and package import/reverse graph | Resolved calls/types, symbol impact and test mapping |
 | Incremental indexing | Native watch/delta updates, retained Go trees, transactional edits and syntax hashes | Additional AST languages, semantic change impact, large-repository performance evidence |
 | Working memory | Typed claims, host outcomes, validation and compaction | Semantic summary dependency cache and resume |
-| Validation scheduler | Six-stage Go verification | Symbol impact and additional languages |
+| Validation scheduler | Six-stage Go verification plus Python compiler syntax and unittest/pytest discovery | Symbol impact and languages beyond Go/Python |
 | Context checkpoints | Active sequential reuse plus independent same-instance host snapshots | Automatic semantic checkpoint policy, aggregate eviction, disk KV resume |
 | Diagnostics | Named bounded adapters with normalized evidence and raw streams | Additional formats and language validation schedulers |
 | Memory | Arena/slice/file-view APIs, action JSON and read-file callers | Broader lifetime migration and measured application memory savings |
 | Observability | Tokens, reuse, durations, bytes, plans, arena/index/watch counters | Full event/profile reporting and integrated peak RSS/VRAM collection |
 | Configuration | TOML profiles/CLI precedence and hardware estimates | Additional models, KV/draft planning and measured fit coverage |
 | Library ABI | Opaque types and ownership rules | Stable ABI guarantee/install package |
-| Benchmark release | Ten fixtures, local measurements, initial OpenCode comparison | 25–50 diverse tasks, repeated robust comparisons |
+| Benchmark release | Development matrix plus a clean-frozen 12-task holdout, three repetitions across Forge/OpenCode/Aider, retained timing/token/failure evidence and explicit rejection of invalid measurements | Valid fresh comparative holdout, remaining reliability gates and larger repository tasks |
 
 ## Required remaining work
 
-1. Broaden the equal-model/equal-hardware OpenCode comparison, align timing
-   boundaries, preserve failure evidence and repeat measurements on larger tasks.
+1. Close the new retraction and rolling-window reliability failures and preserve
+   protected fixtures across comparison harnesses, then evaluate another untouched
+   clean-frozen holdout after tuning; extend comparisons to larger repository tasks.
 2. Resolved repository relationships, structural diff impact and progressive retrieval.
 3. Dependency-aware cached summaries and larger-repository watcher measurements.
 4. Automatic semantic checkpoint selection/eviction and persisted session resume.
@@ -69,8 +77,8 @@ until implemented and verified.
 8. Strict OS isolation, resource quotas, race-resistant filesystem handles.
 9. Broader scoped-memory adoption, asynchronous processes, full event replay,
    stable packaged `libforge` ABI and richer backpressure.
-10. Compact tool-protocol comparison, decoding-mode routing, additional model
-    classes, a second established harness and all required ablations.
+10. Extend native tool-protocol and decoding-mode comparisons to additional model
+    classes and complete the remaining required ablations.
 
 ## Deliberately deferred, as in the plan
 
@@ -83,6 +91,22 @@ The design's v0.1 performance gate remains a real measured reduction in prompt
 processing against an established local harness using the same GGUF/hardware.
 Its v1.0 gate additionally requires broad platform/language support and published
 task-success/timing evidence. Neither follows from the development version alone.
+
+The earlier [tranche-2 campaign](../benchmark/results/2026-09-02-tranche2-native/README.md)
+records Forge 83/87 versus OpenCode 71/87 and Aider 69/87, with a positive
+task-cluster interval and lower median latency than OpenCode. The dirty freeze,
+development-task reuse, diagnostic-specific guidance, and resumed comparison
+leg prevent a fresh-holdout promotion claim.
+
+The [subsequent repair and holdout](../benchmark/results/2026-09-02-tranche2-repair/README.md)
+fixed the identified atomic-transfer and quota-completion failures: both passed
+3/3 in the final 83/87 development matrix, with regression gates 12/12 and
+invariants 60/60. The new clean-frozen holdout recorded Forge 30/36, OpenCode
+29/36 and Aider 21/36. Forge failed retractions and rolling windows 0/3 each;
+OpenCode passed one retraction repetition. OpenCode also edited a protected
+test's diagnostic message, so the frozen reporter rejected the comparison and
+produced no confidence interval. All 108 runs and that violation are retained.
+Tranche 2 remains unaccepted; a development lead cannot satisfy the fresh gate.
 
 The [normalized comparison](../benchmark/results/2026-08-28-normalized/README.md)
 records 10/10 repairs for both Forge and OpenCode, with less evaluated prompt

@@ -1,0 +1,16 @@
+file_sha256:3ba41e92384c442b458c50d45fad3bc9625a4409181a5c67ed5cdbb6d060c38c
+1: import unittest
+2: from service import commit
+3: class Versions(unittest.TestCase):
+4:     def test_chain(self):
+5:         docs = {'x': (0, 'old'), 'y': (4, 'stay')}
+6:         self.assertTrue(commit(docs, [('x', 0, 'mid'), ('x', 1, 'new')]))
+7:         self.assertEqual(docs, {'x': (2, 'new'), 'y': (4, 'stay')})
+8:     def test_conflicts_roll_back(self):
+9:         for updates in [[('x', 0, 'new'), ('x', 0, 'bad')],
+10:                         [('x', 0, 'new'), ('absent', 0, 'bad')]]:
+11:             docs = {'x': (0, 'old')}
+12:             self.assertFalse(commit(docs, updates))
+13:             self.assertEqual(docs, {'x': (0, 'old')})
+14:     def test_empty(self):
+15:         self.assertTrue(commit({}, []))

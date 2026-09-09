@@ -1,0 +1,41 @@
+file_sha256:5aa77ebafa8858abab5d52da6790e5f94c955d8609dd14091148c52083caf295
+1: package holdout
+2: 
+3: import (
+4: 	"fmt"
+5: 	"sort"
+6: )
+7: 
+8: func BuildWaves(deps map[string][]string) ([][]string, error) {
+9: 	done := map[string]bool{}
+10: 	waves := [][]string{}
+11: 	for len(done) < len(deps) {
+12: 		ready := []string{}
+13: 		for job, prerequisites := range deps {
+14: 			if done[job] {
+15: 				continue
+16: 			}
+17: 			ok := true
+18: 			for _, p := range prerequisites {
+19: 				if _, exists := deps[p]; !exists {
+20: 					return nil, fmt.Errorf("missing %s", p)
+21: 				}
+22: 				if !done[p] && len(deps[p]) > 0 {
+23: 					ok = false
+24: 				}
+25: 			}
+26: 			if ok {
+27: 				ready = append(ready, job)
+28: 			}
+29: 		}
+30: 		if len(ready) == 0 {
+31: 			return nil, fmt.Errorf("cycle")
+32: 		}
+33: 		sort.Strings(ready)
+34: 		for _, job := range ready {
+35: 			done[job] = true
+36: 		}
+37: 		waves = append(waves, ready)
+38: 	}
+39: 	return waves, nil
+40: }

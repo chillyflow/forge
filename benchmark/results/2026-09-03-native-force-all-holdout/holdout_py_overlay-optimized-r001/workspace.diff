@@ -1,0 +1,11 @@
+diff --git a/service.py b/service.py
+index 56bf218..59d7d90 100644
+--- a/service.py
++++ b/service.py
+@@ -7,5 +7,5 @@ def overlay(base, changes):
+         elif isinstance(value, dict) and isinstance(result.get(key), dict):
+             result[key] = overlay(result[key], value)
+         else:
+-            result[key] = value
++            result[key] = deepcopy(value)
+     return result

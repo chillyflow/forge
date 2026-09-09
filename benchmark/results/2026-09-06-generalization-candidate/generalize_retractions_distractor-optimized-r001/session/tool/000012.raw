@@ -1,0 +1,16 @@
+TOOL_ERROR [conflict]: stale file_sha256 for service.py; current file_sha256 is c3c020d485d8c260c50120a5cea536e281936b5d0888bec5fbbb39e42a8318a6. Current selected content follows; use this hash for a revised hunk.
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            if target in cancelled:

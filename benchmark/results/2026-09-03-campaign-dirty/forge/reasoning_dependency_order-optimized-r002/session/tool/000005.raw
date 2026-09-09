@@ -1,0 +1,16 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+{"Time":"2026-09-03T14:21:25.2923382-04:00","Action":"start","Package":"forgebench"}
+{"Time":"2026-09-03T14:21:25.4666332-04:00","Action":"run","Package":"forgebench","Test":"TestOrderBuild"}
+{"Time":"2026-09-03T14:21:25.4671465-04:00","Action":"output","Package":"forgebench","Test":"TestOrderBuild","Output":"=== RUN   TestOrderBuild\n","OutputType":"frame"}
+{"Time":"2026-09-03T14:21:25.4671465-04:00","Action":"output","Package":"forgebench","Test":"TestOrderBuild","Output":"    repair_test.go:12: order=[generate lint compile package] ok=true\n","OutputType":"error"}
+{"Time":"2026-09-03T14:21:25.4671465-04:00","Action":"output","Package":"forgebench","Test":"TestOrderBuild","Output":"--- FAIL: TestOrderBuild (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-09-03T14:21:25.4671465-04:00","Action":"fail","Package":"forgebench","Test":"TestOrderBuild","Elapsed":0}
+{"Time":"2026-09-03T14:21:25.4671465-04:00","Action":"output","Package":"forgebench","Output":"FAIL\n","OutputType":"frame"}
+{"Time":"2026-09-03T14:21:25.4687658-04:00","Action":"output","Package":"forgebench","Output":"FAIL\tforgebench\t0.176s\n","OutputType":"frame"}
+{"Time":"2026-09-03T14:21:25.4687658-04:00","Action":"fail","Package":"forgebench","Elapsed":0.176}
+
+stderr:
+
+next_action_guidance: Treat the diagnostics as the change boundary. Preserve behavior not named as failing and make the smallest local edit that addresses the reported condition. The failing assertion and explicit requirements are authoritative; do not reinterpret them or rewrite an otherwise working function. When a requirement names an ordering or tie-break key, compare that semantic key directly; input position or a surrogate index is not equivalent. For an ID tie-break over indexed records, dereference and compare the IDs; changing only comments cannot repair executable behavior.
+diagnostic_specific_guidance: The reported output order shows that a newly ready item lost lexical priority. Preserve graph construction and make one local edit: restore lexical ordering immediately after the loop enqueues newly ready items, before the next item is removed from the ready queue.

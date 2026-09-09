@@ -1,0 +1,12 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,4 +1,4 @@
+-import csv
+-import io
+-def read_records(text):
+-    return list(csv.reader(text.splitlines()))
++import csv
++import io
++def read_records(text):
++    return list(csv.reader(io.StringIO(text)))

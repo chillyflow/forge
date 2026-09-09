@@ -1,0 +1,16 @@
+file_sha256:29bcb16da38621d4b02f474940d070635a315f19407ff8e4067d2d4cc16e6798
+1: package config
+2: 
+3: func Resolve(defaults, file, overrides Values) Values {
+4: 	out := Values{}
+5: 	for k, v := range defaults {
+6: 		out[k] = v
+7: 	}
+8: 	for k, v := range file {
+9: 		out[k] = v
+10: 	}
+11: 	for k, v := range overrides {
+12: 		out[k] = v
+13: 	}
+14: 	return out
+15: }

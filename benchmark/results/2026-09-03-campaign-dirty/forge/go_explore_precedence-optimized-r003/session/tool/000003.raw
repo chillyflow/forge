@@ -1,0 +1,15 @@
+file_sha256:c1704fda36ed2ef1d93be13d17bd01e803a6fce8a8527e01620e198dcff63212
+1: package config
+2: 
+3: import (
+4: 	"reflect"
+5: 	"testing"
+6: )
+7: 
+8: func TestPrecedence(t *testing.T) {
+9: 	got := Resolve(Values{"host": "default", "port": "80"}, Values{"host": "file"}, Values{"host": "runtime"})
+10: 	want := Values{"host": "runtime", "port": "80"}
+11: 	if !reflect.DeepEqual(got, want) {
+12: 		t.Fatalf("got %v", got)
+13: 	}
+14: }

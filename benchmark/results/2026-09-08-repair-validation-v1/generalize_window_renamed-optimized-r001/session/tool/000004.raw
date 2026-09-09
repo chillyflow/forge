@@ -1,0 +1,29 @@
+file_sha256:a173458c407cdf2dd9ad87a0d4090e242c87fb21f67c9e1af4b38bd0badd632d
+1: package holdout
+2: 
+3: type reading struct{ at, value int }
+4: type Accumulator struct {
+5: 	Horizon     int
+6: 	readings    []reading
+7: 	previous    int
+8: 	initialized bool
+9: }
+10: 
+11: func (w *Accumulator) Observe(now, value int) (int, bool) {
+12: 	if w.initialized && now < w.previous {
+13: 		return 0, false
+14: 	}
+15: 	w.previous = now
+16: 	w.initialized = true
+17: 	w.readings = append(w.readings, reading{now, value})
+18: 	head := 0
+19: 	for head < len(w.readings) && w.readings[head].at < now-w.Horizon {
+20: 		head++
+21: 	}
+22: 	w.readings = w.readings[head:]
+23: 	aggregate := 0
+24: 	for _, s := range w.readings {
+25: 		aggregate += s.value
+26: 	}
+27: 	return aggregate, true
+28: }

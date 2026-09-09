@@ -1,0 +1,15 @@
+diff --git a/repair.go b/repair.go
+index 316c0e4..bf166f1 100644
+--- a/repair.go
++++ b/repair.go
+@@ -5,6 +5,10 @@ import "sort"
+ type Interval struct{ Lo, Hi int }
+ 
+ func UnionIntervals(in []Interval) []Interval {
++	if len(in) == 0 {
++		return nil
++	}
++	
+ 	out := append([]Interval{}, in...)
+ 	for i := range out {
+ 		if out[i].Lo > out[i].Hi {

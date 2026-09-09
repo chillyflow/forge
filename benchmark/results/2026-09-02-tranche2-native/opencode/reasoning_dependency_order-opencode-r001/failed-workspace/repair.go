@@ -1,0 +1,70 @@
+package repair
+
+import "sort"
+
+func OrderBuild(tasks []string, deps map[string][]string) ([]string, bool) {
+	known := map[string]bool{}
+	for _, task := range tasks {
+		if known[task] {
+			return nil, false
+		}
+		known[task] = true
+	}
+	indegree := map[string]int{}
+	next := map[string][]string{}
+	for _, task := range tasks {
+		indegree[task] = 0
+	}
+	for task, requirements := range deps {
+		if !known[task] {
+			return nil, false
+		}
+		seen := map[string]bool{}
+		for _, requirement := range requirements {
+			if !known[requirement] || seen[requirement] {
+				return nil, false
+			}
+			seen[requirement] = true
+			indegree[task]++
+			next[requirement] = append(next[requirement], task)
+		}
+	}
+	ready := []string{}
+	for task, n := range indegree {
+		if n == 0 {
+			ready = append(ready, task)
+		}
+	}
+	
+	// Sort ready tasks by their position in the original tasks list to maintain deterministic order
+	sort.Slice(ready, func(i, j int) bool {
+		posI := -1
+		posJ := -1
+		for k, task := range tasks {
+			if task == ready[i] {
+				posI = k
+			}
+			if task == ready[j] {
+				posJ = k
+			}
+		}
+		return posI < posJ
+	})
+	
+	out := []string{}
+	for len(ready) > 0 {
+		task := ready[0]
+		ready = ready[1:]
+		out = append(out, task)
+		for _, dependent := range next[task] {
+			indegree[dependent]--
+			if indegree[dependent] == 0 {
+				ready = append(ready, dependent)
+			}
+		}
+	}
+	if len(out) != len(tasks) {
+		return nil, false
+	}
+	return out, true
+}

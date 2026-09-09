@@ -1,0 +1,26 @@
+{
+  "id": "go_multifile_registry",
+  "suite": "campaign",
+  "language": "go",
+  "category": "multi-file",
+  "prompt": "Registry names are case-insensitive and ignore surrounding whitespace for both writes and reads. Repair the implementation across the repository and run go test -json ./... without modifying tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "protected_files": [
+    "registry/registry_test.go"
+  ],
+  "files": {
+    "go.mod": "module campaign.test/fixture\n\ngo 1.24\n",
+    "names/normalize.go": "package names\n\nimport \"strings\"\n\nfunc Normalize(value string) string { return strings.TrimSpace(value) }\n",
+    "registry/registry.go": "package registry\n\nimport \"campaign.test/fixture/names\"\n\ntype Registry struct { values map[string]int }\nfunc New() *Registry { return &Registry{values: map[string]int{}} }\nfunc (r *Registry) Put(name string, value int) { r.values[names.Normalize(name)] = value }\nfunc (r *Registry) Get(name string) (int, bool) { value, ok := r.values[name]; return value, ok }\n",
+    "registry/registry_test.go": "package registry\n\nimport \"testing\"\nfunc TestNormalizedNames(t *testing.T) { r:=New(); r.Put(\"  Alpha \",7); for _,key:=range []string{\"alpha\",\" ALPHA \",\"Alpha\"} { if got,ok:=r.Get(key); !ok || got!=7 { t.Fatalf(\"%q=(%d,%v)\",key,got,ok) } } }\n"
+  },
+  "oracle_files": {
+    "names/normalize.go": "package names\n\nimport \"strings\"\n\nfunc Normalize(value string) string { return strings.ToLower(strings.TrimSpace(value)) }\n",
+    "registry/registry.go": "package registry\n\nimport \"campaign.test/fixture/names\"\n\ntype Registry struct { values map[string]int }\nfunc New() *Registry { return &Registry{values: map[string]int{}} }\nfunc (r *Registry) Put(name string, value int) { r.values[names.Normalize(name)] = value }\nfunc (r *Registry) Get(name string) (int, bool) { value, ok := r.values[names.Normalize(name)]; return value, ok }\n"
+  }
+}

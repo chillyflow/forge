@@ -1,0 +1,27 @@
+{
+  "id": "py_graph_cycle",
+  "suite": "campaign",
+  "language": "python",
+  "category": "algorithm",
+  "prompt": "topological_order must return every node after its dependencies, include dependency-only nodes, and raise ValueError on cycles. Repair it and run the unittest suite without modifying tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-v"
+  ],
+  "protected_files": [
+    "tests/test_order.py"
+  ],
+  "files": {
+    "graph/__init__.py": "",
+    "graph/order.py": "def topological_order(graph):\n    result, visiting = [], set()\n    def visit(node):\n        if node in visiting:\n            return\n        visiting.add(node)\n        for dependency in graph.get(node, []):\n            visit(dependency)\n        result.append(node)\n    for node in graph:\n        visit(node)\n    return result\n",
+    "tests/test_order.py": "import unittest\nfrom graph.order import topological_order\n\nclass OrderTests(unittest.TestCase):\n    def test_dependencies_and_cycles(self):\n        got=topological_order({\"build\":[\"compile\"],\"compile\":[\"generate\"],\"test\":[\"compile\"]})\n        self.assertEqual(set(got),{\"build\",\"compile\",\"generate\",\"test\"})\n        self.assertLess(got.index(\"generate\"),got.index(\"compile\")); self.assertLess(got.index(\"compile\"),got.index(\"build\"))\n        with self.assertRaises(ValueError): topological_order({\"a\":[\"b\"],\"b\":[\"a\"]})\n"
+  },
+  "oracle_files": {
+    "graph/order.py": "def topological_order(graph):\n    result, visiting, visited = [], set(), set()\n    def visit(node):\n        if node in visiting:\n            raise ValueError(\"cycle\")\n        if node in visited:\n            return\n        visiting.add(node)\n        for dependency in graph.get(node, []):\n            visit(dependency)\n        visiting.remove(node)\n        visited.add(node)\n        result.append(node)\n    for node in graph:\n        visit(node)\n    return result\n"
+  }
+}

@@ -1,0 +1,27 @@
+diff --git a/app/text/slug.py b/app/text/slug.py
+index 244b650..b52c0ff 100644
+--- a/app/text/slug.py
++++ b/app/text/slug.py
+@@ -1,4 +1,21 @@
++import unicodedata
+ import re
+ 
+ def slugify(value):
+-    return re.sub(r"\s+", "-", value.strip().lower())
++    # Normalize unicode characters and remove accents
++    value = unicodedata.normalize('NFKD', value)
++    value = ''.join(c for c in value if not unicodedata.combining(c))
++    
++    # Convert to lowercase
++    value = value.lower()
++    
++    # Remove punctuation and replace with hyphens
++    value = re.sub(r'[^\w\s-]', '', value)
++    
++    # Replace spaces and multiple hyphens with single hyphen
++    value = re.sub(r'[-\s]+', '-', value)
++    
++    # Remove leading and trailing hyphens
++    value = value.strip('-')
++    
++    return value

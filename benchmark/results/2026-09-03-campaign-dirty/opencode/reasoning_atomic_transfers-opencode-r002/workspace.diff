@@ -1,0 +1,23 @@
+diff --git a/repair.go b/repair.go
+index e4ccfb5..53cf2f6 100644
+--- a/repair.go
++++ b/repair.go
+@@ -12,15 +12,15 @@ func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+ 	}
+ 	maxInt := int(^uint(0) >> 1)
+ 	for _, tr := range transfers {
+-		from, fromOK := balances[tr.From]
+-		to, toOK := balances[tr.To]
++		from, fromOK := next[tr.From]
++		to, toOK := next[tr.To]
+ 		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+ 			return false
+ 		}
+ 		if tr.From == tr.To {
+ 			continue
+ 		}
+-		if to > maxInt-tr.Amount {
++		if tr.Amount > maxInt-to {
+ 			return false
+ 		}
+ 		next[tr.From] = from - tr.Amount

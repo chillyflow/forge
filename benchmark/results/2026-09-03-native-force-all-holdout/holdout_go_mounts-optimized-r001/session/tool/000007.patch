@@ -1,0 +1,48 @@
+diff --git "a/service.go" "b/service.go"
+--- "a/service.go"
++++ "b/service.go"
+@@ -1,21 +1,23 @@
+-package holdout
+-
+-import (
+-	"path"
+-	"strings"
+-)
+-
+-func ResolveMount(request string, mounts []string) (string, string, bool) {
+-	request = path.Clean("/" + request)
+-	best := ""
+-	for _, raw := range mounts {
+-		mount := path.Clean("/" + raw)
+-		if (mount == "/" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {
+-			best = mount
+-		}
+-	}
+-	if best == "" {
+-		return "", "", false
+-	}
+-	return best, strings.TrimPrefix(strings.TrimPrefix(request, best), "/"), true
+-}
++package holdout
++
++import (
++	"path"
++	"strings"
++)
++
++func ResolveMount(request string, mounts []string) (string, string, bool) {
++	request = path.Clean("/" + request)
++	best := ""
++	for _, raw := range mounts {
++		mount := path.Clean("/" + raw)
++		if mount == "/" || strings.HasPrefix(request, mount+"/") || (mount != "/" && strings.HasPrefix(request, mount) && len(request) > len(mount)) {
++			if len(mount) > len(best) {
++				best = mount
++			}
++		}
++	}
++	if best == "" {
++		return "", "", false
++	}
++	return best, strings.TrimPrefix(strings.TrimPrefix(request, best), "/"), true
++}

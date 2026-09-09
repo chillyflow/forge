@@ -218,6 +218,15 @@ static void describe_batch(const char *label, yyjson_doc *doc) {
     free(json);
 }
 
+static void pause_poll(void) {
+#ifdef _WIN32
+    Sleep(5);
+#else
+    struct timespec delay = {0, 5000000};
+    nanosleep(&delay, NULL);
+#endif
+}
+
 static size_t initial(fixture *f, forge_watch **watch, const forge_watch_limits *limits) {
     uint64_t deadline = fg_now_ms() + 4000;
     size_t reopens = 0;
@@ -260,7 +269,12 @@ static void collect(forge_watch *watch, const char *const *paths, size_t count, 
     uint64_t deadline = fg_now_ms() + 4000;
     bool complete = false;
     while (!complete && fg_now_ms() < deadline) {
-        yyjson_doc *doc = poll_batch(watch, 100, FG_MAX_JSON);
+        /* Delivery assertions use the outer deadline. An OS callback at a
+         * per-poll deadline can correctly lose its expiring payload and request
+         * reopening; that separate contract is covered by deadline tests. */
+        yyjson_doc *doc = poll_batch(watch, 0, FG_MAX_JSON);
+        if (flag(doc, "reopen_required"))
+            describe_batch("loss while collecting native events", doc);
         yyjson_val *events = yyjson_obj_get(yyjson_doc_get_root(doc), "events"), *event;
         size_t i, length;
         yyjson_arr_foreach(events, i, length,
@@ -271,6 +285,8 @@ static void collect(forge_watch *watch, const char *const *paths, size_t count, 
         complete = true;
         for (size_t j = 0; j < count; j++)
             complete &= (seen[j] & required) == required;
+        if (!complete)
+            pause_poll();
     }
     if (!complete)
         for (size_t i = 0; i < count; i++)
@@ -328,7 +344,7 @@ static void test_initial_timeout_and_files(void) {
     bool saw_rename = false;
     uint64_t rename_deadline = fg_now_ms() + 4000;
     while (!saw_rename && fg_now_ms() < rename_deadline) {
-        doc = poll_batch(watch, 100, FG_MAX_JSON);
+        doc = poll_batch(watch, 0, FG_MAX_JSON);
         yyjson_val *events = yyjson_obj_get(yyjson_doc_get_root(doc), "events"), *event;
         size_t i, count;
         yyjson_arr_foreach(events, i, count, event) {
@@ -338,6 +354,8 @@ static void test_initial_timeout_and_files(void) {
                     (yyjson_get_uint(yyjson_obj_get(event, "flags")) & FORGE_WATCH_RENAMED) != 0;
         }
         yyjson_doc_free(doc);
+        if (!saw_rename)
+            pause_poll();
     }
     assert(saw_rename);
 #endif
@@ -353,12 +371,13 @@ static void test_initial_timeout_and_files(void) {
 static yyjson_doc *wait_rescan(forge_watch *watch, size_t maximum) {
     uint64_t deadline = fg_now_ms() + 4000;
     while (fg_now_ms() < deadline) {
-        yyjson_doc *doc = poll_batch(watch, 100, maximum);
+        yyjson_doc *doc = poll_batch(watch, 0, maximum);
         if (flag(doc, "rescan_required"))
             return doc;
         if (yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")))
             describe_batch("native delivery while awaiting rescan", doc);
         yyjson_doc_free(doc);
+        pause_poll();
     }
     assert(!"Expected filesystem rescan signal");
     return NULL;
@@ -433,13 +452,27 @@ static void test_metadata_exclusions(void) {
     watch = create(&f, &limits);
     initial(&f, &watch, &limits);
     fixture_write(&f, ".forge/deep/long-metadata-path.bin", "ignored", 7);
-    doc = poll_batch(watch, 100, FG_MAX_JSON);
-    if (flag(doc, "rescan_required") ||
-        yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")))
-        describe_batch("unexpected metadata exclusion batch", doc);
-    assert(!flag(doc, "rescan_required"));
-    assert(yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "events")) == 0);
-    yyjson_doc_free(doc);
+    /* Verify actual delivery beside the excluded subtree. A callback arriving
+     * at the exact end of a timed poll may correctly report deadline loss.
+     * Nonblocking polls retain native work limits without conflating that
+     * timing contract with metadata exclusion. */
+    fixture_write(&f, "ok", "visible", 7);
+    bool delivered = false;
+    uint64_t until = fg_now_ms() + 2000;
+    while (!delivered && fg_now_ms() < until) {
+        doc = poll_batch(watch, 0, FG_MAX_JSON);
+        if (flag(doc, "rescan_required"))
+            describe_batch("unexpected metadata exclusion batch", doc);
+        assert(!flag(doc, "rescan_required"));
+        events = yyjson_obj_get(yyjson_doc_get_root(doc), "events");
+        yyjson_arr_foreach(events, i, count, event) {
+            assert(!strcmp(fg_json_str(event, "path"), "ok"));
+            delivered = true;
+        }
+        yyjson_doc_free(doc);
+        pause_poll();
+    }
+    assert(delivered);
     forge_watch_destroy(watch);
     fixture_finish(&f);
 }
@@ -562,7 +595,7 @@ static void test_event_byte_and_native_work_limits(void) {
     uint64_t deadline = fg_now_ms() + 4000;
     yyjson_doc *doc;
     while (!overflow && !(one && two) && fg_now_ms() < deadline) {
-        doc = poll_batch(watch, 100, limits.max_bytes);
+        doc = poll_batch(watch, 0, limits.max_bytes);
         yyjson_val *events = yyjson_obj_get(yyjson_doc_get_root(doc), "events");
         assert(yyjson_arr_size(events) <= 1);
         if (flag(doc, "rescan_required")) {
@@ -578,6 +611,8 @@ static void test_event_byte_and_native_work_limits(void) {
             two |= !strcmp(fg_json_str(event, "path"), "two.txt");
         }
         yyjson_doc_free(doc);
+        if (!overflow && !(one && two))
+            pause_poll();
     }
     assert(overflow || (one && two));
     forge_watch_destroy(watch);

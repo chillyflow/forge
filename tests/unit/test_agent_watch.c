@@ -89,6 +89,7 @@ int main(void) {
     assert(fg_write_file(script, actions, strlen(actions), NULL));
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = script;
     forge_model *model = forge_model_load(&mc, &error);
     assert(model);

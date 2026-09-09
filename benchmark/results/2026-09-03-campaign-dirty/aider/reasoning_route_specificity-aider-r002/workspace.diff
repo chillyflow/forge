@@ -1,0 +1,105 @@
+diff --git a/repair.go b/repair.go
+index 26b0008..c22f7a4 100644
+--- a/repair.go
++++ b/repair.go
+@@ -16,23 +16,33 @@ func routeSegments(value string) []string {
+ 	}
+ 	return strings.Split(value, "/")
+ }
++
+ func MatchRoute(method, path string, routes []Route) (string, map[string]string, bool) {
+ 	actual := routeSegments(path)
+ 	var best routeMatch
+ 	found := false
++	
+ 	for index, route := range routes {
+ 		if route.Method != "*" && route.Method != method {
+ 			continue
+ 		}
++		
+ 		pattern := routeSegments(route.Pattern)
+ 		params := map[string]string{}
+ 		literals, wildcards := 0, 0
+ 		pi, ai := 0, 0
+ 		ok := true
+-		for pi < len(pattern) {
++		
++		for pi < len(pattern) && ai < len(actual) {
+ 			part := pattern[pi]
++			
+ 			if part == "*" {
+-				if pi != len(pattern)-1 || ai >= len(actual) {
++				if pi != len(pattern)-1 {
++					ok = false
++					break
++				}
++				// * captures the remaining non-empty suffix
++				if len(actual[ai:]) == 0 {
+ 					ok = false
+ 					break
+ 				}
+@@ -42,37 +52,58 @@ func MatchRoute(method, path string, routes []Route) (string, map[string]string,
+ 				pi++
+ 				break
+ 			}
+-			if ai >= len(actual) {
+-				ok = false
+-				break
+-			}
++			
+ 			if strings.HasPrefix(part, ":") && len(part) > 1 {
++				// Parameter capture
+ 				params[part[1:]] = actual[ai]
+ 				wildcards++
+ 			} else if part == actual[ai] {
++				// Literal match
+ 				literals++
+ 			} else {
++				// No match
+ 				ok = false
+ 				break
+ 			}
++			
+ 			pi++
+ 			ai++
+ 		}
++		
++		// Check if we've consumed all pattern and all actual segments
+ 		if !ok || pi != len(pattern) || ai != len(actual) {
+ 			continue
+ 		}
++		
++		// Calculate method exact match
+ 		exact := 0
+ 		if route.Method == method {
+ 			exact = 1
+ 		}
+-		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+-		if !found || candidate.literals > best.literals {
++		
++		// Create a fresh params map
++		freshParams := make(map[string]string)
++		for k, v := range params {
++			freshParams[k] = v
++		}
++		
++		candidate := routeMatch{route.Name, freshParams, literals, exact, wildcards, index}
++		
++		// Prefer more literal segments, then exact method over *, then fewer wildcards
++		// If equal, preserve declaration order (index)
++		if !found || 
++			candidate.literals > best.literals ||
++			(candidate.literals == best.literals && candidate.methodExact > best.methodExact) ||
++			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards < best.wildcards) ||
++			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards == best.wildcards && candidate.index < best.index) {
+ 			best = candidate
+ 			found = true
+ 		}
+ 	}
++	
+ 	if !found {
+ 		return "", nil, false
+ 	}
++	
+ 	return best.name, best.params, true
+ }

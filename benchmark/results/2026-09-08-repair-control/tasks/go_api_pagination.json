@@ -1,0 +1,24 @@
+{
+  "id": "go_api_pagination",
+  "suite": "campaign",
+  "language": "go",
+  "category": "api",
+  "prompt": "The HTTP list endpoint must reject invalid page sizes with 400 and return exactly the requested window using one-based pages. Inspect the API code, repair it, and run go test -json ./... without modifying tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "protected_files": [
+    "api/handler_test.go"
+  ],
+  "files": {
+    "go.mod": "module campaign.test/fixture\n\ngo 1.24\n",
+    "api/handler.go": "package api\n\nimport (\n \"encoding/json\"\n \"net/http\"\n \"strconv\"\n)\nfunc ListHandler(values []string) http.HandlerFunc { return func(w http.ResponseWriter,r *http.Request) {\n page,_:=strconv.Atoi(r.URL.Query().Get(\"page\")); size,_:=strconv.Atoi(r.URL.Query().Get(\"size\"))\n if page<1 { page=1 }; if size<1 { size=10 }\n start:=page*size; if start>len(values) { start=len(values) }; end:=start+size; if end>len(values) { end=len(values) }\n json.NewEncoder(w).Encode(values[start:end])\n} }\n",
+    "api/handler_test.go": "package api\n\nimport (\"encoding/json\"; \"net/http/httptest\"; \"reflect\"; \"testing\")\nfunc TestPagination(t *testing.T) { h:=ListHandler([]string{\"a\",\"b\",\"c\",\"d\",\"e\"}); r:=httptest.NewRequest(\"GET\",\"/?page=2&size=2\",nil); w:=httptest.NewRecorder(); h(w,r); var got []string; json.Unmarshal(w.Body.Bytes(),&got); if !reflect.DeepEqual(got,[]string{\"c\",\"d\"}) { t.Fatalf(\"got %v\",got) }; bad:=httptest.NewRequest(\"GET\",\"/?page=1&size=nope\",nil); bw:=httptest.NewRecorder(); h(bw,bad); if bw.Code!=400 { t.Fatalf(\"bad status %d\",bw.Code) } }\n"
+  },
+  "oracle_files": {
+    "api/handler.go": "package api\n\nimport (\n \"encoding/json\"\n \"net/http\"\n \"strconv\"\n)\nfunc ListHandler(values []string) http.HandlerFunc { return func(w http.ResponseWriter,r *http.Request) {\n page,errPage:=strconv.Atoi(r.URL.Query().Get(\"page\")); size,errSize:=strconv.Atoi(r.URL.Query().Get(\"size\"))\n if errPage!=nil || errSize!=nil || page<1 || size<1 { http.Error(w,\"invalid pagination\",http.StatusBadRequest); return }\n start:=(page-1)*size; if start>len(values) { start=len(values) }; end:=start+size; if end>len(values) { end=len(values) }\n json.NewEncoder(w).Encode(values[start:end])\n} }\n"
+  }
+}

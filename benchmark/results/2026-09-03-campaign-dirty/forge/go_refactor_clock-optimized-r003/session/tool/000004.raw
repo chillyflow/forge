@@ -1,0 +1,20 @@
+file_sha256:b5767201250e35657d31d704299a1166eac90045582db24fc83b8008d932a2da
+1: package session
+2: 
+3: import (
+4: 	"testing"
+5: 	"time"
+6: )
+7: 
+8: type fixed struct{ at time.Time }
+9: 
+10: func (f fixed) Now() time.Time { return f.at }
+11: func TestExpiredUsesClock(t *testing.T) {
+12: 	base := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+13: 	if New(base.Add(time.Hour), fixed{base}).Expired() {
+14: 		t.Fatal("future marked expired")
+15: 	}
+16: 	if !New(base.Add(-time.Hour), fixed{base}).Expired() {
+17: 		t.Fatal("past marked active")
+18: 	}
+19: }

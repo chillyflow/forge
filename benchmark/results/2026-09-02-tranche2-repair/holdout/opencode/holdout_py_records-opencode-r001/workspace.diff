@@ -1,0 +1,16 @@
+diff --git a/service.py b/service.py
+index c3e705c..17ac238 100644
+--- a/service.py
++++ b/service.py
+@@ -1,4 +1,10 @@
+ import csv
+ import io
+ def read_records(text):
+-    return list(csv.reader(text.splitlines()))
++    if not text:
++        return []
++    # Use StringIO to handle the text as a file-like object
++    # This properly handles quoted fields with embedded commas, quotes, and line breaks
++    with io.StringIO(text) as f:
++        reader = csv.reader(f)
++        return list(reader)

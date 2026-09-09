@@ -1,0 +1,10 @@
+file_sha256:77de5795c4e431ea043ee069927c295808c643fb40be12d836810d412f25d0d3
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	if LastIndex([]int{2, 1, 2}, 2) != 2 || LastIndex(nil, 0) != -1 || LastIndex([]int{3}, 4) != -1 {
+7: 		t.Fatal("last occurrence failed")
+8: 	}
+9: }

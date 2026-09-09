@@ -1,0 +1,13 @@
+file_sha256:655c90d8b790fd3ab639ecdf259ff3cfa94e2f9709ea5ebfdac1ce18fe8f0217
+1: import unittest
+2: from service import requirements
+3: class Closure(unittest.TestCase):
+4:     def test_diamond(self):
+5:         graph = {'a': ['b', 'c'], 'b': ['d'], 'c': ['d'], 'd': [], 'unused': ['missing']}
+6:         self.assertEqual(requirements(graph, ['a']), {'b', 'c', 'd'})
+7:         self.assertEqual(requirements(graph, ['a', 'b']), {'c', 'd'})
+8:         self.assertEqual(requirements(graph, []), set())
+9:     def test_rejections(self):
+10:         for graph in [{'a': ['b'], 'b': ['a']}, {'a': ['missing']}, {'a': ['a']}]:
+11:             with self.assertRaises(ValueError):
+12:                 requirements(graph, ['a'])

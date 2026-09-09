@@ -1,0 +1,10 @@
+file_sha256:7a6b6ba3990ce6e05191fb12499dae9a2452d6b00050bd5322b97413dc374c14
+1: def commit(documents, updates):
+2:     staged = documents
+3:     for key, expected, value in updates:
+4:         if key not in staged or staged[key][0] != expected:
+5:             return False
+6:         staged[key] = (expected + 1, value)
+7:     documents.clear()
+8:     documents.update(staged)
+9:     return True

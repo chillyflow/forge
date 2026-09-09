@@ -40,6 +40,7 @@ bool fg_random_hex(char *, size_t);
 bool fg_utf8_valid(const char *, size_t);
 size_t fg_utf8_prefix(const char *, size_t length, size_t maximum);
 size_t fg_utf8_forward(const char *, size_t length, size_t offset);
+size_t fg_utf8_trim_incomplete(const char *, size_t length);
 typedef bool (*fg_walk_fn)(const char *, void *);
 bool fg_walk(const char *, const char *, fg_walk_fn, void *, forge_error *);
 char *fg_json_string(const char *);
@@ -63,6 +64,7 @@ char *fg_render_bytes(const char *, size_t);
 forge_status fg_process_at(const char *workspace_root, const char *cwd, const char *const *argv,
                            uint64_t timeout, size_t max_bytes, forge_cancel_fn, void *,
                            fg_process_result *, forge_error *);
+bool fg_process_executable_available(const char *workspace_root, const char *cwd, const char *name);
 
 typedef struct {
     char dir[FG_PATH_MAX];
@@ -121,6 +123,7 @@ typedef struct {
     bool active, reuse_recorded;
 } fg_checkpoint_cache_operation;
 
+struct fg_decode_policy; /* §32 decode routing policy, defined with the thought constants. */
 struct forge_model {
     forge_model_config config;
     void *backend;
@@ -133,14 +136,17 @@ struct forge_model {
     const fg_checkpoint_backend *checkpoint;
     fg_checkpoint_cache *cache;
     const forge_checkpoint_cache_request *cache_request;
-    size_t (*count)(forge_model *, const char *);
-    forge_status (*generate)(forge_model *, const char *, const char *, size_t, forge_token_fn,
-                             void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
+    size_t (*count)(forge_model *, const char *), (*count_prompt)(forge_model *, const char *);
+    forge_status (*generate)(forge_model *, const char *, const char *,
+                             const struct fg_decode_policy *, size_t, forge_token_fn, void *,
+                             char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
                              forge_error *);
+    forge_status (*parse_native)(forge_model *, const char *, char **, forge_error *);
     void (*destroy)(forge_model *);
 };
 bool fg_model_instance_init(forge_model *, forge_error *);
 size_t fg_model_count(const char *, void *);
+size_t fg_model_count_prompt(const char *, void *);
 bool fg_llama_init(forge_model *, forge_error *);
 forge_status fg_model_generate(forge_model *, const char *, const char *, size_t, forge_token_fn,
                                void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
@@ -149,11 +155,20 @@ forge_status fg_model_generate_with_cache(forge_model *, const char *, const cha
                                           forge_token_fn, void *, char **, forge_metrics *,
                                           forge_cancel_fn, void *, uint64_t,
                                           const forge_checkpoint_cache_request *, forge_error *);
+forge_status fg_model_generate_routed_with_cache(forge_model *, const char *, const char *,
+                                                 const struct fg_decode_policy *, size_t,
+                                                 forge_token_fn, void *, char **, forge_metrics *,
+                                                 forge_cancel_fn, void *, uint64_t,
+                                                 const forge_checkpoint_cache_request *,
+                                                 forge_error *);
 /* For compound operations that already own operation_active. Does not release
  * the guard. No automatic checkpoint request is nominated. */
 forge_status fg_model_generate_active(forge_model *, const char *, size_t, forge_token_fn, void *,
                                       char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
                                       forge_error *);
+/* Parse a template-native assistant response into an OpenAI-compatible message.
+ * The caller then normalizes that message through fg_native_action_normalize. */
+forge_status fg_model_parse_native(forge_model *, const char *, char **, forge_error *);
 
 /* Internal cache operations run under the generation operation guard. */
 forge_status fg_checkpoint_cache_validate_request(const char *,
@@ -176,13 +191,85 @@ forge_status fg_checkpoint_restore_active(forge_model *, const forge_checkpoint 
                                           forge_cancel_fn, void *, uint64_t,
                                           forge_checkpoint_stats *, forge_error *);
 
+/* Optional free-text reasoning allowed on every model action. It is bounded
+ * both at the parser boundary and because retained ACTION segments can re-enter
+ * later prompts; the cap keeps that recurring prompt cost small. */
+#define FG_THOUGHT_MAX_BYTES 2048u
+/* std::regex pattern for llama.cpp's lazy grammar sampler. The first capture
+ * starts at the action object's opening brace, so earlier reasoning remains
+ * unconstrained while the complete action is replayed into the GBNF state. */
+#define FG_ACTION_TRIGGER_PATTERN "(\\{[ \\t\\r\\n]*\"(tool|memory|final)\"[ \\t\\r\\n]*:)"
+/* Routed elicitation. A lazy trigger alone never elicits a prefix, because
+ * nothing stops the model from opening the action object on its very first
+ * token (measured: 0 prefixes in 67 routed actions). Banning '{' alone is
+ * worse: parked at the end of a long prompt with its best token excluded,
+ * greedy decoding falls into prompt echo and burns the whole turn budget
+ * without an action (measured: 10/10 benchmark limit deaths). So routed
+ * generation force-decodes this cue first, steering the continuation into
+ * prose; the cue is host scaffold, streamed and recorded in the raw response
+ * but stripped before the thought is bounded, validated, or counted. */
+#define FG_THOUGHT_CUE "Thought: "
+/* After the cue, action-opening tokens stay excluded for this many sampled
+ * tokens (bounded by a quarter of the turn's token budget) so the model must
+ * produce some reasoning text, and end-of-generation tokens stay excluded
+ * until the action actually begins, so a generation cannot end actionless;
+ * the turn's token budget is the backstop. Floor on room to reason, not a
+ * cap: FG_THOUGHT_MAX_BYTES still bounds the accepted prefix. */
+#define FG_THOUGHT_MIN_PREFIX_TOKENS 32u
+#define FG_THOUGHT_DEFAULT_BUDGET 256u
+/* §32 per-state decode routing policy for one generation. A non-NULL policy
+ * selects routed (lazy-grammar) mode and requires `trigger`. `cue` replaces
+ * the forced reasoning cue: NULL means FG_THOUGHT_CUE; empty disables the cue
+ * AND the action-opening ban window, because banning the model's opener
+ * without steering text is the measured prompt-echo death configuration.
+ * `think_budget` bounds sampled reasoning tokens before the action grammar is
+ * enforced by an eager-grammar swap; 0 selects a calibrated 256-token ceiling,
+ * reduced to half the remaining turn budget near exhaustion.
+ * `think_unbounded` restores the phase-1 unbounded behavior (ablation). */
+typedef struct fg_decode_policy {
+    const char *trigger;
+    const char *cue;
+    size_t think_budget;
+    bool think_unbounded;
+    bool native_thinking;
+} fg_decode_policy;
+
+typedef enum fg_action_phase {
+    FG_ACTION_SELECT = 0,
+    FG_ACTION_ARGUMENTS,
+    FG_ACTION_PATCH,
+    FG_ACTION_FINAL,
+    FG_ACTION_MEMORY,
+    FG_ACTION_COMPLETE
+} fg_action_phase;
+/* Pure routing predicates for the decode-state machine, unit-tested without a
+ * model. fg_action_begin mirrors FG_ACTION_TRIGGER_PATTERN and returns the
+ * opening brace of the first action-object start, or NULL. fg_action_complete
+ * reports whether some '{' suffix of `text` parses to completion as a
+ * tool/memory/final object; callers scope `text` to the action-begin offset
+ * so unconstrained reasoning prose can never satisfy it. fg_think_bounds
+ * derives the suppress window and think cap for one generation. */
+const char *fg_action_begin(const char *text);
+bool fg_action_complete(const char *text);
+void fg_think_bounds(const fg_decode_policy *, size_t max_tokens, size_t *min_think,
+                     size_t *think_cap);
+fg_action_phase fg_action_decode_phase(const char *text);
+bool fg_json_whitespace_only(const char *text, size_t length);
+bool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens);
 typedef struct {
     const char *name, *description, *fields, *grammar;
     forge_capability capability;
 } fg_tool_def;
 const fg_tool_def *fg_tools(size_t *);
-char *fg_tool_schema(void);
-char *fg_tool_grammar(void);
+/* `thought` selects whether reasoning is offered, `required` whether it may be
+ * empty, and `routed` whether it is a plain-text prefix outside the action JSON.
+ * Routed mode leaves the action constrained and uses a lazy grammar trigger. */
+char *fg_tool_schema(bool thought, bool required, bool routed);
+char *fg_tool_native_schema(void);
+char *fg_tool_minimal_native_schema(void);
+char *fg_tool_native_final_schema(void);
+char *fg_tool_grammar(bool thought, bool required, bool routed);
+forge_status fg_native_action_normalize(const char *, bool include_thought, char **, forge_error *);
 bool fg_tool_validate(const char *, yyjson_val *, forge_error *);
 uint64_t fg_tool_signature(const char *, yyjson_val *, uint64_t generation,
                            uint64_t diagnostic_hash);
@@ -203,6 +290,8 @@ typedef struct {
     size_t commands, stages;
     uint64_t generation;
     char *json, *summary;
+    struct fg_input_snapshot *failed_inputs; /* Complete, stable failed validation inputs. */
+    char *failed_command;
 } fg_validation_result;
 forge_status fg_validation_run(fg_tool_context *, const char *const *, size_t, forge_metrics *,
                                fg_validation_result *, forge_error *);

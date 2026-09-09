@@ -1,0 +1,41 @@
+diff --git a/service.go b/service.go
+index b4e4cbb..eec4928 100644
+--- a/service.go
++++ b/service.go
+@@ -15,6 +15,7 @@ func (c *Cache) touch(key string) {
+ 	}
+ 	c.order = append(c.order, key)
+ }
++
+ func (c *Cache) Get(key string) (int, bool) {
+ 	value, ok := c.values[key]
+ 	if ok {
+@@ -22,6 +23,7 @@ func (c *Cache) Get(key string) (int, bool) {
+ 	}
+ 	return value, ok
+ }
++
+ func (c *Cache) Put(key string, value int) {
+ 	if c.Capacity <= 0 {
+ 		return
+@@ -29,13 +31,16 @@ func (c *Cache) Put(key string, value int) {
+ 	if c.values == nil {
+ 		c.values = map[string]int{}
+ 	}
++	
+ 	_, exists := c.values[key]
+ 	c.values[key] = value
+-	if !exists {
+-		c.touch(key)
+-	}
+-	if len(c.values) > c.Capacity {
++	
++	if !exists && len(c.values) > c.Capacity {
++		// Remove the least recently used item
+ 		delete(c.values, c.order[0])
+ 		c.order = c.order[1:]
+ 	}
++	
++	// Update the order regardless of whether it's new or existing
++	c.touch(key)
+ }

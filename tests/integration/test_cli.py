@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import pathlib
@@ -17,6 +18,18 @@ if '--fallback-forge' in sys.argv:
     index = sys.argv.index('--fallback-forge')
     FALLBACK_FORGE = str(pathlib.Path(sys.argv.pop(index + 1)).resolve())
     sys.argv.pop(index)
+
+
+def native_call(name, arguments, reasoning=None, call_id=None):
+    call = {'type': 'function',
+            'function': {'name': name, 'arguments': json.dumps(arguments,
+                                                                separators=(',', ':'))}}
+    if call_id:
+        call['id'] = call_id
+    message = {'role': 'assistant', 'content': '', 'tool_calls': [call]}
+    if reasoning is not None:
+        message['reasoning_content'] = reasoning
+    return message
 
 class ForgeTests(unittest.TestCase):
     def setUp(self):
@@ -51,6 +64,8 @@ class ForgeTests(unittest.TestCase):
         if not fallback and success and scripted and 'final' in scripted[-1]:
             scripted.extend([scripted[-1]] * 4)
         path.write_text(json.dumps(scripted))
+        if '--prompt-protocol' not in options:
+            options = (*options, '--prompt-protocol', 'flattened')
         result = self.cli('run', 'Fix Add and verify it.', '--script', str(path), '--json',
                           *options, success=success, executable=fallback or FORGE)
         events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
@@ -75,6 +90,10 @@ class ForgeTests(unittest.TestCase):
     def require_go(self):
         if not shutil.which('go') or not shutil.which('gofmt'):
             self.skipTest('Go and gofmt are needed for real automatic validation')
+
+    def require_python(self):
+        if not any(shutil.which(name) for name in ('python3', 'python', 'py')):
+            self.skipTest('A discoverable Python interpreter is needed for real validation')
 
     def indexed_rows(self, query):
         with sqlite3.connect(self.root / '.forge' / 'index.db') as connection:
@@ -179,6 +198,9 @@ class ForgeTests(unittest.TestCase):
     def test_delta_index_respects_git_ignored_and_forced_tracked_paths(self):
         if not shutil.which('git'):
             self.skipTest('Git is needed for eligibility rules')
+        if subprocess.run(['git', '--no-lazy-fetch', 'version'],
+                          capture_output=True).returncode != 0:
+            self.skipTest('Git 2.45+ is needed for --no-lazy-fetch eligibility rules')
         subprocess.run(['git', 'init', '-q', str(self.root)], check=True, capture_output=True)
         (self.root / '.gitignore').write_text('ignored.go\n.forge/\n', newline='\n')
         (self.root / 'ignored.go').write_text('package calc\nfunc IgnoreMe() {}\n')
@@ -285,6 +307,386 @@ class ForgeTests(unittest.TestCase):
                     self.assertEqual(view['recent_outcomes'][0]['tool_call_id'],
                                      int(path.stem) - 2)
 
+    def test_thought_channel_retention_and_ablation(self):
+        # A bounded leading thought rides along with the action. Retention in
+        # the ACTION segment is OFF by default (it costs accuracy and prompt
+        # tokens once reasoning is actually elicited, and loses no evidence
+        # because the raw response is already in the session log);
+        # --thought-history opts back in; --no-thought removes the channel from
+        # the generated grammar and schema entirely.
+        secret = 'Reasoning sentinel that must not reach a later prompt.'
+        actions = [{'thought': secret, 'tool': 'read_file',
+                    'args': {'path': 'note.txt', 'start': 1, 'end': 1}},
+                   {'thought': secret, 'final': 'Inspected the note.'}]
+        (self.root / 'note.txt').write_text('original data\n', newline='\n')
+
+        result, _, session = self.run_script(actions, '--no-auto-validation')
+        prompts = [path.read_text() for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertFalse(any(secret in prompt for prompt in prompts),
+                         'thought must not re-enter a prompt by default')
+        # Stripping the thought must not drop the action it decorated.
+        self.assertTrue(any('read_file' in prompt for prompt in prompts))
+        # The thought is still recorded as session evidence: dropping it from
+        # later prompts must not cost observability.
+        self.assertIn(secret, result.stdout)
+
+        _, _, kept = self.run_script(actions, '--no-auto-validation', '--thought-history')
+        prompts = [path.read_text() for path in sorted((kept / 'context').glob('*.txt'))]
+        self.assertTrue(any(secret in prompt for prompt in prompts),
+                        '--thought-history must re-enter the thought')
+
+        # The explicit off switch stays available and agrees with the default.
+        _, _, stripped = self.run_script(actions, '--no-auto-validation', '--thought-decode-only')
+        prompts = [path.read_text() for path in sorted((stripped / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertFalse(any(secret in prompt for prompt in prompts))
+        self.assertEqual(json.loads((stripped / 'metrics.json').read_text())['status'], 'ok')
+
+        # The channel is host-gated, not merely grammar-hidden: with it off the
+        # schema stops advertising it and a thought-bearing action is refused,
+        # so the ablation cannot be defeated by an unconstrained backend.
+        result, _, ablated = self.run_script(actions, '--no-auto-validation', '--no-thought',
+                                             success=False)
+        prompts = [path.read_text() for path in sorted((ablated / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertNotIn('"thought" field', prompts[0])
+        self.assertFalse(any(secret in prompt for prompt in prompts))
+        self.assertIn('invalid action', result.stderr)
+
+        # Routed mode leaves the reasoning prefix unconstrained until the real
+        # action object begins, then normalizes it into the same host-validated
+        # thought field used above. Raw string script steps model that exact
+        # backend output without bypassing the agent parser.
+        routed_actions = [
+            secret + '\n' + json.dumps({'tool': 'read_file',
+                                         'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+            'The note has been inspected.\n' + json.dumps({'final': 'Inspected the note.'}),
+        ]
+        _, routed_events, routed = self.run_script(
+            routed_actions, '--no-auto-validation', '--thought-routed', '--thought-history')
+        tool_call = next(event['data'] for event in routed_events if event['type'] == 'tool_call')
+        self.assertEqual(tool_call['thought'], secret)
+        prompts = [path.read_text() for path in sorted((routed / 'context').glob('*.txt'))]
+        self.assertTrue(any(secret in prompt for prompt in prompts))
+
+        _, _, routed_stripped = self.run_script(
+            routed_actions, '--no-auto-validation', '--thought-routed', '--thought-decode-only')
+        prompts = [path.read_text() for path in sorted((routed_stripped / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertFalse(any(secret in prompt for prompt in prompts))
+
+        # The llama backend force-decodes a "Thought: " cue as scaffold. The
+        # host strips it: it never enters the recorded thought and never
+        # satisfies --thought-required on its own.
+        cued = ['Thought: ' + secret + '\n' + json.dumps(
+                    {'tool': 'read_file', 'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+                json.dumps({'final': 'Done.'})]
+        _, cued_events, _ = self.run_script(cued, '--no-auto-validation', '--thought-routed')
+        cued_call = next(e['data'] for e in cued_events if e['type'] == 'tool_call')
+        self.assertEqual(cued_call['thought'], secret)
+        cue_only = ['Thought: \n' + json.dumps({'final': 'No real reasoning.'})]
+        result, _, _ = self.run_script(cue_only, '--no-auto-validation', '--thought-routed',
+                                       '--thought-required', success=False)
+        self.assertIn('required before every action', result.stderr)
+
+        # Required routed thought is enforced by the host even for the scripted
+        # backend, which ignores grammar constraints.
+        missing = [json.dumps({'final': 'No reasoning prefix.'})]
+        result, _, _ = self.run_script(missing, '--no-auto-validation', '--thought-routed',
+                                       '--thought-required', success=False)
+        self.assertIn('required before every action', result.stderr)
+        # An over-long routed prefix is truncated at the byte cap, never
+        # run-fatal: the raw text is already session evidence, and killing the
+        # run for verbose reasoning was the recorded phase-2 defect. The
+        # UTF-8-boundary slice keeps exactly the first 2048 bytes here.
+        oversized = ['x' * 2049 + '\n' + json.dumps(
+                         {'tool': 'read_file', 'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+                     json.dumps({'final': 'Read after truncated reasoning.'})]
+        _, oversized_events, _ = self.run_script(oversized, '--no-auto-validation',
+                                                 '--thought-routed')
+        truncated = next(e['data'] for e in oversized_events if e['type'] == 'tool_call')
+        self.assertEqual(truncated['thought'], 'x' * 2048)
+
+        # Contradictory ablation settings must fail loudly rather than quietly
+        # report one arm's numbers under the other arm's name.
+        contradiction = self.cli('run', 'Inspect the note.', '--script', str(self.root / 'script.json'),
+                                 '--prompt-protocol', 'flattened', '--no-thought',
+                                 '--thought-required', success=False)
+        self.assertIn('contradicts', contradiction.stderr)
+
+        # Inline --thought-required is enforced by the host, not only by the
+        # grammar: the scripted backend ignores GBNF, so an action with no
+        # thought must still be refused. Without this the flag would be a
+        # no-op for any unconstrained backend and the ablation arm it names
+        # would silently measure the untreated configuration.
+        thoughtless = [json.dumps({'final': 'No reasoning at all.'})]
+        refused = self.run_script(thoughtless, '--no-auto-validation', '--thought-required',
+                                  success=False)[0]
+        self.assertIn('invalid action', refused.stderr)
+        # ... and an action that does carry one is still accepted.
+        withthought = [{'thought': 'Reasoned first.', 'final': 'Done.'}]
+        self.run_script(withthought, '--no-auto-validation', '--thought-required')
+        contradiction = self.cli('run', 'Inspect the note.', '--script',
+                                 str(self.root / 'script.json'), '--no-thought',
+                                 '--thought-routed', '--prompt-protocol', 'flattened', success=False)
+        self.assertIn('contradict', contradiction.stderr)
+
+        # §32 per-state routing controls. The think budget and cue only mean
+        # anything in routed mode; arming them elsewhere is a loud error, not a
+        # silent no-op arm.
+        rejected = self.cli('run', 'Inspect the note.', '--script',
+                            str(self.root / 'script.json'), '--thought-routed',
+                            '--thought-budget', '0', '--prompt-protocol', 'flattened', success=False)
+        self.assertIn('[1, 2147483647]', rejected.stderr)
+        rejected = self.cli('run', 'Inspect the note.', '--script',
+                            str(self.root / 'script.json'), '--thought-budget', '64',
+                            '--prompt-protocol', 'flattened', success=False)
+        self.assertIn('require --thought-routed', rejected.stderr)
+        rejected = self.cli('run', 'Inspect the note.', '--script',
+                            str(self.root / 'script.json'), '--thought-routed',
+                            '--thought-cue', 'Plan: {', '--prompt-protocol', 'flattened', success=False)
+        self.assertIn('action-opening brace', rejected.stderr)
+        # The unbounded ablation and an explicit budget parse and run; the
+        # scripted backend ignores decode routing, so these only pin the CLI
+        # and config surface.
+        self.run_script(routed_actions, '--no-auto-validation', '--thought-routed',
+                        '--no-thought-budget')
+        self.run_script(routed_actions, '--no-auto-validation', '--thought-routed',
+                        '--thought-budget', '64')
+        # A configured cue replaces the default scaffold in host normalization:
+        # it is stripped from the recorded thought exactly as "Thought: " is.
+        custom_cued = ['Plan: ' + secret + '\n' + json.dumps(
+                           {'tool': 'read_file', 'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+                       json.dumps({'final': 'Done.'})]
+        _, custom_events, _ = self.run_script(custom_cued, '--no-auto-validation',
+                                              '--thought-routed', '--thought-cue', 'Plan: ')
+        custom_call = next(e['data'] for e in custom_events if e['type'] == 'tool_call')
+        self.assertEqual(custom_call['thought'], secret)
+
+        # Native template thinking and its thinking-disabled control use the
+        # same lazy action grammar and no Forge cue, bans, or forced budget.
+        native = ['<think>inspect first</think>\n' + json.dumps(
+                      {'tool': 'read_file',
+                       'args': {'path': 'note.txt', 'start': 1, 'end': 1}}),
+                  json.dumps({'final': 'Done.'})]
+        _, native_events, _ = self.run_script(native, '--no-auto-validation',
+                                              '--thought-native')
+        native_call = next(e['data'] for e in native_events if e['type'] == 'tool_call')
+        self.assertEqual(native_call['thought'], '<think>inspect first</think>')
+        self.run_script([json.dumps({'final': 'Done.'})], '--no-auto-validation',
+                        '--thought-native', '--disable-thinking')
+
+    def test_native_system_instructions_do_not_depend_on_task_keywords(self):
+        script = self.root / 'script.json'
+        script.write_text(json.dumps([native_call('final', {'answer': 'Inspected.'})]))
+        systems = []
+        for request in ('Inspect the repository.', 'Inspect replay and retraction behavior.'):
+            self.cli('run', request, '--script', str(script), '--prompt-protocol', 'native',
+                     '--no-auto-validation', '--max-turns', '2')
+            session = max((self.root / '.forge' / 'sessions').iterdir(),
+                          key=lambda path: path.stat().st_mtime_ns)
+            prompt = json.loads(sorted((session / 'context').glob('*.txt'))[0].read_text(
+                encoding='utf-8'))
+            systems.append(prompt['messages'][0]['content'])
+        self.assertEqual(systems[0], systems[1])
+        self.assertNotIn("totals[account]", systems[0])
+
+    def test_native_failure_guidance_is_independent_of_diagnostic_text(self):
+        guidance = []
+        for diagnostic in ('ordinary failure', 'order=[x]', 'success=map[x:1]',
+                           'ValueError not raised', 'capped=map[x:1]',
+                           'Retractions AssertionError: unrelated failure'):
+            with self.subTest(diagnostic=diagnostic):
+                _, events, _ = self.run_script([
+                    native_call('run_command', {'argv': [sys.executable, '-c',
+                                f'import sys; print({diagnostic!r}); sys.exit(1)']}),
+                    native_call('final', {'answer': 'Recorded failure; no repair claimed.'}),
+                ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
+                   '--no-semantic', fallback_watch=True)
+                output = next(event['data']['output'] for event in events
+                              if event['type'] == 'tool_result')
+                self.assertIn(diagnostic, output)
+                self.assertNotIn('diagnostic_specific_guidance:', output)
+                self.assertIn('next_action_guidance:', output)
+                guidance.append(output.split('next_action_guidance:', 1)[1])
+        self.assertEqual(len(set(guidance)), 1)
+
+    def test_native_prompt_protocol_roles_tools_and_explicit_failures(self):
+        (self.root / 'note.txt').write_text('native evidence\n', encoding='utf-8', newline='\n')
+        read = native_call('read_file', {'path': 'note.txt', 'start': 1, 'end': 1},
+                           reasoning='inspect natively', call_id='model-call')
+        finish = native_call('final', {'answer': 'Inspected the note.'})
+        _, events, session = self.run_script(
+            [read, finish, finish, finish], '--prompt-protocol', 'native',
+            '--no-auto-validation', '--max-turns', '16')
+        calls = [event['data'] for event in events if event['type'] == 'tool_call']
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['tool'], 'read_file')
+        self.assertEqual(calls[0]['thought'], 'inspect natively')
+        self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
+                         ['Inspected the note.'])
+        prompts = [json.loads(path.read_text(encoding='utf-8'))
+                   for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertTrue(prompts)
+        self.assertTrue(all(prompt['protocol'] == 'forge-native-v1' for prompt in prompts))
+        self.assertIn('the action limit includes final', prompts[0]['messages'][0]['content'])
+        self.assertIn('compare that field in the ordering decision',
+                      prompts[0]['messages'][0]['content'])
+        self.assertIn('dereference the indices and compare the IDs',
+                      prompts[0]['messages'][0]['content'])
+        self.assertTrue(any(message['role'] == 'user' and
+                            '[RUN_STATE]' in message.get('content', '')
+                            for prompt in prompts for message in prompt['messages']))
+        tool_names = {tool['function']['name'] for tool in prompts[0]['tools']}
+        self.assertTrue({'read_file', 'final', 'memory'} <= tool_names)
+        paired = next(prompt for prompt in prompts
+                      if any(message['role'] == 'tool' for message in prompt['messages']))
+        messages = paired['messages']
+        tool_index = next(i for i, message in enumerate(messages) if message['role'] == 'tool')
+        assistant = messages[tool_index - 1]
+        tool_message = messages[tool_index]
+        self.assertEqual(assistant['role'], 'assistant')
+        self.assertEqual(len(assistant['tool_calls']), 1)
+        history_call = assistant['tool_calls'][0]
+        self.assertEqual(history_call['function']['name'], 'read_file')
+        self.assertEqual(history_call['function']['arguments'],
+                         {'path': 'note.txt', 'start': 1, 'end': 1})
+        self.assertEqual(history_call['id'], tool_message['tool_call_id'])
+        self.assertEqual(len(history_call['id']), 9)
+        self.assertEqual(tool_message['name'], 'read_file')
+        run_state = next(message['content'] for message in reversed(messages)
+                         if message['role'] == 'user' and '[RUN_STATE]' in message['content'])
+        self.assertIn('"current_action":2', run_state)
+        self.assertIn('"remaining_actions_including_current":15', run_state)
+        self.assertIn('"final_runs_required_host_validation":true', run_state)
+
+        failed_read = native_call('read_file', {'path': 'missing.txt', 'start': 1, 'end': 1},
+                                  reasoning='The missing file may explain the failure.')
+        _, _, failed_session = self.run_script(
+            [failed_read, finish], '--prompt-protocol', 'native', '--no-auto-validation')
+        failed_prompts = [json.loads(path.read_text(encoding='utf-8'))
+                          for path in sorted((failed_session / 'context').glob('*.txt'))]
+        failed_pair = next(prompt for prompt in failed_prompts
+                           if any(message.get('name') == 'read_file'
+                                  for message in prompt['messages']))
+        failed_tool_index = next(i for i, message in enumerate(failed_pair['messages'])
+                                 if message.get('name') == 'read_file')
+        self.assertEqual(failed_pair['messages'][failed_tool_index - 1]['reasoning_content'],
+                         'The missing file may explain the failure.')
+
+        memory = {'facts': ['Native memory fact.'], 'hypotheses': [],
+                  'decisions': ['Keep native roles paired.'], 'relevant_files': ['note.txt'],
+                  'remaining': ['Finish.']}
+        _, _, memory_session = self.run_script(
+            [native_call('memory', memory, reasoning='retain state'), finish],
+            '--prompt-protocol', 'native', '--no-auto-validation')
+        state = json.loads((memory_session / 'working_state.json').read_text(encoding='utf-8'))
+        self.assertEqual(state['facts'], memory['facts'])
+        memory_prompts = [json.loads(path.read_text(encoding='utf-8'))
+                          for path in sorted((memory_session / 'context').glob('*.txt'))]
+        paired_memory = next(prompt for prompt in memory_prompts
+                             if any(message.get('name') == 'memory'
+                                    for message in prompt['messages']))
+        memory_messages = paired_memory['messages']
+        memory_tool_index = next(i for i, message in enumerate(memory_messages)
+                                 if message.get('name') == 'memory')
+        self.assertEqual(memory_messages[memory_tool_index - 1]['role'], 'assistant')
+        self.assertEqual(
+            memory_messages[memory_tool_index - 1]['tool_calls'][0]['function']['name'],
+            'memory')
+        self.assertEqual(memory_messages[memory_tool_index]['role'], 'tool')
+
+        original = (self.root / 'calc.go').read_bytes()
+        malformed = [
+            (native_call('not_a_forge_tool', {}), 'unsupported tool'),
+            ({'role': 'assistant', 'content': '', 'tool_calls': [
+                native_call('git_status', {})['tool_calls'][0],
+                native_call('git_diff', {})['tool_calls'][0],
+            ]}, 'exactly one tool call'),
+            (native_call('read_file', {'path': 'calc.go', 'start': 1}), 'missing end'),
+        ]
+        for response, detail in malformed:
+            with self.subTest(detail=detail):
+                result, failed_events, _ = self.run_script(
+                    [response], '--prompt-protocol', 'native', success=False)
+                self.assertIn(detail, result.stderr.lower())
+                self.assertTrue(any(event['type'] == 'model_output'
+                                    for event in failed_events))
+                self.assertFalse(any(event['type'] == 'tool_call'
+                                     for event in failed_events))
+                self.assertEqual((self.root / 'calc.go').read_bytes(), original)
+
+        script = self.root / 'script.json'
+        invalid = self.cli('run', 'Inspect.', '--script', str(script),
+                           '--prompt-protocol', 'neither', success=False)
+        self.assertIn('must be flattened or native', invalid.stderr)
+        routed = self.cli('run', 'Inspect.', '--script', str(script),
+                          '--prompt-protocol', 'native', '--thought-routed', success=False)
+        self.assertIn('cannot be combined with routed', routed.stderr)
+
+    def test_native_last_action_exposes_only_final(self):
+        (self.root / 'note.txt').write_text('finish evidence\n', encoding='utf-8', newline='\n')
+        _, _, session = self.run_script([
+            native_call('read_file', {'path': 'note.txt', 'start': 1, 'end': 1}),
+            native_call('final', {'answer': 'Finished on the last action.'}),
+        ], '--prompt-protocol', 'native', '--no-auto-validation', '--max-turns', '2')
+        prompts = [json.loads(path.read_text(encoding='utf-8'))
+                   for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertEqual(len(prompts), 2)
+        self.assertIn('read_file', {tool['function']['name'] for tool in prompts[0]['tools']})
+        self.assertEqual([tool['function']['name'] for tool in prompts[1]['tools']], ['final'])
+        run_state = next(message['content'] for message in reversed(prompts[1]['messages'])
+                         if message['role'] == 'user' and '[RUN_STATE]' in message['content'])
+        self.assertIn('"remaining_actions_including_current":1', run_state)
+        self.assertIn('This is the last action', run_state)
+
+    def test_native_successful_process_keeps_penultimate_repair_tools(self):
+        command = native_call('run_command', {
+            'argv': [sys.executable, '-c', "print('validation passed')"]})
+        _, events, session = self.run_script([
+            command,
+            native_call('final', {'answer': 'Only the print command succeeded; tests unverified.'}),
+        ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
+            '--max-turns', '3')
+        output = next(event['data']['output'] for event in events
+                      if event['type'] == 'tool_result')
+        self.assertIn('does not prove that tests ran', output)
+        prompts = [json.loads(path.read_text(encoding='utf-8'))
+                   for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertEqual(len(prompts), 2)
+        self.assertIn('apply_patch', {tool['function']['name'] for tool in prompts[1]['tools']})
+        state = json.loads((session / 'working_state.json').read_text(encoding='utf-8'))
+        self.assertEqual(state['validation']['status'], 'unverified')
+
+    def test_native_definition_only_unittest_is_not_validation_evidence(self):
+        (self.root / 'test_probe.py').write_text(
+            'import unittest\n'
+            'class ProbeCase(unittest.TestCase):\n'
+            '    def test_contract(self):\n'
+            "        self.assertEqual(2 + 2, 5, 'deliberate validation failure')\n",
+            encoding='utf-8', newline='\n')
+        _, events, session = self.run_script([
+            native_call('run_command', {'argv': [sys.executable, 'test_probe.py']}),
+            native_call('run_command', {'argv': [sys.executable, '-m', 'unittest', '-v', 'test_probe']}),
+            native_call('final', {'answer': 'The real runner found a failing test; no repair claimed.'}),
+        ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation',
+           '--max-turns', '3', '--no-semantic', fallback_watch=True)
+        results = [event['data'] for event in events if event['type'] == 'tool_result']
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]['exit_code'], 0)
+        self.assertEqual(results[0]['stdout_bytes'], 0)
+        self.assertEqual(results[0]['stderr_bytes'], 0)
+        self.assertIn('does not prove that tests ran', results[0]['output'])
+        self.assertIn('python -m unittest', results[0]['output'])
+        self.assertNotEqual(results[1]['exit_code'], 0)
+        self.assertIn('deliberate validation failure', results[1]['output'])
+        self.assertIn('Ran 1 test', results[1]['output'])
+        prompts = [json.loads(path.read_text(encoding='utf-8'))
+                   for path in sorted((session / 'context').glob('*.txt'))]
+        self.assertIn('run_command', {tool['function']['name'] for tool in prompts[1]['tools']})
+        self.assertEqual([tool['function']['name'] for tool in prompts[2]['tools']], ['final'])
+
     def test_validation_plan_and_permission_denial(self):
         self.go_module()
         plan = json.loads(self.cli('validation-plan', 'calc.go', '--json').stdout)
@@ -321,6 +723,27 @@ class ForgeTests(unittest.TestCase):
         self.assertEqual(failure['commands_run'], 1)
         self.assertEqual(failure['commands'][0]['stage'], 'format')
         self.assertEqual(failure['commands'][0]['exit_code'], 0)
+
+    def test_python_validation_rejects_compiler_only_syntax_errors(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'tests').mkdir()
+        (self.root / 'worker.py').write_text('return 1\n', encoding='utf-8', newline='\n')
+        (self.root / 'tests/test_worker.py').write_text(
+            'import unittest\n\nclass WorkerTest(unittest.TestCase):\n'
+            '    def test_placeholder(self):\n        self.assertTrue(True)\n',
+            encoding='utf-8', newline='\n')
+        failed = self.cli('validate', 'worker.py', '--allow-exec', '--json', success=False)
+        events = [json.loads(line) for line in failed.stdout.splitlines()]
+        report = next(event['data'] for event in events
+                      if event['type'] == 'validation_result')
+        self.assertFalse(report['passed'])
+        self.assertEqual(report['commands_run'], 1)
+        self.assertEqual(report['commands'][0]['stage'], 'compile')
+        artifact = pathlib.Path(report['session']) / report['commands'][0]['stderr_artifact']
+        self.assertIn('outside function', artifact.read_text(encoding='utf-8'))
+        self.assertFalse((self.root / '__pycache__').exists())
 
     def test_staged_retrieval_cli_and_read_only_tool(self):
         (self.root / 'notes.md').write_text('ADD is documented in uppercase.\n', encoding='utf-8')
@@ -363,7 +786,7 @@ class ForgeTests(unittest.TestCase):
             {'final': 'The corrected result passed verification.'},
         ], '--allow-write', '--allow-exec', fallback_watch=True)
         reports = [e['data'] for e in events if e['type'] == 'validation_result']
-        self.assertEqual([report['passed'] for report in reports], [False, True])
+        self.assertEqual([report['passed'] for report in reports], [False, True, True])
         self.assertEqual([e['data'] for e in events if e['type'] == 'message'],
                          ['The corrected result passed verification.'])
         state = json.loads((session / 'working_state.json').read_text())
@@ -384,6 +807,24 @@ class ForgeTests(unittest.TestCase):
         self.assertFalse(any(e['type'] == 'message' for e in events))
         self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
                          'denied')
+
+    def test_agent_cannot_finish_when_validation_is_not_applicable(self):
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'note.txt').write_text('before\n', encoding='utf-8', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'note.txt', 'old_text': 'before', 'new_text': 'after'}},
+            {'final': 'Claimed success without an applicable validation plan.'},
+        ], '--allow-write', success=False, fallback_watch=True)
+        reports = [event['data'] for event in events
+                   if event['type'] == 'validation_result']
+        self.assertEqual(len(reports), 1)
+        self.assertFalse(reports[0]['applicable'])
+        self.assertFalse(reports[0]['passed'])
+        self.assertFalse(any(event['type'] == 'message' for event in events))
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'not_applicable')
 
     def test_unindexed_command_changes_require_fresh_validation(self):
         self.require_go()
@@ -408,7 +849,7 @@ class ForgeTests(unittest.TestCase):
             {'final': 'Restored the fixture and verified it.'},
         ], '--allow-exec', '--allow-write', fallback_watch=True)
         reports = [event['data'] for event in events if event['type'] == 'validation_result']
-        self.assertEqual([report['passed'] for report in reports], [False, True])
+        self.assertEqual([report['passed'] for report in reports], [False, True, True])
         self.assertTrue(all(report['inputs_checked'] for report in reports))
         self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
                          ['Restored the fixture and verified it.'])
@@ -508,6 +949,448 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('conflict', results[0])
         self.assertEqual((self.root / 'new.go').read_text(), 'package calc\n')
 
+    def test_hash_anchored_hunk_is_narrow_and_rejects_stale_revision(self):
+        self.go_module('a - b')
+        before = (self.root / 'calc.go').read_bytes()
+        anchor = hashlib.sha256(before).hexdigest()
+        _, events, session = self.run_script([
+            {'tool': 'read_file', 'args': {'path': 'calc.go', 'start': 4, 'end': 4}},
+            {'tool': 'apply_hunk', 'args': {
+                'path': 'calc.go', 'start': 4, 'end': 4, 'file_sha256': anchor,
+                'new_text': '\treturn a + b'}},
+            {'tool': 'apply_hunk', 'args': {
+                'path': 'calc.go', 'start': 4, 'end': 4, 'file_sha256': anchor,
+                'new_text': '\treturn 0\n'}},
+            {'final': 'Applied one anchored line edit.'},
+        ], '--allow-write', '--no-auto-validation')
+        outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
+        self.assertEqual(outputs[0], f'file_sha256:{anchor}\n4: \treturn a - b\n')
+        self.assertIn('Patched calc.go', outputs[1])
+        self.assertNotIn('file_sha256:', outputs[1])
+        self.assertIn('Staged Go syntax validation passed before commit', outputs[1])
+        self.assertIn('TOOL_ERROR [conflict]', outputs[2])
+        self.assertIn('stale file_sha256', outputs[2])
+        self.assertIn('\treturn a + b\n}', (self.root / 'calc.go').read_text())
+        outcome = json.loads((session / 'tool/000002.edit-result.json').read_text())
+        self.assertEqual(outcome['state'], 'applied')
+        self.assertFalse((session / 'tool/000003.edit.json').exists())
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['files_modified'], 1)
+
+    def test_hash_anchored_hunk_can_fill_an_existing_empty_file(self):
+        target = self.root / 'empty.txt'
+        target.write_bytes(b'')
+        anchor = hashlib.sha256(b'').hexdigest()
+        _, events, _ = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'empty.txt', 'old_text': '', 'new_text': 'first line\n'}},
+            {'tool': 'apply_hunk', 'args': {
+                'path': 'empty.txt', 'start': 1, 'end': 1, 'file_sha256': anchor,
+                'new_text': 'first line\n'}},
+            {'final': 'Filled the empty file.'},
+        ], '--allow-write', '--no-auto-validation')
+        outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
+        self.assertIn('use apply_hunk with start=1, end=1', outputs[0])
+        self.assertIn('Patched empty.txt', outputs[1])
+        self.assertEqual(target.read_text(), 'first line\n')
+
+    def test_native_broad_hunk_rejects_omitted_trailing_context_and_accepts_narrow_retry(self):
+        target = self.root / 'lines.txt'
+        original = ''.join(f'line {line}\n' for line in range(1, 11))
+        target.write_text(original, encoding='utf-8', newline='\n')
+        anchor = hashlib.sha256(original.encode()).hexdigest()
+        broad = ''.join(('changed 5' if line == 5 else f'line {line}') + '\n'
+                        for line in range(3, 8))
+        overlap = ''.join(('changed 5' if line == 5 else f'line {line}') + '\n'
+                          for line in range(3, 9))
+        shifted = 'line 3\ninserted\nline 4\nchanged 5\nline 6\n'
+        after_narrow = original.replace('line 5\n', 'changed 5\n')
+        after_narrow_hash = hashlib.sha256(after_narrow.encode()).hexdigest()
+        after_tail = after_narrow.replace('line 9\nline 10\n',
+                                          'line 9\ninserted tail\nline 10\n')
+        _, events, _ = self.run_script([
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 3, 'end': 8, 'file_sha256': anchor,
+                'new_text': broad}),
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 3, 'end': 6, 'file_sha256': anchor,
+                'new_text': overlap}),
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 3, 'end': 6, 'file_sha256': anchor,
+                'new_text': shifted}),
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 5, 'end': 5, 'file_sha256': anchor,
+                'new_text': 'changed 5'}),
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 9, 'end': 10,
+                'file_sha256': after_narrow_hash,
+                'new_text': 'line 9\ninserted tail\nline 10\n'}),
+            native_call('final', {'answer': 'Applied the narrow edit.'}),
+        ], '--prompt-protocol', 'native', '--allow-write', '--no-auto-validation',
+           fallback_watch=True)
+        outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
+        self.assertIn('omits 1 trailing selected line', outputs[0])
+        self.assertIn('differs at only line 5', outputs[0])
+        self.assertIn('repeats 2 following lines', outputs[1])
+        self.assertIn('middle-of-file hunk changes the selected line count from 4 to 5', outputs[2])
+        self.assertIn('Use apply_patch with the smallest exact old_text/new_text', outputs[2])
+        self.assertIn('Patched lines.txt', outputs[3])
+        self.assertIn(f'file_sha256:{after_narrow_hash}', outputs[3])
+        self.assertIn('Patched lines.txt', outputs[4])
+        self.assertIn(f'file_sha256:{hashlib.sha256(after_tail.encode()).hexdigest()}', outputs[4])
+        self.assertEqual(target.read_text(), after_tail)
+
+    def test_native_hash_anchored_hunk_accepts_large_end_of_file_replacement(self):
+        target = self.root / 'lines.txt'
+        original = ''.join(f'line {line}\n' for line in range(1, 41))
+        replacement = original.replace('line 20\n', 'changed 20\ninserted line\n')
+        target.write_text(original, encoding='utf-8', newline='\n')
+        anchor = hashlib.sha256(original.encode()).hexdigest()
+        _, events, _ = self.run_script([
+            native_call('apply_hunk', {
+                'path': 'lines.txt', 'start': 1, 'end': 40, 'file_sha256': anchor,
+                'new_text': replacement}),
+            native_call('final', {'answer': 'Applied the anchored replacement.'}),
+        ], '--prompt-protocol', 'native', '--allow-write', '--no-auto-validation',
+           fallback_watch=True)
+        output = next(event['data']['output'] for event in events
+                      if event['type'] == 'tool_result')
+        self.assertIn('Patched lines.txt', output)
+        self.assertEqual(target.read_text(), replacement)
+
+    def test_syntax_broken_go_candidate_is_aborted_before_commit(self):
+        before = (self.root / 'calc.go').read_bytes()
+        source = before.decode()
+        candidates = [
+            source.replace('return a - b }', 'return a + b'),
+            'func Add(a, b int) int { return a + b }\n',
+            'package calc\nreturn 1\n',
+            'package calc\n' + r'var _ = "\q"' + '\n',
+            'package calc\n' + r"var _ = '\x12ab'" + '\n',
+            '',
+        ]
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'calc.go', 'old_text': source, 'new_text': candidate}}
+            for candidate in candidates
+        ] + [
+            {'final': 'The invalid candidate was rejected.'},
+        ], '--allow-write', '--no-auto-validation', fallback_watch=True)
+        outputs = [event['data']['output'] for event in events
+                   if event['type'] == 'tool_result']
+        self.assertEqual(len(outputs), len(candidates))
+        for output in outputs:
+            self.assertIn('TOOL_ERROR [parse]', output)
+            self.assertIn('Proposed Go edit rejected before commit', output)
+        self.assertEqual((self.root / 'calc.go').read_bytes(), before)
+        self.assertEqual((session / 'tool/000001.before').read_bytes(), before)
+        for index, candidate in enumerate(candidates, 1):
+            self.assertEqual((session / f'tool/{index:06}.after').read_bytes(),
+                             candidate.encode())
+            outcome = json.loads((session / f'tool/{index:06}.edit-result.json').read_text())
+            self.assertEqual(outcome['state'], 'aborted')
+            self.assertEqual(outcome['status'], 'parse')
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['files_modified'], 0)
+
+    def test_valid_go_package_comment_and_coalesced_hex_escape_commit(self):
+        before = (self.root / 'calc.go').read_bytes()
+        candidate = (b'package /* inline */ calc\n\nvar _ = "\\x12ab"\n\n'
+                     b'func Add(a, b int) int { return a - b }\n')
+        _, events, _ = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'calc.go', 'old_text': before.decode(),
+                'new_text': candidate.decode()}},
+            {'final': 'The valid candidate committed.'},
+        ], '--allow-write', '--no-auto-validation')
+        output = next(event['data']['output'] for event in events
+                      if event['type'] == 'tool_result')
+        self.assertIn('Patched calc.go', output)
+        self.assertIn('Staged Go syntax validation passed before commit', output)
+        self.assertEqual((self.root / 'calc.go').read_bytes(), candidate)
+
+    def test_failed_workspace_states_survive_edit_tool_changes(self):
+        self.require_python()
+        for changed_input in (None, 'dependency.txt', 'test_input.txt'):
+            with self.subTest(changed_input=changed_input):
+                (self.root / 'calc.go').unlink(missing_ok=True)
+                (self.root / 'caller.go').unlink(missing_ok=True)
+                (self.root / 'worker.py').write_text('value = 1\n', newline='\n')
+                for name in ('dependency.txt', 'test_input.txt'):
+                    (self.root / name).write_text('1\n', newline='\n')
+                command = {'tool': 'run_command', 'args': {'argv': [
+                    sys.executable, '-B', '-c',
+                    'import worker; assert worker.value == 3, "repair assertion: expected 3"']}}
+                actions = [
+                    {'tool': 'apply_patch', 'args': {
+                        'path': 'worker.py', 'old_text': 'value = 1', 'new_text': 'value = 2'}},
+                    command,
+                    {'tool': 'apply_patch', 'args': {
+                        'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 1'}},
+                ]
+                if changed_input:
+                    actions.append({'tool': 'apply_patch', 'args': {
+                        'path': changed_input, 'old_text': '1', 'new_text': '2'}})
+                actions += [
+                    {'tool': 'apply_hunk', 'args': {
+                        'path': 'worker.py', 'start': 1, 'end': 1,
+                        'file_sha256': hashlib.sha256(b'value = 1\n').hexdigest(),
+                        'new_text': 'value = 2\n'}},
+                    {'tool': 'apply_patch', 'args': {
+                        'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 3'}},
+                    {'final': 'Recovered.'},
+                ]
+                _, events, session = self.run_script(
+                    actions, '--allow-write', '--allow-exec', '--no-auto-validation',
+                    fallback_watch=True)
+                matches = [e['data'] for e in events if e['type'] == 'failed_workspace_state']
+                self.assertEqual(len(matches), 0 if changed_input else 1)
+                if not changed_input:
+                    self.assertIn('repair assertion: expected 3', matches[0])
+                    self.assertIn('run_command', matches[0])
+                self.assertEqual((self.root / 'worker.py').read_text(), 'value = 3\n')
+                # Failure evidence stays in the prompt across the intervening revert.
+                self.assertIn('repair assertion: expected 3',
+                              (session / 'context/0004.txt').read_text())
+
+    def test_reapplying_edit_after_a_legitimate_revert_is_allowed(self):
+        edit = {'tool': 'apply_patch', 'args': {
+            'path': 'calc.go', 'old_text': 'a - b', 'new_text': 'a + b'}}
+        _, events, _ = self.run_script([
+            edit,
+            {'tool': 'apply_patch', 'args': {
+                'path': 'calc.go', 'old_text': 'a + b', 'new_text': 'a - b'}},
+            edit,
+            {'final': 'Reapplied a valid repair.'},
+        ], '--allow-write', '--no-auto-validation', fallback_watch=True)
+        self.assertEqual(len([e for e in events if e['type'] == 'edit_result' and
+                              e['data']['state'] == 'applied']), 3)
+        self.assertFalse(any(e['type'] == 'failed_workspace_state' for e in events))
+
+    def test_validation_runner_is_visible_before_first_action(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nclass Tests(unittest.TestCase):\n'
+            '    def test_value(self): self.assertEqual(1, 2)\n', newline='\n')
+        _, _, session = self.run_script([{'final': 'Inspected.'}],
+                                        '--no-auto-validation', fallback_watch=True)
+        prompt = (session / 'context/0001.txt').read_text()
+        self.assertIn('VALIDATION_GUIDANCE', prompt)
+        self.assertIn('unittest', prompt)
+        self.assertIn('test_worker.py', prompt)
+        self.assertIn('definition-only', prompt)
+
+    def test_failed_repair_is_rechecked_immediately_after_edit(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text('value = 1\n', newline='\n')
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nfrom worker import value\nclass Tests(unittest.TestCase):\n'
+            '    def test_value(self): self.assertEqual(value, 3)\n', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'run_command', 'args': {'argv': [sys.executable, '-B', '-m',
+                                                     'unittest', 'test_worker', '-v']}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 1', 'new_text': 'value = 2'}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 3'}},
+            {'final': 'Repaired and validated.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        outputs = [e['data']['output'] for e in events if e['type'] == 'tool_result']
+        self.assertIn('2 != 3', outputs[1])
+        self.assertIn('POST_EDIT_VALIDATION', outputs[1])
+        self.assertIn('Automatic staged validation passed', outputs[2])
+        self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
+                         'passed')
+
+    def test_rejected_hunk_reports_current_bounds_without_applying_candidate(self):
+        target = self.root / 'lines.txt'
+        target.write_bytes(b'first\nsecond\nlast\n')
+        anchor = hashlib.sha256(target.read_bytes()).hexdigest()
+        _, events, _ = self.run_script([
+            native_call('apply_hunk', {'path': 'lines.txt', 'start': 1, 'end': 10,
+                                       'file_sha256': anchor, 'new_text': 'rejected\n'}),
+            native_call('apply_hunk', {'path': 'lines.txt', 'start': 2, 'end': 2,
+                                       'file_sha256': anchor, 'new_text': 'repaired\n'}),
+            native_call('final', {'answer': 'Applied the narrow retry.'}),
+        ], '--allow-write', '--no-auto-validation', '--prompt-protocol', 'native',
+           fallback_watch=True)
+        outputs = [e['data']['output'] for e in events if e['type'] == 'tool_result']
+        self.assertIn('No edit performed', outputs[0])
+        self.assertIn('file_line_count:3', outputs[0])
+        self.assertIn(f'file_sha256:{anchor}', outputs[0])
+        self.assertIn('file_line_count:3', outputs[1])
+        self.assertEqual(target.read_bytes(), b'first\nrepaired\nlast\n')
+
+    def test_failed_automatic_validation_tracks_contents_and_keeps_assertion(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text('value = 1\n', newline='\n')
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nfrom worker import value\nclass Tests(unittest.TestCase):\n'
+            '    def test_value(self): self.assertEqual(value, 3, "expected three")\n', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 1', 'new_text': 'value = 2'}},
+            {'final': 'Check the first candidate.'},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 1'}},
+            {'tool': 'apply_hunk', 'args': {
+                'path': 'worker.py', 'start': 1, 'end': 1,
+                'file_sha256': hashlib.sha256(b'value = 1\n').hexdigest(),
+                'new_text': 'value = 2\n'}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'absent', 'new_text': 'still absent'}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'value = 2', 'new_text': 'value = 3'}},
+            {'final': 'Validated the actual repair.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        matches = [e['data'] for e in events if e['type'] == 'failed_workspace_state']
+        self.assertEqual(len(matches), 1)
+        self.assertIn('2 != 3', matches[0])
+        self.assertIn('test_worker.py', matches[0])
+        prompt = (session / 'context/0006.txt').read_text()
+        self.assertIn('REPAIR_EVIDENCE', prompt)
+        self.assertIn('expected three', prompt)
+        self.assertTrue(json.loads((session / 'validation/latest.json').read_text())['passed'])
+
+    def test_mutating_failed_command_does_not_label_post_command_contents_failed(self):
+        (self.root / 'state.txt').write_text('old\n', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'run_command', 'args': {'argv': [sys.executable, '-c',
+                'from pathlib import Path; Path("state.txt").write_text("failed\\n"); exit(1)']}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'state.txt', 'old_text': 'failed', 'new_text': 'old'}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'state.txt', 'old_text': 'old', 'new_text': 'failed'}},
+            {'final': 'Mutation is not stable failure evidence.'},
+        ], '--allow-write', '--allow-exec', '--no-auto-validation', fallback_watch=True)
+        self.assertFalse(any(e['type'] == 'failed_workspace_state' for e in events))
+        prompt = (session / 'context/0003.txt').read_text()
+        self.assertIn('REPAIR_EVIDENCE', prompt)
+        self.assertIn('stable_inputs=false', prompt)
+
+    def test_python_first_stall_runs_validation_and_pins_failure(self):
+        if not any(shutil.which(name) for name in ('python', 'python3', 'py')):
+            self.skipTest('Python executable discovery is needed for automatic validation')
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'expr').mkdir()
+        (self.root / 'tests').mkdir()
+        (self.root / 'expr/__init__.py').write_text('')
+        (self.root / 'expr/evaluate.py').write_text(
+            'import ast\n\ndef evaluate(expression)\n'
+            '    node = ast.parse(expression, mode="eval").body\n'
+            '    if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Add):\n'
+            '        raise ValueError("unsupported")\n'
+            '    if not isinstance(node.left, ast.Constant) or not isinstance(node.right, ast.Constant):\n'
+            '        raise ValueError("unsupported")\n'
+            '    return node.left.value + node.right.value\n', newline='\n')
+        (self.root / 'tests/test_evaluate.py').write_text(
+            'import unittest\nfrom expr.evaluate import evaluate\n\n'
+            'class EvaluateTests(unittest.TestCase):\n'
+            '    def test_addition_only(self):\n'
+            '        self.assertEqual(evaluate("2 + 5"), 7)\n'
+            '        with self.assertRaises(ValueError): evaluate("2 * 5")\n'
+            '        with self.assertRaises(ValueError): evaluate("\'a\' + \'b\'")\n', newline='\n')
+        old_guard = ('    if not isinstance(node.left, ast.Constant) or '
+                     'not isinstance(node.right, ast.Constant):\n'
+                     '        raise ValueError("unsupported")')
+        new_guard = ('    if not all(isinstance(value, ast.Constant) and '
+                     'isinstance(value.value, int)\n'
+                     '               for value in (node.left, node.right)):\n'
+                     '        raise ValueError("unsupported")')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'expr/evaluate.py', 'old_text': 'def evaluate(expression)\n',
+                'new_text': 'def evaluate(expression):\n'}},
+            {'tool': 'read_file', 'args': {
+                'path': 'expr/__init__.py', 'start': 1, 'end': 1}},
+            {'tool': 'read_file', 'args': {
+                'path': 'expr/__init__.py', 'start': 1, 'end': 1}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'expr/evaluate.py', 'old_text': old_guard, 'new_text': new_guard}},
+            {'final': 'Python repair validated.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        recoveries = [event['data'] for event in events if event['type'] == 'recovery']
+        self.assertEqual(len(recoveries), 1)
+        self.assertIn('ValueError not raised', recoveries[0])
+        validation_results = [event for event in events if event['type'] == 'validation_result']
+        self.assertGreaterEqual(len(validation_results), 2)
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'passed')
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual(metrics['loop_warnings'], 1)
+        self.assertGreaterEqual(metrics['validation_commands'], 4)
+        self.assertFalse((self.root / '__pycache__').exists())
+        self.assertFalse((self.root / '.pytest_cache').exists())
+        repaired = (self.root / 'expr/evaluate.py').read_text()
+        self.assertIn('isinstance(value.value, int)', repaired)
+
+    def test_blocked_python_stall_enters_recovery_and_can_add_tests(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text(
+            'def value():\n    return 1\n', encoding='utf-8', newline='\n')
+        test_source = (
+            'import unittest\nfrom worker import value\n\n'
+            'class WorkerTest(unittest.TestCase):\n'
+            '    def test_value(self):\n        self.assertEqual(value(), 2)\n')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'return 1', 'new_text': 'return 2'}},
+            {'tool': 'read_file', 'args': {'path': 'worker.py', 'start': 1, 'end': 5}},
+            {'tool': 'read_file', 'args': {'path': 'worker.py', 'start': 1, 'end': 5}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'test_worker.py', 'old_text': '', 'new_text': test_source}},
+            {'final': 'Added the missing Python test and validated the repair.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        recoveries = [event['data'] for event in events if event['type'] == 'recovery']
+        self.assertEqual(len(recoveries), 1)
+        self.assertIn('python_tests_not_detected', recoveries[0])
+        reports = [event['data'] for event in events
+                   if event['type'] == 'validation_result']
+        self.assertEqual([report['passed'] for report in reports], [False, True])
+        self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
+                         ['Added the missing Python test and validated the repair.'])
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'passed')
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['loop_warnings'], 1)
+
+    def test_stall_recovery_preserves_rejected_edit_diagnostic(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text(
+            'def value():\n    return 1\n', encoding='utf-8', newline='\n')
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nfrom worker import value\n\n'
+            'class WorkerTest(unittest.TestCase):\n'
+            '    def test_value(self):\n        self.assertEqual(value(), 2)\n',
+            encoding='utf-8', newline='\n')
+        invalid = {
+            'path': 'broken.go',
+            'old_text': '',
+            'new_text': 'package broken\nfunc Broken() {\n',
+        }
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'return 1', 'new_text': 'return 2'}},
+            {'tool': 'apply_patch', 'args': invalid},
+            {'tool': 'apply_patch', 'args': invalid},
+            {'final': 'Kept the valid committed Python repair.'},
+        ], '--allow-write', '--allow-exec', fallback_watch=True)
+        recoveries = [event['data'] for event in events if event['type'] == 'recovery']
+        self.assertEqual(len(recoveries), 1)
+        self.assertIn('Proposed Go edit rejected before commit', recoveries[0])
+        self.assertIn('Automatic staged validation passed', recoveries[0])
+        self.assertEqual([event['data'] for event in events if event['type'] == 'message'],
+                         ['Kept the valid committed Python repair.'])
+        self.assertEqual(json.loads((session / 'metrics.json').read_text())['loop_warnings'], 1)
+
     def test_edit_artifacts_are_exact_and_git_applicable(self):
         if not shutil.which('git'):
             self.skipTest('Git is needed to independently check emitted patches')
@@ -565,7 +1448,7 @@ class ForgeTests(unittest.TestCase):
 
     def test_identical_patch_is_a_conflict_and_can_recover(self):
         _, events, session = self.run_script([
-            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a - b'}},
+            {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'not present', 'new_text': 'not present'}},
             {'tool': 'apply_patch', 'args': {'path': 'calc.go', 'old_text': 'return a - b', 'new_text': 'return a + b'}},
             {'final': 'Fixed the expression.'},
         ], '--allow-write', '--no-auto-validation')
@@ -573,6 +1456,7 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('TOOL_ERROR [conflict]', outputs[0])
         self.assertIn('No edit performed', outputs[0])
         self.assertIn('Patched calc.go', outputs[1])
+        self.assertFalse((session / 'tool/000001.edit.json').exists())
         self.assertEqual(json.loads((session / 'metrics.json').read_text())['files_modified'], 1)
 
     def test_loop_detection_uses_canonical_arguments(self):
@@ -592,6 +1476,53 @@ class ForgeTests(unittest.TestCase):
         self.assertFalse(any(event['type'] == 'validation_result' for event in events))
         self.assertEqual(json.loads((session / 'working_state.json').read_text())['validation']['status'],
                          'unverified')
+
+    def test_repeated_process_action_enters_recovery_across_generation_bumps(self):
+        command = {'tool': 'run_command', 'args': {
+            'argv': [sys.executable, '-c', "print('same command')"]}}
+        _, events, session = self.run_script([
+            command,
+            command,
+            {'tool': 'read_file', 'args': {'path': 'calc.go', 'start': 1, 'end': 3}},
+            {'final': 'Recovered from the repeated process action.'},
+        ], '--allow-exec', '--no-auto-validation')
+        outputs = [event['data']['output'] for event in events
+                   if event['type'] == 'tool_result']
+        self.assertIn('exit_code=0', outputs[0])
+        self.assertIn('RECOVERY_MODE', outputs[1])
+        self.assertIn('file_sha256:', outputs[2])
+        self.assertEqual(len([event for event in events if event['type'] == 'recovery']), 1)
+        metrics = json.loads((session / 'metrics.json').read_text())
+        self.assertEqual(metrics['loop_warnings'], 1)
+        self.assertEqual(metrics['tool_calls'], 3)
+
+    def test_denied_stall_validation_is_recovery_evidence_not_terminal(self):
+        self.require_python()
+        (self.root / 'calc.go').unlink()
+        (self.root / 'caller.go').unlink()
+        (self.root / 'worker.py').write_text(
+            'def value():\n    return 1\n', encoding='utf-8', newline='\n')
+        (self.root / 'test_worker.py').write_text(
+            'import unittest\nfrom worker import value\n\n'
+            'class WorkerTest(unittest.TestCase):\n'
+            '    def test_value(self):\n        self.assertEqual(value(), 2)\n',
+            encoding='utf-8', newline='\n')
+        _, events, session = self.run_script([
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'return 1', 'new_text': 'return 2'}},
+            {'tool': 'read_file', 'args': {'path': 'worker.py', 'start': 1, 'end': 5}},
+            {'tool': 'read_file', 'args': {'path': 'worker.py', 'start': 1, 'end': 5}},
+            {'tool': 'apply_patch', 'args': {
+                'path': 'worker.py', 'old_text': 'return 2', 'new_text': 'return 3'}},
+            {'final': 'This final remains denied.'},
+        ], '--allow-write', success=False, fallback_watch=True)
+        recoveries = [event['data'] for event in events if event['type'] == 'recovery']
+        self.assertEqual(len(recoveries), 1)
+        self.assertIn('requires explicit unsandboxed process approval', recoveries[0])
+        self.assertIn('return 3', (self.root / 'worker.py').read_text())
+        self.assertFalse(any(event['type'] == 'message' for event in events))
+        state = json.loads((session / 'working_state.json').read_text())
+        self.assertEqual(state['validation']['status'], 'denied')
 
     def test_no_implicit_simulation(self):
         self.assertNotEqual(self.cli('run', 'task', success=False).returncode, 0)
@@ -622,7 +1553,23 @@ class ForgeTests(unittest.TestCase):
             {'final': 'Read bounded source slices.'},
         ])
         outputs = [event['data']['output'] for event in events if event['type'] == 'tool_result']
-        self.assertEqual(outputs, ['', '2: café\n'])
+        empty_hash = hashlib.sha256(b'').hexdigest()
+        last_hash = hashlib.sha256('one\ncafé'.encode('utf-8')).hexdigest()
+        self.assertEqual(outputs,
+                         [f'file_sha256:{empty_hash}\n',
+                          f'file_sha256:{last_hash}\n2: café\n'])
+
+        _, native_events, _ = self.run_script([
+            native_call('read_file', {'path': 'empty.txt', 'start': 1, 'end': 2}),
+            native_call('final', {'answer': 'Read the empty file.'}),
+        ], '--prompt-protocol', 'native', '--no-auto-validation')
+        native_output = next(event['data']['output'] for event in native_events
+                             if event['type'] == 'tool_result')
+        self.assertEqual(
+            native_output,
+            f'file_sha256:{empty_hash}\nfile_state:empty\n'
+            'next_action_guidance:Do not reread this unchanged empty file; inspect a different '
+            'relevant file.\n')
 
     def test_hardlink_patch_denied(self):
         outside = self.root / 'original.txt'
@@ -662,6 +1609,26 @@ class ForgeTests(unittest.TestCase):
         self.assertIn('exit_code=0', output)
         self.assertIn('isolated', output)
 
+    def test_native_failed_command_recommends_smallest_diagnostic_scoped_edit(self):
+        command = native_call('run_command', {
+            'argv': [sys.executable, '-c',
+                     "print('one assertion failed\\norder=[b a]\\nsuccess=map[a:1]\\n"
+                     "ValueError not raised\\ncapped=map[a:2 b:1]'); raise SystemExit(1)"]})
+        _, events, _ = self.run_script([
+            command,
+            native_call('final', {'answer': 'Recorded the diagnostic.'}),
+        ], '--prompt-protocol', 'native', '--allow-exec', '--no-auto-validation')
+        output = next(event['data']['output'] for event in events
+                      if event['type'] == 'tool_result')
+        self.assertIn('one assertion failed', output)
+        self.assertIn('Treat the diagnostics as the change boundary', output)
+        self.assertIn('make the smallest local edit', output)
+        self.assertIn('assertion and explicit requirements are authoritative', output)
+        self.assertIn('compare that semantic key directly', output)
+        self.assertIn('surrogate index is not equivalent', output)
+        self.assertIn('dereference and compare the IDs', output)
+        self.assertIn('changing only comments cannot repair executable behavior', output)
+
     def test_binary_command_output_is_preserved(self):
         code = "import sys; sys.stdout.buffer.write(b'begin\\x00after\\xff\\n'); sys.stderr.buffer.write(b'error\\x00tail')"
         _, events, session = self.run_script([
@@ -696,7 +1663,8 @@ class ForgeTests(unittest.TestCase):
             path = self.root / 'script.json'
             path.write_text(json.dumps(actions), encoding='utf-8')
             result = self.cli('run', 'Check inherited descriptors', '--script', str(path), '--json',
-                              '--allow-exec', '--no-auto-validation', **options)
+                              '--allow-exec', '--no-auto-validation', '--prompt-protocol', 'flattened',
+                              **options)
         events = [json.loads(line) for line in result.stdout.splitlines()]
         output = next(e['data']['output'] for e in events if e['type'] == 'tool_result')
         self.assertIn('exit_code=0', output)

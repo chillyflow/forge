@@ -1,0 +1,16 @@
+diff --git a/service.py b/service.py
+index 8fcdd20..baff95c 100644
+--- a/service.py
++++ b/service.py
+@@ -11,9 +11,10 @@ class Queue:
+     def pop(self):
+         while self.heap:
+             _, serial, key = heapq.heappop(self.heap)
+-            entry = self.current.pop(key, None)
++            entry = self.current.get(key)
+             if entry is None or entry[0] != serial:
+                 continue
+             # Entry was removed while reading it.
++            del self.current[key]
+             return key, entry[1]
+         return None

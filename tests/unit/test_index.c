@@ -692,6 +692,20 @@ static void test_git_delta_eligibility(void) {
         fixture_finish(&f);
         return;
     }
+    /* Git enumeration passes --no-lazy-fetch, which requires Git 2.45. Older Git
+     * takes the documented native full-scan fallback, which does not exclude
+     * .gitignore paths, so this case cannot hold there (docs/INDEX.md). */
+    const char *lazy_argv[] = {"git", "--no-lazy-fetch", "version", NULL};
+    fg_process_result lazy_result = {0};
+    forge_status lazy_status =
+        fg_process(f.root, lazy_argv, 10000, 8192, NULL, NULL, &lazy_result, &f.error);
+    bool lazy_fetch = lazy_status == FORGE_OK && !lazy_result.exit_code;
+    fg_process_free(&lazy_result);
+    if (!lazy_fetch) {
+        puts("Git eligibility case skipped: Git lacks --no-lazy-fetch (needs 2.45+)");
+        fixture_finish(&f);
+        return;
+    }
     write_source(&f, ".gitignore", ".forge/\nignored.go\n");
     write_source(&f, "tracked.go", "package p\nfunc Tracked() {}\n");
     write_source(&f, "free.go", "package p\nfunc Untracked() {}\n");

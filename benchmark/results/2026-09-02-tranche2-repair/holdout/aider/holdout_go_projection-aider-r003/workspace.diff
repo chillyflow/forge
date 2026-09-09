@@ -1,0 +1,15 @@
+diff --git a/The issue is in this section b/The issue is in this section
+index e69de29..5df5127 100644
+--- a/The issue is in this section	
++++ b/The issue is in this section	
+@@ -0,0 +1,10 @@
++if seen && ev.Revision <= previous {
++    continue
++}
++revisions[ev.Key] = ev.Revision
++if ev.Deleted {
++    delete(values, ev.Key)
++    delete(revisions, ev.Key)
++} else {
++    values[ev.Key] = ev.Value
++}

@@ -1,0 +1,26 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,11 +1,11 @@
+-from copy import deepcopy
+-def overlay(base, changes):
+-    result = deepcopy(base)
+-    for key, value in changes.items():
+-        if value is None:
+-            result.pop(key, None)
+-        elif isinstance(value, dict) and isinstance(result.get(key), dict):
+-            result[key] = overlay(result[key], value)
+-        else:
+-            result[key] = value
+-    return result
++from copy import deepcopy
++def overlay(base, changes):
++    result = deepcopy(base)
++    for key, value in changes.items():
++        if value is None:
++            result.pop(key, None)
++        elif isinstance(value, dict) and isinstance(result.get(key), dict):
++            result[key] = overlay(result[key], value)
++        else:
++            result[key] = deepcopy(value)
++    return result

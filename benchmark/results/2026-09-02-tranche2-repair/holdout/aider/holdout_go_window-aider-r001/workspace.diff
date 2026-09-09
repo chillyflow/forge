@@ -1,0 +1,21 @@
+diff --git a/service.go b/service.go
+index 0826199..01ee4f3 100644
+--- a/service.go
++++ b/service.go
+@@ -15,11 +15,15 @@ func (w *Window) Add(now, value int) (int, bool) {
+ 	w.last = now
+ 	w.started = true
+ 	w.samples = append(w.samples, sample{now, value})
++	
++	// Remove samples that are outside the window
+ 	first := 0
+-	for first < len(w.samples) && w.samples[first].at < now-w.Width {
++	for first < len(w.samples) && w.samples[first].at <= now-w.Width {
+ 		first++
+ 	}
+ 	w.samples = w.samples[first:]
++	
++	// Calculate sum of remaining samples
+ 	sum := 0
+ 	for _, s := range w.samples {
+ 		sum += s.value

@@ -4,7 +4,14 @@ forge_limits forge_default_limits(void) {
                           120000, 1800000};
 }
 forge_model_config forge_default_model_config(void) {
-    return (forge_model_config){NULL, NULL, NULL, 16384, 0, 0, 42, 0.0f, true, true};
+    forge_model_config config = {0};
+    config.context_tokens = 16384;
+    config.seed = 42;
+    config.reuse_prefix = true;
+    config.grammar_fast_path = true;
+    config.thinking = FORGE_THINKING_DISABLED;
+    config.prompt_protocol = FORGE_PROMPT_NATIVE;
+    return config;
 }
 bool fg_model_instance_init(forge_model *m, forge_error *e) {
     if (!m || !fg_random_hex(m->instance_nonce, 16)) {
@@ -19,22 +26,42 @@ static size_t script_count(forge_model *m, const char *text) {
     (void)m;
     return (strlen(text) + 3) / 4;
 }
+static forge_status script_parse_native(forge_model *m, const char *response, char **message,
+                                        forge_error *error) {
+    (void)m;
+    if (!response || !message)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Invalid scripted native response");
+    *message = fg_strdup(response);
+    return *message ? FORGE_OK
+                    : fg_error(error, FORGE_ERR_MEMORY, "Cannot copy scripted native response");
+}
 size_t fg_model_count(const char *text, void *model) {
     forge_model *m = model;
     return m->count(m, text);
 }
+size_t fg_model_count_prompt(const char *text, void *model) {
+    forge_model *m = model;
+    return (m->count_prompt ? m->count_prompt : m->count)(m, text);
+}
 static forge_status script_generate(forge_model *m, const char *prompt, const char *grammar,
-                                    size_t max_tokens, forge_token_fn cb, void *user, char **out,
-                                    forge_metrics *stats, forge_cancel_fn cancel, void *cu,
-                                    uint64_t deadline, forge_error *e) {
+                                    const fg_decode_policy *policy, size_t max_tokens,
+                                    forge_token_fn cb, void *user, char **out, forge_metrics *stats,
+                                    forge_cancel_fn cancel, void *cu, uint64_t deadline,
+                                    forge_error *e) {
     (void)grammar;
+    (void)policy;
     if ((cancel && cancel(cu)) || (deadline && fg_now_ms() >= deadline))
         return fg_error(e, FORGE_ERR_CANCELLED, "Generation cancelled");
     yyjson_val *steps = yyjson_doc_get_root(m->script),
                *step = yyjson_arr_get(steps, m->script_cursor++);
     if (!step)
         return fg_error(e, FORGE_ERR_MODEL, "Scripted test fixture exhausted");
-    char *json = yyjson_val_write(step, 0, NULL);
+    /* Object steps preserve the original concise fixture format. String steps
+     * are exact raw model text, used to exercise routed reasoning before the
+     * action JSON without giving the test backend special agent knowledge. */
+    char *json = yyjson_is_str(step) && yyjson_get_len(step) == strlen(yyjson_get_str(step))
+                     ? fg_strdup(yyjson_get_str(step))
+                     : yyjson_val_write(step, 0, NULL);
     if (!json)
         return fg_error(e, FORGE_ERR_MEMORY, "Script allocation failed");
     size_t count = script_count(m, json);
@@ -64,6 +91,8 @@ static forge_status script_generate(forge_model *m, const char *prompt, const ch
 }
 forge_model *forge_model_load(const forge_model_config *config, forge_error *e) {
     if (!config || config->context_tokens < 128 || config->context_tokens > 1048576 ||
+        (unsigned)config->thinking > FORGE_THINKING_DISABLED ||
+        (unsigned)config->prompt_protocol > FORGE_PROMPT_NATIVE ||
         (!config->model_path == !config->script_path)) {
         fg_error(
             e, FORGE_ERR_ARGUMENT,
@@ -94,7 +123,9 @@ forge_model *forge_model_load(const forge_model_config *config, forge_error *e) 
             return NULL;
         }
         m->count = script_count;
+        m->count_prompt = script_count;
         m->generate = script_generate;
+        m->parse_native = script_parse_native;
         return m;
     }
 #ifdef FORGE_WITH_LLAMA
@@ -110,6 +141,17 @@ forge_model *forge_model_load(const forge_model_config *config, forge_error *e) 
              "only for tests.");
     return NULL;
 #endif
+}
+
+forge_status fg_model_parse_native(forge_model *model, const char *response, char **message,
+                                   forge_error *error) {
+    if (!model || !response || !message || model->config.prompt_protocol != FORGE_PROMPT_NATIVE)
+        return fg_error(error, FORGE_ERR_ARGUMENT, "Invalid native response parse request");
+    *message = NULL;
+    if (!model->parse_native)
+        return fg_error(error, FORGE_ERR_UNSUPPORTED,
+                        "The selected backend cannot parse native tool calls");
+    return model->parse_native(model, response, message, error);
 }
 void forge_model_destroy(forge_model *m) {
     if (m) {
@@ -161,8 +203,8 @@ forge_status fg_model_generate_active(forge_model *m, const char *prompt, size_t
     *output = NULL;
     if ((cancel && cancel(cancel_userdata)) || (deadline && fg_now_ms() >= deadline))
         return fg_error(e, FORGE_ERR_CANCELLED, "Generation cancelled before tokenization");
-    return m->generate(m, prompt, NULL, max_tokens, callback, userdata, output, metrics, cancel,
-                       cancel_userdata, deadline, e);
+    return m->generate(m, prompt, NULL, NULL, max_tokens, callback, userdata, output, metrics,
+                       cancel, cancel_userdata, deadline, e);
 }
 forge_status fg_model_generate_with_cache(forge_model *m, const char *p, const char *g,
                                           size_t max_tokens, forge_token_fn cb, void *u, char **out,
@@ -170,8 +212,19 @@ forge_status fg_model_generate_with_cache(forge_model *m, const char *p, const c
                                           uint64_t deadline,
                                           const forge_checkpoint_cache_request *request,
                                           forge_error *e) {
+    return fg_model_generate_routed_with_cache(m, p, g, NULL, max_tokens, cb, u, out, stats, cancel,
+                                               cu, deadline, request, e);
+}
+forge_status
+fg_model_generate_routed_with_cache(forge_model *m, const char *p, const char *g,
+                                    const struct fg_decode_policy *policy, size_t max_tokens,
+                                    forge_token_fn cb, void *u, char **out, forge_metrics *stats,
+                                    forge_cancel_fn cancel, void *cu, uint64_t deadline,
+                                    const forge_checkpoint_cache_request *request, forge_error *e) {
     if (!m || !m->generate || !p || !max_tokens || !out || !stats)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid generation request");
+    if (policy && (!g || !policy->trigger || !*policy->trigger))
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Lazy grammar requires grammar and trigger");
     *out = NULL;
     if (m->operation_active)
         return fg_error(e, FORGE_ERR_CONFLICT, "Another operation is active on this model");
@@ -185,7 +238,8 @@ forge_status fg_model_generate_with_cache(forge_model *m, const char *p, const c
     if ((cancel && cancel(cu)) || (deadline && fg_now_ms() >= deadline))
         status = fg_error(e, FORGE_ERR_CANCELLED, "Generation cancelled before tokenization");
     else
-        status = m->generate(m, p, g, max_tokens, cb, u, out, stats, cancel, cu, deadline, e);
+        status =
+            m->generate(m, p, g, policy, max_tokens, cb, u, out, stats, cancel, cu, deadline, e);
     forge_checkpoint_cache_get_stats(m, &cache_after);
     cache_metrics(stats, &cache_before, &cache_after);
     m->cache_request = NULL;

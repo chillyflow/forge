@@ -212,10 +212,146 @@ static void test_diagnostic_byte_boundaries(void) {
     assert(fg_utf8_valid(compressed, strlen(compressed)));
     free(compressed);
 }
+
+static void test_native_tool_schema_and_normalization(void) {
+    char *schema = fg_tool_native_schema();
+    assert(schema);
+    yyjson_doc *document = yyjson_read(schema, strlen(schema), 0);
+    yyjson_val *tools = document ? yyjson_doc_get_root(document) : NULL;
+    size_t tool_count = 0;
+    fg_tools(&tool_count);
+    assert(yyjson_is_arr(tools) && yyjson_arr_size(tools) == tool_count + 2);
+    bool final = false, memory = false, hunk_newline = false, hunk_structure = false,
+         hunk_hash = false, patch_minimal = false, patch_hash = false;
+    size_t index, maximum;
+    yyjson_val *tool;
+    yyjson_arr_foreach(tools, index, maximum, tool) {
+        assert(!strcmp(fg_json_str(tool, "type"), "function"));
+        yyjson_val *function = yyjson_obj_get(tool, "function");
+        const char *name = fg_json_str(function, "name");
+        yyjson_val *parameters = yyjson_obj_get(function, "parameters");
+        const char *description = fg_json_str(function, "description");
+        assert(name && description && yyjson_is_obj(parameters));
+        assert(yyjson_is_false(yyjson_obj_get(parameters, "additionalProperties")));
+        final |= !strcmp(name, "final") && strstr(description, "trigger required host validation");
+        memory |= !strcmp(name, "memory") && strstr(description, "not a completion action");
+        hunk_newline |=
+            !strcmp(name, "apply_hunk") && strstr(description, "host preserves that line ending");
+        hunk_structure |=
+            !strcmp(name, "apply_hunk") && strstr(description, "preserve the selected line count");
+        hunk_hash |= !strcmp(name, "apply_hunk") && strstr(description, "updated file_sha256");
+        patch_minimal |=
+            !strcmp(name, "apply_patch") && strstr(description, "smallest unique differing span");
+        patch_hash |= !strcmp(name, "apply_patch") && strstr(description, "updated file_sha256");
+    }
+    assert(final && memory && hunk_newline && hunk_structure && hunk_hash && patch_minimal &&
+           patch_hash);
+    yyjson_doc_free(document);
+    free(schema);
+
+    schema = fg_tool_native_final_schema();
+    assert(schema);
+    document = yyjson_read(schema, strlen(schema), 0);
+    tools = document ? yyjson_doc_get_root(document) : NULL;
+    assert(yyjson_is_arr(tools) && yyjson_arr_size(tools) == 1);
+    yyjson_val *only = yyjson_arr_get_first(tools);
+    assert(only && !strcmp(fg_json_str(yyjson_obj_get(only, "function"), "name"), "final"));
+    yyjson_doc_free(document);
+    free(schema);
+
+    const char *message = "{\"role\":\"assistant\",\"content\":\"\","
+                          "\"reasoning_content\":\"inspect first\",\"tool_calls\":[{"
+                          "\"type\":\"function\",\"function\":{\"name\":\"read_file\","
+                          "\"arguments\":\"{\\\"path\\\":\\\"calc.go\\\",\\\"start\\\":1,"
+                          "\\\"end\\\":2}\"}}]}";
+    forge_error error = {0};
+    char *action = NULL;
+    assert(fg_native_action_normalize(message, true, &action, &error) == FORGE_OK);
+    document = yyjson_read(action, strlen(action), 0);
+    yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
+    assert(root && !strcmp(fg_json_str(root, "thought"), "inspect first") &&
+           !strcmp(fg_json_str(root, "tool"), "read_file"));
+    yyjson_val *args = yyjson_obj_get(root, "args");
+    assert(!strcmp(fg_json_str(args, "path"), "calc.go") &&
+           yyjson_get_uint(yyjson_obj_get(args, "start")) == 1 &&
+           yyjson_get_uint(yyjson_obj_get(args, "end")) == 2);
+    yyjson_doc_free(document);
+    free(action);
+
+    action = NULL;
+    assert(fg_native_action_normalize(message, false, &action, &error) == FORGE_OK);
+    assert(!strstr(action, "thought"));
+    free(action);
+
+    fg_buf long_message = {0};
+    assert(fg_buf_puts(&long_message, "{\"role\":\"assistant\",\"content\":\"\","
+                                      "\"reasoning_content\":\""));
+    for (size_t i = 0; i < FG_THOUGHT_MAX_BYTES + 100; i++)
+        assert(fg_buf_puts(&long_message, "x"));
+    assert(fg_buf_puts(&long_message, "\",\"tool_calls\":[{\"type\":\"function\",\"function\":{"
+                                      "\"name\":\"git_status\",\"arguments\":\"{}\"}}]}"));
+    action = NULL;
+    assert(fg_native_action_normalize(long_message.data, true, &action, &error) == FORGE_OK);
+    document = yyjson_read(action, strlen(action), 0);
+    root = document ? yyjson_doc_get_root(document) : NULL;
+    assert(root && strlen(fg_json_str(root, "thought")) == FG_THOUGHT_MAX_BYTES);
+    yyjson_doc_free(document);
+    free(action);
+    fg_buf_clear(&long_message);
+
+    message = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+              "\"id\":\"call_1\",\"type\":\"function\",\"function\":{"
+              "\"name\":\"final\",\"arguments\":{\"answer\":\"done\"}}}]}";
+    action = NULL;
+    assert(fg_native_action_normalize(message, true, &action, &error) == FORGE_OK);
+    assert(!strcmp(action, "{\"final\":\"done\"}"));
+    free(action);
+
+    const char *unsupported = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+                              "\"type\":\"function\",\"function\":{\"name\":\"delete_everything\","
+                              "\"arguments\":\"{}\"}}]}";
+    action = NULL;
+    assert(fg_native_action_normalize(unsupported, true, &action, &error) == FORGE_ERR_UNSUPPORTED);
+    assert(!action && strstr(error.message, "unsupported tool"));
+    const char *parallel = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":["
+                           "{\"type\":\"function\",\"function\":{\"name\":\"git_status\","
+                           "\"arguments\":\"{}\"}},{\"type\":\"function\",\"function\":{"
+                           "\"name\":\"git_diff\",\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(parallel, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "exactly one"));
+    const char *bad_args = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+                           "\"type\":\"function\",\"function\":{\"name\":\"read_file\","
+                           "\"arguments\":\"{\\\"path\\\":\\\"x\\\",\\\"start\\\":1}\"}}]}";
+    assert(fg_native_action_normalize(bad_args, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "missing end"));
+    const char *nul_name = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+                           "\"type\":\"function\",\"function\":{\"name\":\"read_file\\u0000junk\","
+                           "\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(nul_name, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "requires type=function"));
+    const char *extra = "{\"role\":\"assistant\",\"content\":\"\",\"unexpected\":true,"
+                        "\"tool_calls\":[{\"type\":\"function\",\"function\":{"
+                        "\"name\":\"git_status\",\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(extra, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "malformed fields"));
+    const char *missing_content = "{\"role\":\"assistant\",\"unexpected\":true,\"tool_calls\":[{"
+                                  "\"type\":\"function\",\"function\":{\"name\":\"git_status\","
+                                  "\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(missing_content, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "assistant content"));
+    const char *duplicate_role = "{\"role\":\"assistant\",\"role\":\"assistant\",\"tool_calls\":[{"
+                                 "\"type\":\"function\",\"function\":{\"name\":\"git_status\","
+                                 "\"arguments\":\"{}\"}}]}";
+    assert(fg_native_action_normalize(duplicate_role, true, &action, &error) == FORGE_ERR_PARSE);
+    assert(!action && strstr(error.message, "assistant content"));
+}
 int main(void) {
+    forge_model_config defaults = forge_default_model_config();
+    assert(defaults.prompt_protocol == FORGE_PROMPT_NATIVE);
     test_edit_diffs();
     test_utf8_and_byte_rendering();
     test_diagnostic_byte_boundaries();
+    test_native_tool_schema_and_normalization();
     fg_buf b = {0};
     assert(fg_buf_puts(&b, "abc"));
     assert(fg_buf_printf(&b, "%d", 123));
@@ -268,9 +404,127 @@ int main(void) {
     d = yyjson_read(j, strlen(j), 0);
     assert(!fg_tool_validate("read_file", yyjson_doc_get_root(d), &e));
     yyjson_doc_free(d);
-    s = fg_tool_grammar();
+    s = fg_tool_grammar(true, false, false);
     assert(s && strstr(s, "call0") && strstr(s, "root ::="));
+    assert(strstr(s, "thought ::=") && strstr(s, " ws thought? "));
     free(s);
+    s = fg_tool_schema(true, false, false);
+    assert(s && strstr(s, "\"thought\"") && strstr(s, "2048") && strstr(s, "may begin"));
+    free(s);
+    /* The §32 ablation control removes the reasoning channel from generation
+     * without touching the constrained action: every call rule survives. */
+    s = fg_tool_grammar(false, false, false);
+    assert(s && strstr(s, "call0") && strstr(s, "root ::="));
+    assert(!strstr(s, "thought"));
+    free(s);
+    s = fg_tool_schema(false, false, false);
+    assert(s && !strstr(s, "thought") && strstr(s, "read_file"));
+    free(s);
+    /* Required mode is the measurable "on" arm: models do not reliably opt
+     * into an optional field, so the ablation needs the channel mandatory. */
+    s = fg_tool_grammar(true, true, false);
+    assert(s && strstr(s, "thought ::=") && strstr(s, " ws thought ") &&
+           !strstr(s, " ws thought? "));
+    free(s);
+    s = fg_tool_schema(true, true, false);
+    assert(s && strstr(s, "MUST begin") && !strstr(s, "may begin"));
+    free(s);
+    /* Requiring the field cannot resurrect a disabled channel. */
+    s = fg_tool_grammar(false, true, false);
+    assert(s && !strstr(s, "thought"));
+    free(s);
+    /* Routed mode moves thought before the JSON object and therefore keeps the
+     * action grammar free of an inline thought field. */
+    s = fg_tool_grammar(true, false, true);
+    assert(s && strstr(s, "call0") && !strstr(s, "thought"));
+    free(s);
+    s = fg_tool_schema(true, false, true);
+    assert(s && strstr(s, "Reason in plain text") && strstr(s, "is optional") &&
+           strstr(s, "Do not put a thought field"));
+    free(s);
+    s = fg_tool_schema(true, true, true);
+    assert(s && strstr(s, "MUST be nonempty"));
+    free(s);
+    /* §32 decode-state routing predicates. fg_action_begin mirrors the lazy
+     * trigger: an envelope key must open the object, so reasoning prose and
+     * embedded non-action objects never mark the constrained region. */
+    const char *begun = fg_action_begin("Thought: adding first {\"tool\":\"read_file\"");
+    assert(begun && !strncmp(begun, "{\"tool\"", 7));
+    begun = fg_action_begin("x { \"final\" : \"done\"}");
+    assert(begun && !strncmp(begun, "{ \"final\"", 9));
+    assert(!fg_action_begin("no action here"));
+    assert(!fg_action_begin("{\"thought\":\"only\"}"));
+    assert(!fg_action_begin("{\"x\":1,\"tool\":\"late key\"}"));
+    /* Completion requires a full parse to the end of the text: an unclosed
+     * object, or a '}' inside a string, must not end generation early. */
+    assert(fg_action_complete("{\"tool\":\"list_files\",\"args\":{\"path\":\".\"}}"));
+    assert(fg_action_complete("prose then {\"final\":\"done\"} \n"));
+    assert(!fg_action_complete("{\"tool\":\"list_files\",\"args\":{\"path\":\".\"}"));
+    assert(!fg_action_complete("{\"final\":\"a brace } inside"));
+    assert(!fg_action_complete("nothing"));
+    assert(fg_json_whitespace_only(" \t\r\n", 4));
+    assert(!fg_json_whitespace_only("", 0));
+    assert(!fg_json_whitespace_only(" \n{", 3));
+    assert(!fg_native_force_due(false, false, 0, 2048));
+    assert(!fg_native_force_due(true, false, 0, 0));
+    assert(!fg_native_force_due(true, false, 0, 1));
+    assert(!fg_native_force_due(true, false, 1, 1));
+    assert(!fg_native_force_due(true, false, 1, 0));
+    const size_t native_budgets[] = {2, 32, 64, 512, 513, 2048};
+    for (size_t i = 0; i < sizeof(native_budgets) / sizeof(*native_budgets); i++) {
+        size_t budget = native_budgets[i];
+        size_t cap = FG_MIN((size_t)256, budget / 2);
+        assert(!fg_native_force_due(true, false, cap - 1, budget));
+        assert(fg_native_force_due(true, false, cap, budget));
+        assert(!fg_native_force_due(true, true, cap, budget));
+        assert(!fg_native_force_due(false, false, cap, budget));
+        assert(!fg_native_force_due(true, false, budget, budget));
+    }
+    assert(fg_action_decode_phase("") == FG_ACTION_SELECT);
+    assert(fg_action_decode_phase("{\"tool\":\"read_file\",\"args\":{") == FG_ACTION_ARGUMENTS);
+    assert(fg_action_decode_phase("{\"tool\":\"apply_patch\",\"args\":{") == FG_ACTION_PATCH);
+    assert(fg_action_decode_phase("{\"thought\":\"use { tool carefully\","
+                                  "\"tool\":\"apply_patch\",\"args\":{") == FG_ACTION_PATCH);
+    assert(fg_action_decode_phase("{\"thought\":\"the key \\\"tool\\\" is quoted\"") ==
+           FG_ACTION_SELECT);
+    assert(fg_action_decode_phase("{\"final\":\"") == FG_ACTION_FINAL);
+    assert(fg_action_decode_phase("{\"memory\":{") == FG_ACTION_MEMORY);
+    /* Think bounds: the suppress window stays a quarter capped at 32; the cap
+     * defaults to a measured 256 ceiling (half-turn when smaller); a configured
+     * budget clamps the window; the unbounded ablation removes the cap; and an
+     * empty cue removes the window (banning the opener without steering text is
+     * the measured prompt-echo death configuration). */
+    fg_decode_policy policy = {FG_ACTION_TRIGGER_PATTERN, NULL, 0, false, false};
+    size_t min_think = 0, think_cap = 0;
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 32 && think_cap == 256);
+    fg_think_bounds(&policy, 64, &min_think, &think_cap);
+    assert(min_think == 16 && think_cap == 32);
+    policy.think_budget = 8;
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 8 && think_cap == 8);
+    policy.think_budget = 0;
+    policy.think_unbounded = true;
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 32 && think_cap == SIZE_MAX);
+    policy.think_unbounded = false;
+    policy.cue = "";
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 0 && think_cap == 256);
+    policy.native_thinking = true;
+    fg_think_bounds(&policy, 2048, &min_think, &think_cap);
+    assert(min_think == 0 && think_cap == SIZE_MAX);
+    /* A budget-forced action can cut the reasoning mid-character; only a
+     * trailing incomplete sequence is dropped, and invalid bytes elsewhere
+     * stay for validation to reject. */
+    assert(fg_utf8_trim_incomplete("abc", 3) == 3);
+    assert(fg_utf8_trim_incomplete("ab\xf0", 3) == 2);
+    assert(fg_utf8_trim_incomplete("ab\xf0\x9f", 4) == 2);
+    assert(fg_utf8_trim_incomplete("ab\xc3\xa9", 4) == 4);
+    assert(fg_utf8_trim_incomplete("ab\xc0", 3) == 3);
+    assert(fg_utf8_trim_incomplete("ab\xf5", 3) == 3);
+    assert(fg_utf8_trim_incomplete("\x80\x80", 2) == 2);
+    assert(fg_utf8_trim_incomplete("", 0) == 0);
     const char *raw =
         "{\"Action\":\"pass\",\"Test\":\"TestOK\"}\n{\"Action\":\"fail\",\"Package\":\"example/"
         "math\",\"Test\":\"TestAdd\"}\n{\"Action\":\"output\",\"Output\":\"math_test.go:9: "

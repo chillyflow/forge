@@ -35,7 +35,9 @@ typedef enum {
     FORGE_AGENT_TOOL_RESULT,
     FORGE_AGENT_RECONTEXTUALIZE,
     FORGE_AGENT_DONE,
-    FORGE_AGENT_ERROR
+    FORGE_AGENT_ERROR,
+    /* Appended so the numeric values of every existing public state remain stable. */
+    FORGE_AGENT_RECOVERY
 } forge_agent_state;
 typedef enum { FORGE_CAP_READ = 1, FORGE_CAP_WRITE = 2, FORGE_CAP_PROCESS = 4 } forge_capability;
 typedef struct {
@@ -73,7 +75,21 @@ typedef struct {
     uint64_t checkpoint_additional_tokens; /* Reused beyond the previously usable live prefix. */
     size_t checkpoint_peak_bytes; /* Configured manager allocation high-water mark, not RSS. */
     double checkpoint_probe_ms, checkpoint_capture_ms, checkpoint_restore_ms;
+    /* §32 decode routing. think_tokens counts sampled reasoning tokens before
+     * the action began (tokenizer-relative, never comparable across models);
+     * forced_actions counts think-budget grammar swaps; action_stops counts
+     * generations ended at action completion instead of an end token. The
+     * remaining counters expose the active action sampler state. */
+    size_t think_tokens, forced_actions, action_stops;
+    size_t action_select_tokens, action_argument_tokens, patch_tokens, final_tokens;
+    size_t memory_tokens, forced_action_progress_tokens;
 } forge_metrics;
+typedef enum {
+    FORGE_THINKING_AUTO = 0,
+    FORGE_THINKING_ENABLED,
+    FORGE_THINKING_DISABLED
+} forge_thinking_mode;
+typedef enum { FORGE_PROMPT_FLATTENED = 0, FORGE_PROMPT_NATIVE } forge_prompt_protocol;
 typedef struct {
     const char *model_path;
     const char *script_path;   /* Explicit deterministic test fixture; never auto-selected. */
@@ -83,6 +99,12 @@ typedef struct {
     uint32_t seed;
     float temperature;
     bool reuse_prefix, grammar_fast_path;
+    forge_thinking_mode thinking; /* Jinja enable_thinking control; AUTO preserves legacy. */
+    /* NATIVE is selected by forge_default_model_config() and renders structured roles and
+     * function schemas through llama.cpp. FLATTENED preserves the original single-user-message
+     * protocol byte for byte; the enum values remain stable for source and snapshot compatibility.
+     */
+    forge_prompt_protocol prompt_protocol;
 } forge_model_config;
 typedef struct forge_model forge_model;
 typedef struct forge_agent forge_agent;
@@ -92,7 +114,48 @@ typedef struct {
     forge_model *model; /* Borrowed; model must outlive agent. One active run per model. */
     forge_limits limits;
     bool allow_write, allow_exec, semantic_output, compact_context;
-    bool skip_validation; /* Explicit ablation; ordinary runs verify changed Go workspaces. */
+    /* §32 reasoning channel. `thought` offers optional reasoning before each action;
+     * `thought_in_history` retains it verbatim in stored ACTION segments so it
+     * re-enters later prompts. It is OFF in a default-initialized forge_config
+     * and should stay off unless you need it: measured, retention costs accuracy
+     * and prompt tokens once reasoning is actually elicited, and loses no
+     * evidence, because the raw response reaches the session log before any
+     * stripping. Clearing it keeps thought purely decode-side: it steers only
+     * the generation that produced it. `thought_routed` changes the wire format
+     * field to bounded plain text followed by a lazily constrained action object;
+     * the host normalizes that prefix into the same thought field before validation.
+     * The llama backend also force-decodes a "Thought: " cue (host scaffold,
+     * stripped before validation), withholds action-opening tokens for a minimum
+     * prefix budget, and withholds end-of-generation tokens until the action
+     * begins, so a routed run reasons before acting and cannot end actionless
+     * before the action grammar arms. `thought_required` rejects an empty or absent
+     * thought; a whitespace-only routed prefix still fails it. Setting either
+     * while `thought` is false is rejected: forge_agent_create fails with
+     * FORGE_ERR_ARGUMENT. */
+    bool thought, thought_required, thought_in_history, thought_routed;
+    /* §32 routed-mode decode routing. All three require `thought_routed`;
+     * forge_agent_create rejects them without it. `thought_cue` replaces the
+     * forced "Thought: " cue (NULL: default; empty: no cue — natively-thinking
+     * models bring their own opener, and the action-opening ban window is
+     * dropped with the cue, because banning the opener without steering text
+     * is the measured prompt-echo death configuration). `thought_budget`
+     * bounds sampled reasoning tokens before the action grammar is enforced
+     * by an eager-grammar swap (0: a calibrated 256-token ceiling, reduced to
+     * half the remaining turn budget near exhaustion). `thought_budget_unbounded` restores
+     * unbounded reasoning (ablation; the phase-1 behavior). */
+    const char *thought_cue;
+    size_t thought_budget;
+    bool thought_budget_unbounded;
+    /* Lazy grammar with template-controlled reasoning and no host cue/bans/swap.
+     * FORGE_THINKING_DISABLED gives its matched thinking-safe baseline. */
+    bool thought_native;
+    /* Explicit ablation; ordinary runs verify changed Go/Python workspaces. */
+    bool skip_validation;
+    /* Experimental native diagnostic control: append-only basic tool loop,
+     * without semantic context, recovery, compaction or automatic validation.
+     * Retains all model prose as assistant content regardless of thought flags;
+     * does not nominate optional physical checkpoint cache anchors. */
+    bool minimal_agent;
     forge_policy_fn policy;
     forge_cancel_fn cancelled;
     void *userdata;
@@ -108,7 +171,8 @@ forge_status forge_agent_run(forge_agent *, const char *request, forge_event_fn,
                              forge_error *);
 const forge_metrics *forge_agent_metrics(const forge_agent *);
 const char *forge_agent_session(const forge_agent *);
-/* Caller owns the host/model-separated state JSON; available after a run. */
+/* Caller owns host/model-separated state JSON after an ordinary agent run.
+ * The minimal diagnostic control does not create working state. */
 char *forge_agent_working_state(const forge_agent *, forge_error *);
 void forge_agent_destroy(forge_agent *);
 forge_repo *forge_repo_open(const char *workspace, forge_error *);

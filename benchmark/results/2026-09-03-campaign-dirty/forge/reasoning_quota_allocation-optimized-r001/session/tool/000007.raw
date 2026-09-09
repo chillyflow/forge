@@ -1,0 +1,42 @@
+file_sha256:c71e47e20ad3a3059df0c972595f2f4c29473175d6437a720e5bc9ff427f7fee
+50: 		shares := make([]quotaShare, 0, len(active))
+51: 		used := 0
+52: 		for _, i := range active {
+53: 			request := requests[i]
+54: 			numerator := int64(left) * int64(request.Weight)
+55: 			whole := int(numerator / weightTotal)
+56: 			room := request.Max - out[request.ID]
+57: 			if whole > room {
+58: 				whole = room
+59: 			}
+60: 			shares = append(shares, quotaShare{i, whole, numerator % weightTotal})
+61: 			used += whole
+62: 		}
+63: 		for _, share := range shares {
+64: 			out[requests[share.index].ID] += share.whole
+65: 		}
+66: 		left -= used
+67: 		if left == 0 {
+68: 			break
+69: 		}
+70: 		sort.SliceStable(shares, func(i, j int) bool {
+71: 			if shares[i].remainder == shares[j].remainder {
+72: 				return shares[i].index < shares[j].index
+73: 			}
+74: 			return shares[i].remainder > shares[j].remainder
+75: 		})
+76: 		progressed := false
+77: 		for _, share := range shares {
+78: 			id := requests[share.index].ID
+79: 			if left > 0 && out[id] < requests[share.index].Max {
+80: 				out[id]++
+81: 				left--
+82: 				progressed = true
+83: 			}
+84: 		}
+85: 		if !progressed {
+86: 			return nil, false
+87: 		}
+88: 	}
+89: 	return out, true
+90: }

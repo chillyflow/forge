@@ -1,0 +1,68 @@
+diff --git a/repair.go b/repair.go
+index e4ccfb5..3effcd0 100644
+--- a/repair.go
++++ b/repair.go
+@@ -1,33 +1,57 @@
+ package repair
+ 
++import "math"
++
+ type Transfer struct {
+ 	From, To string
+ 	Amount   int
+ }
+ 
+ func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
++	// Create a copy of balances to test the transaction
+ 	next := make(map[string]int, len(balances))
+ 	for key, value := range balances {
+ 		next[key] = value
+ 	}
+-	maxInt := int(^uint(0) >> 1)
++	
++	// Check all transfers first for validity
+ 	for _, tr := range transfers {
+-		from, fromOK := balances[tr.From]
+-		to, toOK := balances[tr.To]
++		// Check if accounts exist
++		from, fromOK := next[tr.From]
++		to, toOK := next[tr.To]
++		
++		// Reject if accounts don't exist, amount is negative, or insufficient funds
+ 		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+ 			return false
+ 		}
++		
++		// Skip self-transfers (they don't change balances)
+ 		if tr.From == tr.To {
+ 			continue
+ 		}
+-		if to > maxInt-tr.Amount {
++		
++		// Check for integer overflow when adding to destination account
++		if to > math.MaxInt-int(tr.Amount) {
+ 			return false
+ 		}
+-		next[tr.From] = from - tr.Amount
+-		next[tr.To] = to + tr.Amount
+ 	}
++	
++	// Apply all transfers if they're all valid
++	for _, tr := range transfers {
++		// Skip self-transfers
++		if tr.From == tr.To {
++			continue
++		}
++		
++		// Apply the transfer
++		next[tr.From] = next[tr.From] - tr.Amount
++		next[tr.To] = next[tr.To] + tr.Amount
++	}
++	
++	// Update the original balances map
+ 	for key, value := range next {
+ 		balances[key] = value
+ 	}
++	
+ 	return true
+ }

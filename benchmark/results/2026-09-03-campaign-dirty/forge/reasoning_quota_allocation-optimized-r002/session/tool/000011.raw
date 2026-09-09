@@ -1,0 +1,12 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+=== RUN   TestAllocateQuota
+    repair_test.go:19: tie=map[a:0 b:1] ok=true
+--- FAIL: TestAllocateQuota (0.00s)
+FAIL
+FAIL	forgebench	0.182s
+FAIL
+
+stderr:
+
+next_action_guidance: Treat the diagnostics as the change boundary. Preserve behavior not named as failing and make the smallest local edit that addresses the reported condition. The failing assertion and explicit requirements are authoritative; do not reinterpret them or rewrite an otherwise working function. When a requirement names an ordering or tie-break key, compare that semantic key directly; input position or a surrogate index is not equivalent. For an ID tie-break over indexed records, dereference and compare the IDs; changing only comments cannot repair executable behavior.

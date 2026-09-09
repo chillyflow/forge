@@ -1,0 +1,21 @@
+file_sha256:0ed0164c432f76d2a9a0597f77b958d9b53930ebd2bf9c2223766e0c8c64ca69
+1: package holdout
+2: 
+3: import (
+4: 	"path"
+5: 	"strings"
+6: )
+7: 
+8: func ResolveMount(request string, mounts []string) (string, string, bool) {
+9: 	request = path.Clean("/" + request)
+10: 	best := ""
+11: 	for _, raw := range mounts {
+12: 		mount := path.Clean("/" + raw)
+13: 		if mount == "/" {
+14: 			// Root mount matches everything
+15: 			if len(mount) > len(best) {
+16: 				best = mount
+17: 			}
+18: 		} else if strings.HasPrefix(request, mount+"/") {
+19: 			// Mount matches as a prefix with a trailing slash
+20: 			if len(mount) > len(best) {

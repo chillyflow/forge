@@ -1,0 +1,13 @@
+diff --git a/users/service.py b/users/service.py
+index 2d199a7..3a8ce3a 100644
+--- a/users/service.py
++++ b/users/service.py
+@@ -5,4 +5,7 @@ class UserService:
+         self.repository = repository
+ 
+     def display_name(self, user_id):
+-        return self.repository.users[user_id]["name"].strip().title()
++        user = self.repository.find(user_id)
++        if user is None:
++            return None
++        return user["name"].strip().title()

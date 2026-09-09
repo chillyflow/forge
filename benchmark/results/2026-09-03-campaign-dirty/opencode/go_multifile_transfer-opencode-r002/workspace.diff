@@ -1,0 +1,31 @@
+diff --git a/ledger/ledger.go b/ledger/ledger.go
+index f167977..897c2ed 100644
+--- a/ledger/ledger.go
++++ b/ledger/ledger.go
+@@ -3,7 +3,7 @@ package ledger
+ type Ledger struct{ Balance int }
+ 
+ func (l *Ledger) debit(amount int) bool {
+-	if amount < 0 || l.Balance <= amount {
++	if amount < 0 || l.Balance < amount {
+ 		return false
+ 	}
+ 	l.Balance -= amount
+diff --git a/ledger/transfer.go b/ledger/transfer.go
+index 20a3b2e..2f28e87 100644
+--- a/ledger/transfer.go
++++ b/ledger/transfer.go
+@@ -3,9 +3,12 @@ package ledger
+ import "errors"
+ 
+ func Transfer(from, to *Ledger, amount int) error {
++	if amount < 0 {
++		return errors.New("invalid amount")
++	}
+ 	if !from.debit(amount) {
+ 		return errors.New("insufficient funds")
+ 	}
+-	from.Balance += amount
++	to.Balance += amount
+ 	return nil
+ }

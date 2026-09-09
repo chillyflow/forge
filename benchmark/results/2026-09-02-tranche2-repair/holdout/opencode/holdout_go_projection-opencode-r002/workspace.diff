@@ -1,0 +1,21 @@
+diff --git a/service.go b/service.go
+index 6634309..2cf1121 100644
+--- a/service.go
++++ b/service.go
+@@ -12,13 +12,15 @@ func Project(events []Event) map[string]string {
+ 	revisions := map[string]int{}
+ 	for _, ev := range events {
+ 		previous, seen := revisions[ev.Key]
++		// If key was deleted, ignore any further updates to it
+ 		if seen && ev.Revision <= previous {
+ 			continue
+ 		}
++		
+ 		revisions[ev.Key] = ev.Revision
+ 		if ev.Deleted {
+ 			delete(values, ev.Key)
+-			delete(revisions, ev.Key)
++			// Don't delete from revisions map to prevent resurrection with older revisions
+ 		} else {
+ 			values[ev.Key] = ev.Value
+ 		}

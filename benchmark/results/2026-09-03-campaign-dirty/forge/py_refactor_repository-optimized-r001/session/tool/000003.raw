@@ -1,0 +1,13 @@
+file_sha256:a7dc01ad01cdac5591cbad3fbdb75a78ac98967b9c8bab220fba5fcd12f8399f
+1: import unittest
+2: from users.service import UserService
+3: 
+4: class StubRepository:
+5:     def find(self, user_id):
+6:         return {"id": user_id, "name": "  ada lovelace "} if user_id == "a" else None
+7: 
+8: class ServiceTests(unittest.TestCase):
+9:     def test_protocol_and_missing(self):
+10:         service = UserService(StubRepository())
+11:         self.assertEqual(service.display_name("a"), "Ada Lovelace")
+12:         self.assertIsNone(service.display_name("missing"))

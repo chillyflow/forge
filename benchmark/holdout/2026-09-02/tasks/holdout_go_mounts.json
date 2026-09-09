@@ -1,0 +1,21 @@
+{
+  "id": "holdout_go_mounts",
+  "suite": "holdout-2026-09-02",
+  "language": "go",
+  "category": "api",
+  "prompt": "ResolveMount selects the longest matching mount by path components and returns the remaining relative path. Clean paths first. The root mount is a fallback; textual prefixes inside a component do not match. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module holdout\n\ngo 1.24\n",
+    "service.go": "package holdout\nimport (\"path\"; \"strings\")\nfunc ResolveMount(request string, mounts []string) (string,string,bool) {\n    request=path.Clean(\"/\"+request)\n    best:=\"\"\n    for _,raw:=range mounts {\n        mount:=path.Clean(\"/\"+raw)\n        if (mount==\"/\" || strings.HasPrefix(request,mount)) && len(mount)>len(best) { best=mount }\n    }\n    if best==\"\" { return \"\",\"\",false }\n    return best,strings.TrimPrefix(strings.TrimPrefix(request,best),\"/\"),true\n}\n",
+    "service_test.go": "package holdout\nimport \"testing\"\nfunc TestMounts(t *testing.T) {\n    for _,tc:=range []struct{request,mount,rest string}{\n        {\"/apple/x\",\"/\",\"apple/x\"},{\"/app/a\",\"/app\",\"a\"},{\"/app\",\"/app\",\"\"},\n        {\"/app/v2/x\",\"/app/v2\",\"x\"},{\"/app/../apple\",\"/\",\"apple\"},\n    } {\n        mount,rest,ok:=ResolveMount(tc.request,[]string{\"/app\",\"/\",\"/app/v2\"})\n        if !ok || mount!=tc.mount || rest!=tc.rest { t.Fatalf(\"%s: %q %q %v\",tc.request,mount,rest,ok) }\n    }\n    if _,_,ok:=ResolveMount(\"/apple\",[]string{\"/app\"});ok { t.Fatal(\"partial component matched\") }\n}\n"
+  },
+  "oracle_files": {
+    "service.go": "package holdout\nimport (\"path\"; \"strings\")\nfunc ResolveMount(request string, mounts []string) (string,string,bool) {\n    request=path.Clean(\"/\"+request)\n    best:=\"\"\n    for _,raw:=range mounts {\n        mount:=path.Clean(\"/\"+raw)\n        if (mount==\"/\" || request==mount || strings.HasPrefix(request,mount+\"/\")) && len(mount)>len(best) { best=mount }\n    }\n    if best==\"\" { return \"\",\"\",false }\n    return best,strings.TrimPrefix(strings.TrimPrefix(request,best),\"/\"),true\n}\n"
+  }
+}

@@ -1,0 +1,89 @@
+diff --git "a/service.go" "b/service.go"
+--- "a/service.go"
++++ "b/service.go"
+@@ -1,41 +1,44 @@
+-package holdout
+-
+-type Cache struct {
+-	Capacity int
+-	values   map[string]int
+-	order    []string
+-}
+-
+-func (c *Cache) touch(key string) {
+-	for i, k := range c.order {
+-		if k == key {
+-			c.order = append(c.order[:i], c.order[i+1:]...)
+-			break
+-		}
+-	}
+-	c.order = append(c.order, key)
+-}
+-func (c *Cache) Get(key string) (int, bool) {
+-	value, ok := c.values[key]
+-	if ok {
+-		c.touch(key)
+-	}
+-	return value, ok
+-}
+-func (c *Cache) Put(key string, value int) {
+-	if c.Capacity <= 0 {
+-		return
+-	}
+-	if c.values == nil {
+-		c.values = map[string]int{}
+-	}
+-	_, exists := c.values[key]
+-	c.values[key] = value
+-	if !exists {
+-		c.touch(key)
+-	}
+-	if len(c.values) > c.Capacity {
+-		delete(c.values, c.order[0])
+-		c.order = c.order[1:]
+-	}
+-}
++package holdout
++
++type Cache struct {
++	Capacity int
++	values   map[string]int
++	order    []string
++}
++
++func (c *Cache) touch(key string) {
++	for i, k := range c.order {
++		if k == key {
++			c.order = append(c.order[:i], c.order[i+1:]...)
++			break
++		}
++	}
++	c.order = append(c.order, key)
++}
++func (c *Cache) Get(key string) (int, bool) {
++	value, ok := c.values[key]
++	if ok {
++		c.touch(key)
++	}
++	return value, ok
++}
++func (c *Cache) Put(key string, value int) {
++	if c.Capacity <= 0 {
++		return
++	}
++	if c.values == nil {
++		c.values = map[string]int{}
++	}
++	_, exists := c.values[key]
++	c.values[key] = value
++	if !exists {
++		c.touch(key)
++	} else {
++		// If key already exists, we need to touch it to make it most recent
++		c.touch(key)
++	}
++	if len(c.values) > c.Capacity {
++		delete(c.values, c.order[0])
++		c.order = c.order[1:]
++	}
++}

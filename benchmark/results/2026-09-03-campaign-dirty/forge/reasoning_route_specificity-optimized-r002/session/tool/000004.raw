@@ -1,0 +1,51 @@
+file_sha256:9471554250a8554f0e7844414502dc350295d427e6137456e9fee73f047c6459
+1: package repair
+2: 
+3: import "strings"
+4: 
+5: type Route struct{ Method, Pattern, Name string }
+6: type routeMatch struct {
+7: 	name                                    string
+8: 	params                                  map[string]string
+9: 	literals, methodExact, wildcards, index int
+10: }
+11: 
+12: func routeSegments(value string) []string {
+13: 	value = strings.Trim(value, "/")
+14: 	if value == "" {
+15: 		return nil
+16: 	}
+17: 	return strings.Split(value, "/")
+18: }
+19: func MatchRoute(method, path string, routes []Route) (string, map[string]string, bool) {
+20: 	actual := routeSegments(path)
+21: 	var best routeMatch
+22: 	found := false
+23: 	for index, route := range routes {
+24: 		if route.Method != "*" && route.Method != method {
+25: 			continue
+26: 		}
+27: 		pattern := routeSegments(route.Pattern)
+28: 		params := map[string]string{}
+29: 		literals, wildcards := 0, 0
+30: 		pi, ai := 0, 0
+31: 		ok := true
+32: 		for pi < len(pattern) {
+33: 			part := pattern[pi]
+34: 			if part == "*" {
+35: 				if pi != len(pattern)-1 || ai >= len(actual) {
+36: 					ok = false
+37: 					break
+38: 				}
+39: 				params["*"] = strings.Join(actual[ai:], "/")
+40: 				wildcards++
+41: 				ai = len(actual)
+42: 				pi++
+43: 				break
+44: 			}
+45: 			if ai >= len(actual) {
+46: 				ok = false
+47: 				break
+48: 			}
+49: 			if strings.HasPrefix(part, ":") && len(part) > 1 {
+50: 				params[part[1:]] = actual[ai]

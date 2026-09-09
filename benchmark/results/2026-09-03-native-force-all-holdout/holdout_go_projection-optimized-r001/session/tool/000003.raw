@@ -1,0 +1,23 @@
+file_sha256:f6216b2e0db27aefa4b193b95a9d9cf38b9efe83d8519d985e6e156961d145e7
+1: package holdout
+2: 
+3: import (
+4: 	"reflect"
+5: 	"testing"
+6: )
+7: 
+8: func TestProject(t *testing.T) {
+9: 	events := []Event{{"x", 5, "new", false}, {"x", 6, "", true}, {"x", 4, "stale", false},
+10: 		{"y", 1, "first", false}, {"y", 1, "duplicate", false}, {"z", 0, "zero", false}}
+11: 	got := Project(events)
+12: 	if !reflect.DeepEqual(got, map[string]string{"y": "first", "z": "zero"}) {
+13: 		t.Fatalf("projection %v", got)
+14: 	}
+15: 	events = append(events, Event{"x", 7, "reborn", false})
+16: 	if Project(events)["x"] != "reborn" {
+17: 		t.Fatal("new revision rejected")
+18: 	}
+19: 	if len(Project(nil)) != 0 {
+20: 		t.Fatal("empty input")
+21: 	}
+22: }

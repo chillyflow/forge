@@ -1,0 +1,21 @@
+{
+  "id": "holdout_go_build_waves",
+  "suite": "holdout-2026-09-02",
+  "language": "go",
+  "category": "dependency",
+  "prompt": "BuildWaves groups jobs into dependency waves. A wave contains every job whose prerequisites were completed in earlier waves, sorted lexically. Missing prerequisites and cycles return an error. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module holdout\n\ngo 1.24\n",
+    "service.go": "package holdout\nimport (\"fmt\"; \"sort\")\nfunc BuildWaves(deps map[string][]string) ([][]string,error) {\n    done := map[string]bool{}\n    waves := [][]string{}\n    for len(done)<len(deps) {\n        ready:=[]string{}\n        for job, prerequisites := range deps {\n            if done[job] { continue }\n            ok:=true\n            for _, p := range prerequisites {\n                if _, exists:=deps[p]; !exists { return nil,fmt.Errorf(\"missing %s\",p) }\n                if !done[p] && len(deps[p])>0 { ok=false }\n            }\n            if ok { ready=append(ready,job) }\n        }\n        if len(ready)==0 { return nil,fmt.Errorf(\"cycle\") }\n        sort.Strings(ready)\n        for _,job:=range ready { done[job]=true }\n        waves=append(waves,ready)\n    }\n    return waves,nil\n}\n",
+    "service_test.go": "package holdout\nimport (\"reflect\"; \"testing\")\nfunc TestWaves(t *testing.T) {\n    deps:=map[string][]string{\"app\":{\"lib\",\"assets\"},\"lib\":{\"core\"},\"core\":{},\"assets\":{}}\n    want:=[][]string{{\"assets\",\"core\"},{\"lib\"},{\"app\"}}\n    for i:=0;i<20;i++ { got,err:=BuildWaves(deps); if err!=nil || !reflect.DeepEqual(got,want) { t.Fatalf(\"waves %v, error %v\",got,err) } }\n    for _,bad:=range []map[string][]string{{\"a\":{\"b\"},\"b\":{\"a\"}},{\"a\":{\"missing\"}},{\"a\":{\"a\"}}} {\n        if _,err:=BuildWaves(bad);err==nil { t.Fatal(\"invalid graph accepted\") }\n    }\n    got,err:=BuildWaves(map[string][]string{}); if err!=nil || len(got)!=0 { t.Fatal(got,err) }\n    got,err=BuildWaves(map[string][]string{\"a\":{},\"b\":{\"a\",\"a\"}})\n    if err!=nil || !reflect.DeepEqual(got,[][]string{{\"a\"},{\"b\"}}) { t.Fatal(got,err) }\n}\n"
+  },
+  "oracle_files": {
+    "service.go": "package holdout\nimport (\"fmt\"; \"sort\")\nfunc BuildWaves(deps map[string][]string) ([][]string,error) {\n    done := map[string]bool{}\n    waves := [][]string{}\n    for len(done)<len(deps) {\n        ready:=[]string{}\n        for job, prerequisites := range deps {\n            if done[job] { continue }\n            ok:=true\n            for _, p := range prerequisites {\n                if _, exists:=deps[p]; !exists { return nil,fmt.Errorf(\"missing %s\",p) }\n                if !done[p] { ok=false }\n            }\n            if ok { ready=append(ready,job) }\n        }\n        if len(ready)==0 { return nil,fmt.Errorf(\"cycle\") }\n        sort.Strings(ready)\n        for _,job:=range ready { done[job]=true }\n        waves=append(waves,ready)\n    }\n    return waves,nil\n}\n"
+  }
+}

@@ -1,0 +1,15 @@
+diff --git a/repair.go b/repair.go
+index 281ad76..3517d43 100644
+--- a/repair.go
++++ b/repair.go
+@@ -1,8 +1,8 @@
+ package repair
+ 
+ func LastIndex(xs []int, target int) int {
+-	for i, v := range xs {
+-		if v == target {
++	for i := len(xs) - 1; i >= 0; i-- {
++		if xs[i] == target {
+ 			return i
+ 		}
+ 	}

@@ -1,0 +1,42 @@
+file_sha256:d14a0f7f165e464906d8891990ee40a019c8d8d7489f2849cfa2eb7352cb7e8a
+1: package holdout
+2: 
+3: type Cache struct {
+4: 	Capacity int
+5: 	values   map[string]int
+6: 	order    []string
+7: }
+8: 
+9: func (c *Cache) touch(key string) {
+10: 	for i, k := range c.order {
+11: 		if k == key {
+12: 			c.order = append(c.order[:i], c.order[i+1:]...)
+13: 			break
+14: 		}
+15: 	}
+16: 	c.order = append(c.order, key)
+17: }
+18: func (c *Cache) Get(key string) (int, bool) {
+19: 	value, ok := c.values[key]
+20: 	if ok {
+21: 		c.touch(key)
+22: 	}
+23: 	return value, ok
+24: }
+25: func (c *Cache) Put(key string, value int) {
+26: 	if c.Capacity <= 0 {
+27: 		return
+28: 	}
+29: 	if c.values == nil {
+30: 		c.values = map[string]int{}
+31: 	}
+32: 	_, exists := c.values[key]
+33: 	c.values[key] = value
+34: 	if !exists {
+35: 		c.touch(key)
+36: 	}
+37: 	if len(c.values) > c.Capacity {
+38: 		delete(c.values, c.order[0])
+39: 		c.order = c.order[1:]
+40: 	}
+41: }

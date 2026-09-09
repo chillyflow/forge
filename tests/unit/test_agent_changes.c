@@ -10,6 +10,7 @@
 #undef NDEBUG
 #endif
 #include "internal.h"
+#include "core/digest.h"
 #include "forge/watch.h"
 #include "tools/edit_journal.h"
 #include <assert.h>
@@ -61,6 +62,10 @@ struct fixture {
     edit_case edit_mode;
     size_t prepared, finished;
 };
+static const char *original_read_content(const fixture *f) {
+    const char *numbered = strstr(f->old_read, "\n1: ");
+    return numbered ? numbered + 4 : f->old_read;
+}
 static fixture *active;
 
 static void set_path(const char *value) {
@@ -151,7 +156,15 @@ static bool bool_field(yyjson_val *object, const char *key) {
 static void assert_file(const char *path, const char *expected) {
     size_t length = 0;
     char *text = fg_read_file(path, FG_MAX_JSON, &length, NULL);
+    if (!text || length != strlen(expected) || memcmp(text, expected, length))
+        fprintf(stderr, "assert_file: path=%s expected=[%s] actual=[%.*s]\n", path, expected,
+                text ? (int)length : -1, text ? text : "(missing)");
     assert(text && length == strlen(expected) && !memcmp(text, expected, length));
+    free(text);
+}
+static void assert_contains(const char *path, const char *needle) {
+    char *text = fg_read_file(path, FG_MAX_JSON, NULL, NULL);
+    assert(text && strstr(text, needle));
     free(text);
 }
 static void edit_artifact(fixture *f, const char *name, char path[FG_PATH_MAX]) {
@@ -165,7 +178,7 @@ static void check_edit(fixture *f, const char *type, yyjson_val *data) {
         assert(!strcmp(fg_json_str(data, "path"), f->relative));
         assert(!strcmp(fg_json_str(data, "state"), "prepared"));
         assert(bool_field(data, "before_exists"));
-        const char *before = f->old_read + 3;
+        const char *before = original_read_content(f);
         const char *after = !strcmp(f->relative, "sub/main.c")
                                 ? "int forge_change_value(void) { return 2; }\n"
                                 : "updated data\n";
@@ -359,7 +372,9 @@ static void create_fixture(fixture *f, bool indexed, bool read_backslashes, bool
     const char *old = indexed ? "int forge_change_value(void) { return 1; }\n" : "original data\n";
     const char *replacement =
         indexed ? "int forge_change_value(void) { return 2; }\n" : "updated data\n";
-    snprintf(f->old_read, sizeof(f->old_read), "1: %s", old);
+    char source_hash[65];
+    assert(fg_sha256_hex(old, strlen(old), source_hash));
+    snprintf(f->old_read, sizeof(f->old_read), "file_sha256:%s\n1: %s", source_hash, old);
     assert(fg_write_file(f->source, old, strlen(old), NULL));
     write_script(f, read_backslashes, patch_backslashes, old, replacement);
     const char *original_path = getenv("PATH");
@@ -425,11 +440,12 @@ static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes
     if (retrieve) {
         assert(indexed);
         f.retrieve = true;
-        write_script(&f, false, patch_backslashes, f.old_read + 3,
+        write_script(&f, false, patch_backslashes, original_read_content(&f),
                      "int forge_change_value(void) { return 2; }\n");
     }
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = f.script;
     f.model = forge_model_load(&mc, &error);
     assert(f.model);
@@ -440,6 +456,7 @@ static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes
     ac.limits.max_turns = 3;
     ac.limits.wall_timeout_ms = 15000;
     ac.allow_write = ac.semantic_output = ac.compact_context = true;
+    ac.skip_validation = true; /* This fixture tests source invalidation, not language checks. */
     ac.cancelled = is_cancelled;
     ac.userdata = &f;
     f.agent = forge_agent_create(&ac, &error);
@@ -557,6 +574,7 @@ static void run_edit_error(edit_case mode) {
                      "original data\n");
     forge_error error = {0};
     forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
     mc.script_path = f.script;
     f.model = forge_model_load(&mc, &error);
     assert(f.model);
@@ -596,6 +614,15 @@ static void run_edit_error(edit_case mode) {
         edit_artifact(&f, "tool/000002.edit.json", path);
         assert(!fg_read_file(path, 1024, NULL, NULL));
     }
+    if (mode == EDIT_CONFLICT) {
+        /* A mismatch must return the current text, not merely advise re-reading:
+         * once the repository and diagnostic state are unchanged a repeated read
+         * is rejected as a repeated action, so the model cannot re-read to
+         * recover. The conflict message is the only path back to valid input. */
+        edit_artifact(&f, "tool/000002.raw", path);
+        assert_contains(path, "TOOL_ERROR [conflict]");
+        assert_contains(path, "original data");
+    }
     char *state = forge_agent_working_state(f.agent, &error);
     yyjson_doc *doc = state ? yyjson_read(state, strlen(state), 0) : NULL;
     assert(doc);
@@ -607,6 +634,250 @@ static void run_edit_error(edit_case mode) {
     free(state);
     if (mode == EDIT_DENIED)
         check_edit_budget(&f);
+    destroy_fixture(&f);
+}
+/* A repair that repeats a stale old_text must be re-anchored to the text the
+ * previous patch actually wrote, and must never be re-anchored onto an
+ * occurrence that is not a whole region of that text. */
+static void reanchor_outputs(const forge_event *event, void *user) {
+    (void)user;
+    if (event && event->type && event->json && !strcmp(event->type, "tool_result"))
+        fprintf(stderr, "reanchor tool_result %s\n", event->json);
+}
+static void run_reanchor(const char *first_replacement, const char *second_replacement,
+                         const char *expected, bool expect_applied) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    assert_file(f.source, "original data\n");
+    /* Patch A lands; patch B repeats A's old_text with corrected new_text. */
+    const char *script_format =
+        "[{\"tool\":\"apply_patch\",\"args\":{\"path\":%s,\"old_text\":\"original data\\n\","
+        "\"new_text\":%s}},"
+        "{\"tool\":\"apply_patch\",\"args\":{\"path\":%s,\"old_text\":\"original data\\n\","
+        "\"new_text\":%s}},{\"final\":\"Patch applied.\"}]";
+    char *path_json = fg_json_string(f.relative);
+    char *first_json = fg_json_string(first_replacement);
+    char *second_json = fg_json_string(second_replacement);
+    assert(path_json && first_json && second_json);
+    char script[4096];
+    int written = snprintf(script, sizeof(script), script_format, path_json, first_json, path_json,
+                           second_json);
+    assert(written > 0 && (size_t)written < sizeof(script));
+    free(path_json);
+    free(first_json);
+    free(second_json);
+    assert(fg_write_file(f.script, script, strlen(script), NULL));
+
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = 4;
+    ac.limits.wall_timeout_ms = 15000;
+    ac.allow_write = true;
+    ac.skip_validation = true; /* Re-anchoring is isolated from unsupported-language gating. */
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    forge_status status =
+        forge_agent_run(f.agent, "Repair the previous edit.", reanchor_outputs, &f, &error);
+    assert(status == FORGE_OK);
+    assert(forge_agent_metrics(f.agent)->files_modified == 1);
+    /* The file ends in the corrected text when the repair was re-anchored, and
+     * in the first replacement when the rewrite was correctly refused. */
+    assert_file(f.source, expect_applied ? expected : first_replacement);
+    (void)expected;
+    destroy_fixture(&f);
+}
+typedef struct {
+    size_t recovery_states, recovery_events, rejected_results, applied_results, messages;
+    bool complete_state;
+} recovery_observation;
+static void recovery_events(const forge_event *event, void *user) {
+    recovery_observation *observation = user;
+    yyjson_doc *doc = yyjson_read(event->json, strlen(event->json), 0);
+    assert(doc);
+    yyjson_val *data = yyjson_obj_get(yyjson_doc_get_root(doc), "data");
+    if (!strcmp(event->type, "state") &&
+        (forge_agent_state)number(data, "state") == FORGE_AGENT_RECOVERY)
+        observation->recovery_states++;
+    else if (!strcmp(event->type, "recovery")) {
+        assert(yyjson_is_str(data));
+        const char *text = yyjson_get_str(data);
+        observation->recovery_events++;
+        observation->complete_state =
+            strstr(text, "current_diff (bounded committed edit history, newest last)") &&
+            strstr(text, "last_diagnostic") && strstr(text, "relevant_files") &&
+            strstr(text, "failed_hypothesis") &&
+            strstr(text, "the same patch should apply again") && strstr(text, "remaining_turns=") &&
+            strstr(text, "remaining_generated_tokens=") &&
+            strstr(text, "remaining_input_tokens=") && strstr(text, "remaining_wall_ms=") &&
+            strstr(text, "unified_diff") && strstr(text, "original data") &&
+            strstr(text, "updated data");
+    } else if (!strcmp(event->type, "tool_result")) {
+        const char *status = fg_json_str(data, "status");
+        const char *output = fg_json_str(data, "output");
+        assert(status && output);
+        if (!strcmp(status, "conflict")) {
+            observation->rejected_results++;
+            assert(strstr(output, "RECOVERY_MODE"));
+            assert(strstr(output, "RECOVERY_REQUIREMENT"));
+        } else {
+            assert(!strcmp(status, "ok"));
+            observation->applied_results++;
+        }
+    } else if (!strcmp(event->type, "message")) {
+        assert(yyjson_is_str(data) && !strcmp(yyjson_get_str(data), "Recovered."));
+        observation->messages++;
+    }
+    yyjson_doc_free(doc);
+}
+static void run_recovery(void) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    char *path = fg_json_string(f.relative);
+    assert(path);
+    char original_hash[65], updated_hash[65];
+    assert(fg_sha256_hex("original data\n", strlen("original data\n"), original_hash));
+    assert(fg_sha256_hex("updated data\n", strlen("updated data\n"), updated_hash));
+    fg_buf script = {0};
+    fg_buf_printf(&script,
+                  "[{\"thought\":\"apply baseline update\",\"tool\":\"apply_hunk\",\"args\":{"
+                  "\"path\":%s,\"start\":1,\"end\":1,\"file_sha256\":\"%s\","
+                  "\"new_text\":\"updated data\\n\"}},"
+                  "{\"thought\":\"the same patch should apply again\",\"tool\":\"apply_hunk\","
+                  "\"args\":{\"path\":%s,\"start\":1,\"end\":1,\"file_sha256\":\"%s\","
+                  "\"new_text\":\"updated data\\n\"}},"
+                  "{\"thought\":\"repair from live text\",\"tool\":\"apply_hunk\",\"args\":{"
+                  "\"path\":%s,\"start\":1,\"end\":1,\"file_sha256\":\"%s\","
+                  "\"new_text\":\"recovered data\\n\"}},"
+                  "{\"final\":\"Recovered.\"}]",
+                  path, original_hash, path, original_hash, path, updated_hash);
+    free(path);
+    assert(!script.failed && fg_write_file(f.script, script.data, script.len, NULL));
+    fg_buf_clear(&script);
+
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = 4;
+    ac.limits.wall_timeout_ms = 15000;
+    ac.allow_write = true;
+    ac.skip_validation = true;
+    ac.thought = true;
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    recovery_observation observation = {0};
+    forge_status status = forge_agent_run(f.agent, "Recover from a repeated edit.", recovery_events,
+                                          &observation, &error);
+    if (status != FORGE_OK)
+        fprintf(stderr, "agent recovery: %s\n", error.message);
+    assert(status == FORGE_OK);
+    const forge_metrics *metrics = forge_agent_metrics(f.agent);
+    assert(metrics->loop_warnings == 1 && metrics->tool_calls == 3 && metrics->files_modified == 1);
+    assert(observation.recovery_states == 1 && observation.recovery_events == 1 &&
+           observation.rejected_results == 1 && observation.applied_results == 2 &&
+           observation.messages == 1 && observation.complete_state);
+    assert_file(f.source, "recovered data\n");
+    destroy_fixture(&f);
+}
+/* Every action envelope accepts one optional bounded leading "thought"
+ * string: free-text reasoning the host records verbatim and never executes. */
+static size_t thought_tool_calls;
+static void thought_events(const forge_event *event, void *user) {
+    (void)user;
+    yyjson_doc *doc = yyjson_read(event->json, strlen(event->json), 0);
+    assert(doc);
+    yyjson_val *data = yyjson_obj_get(yyjson_doc_get_root(doc), "data");
+    if (!strcmp(event->type, "tool_call") && fg_json_str(data, "thought"))
+        thought_tool_calls++;
+    yyjson_doc_free(doc);
+}
+static void run_thought(void) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    assert_file(f.source, "original data\n");
+    const char *script_format =
+        "[{\"thought\":\"The note file needs the updated value.\",\"tool\":\"apply_patch\","
+        "\"args\":{\"path\":%s,\"old_text\":\"original data\\n\",\"new_text\":\"updated "
+        "data\\n\"}},"
+        "{\"thought\":\"Record what changed.\",\"memory\":{\"facts\":[\"patched the note\"],"
+        "\"hypotheses\":[],\"decisions\":[],\"relevant_files\":[],\"remaining\":[]}},"
+        "{\"thought\":\"The change is in place.\",\"final\":\"Patch applied.\"}]";
+    char *path_json = fg_json_string(f.relative);
+    assert(path_json);
+    char script[2048];
+    int written = snprintf(script, sizeof(script), script_format, path_json);
+    assert(written > 0 && (size_t)written < sizeof(script));
+    free(path_json);
+    assert(fg_write_file(f.script, script, strlen(script), NULL));
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = 4;
+    ac.limits.wall_timeout_ms = 15000;
+    ac.allow_write = true;
+    ac.skip_validation = true; /* Thought-history behavior is independent of validation. */
+    ac.thought = true;
+    ac.thought_in_history = true;
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    thought_tool_calls = 0;
+    forge_status status = forge_agent_run(f.agent, "Update the note.", thought_events, &f, &error);
+    assert(status == FORGE_OK);
+    assert(forge_agent_metrics(f.agent)->files_modified == 1);
+    assert(thought_tool_calls == 1);
+    assert_file(f.source, "updated data\n");
+    char *state = forge_agent_working_state(f.agent, &error);
+    assert(state && strstr(state, "patched the note"));
+    free(state);
+    destroy_fixture(&f);
+}
+/* An invalid thought (oversized, wrong type, or thought without an action)
+ * invalidates the whole action instead of degrading into a guess. */
+static void run_thought_rejected(const char *script) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    assert(fg_write_file(f.script, script, strlen(script), NULL));
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = 3;
+    ac.limits.wall_timeout_ms = 15000;
+    ac.allow_write = true;
+    ac.thought = true;
+    ac.thought_in_history = true;
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    forge_status status = forge_agent_run(f.agent, "Update the note.", thought_events, &f, &error);
+    assert(status == FORGE_ERR_PARSE);
+    assert_file(f.source, "original data\n");
     destroy_fixture(&f);
 }
 int main(void) {
@@ -623,6 +894,31 @@ int main(void) {
     run_case(true, false, true, true, true);
     for (edit_case mode = EDIT_CANCEL; mode <= EDIT_CONFLICT; mode++)
         run_edit_error(mode);
+    /* Repair re-anchoring: a repeated stale old_text is rewritten against the
+     * text the previous patch wrote, so the corrected edit lands. */
+    run_reanchor("return value\n", "return value2\n", "return value2\n", true);
+    /* A patch whose old_text still matches must not be rewritten at all: the
+     * normal path applies it, and the file ends in the corrected text. */
+    run_reanchor("value\n", "value\n", "value\n", true);
+    /* The second identical action enters recovery immediately. It is rejected
+     * without execution, while a changed edit anchored in current content exits
+     * recovery and completes normally. */
+    run_recovery();
+    /* Reasoning channel: a bounded leading thought rides along on tool,
+     * memory, and final actions; an invalid one voids the action. */
+    run_thought();
+    run_thought_rejected("[{\"thought\":7,\"final\":\"done\"}]");
+    run_thought_rejected("[{\"thought\":\"orphan reasoning\"}]");
+    {
+        fg_buf big = {0};
+        fg_buf_puts(&big, "[{\"thought\":\"");
+        for (size_t i = 0; i < FG_THOUGHT_MAX_BYTES + 1; i++)
+            fg_buf_puts(&big, "a");
+        fg_buf_puts(&big, "\",\"final\":\"done\"}]");
+        assert(!big.failed);
+        run_thought_rejected(big.data);
+        fg_buf_clear(&big);
+    }
     puts("Agent known-change and edit-evidence tests passed (no watch delivery)");
     return 0;
 }

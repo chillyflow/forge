@@ -1,0 +1,67 @@
+
+Update git name with: git config user.name "Your Name"
+Update git email with: git config user.email "you@example.com"
+Aider v0.86.2
+Model: openai/forge-local with whole edit format
+Git repo: .git with 4 files
+Repo-map: using 1024 tokens, auto refresh
+Added names\normalize.go to the chat.
+Added registry\registry.go to the chat.
+
+I'll fix the registry implementation to make names case-insensitive and ignore 
+surrounding whitespace for both writes and reads.
+
+
+
+The changes needed:
+
+1. Update the `Get` method in `registry.go` to normalize the lookup key
+
+2. Update the `Put` method in `registry.go` to normalize the key before storing
+
+3. Import the `strings` package in `registry.go` for case conversion
+
+
+
+Here are the updated files:
+
+
+
+registry\registry.go
+
+```diff
+@@ -1,9 +1,12 @@
+ package registry
+ 
+-import "campaign.test/fixture/names"
++import (
++       "strings"
++       "campaign.test/fixture/names"
++)
+ 
+ type Registry struct{ values map[string]int }
+ 
+ func New() *Registry                            { return &Registry{values: 
+map[string]int{}} }
+-func (r *Registry) Put(name string, value int)  { 
+r.values[names.Normalize(name)] = value }
+-func (r *Registry) Get(name string) (int, bool) { value, ok := r.values[name];
+return value, ok }
++func (r *Registry) Put(name string, value int)  { 
+r.values[strings.ToLower(names.Normalize(name))] = value }
++func (r *Registry) Get(name string) (int, bool) { value, ok := 
+r.values[strings.ToLower(names.Normalize(name))]; return value, ok }
+```
+
+
+
+names\normalize.go
+
+```diff
+
+```
+
+
+Tokens: 1.0k sent, 235 received.
+Applied edit to registry\registry.go
+Applied edit to names\normalize.go

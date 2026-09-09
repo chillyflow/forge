@@ -1,0 +1,16 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+{"Time":"2026-09-03T14:20:35.0468477-04:00","Action":"start","Package":"forgebench"}
+{"Time":"2026-09-03T14:20:35.2223417-04:00","Action":"run","Package":"forgebench","Test":"TestApplyTransfers"}
+{"Time":"2026-09-03T14:20:35.2228641-04:00","Action":"output","Package":"forgebench","Test":"TestApplyTransfers","Output":"=== RUN   TestApplyTransfers\n","OutputType":"frame"}
+{"Time":"2026-09-03T14:20:35.2228641-04:00","Action":"output","Package":"forgebench","Test":"TestApplyTransfers","Output":"    repair_test.go:12: success=map[a:10 b:0 c:2]\n","OutputType":"error"}
+{"Time":"2026-09-03T14:20:35.2228641-04:00","Action":"output","Package":"forgebench","Test":"TestApplyTransfers","Output":"--- FAIL: TestApplyTransfers (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-09-03T14:20:35.2228641-04:00","Action":"fail","Package":"forgebench","Test":"TestApplyTransfers","Elapsed":0}
+{"Time":"2026-09-03T14:20:35.2228641-04:00","Action":"output","Package":"forgebench","Output":"FAIL\n","OutputType":"frame"}
+{"Time":"2026-09-03T14:20:35.2244196-04:00","Action":"output","Package":"forgebench","Output":"FAIL\tforgebench\t0.177s\n","OutputType":"frame"}
+{"Time":"2026-09-03T14:20:35.2244196-04:00","Action":"fail","Package":"forgebench","Elapsed":0.178}
+
+stderr:
+
+next_action_guidance: Treat the diagnostics as the change boundary. Preserve behavior not named as failing and make the smallest local edit that addresses the reported condition. The failing assertion and explicit requirements are authoritative; do not reinterpret them or rewrite an otherwise working function. When a requirement names an ordering or tie-break key, compare that semantic key directly; input position or a surrogate index is not equivalent. For an ID tie-break over indexed records, dereference and compare the IDs; changing only comments cannot repair executable behavior.
+diagnostic_specific_guidance: The unchanged transfer result is consistent with validating later operations against the original map. Preserve the existing atomic copy/commit flow and make the smallest expression edit so each operation's source and destination values are loaded from the staged working map that already contains earlier operations.

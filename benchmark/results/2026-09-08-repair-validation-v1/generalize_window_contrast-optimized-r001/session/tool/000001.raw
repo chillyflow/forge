@@ -1,0 +1,29 @@
+file_sha256:5b4a2cea3832bc15c54339fde45133f258541b08d90bf0435a9948532313d4aa
+1: package holdout
+2: 
+3: type sample struct{ at, value int }
+4: type Window struct {
+5: 	Width   int
+6: 	samples []sample
+7: 	last    int
+8: 	started bool
+9: }
+10: 
+11: func (w *Window) Add(now, value int) (int, bool) {
+12: 	if w.started && now < w.last {
+13: 		return 0, false
+14: 	}
+15: 	w.last = now
+16: 	w.started = true
+17: 	w.samples = append(w.samples, sample{now, value})
+18: 	first := 0
+19: 	for first < len(w.samples) && w.samples[first].at <= now-w.Width {
+20: 		first++
+21: 	}
+22: 	w.samples = w.samples[first:]
+23: 	sum := 0
+24: 	for _, s := range w.samples {
+25: 		sum += s.value
+26: 	}
+27: 	return sum, true
+28: }

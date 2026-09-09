@@ -1,0 +1,31 @@
+{
+  "id": "generalize_window_renamed",
+  "suite": "generalization-v1",
+  "language": "go",
+  "category": "algorithm",
+  "prompt": "Accumulator.Observe accepts nondecreasing integer timestamps and sums values in (now-width, now]. Rejected out-of-order timestamps must leave the window unchanged. Horizon is positive. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module holdout\n\ngo 1.24\n",
+    "buffer.go": "package holdout\ntype reading struct { at,value int }\ntype Accumulator struct { Horizon int; readings []reading; previous int; initialized bool }\nfunc (w *Accumulator) Observe(now,value int) (int,bool) {\n    if w.initialized && now<w.previous { return 0,false }\n    w.previous=now; w.initialized=true\n    w.readings=append(w.readings,reading{now,value})\n    head:=0\n    for head<len(w.readings) && w.readings[head].at<now-w.Horizon { head++ }\n    w.readings=w.readings[head:]\n    aggregate:=0; for _,s:=range w.readings { aggregate+=s.value }\n    return aggregate,true\n}\n",
+    "buffer_test.go": "package holdout\nimport \"testing\"\nfunc TestAccumulator(t *testing.T) {\n    w:=Accumulator{Horizon:5}\n    for _,tc:=range []struct{at,value,want int}{{0,3,3},{4,2,5},{5,7,9},{5,-2,7},{10,1,1}} {\n        got,ok:=w.Observe(tc.at,tc.value); if !ok || got!=tc.want { t.Fatalf(\"at %d aggregate %d\",tc.at,got) }\n    }\n    if _,ok:=w.Observe(9,100);ok { t.Fatal(\"backdated reading accepted\") }\n    if got,ok:=w.Observe(10,2);!ok || got!=3 { t.Fatal(got,ok) }\n}\n"
+  },
+  "oracle_files": {
+    "buffer.go": "package holdout\ntype reading struct { at,value int }\ntype Accumulator struct { Horizon int; readings []reading; previous int; initialized bool }\nfunc (w *Accumulator) Observe(now,value int) (int,bool) {\n    if w.initialized && now<w.previous { return 0,false }\n    w.previous=now; w.initialized=true\n    w.readings=append(w.readings,reading{now,value})\n    head:=0\n    for head<len(w.readings) && w.readings[head].at<=now-w.Horizon { head++ }\n    w.readings=w.readings[head:]\n    aggregate:=0; for _,s:=range w.readings { aggregate+=s.value }\n    return aggregate,true\n}\n"
+  },
+  "generalization": {
+    "family": "window",
+    "variant": "renamed",
+    "relation": "equivalent",
+    "source_task": "holdout_go_window",
+    "source_sha256": "6392569a495684f04d52c420c9fcb3a0986c38a84aa0b21f109f4022962ac1ab"
+  },
+  "protected_files": [
+    "buffer_test.go"
+  ]
+}

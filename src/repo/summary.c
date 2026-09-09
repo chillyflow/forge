@@ -1175,10 +1175,11 @@ static bool generation_identity(const forge_model *model, const char *producer, 
     memcpy(&temperature, &model->config.temperature, sizeof(temperature));
     char profile[256];
     int n =
-        snprintf(profile, sizeof(profile), "%zu:%zu:%d:%d:%u:%08x:%d:%d:%d", tokens,
+        snprintf(profile, sizeof(profile), "%zu:%zu:%d:%d:%u:%08x:%d:%d:%d:%u", tokens,
                  model->config.context_tokens, model->config.gpu_layers, model->config.threads,
                  (unsigned)model->config.seed, (unsigned)temperature, model->config.reuse_prefix,
-                 model->config.grammar_fast_path, model->script != NULL);
+                 model->config.grammar_fast_path, model->script != NULL,
+                 (unsigned)model->config.thinking);
     if (n <= 0 || (size_t)n >= sizeof(profile)) {
         fg_error(error, FORGE_ERR_LIMIT, "Summary producer configuration exceeds its limit");
         return false;

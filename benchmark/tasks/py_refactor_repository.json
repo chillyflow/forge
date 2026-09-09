@@ -1,0 +1,28 @@
+{
+  "id": "py_refactor_repository",
+  "suite": "campaign",
+  "language": "python",
+  "category": "refactor",
+  "prompt": "UserService must depend only on the repository protocol, not MemoryRepository internals, and missing users must return None. Refactor the implementation without changing the public service API and run the unittest suite without modifying tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-v"
+  ],
+  "protected_files": [
+    "tests/test_service.py"
+  ],
+  "files": {
+    "users/__init__.py": "",
+    "users/repository.py": "class MemoryRepository:\n    def __init__(self, users):\n        self.users = {user[\"id\"]: user for user in users}\n\n    def find(self, user_id):\n        return self.users.get(user_id)\n",
+    "users/service.py": "from .repository import MemoryRepository\n\nclass UserService:\n    def __init__(self, repository):\n        self.repository = repository\n\n    def display_name(self, user_id):\n        return self.repository.users[user_id][\"name\"].strip().title()\n",
+    "tests/test_service.py": "import unittest\nfrom users.service import UserService\n\nclass StubRepository:\n    def find(self, user_id):\n        return {\"id\": user_id, \"name\": \"  ada lovelace \"} if user_id == \"a\" else None\n\nclass ServiceTests(unittest.TestCase):\n    def test_protocol_and_missing(self):\n        service = UserService(StubRepository())\n        self.assertEqual(service.display_name(\"a\"), \"Ada Lovelace\")\n        self.assertIsNone(service.display_name(\"missing\"))\n"
+  },
+  "oracle_files": {
+    "users/service.py": "class UserService:\n    def __init__(self, repository):\n        self.repository = repository\n\n    def display_name(self, user_id):\n        user = self.repository.find(user_id)\n        return user[\"name\"].strip().title() if user is not None else None\n"
+  }
+}

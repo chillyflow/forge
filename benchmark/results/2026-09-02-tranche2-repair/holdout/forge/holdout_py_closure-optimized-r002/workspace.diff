@@ -1,0 +1,12 @@
+diff --git a/service.py b/service.py
+index 11d10cb..c003957 100644
+--- a/service.py
++++ b/service.py
+@@ -12,6 +12,7 @@ def requirements(graph, targets):
+             visit(dependency)
+         # Keep the traversal history for later visits.
+         visited.add(node)
++        active.discard(node)
+     targets = set(targets)
+     for target in targets:
+         visit(target)

@@ -1,0 +1,21 @@
+{
+  "id": "holdout_go_lru",
+  "suite": "holdout-2026-09-02",
+  "language": "go",
+  "category": "stateful",
+  "prompt": "Cache is a bounded LRU cache. Successful Get and both new and existing Put operations make the key most recently used. Updating a key must preserve other entries until capacity is exceeded. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module holdout\n\ngo 1.24\n",
+    "service.go": "package holdout\ntype Cache struct { Capacity int; values map[string]int; order []string }\nfunc (c *Cache) touch(key string) {\n    for i,k:=range c.order { if k==key { c.order=append(c.order[:i],c.order[i+1:]...);break } }\n    c.order=append(c.order,key)\n}\nfunc (c *Cache) Get(key string) (int,bool) {\n    value,ok:=c.values[key];if ok { c.touch(key) };return value,ok\n}\nfunc (c *Cache) Put(key string,value int) {\n    if c.Capacity<=0 { return }\n    if c.values==nil { c.values=map[string]int{} }\n    _,exists:=c.values[key]\n    c.values[key]=value\n    if !exists { c.touch(key) }\n    if len(c.values)>c.Capacity { delete(c.values,c.order[0]);c.order=c.order[1:] }\n}\n",
+    "service_test.go": "package holdout\nimport \"testing\"\nfunc TestCache(t *testing.T) {\n    c:=Cache{Capacity:2};c.Put(\"a\",1);c.Put(\"b\",2);c.Put(\"a\",3);c.Put(\"c\",4)\n    if _,ok:=c.Get(\"b\");ok { t.Fatal(\"least recent key retained\") }\n    if v,ok:=c.Get(\"a\");!ok || v!=3 { t.Fatal(\"updated key evicted\",v,ok) }\n    c.Put(\"d\",5);if _,ok:=c.Get(\"c\");ok { t.Fatal(\"Get did not refresh recency\") }\n    z:=Cache{Capacity:0};z.Put(\"x\",1);if _,ok:=z.Get(\"x\");ok { t.Fatal(\"zero capacity\") }\n    one:=Cache{Capacity:1};one.Put(\"x\",1);one.Put(\"x\",2);if v,ok:=one.Get(\"x\");!ok || v!=2 { t.Fatal(v,ok) }\n}\n"
+  },
+  "oracle_files": {
+    "service.go": "package holdout\ntype Cache struct { Capacity int; values map[string]int; order []string }\nfunc (c *Cache) touch(key string) {\n    for i,k:=range c.order { if k==key { c.order=append(c.order[:i],c.order[i+1:]...);break } }\n    c.order=append(c.order,key)\n}\nfunc (c *Cache) Get(key string) (int,bool) {\n    value,ok:=c.values[key];if ok { c.touch(key) };return value,ok\n}\nfunc (c *Cache) Put(key string,value int) {\n    if c.Capacity<=0 { return }\n    if c.values==nil { c.values=map[string]int{} }\n    c.values[key]=value\n    c.touch(key)\n    if len(c.values)>c.Capacity { delete(c.values,c.order[0]);c.order=c.order[1:] }\n}\n"
+  }
+}

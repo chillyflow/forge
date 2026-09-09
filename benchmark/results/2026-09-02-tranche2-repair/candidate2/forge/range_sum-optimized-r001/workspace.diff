@@ -1,0 +1,17 @@
+diff --git a/repair.go b/repair.go
+index 7840739..ff74740 100644
+--- a/repair.go
++++ b/repair.go
+@@ -1,8 +1,11 @@
+ package repair
+ 
+ func RangeSum(lo, hi int) int {
++	if lo > hi {
++		return 0
++	}
+ 	sum := 0
+-	for i := lo; i < hi; i++ {
++	for i := lo; i <= hi; i++ {
+ 		sum += i
+ 	}
+ 	return sum

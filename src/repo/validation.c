@@ -4,6 +4,7 @@
 
 #define VP_MAX_CHANGES 1024u
 #define VP_MAX_COMMANDS 2048u
+#define VP_MAX_PYTHON_TARGETS 1024u
 #define VP_BATCH_PACKAGES 32u
 #define VP_BATCH_BYTES 12000u
 #define VP_MAX_VM_STEPS UINT64_C(100000000)
@@ -15,7 +16,7 @@ typedef fg_go_package vp_package;
 typedef fg_go_edge vp_edge;
 typedef struct {
     char *path;
-    bool go, indexed;
+    bool go, python, indexed;
 } vp_change;
 typedef struct {
     const char *code, *detail;
@@ -30,11 +31,15 @@ typedef struct {
     const vp_package *packages;
     const vp_edge *edges;
     vp_change *changes;
+    char **python_targets, **python_tests;
+    const char *python_executable;
     bool *affected, *dependent;
     size_t module_count, package_count, edge_count, change_count;
+    size_t python_file_count, python_syntax_count, python_test_count, python_target_count;
     vp_reason reasons[32];
     size_t reason_count, command_count;
-    bool failed, applicable;
+    bool failed, applicable, verification_ready, go_applicable, python_applicable, python_pytest;
+    bool python_broad_syntax;
     yyjson_mut_doc *doc;
 } vp_graph;
 
@@ -57,7 +62,7 @@ static bool vp_fail(vp_graph *g, forge_status status, const char *message) {
 static char *vp_copy(vp_graph *g, const char *s) {
     char *copy = fg_strdup(s);
     if (!copy)
-        vp_fail(g, FORGE_ERR_MEMORY, "Go validation allocation failed");
+        vp_fail(g, FORGE_ERR_MEMORY, "Validation allocation failed");
     return copy;
 }
 
@@ -187,6 +192,7 @@ static bool vp_changes(vp_graph *g, const char *const *paths, size_t count) {
         if (!c->path)
             return false;
         c->go = vp_suffix(c->path, ".go");
+        c->python = vp_suffix(c->path, ".py");
         g->change_count++;
     }
     qsort(g->changes, g->change_count, sizeof(*g->changes), vp_change_compare);
@@ -206,7 +212,7 @@ static sqlite3_stmt *vp_query(vp_graph *g, const char *query) {
         return NULL;
     sqlite3_stmt *s = NULL;
     if (sqlite3_prepare_v2(g->repo->db, query, -1, &s, NULL) != SQLITE_OK)
-        vp_fail(g, FORGE_ERR_IO, "Cannot query Go validation index");
+        vp_fail(g, FORGE_ERR_IO, "Cannot query validation index");
     return s;
 }
 
@@ -214,7 +220,188 @@ static bool vp_query_done(vp_graph *g, sqlite3_stmt *s, int rc) {
     sqlite3_finalize(s);
     if (vp_stopped(g))
         return false;
-    return rc == SQLITE_DONE || vp_fail(g, FORGE_ERR_IO, "Cannot read Go validation index");
+    return rc == SQLITE_DONE || vp_fail(g, FORGE_ERR_IO, "Cannot read validation index");
+}
+
+static bool vp_python_test_path(const char *path) {
+    const char *base = vp_base(path);
+    return vp_suffix(base, "_test.py") || (!strncmp(base, "test", 4) && vp_suffix(base, ".py"));
+}
+
+static bool vp_python_configuration_path(const char *path) {
+    const char *base = vp_base(path);
+    return !strcmp(base, "pytest.ini") || !strcmp(base, ".pytest.ini") ||
+           !strcmp(base, "pyproject.toml") || !strcmp(base, "setup.cfg") ||
+           !strcmp(base, "tox.ini");
+}
+
+static bool vp_python_related_test(const vp_change *change, const char *test_path) {
+    if (!change->python || !change->indexed || !vp_python_test_path(test_path))
+        return false;
+    if (!strcmp(change->path, test_path))
+        return true;
+    if (vp_python_test_path(change->path))
+        return false;
+    const char *source = vp_base(change->path), *test = vp_base(test_path);
+    size_t source_length = strlen(source), test_length = strlen(test);
+    if (source_length <= 3)
+        return false;
+    size_t stem_length = source_length - 3;
+    bool prefixed = test_length == 5 + stem_length + 3 && !strncmp(test, "test_", 5) &&
+                    !memcmp(test + 5, source, stem_length) &&
+                    !strcmp(test + 5 + stem_length, ".py");
+    bool suffixed = test_length == stem_length + 8 && !memcmp(test, source, stem_length) &&
+                    !strcmp(test + stem_length, "_test.py");
+    return prefixed || suffixed;
+}
+
+static bool vp_python_target_add(vp_graph *g, const char *path) {
+    if (g->python_target_count == VP_MAX_PYTHON_TARGETS)
+        return vp_fail(g, FORGE_ERR_LIMIT, "Python targeted validation exceeds 1024 test files");
+    char *copy = vp_copy(g, path);
+    if (!copy)
+        return false;
+    g->python_targets[g->python_target_count++] = copy;
+    return true;
+}
+
+static bool vp_python_test_add(vp_graph *g, const char *path) {
+    if (g->python_test_count == VP_MAX_PYTHON_TARGETS)
+        return vp_fail(g, FORGE_ERR_LIMIT, "Python validation exceeds 1024 test files");
+    char *copy = vp_copy(g, path);
+    if (!copy)
+        return false;
+    g->python_tests[g->python_test_count++] = copy;
+    return true;
+}
+
+static bool vp_python_content_signal(vp_graph *g) {
+    sqlite3_stmt *s =
+        vp_query(g, "SELECT 1 FROM chunks WHERE "
+                    "(((path='pyproject.toml' OR path LIKE '%/pyproject.toml' OR "
+                    "path='setup.cfg' OR path LIKE '%/setup.cfg' OR path='tox.ini' OR "
+                    "path LIKE '%/tox.ini') AND instr(lower(content),'pytest')>0) OR "
+                    "((path GLOB 'test*.py' OR path GLOB '*/test*.py' OR "
+                    "path GLOB '*_test.py') AND (instr(content,'import pytest')>0 OR "
+                    "instr(content,'from pytest')>0 OR ((instr(content,'def test_')>0 OR "
+                    "instr(content,'async def test_')>0) AND "
+                    "instr(content,'unittest.TestCase')=0 AND "
+                    "instr(content,'from unittest import TestCase')=0)))) "
+                    "LIMIT 1");
+    if (!s)
+        return false;
+    int rc = sqlite3_step(s);
+    if (rc == SQLITE_ROW)
+        g->python_pytest = true;
+    else if (rc != SQLITE_DONE) {
+        sqlite3_finalize(s);
+        return vp_fail(g, FORGE_ERR_IO, "Cannot detect Python test configuration");
+    }
+    sqlite3_finalize(s);
+    return !vp_stopped(g);
+}
+
+static const char *vp_python_interpreter(vp_graph *g) {
+#ifdef _WIN32
+    static const char *const candidates[] = {"python", "python3", "py"};
+#else
+    static const char *const candidates[] = {"python3", "python"};
+#endif
+    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
+        if (fg_process_executable_available(g->repo->root, g->repo->root, candidates[i]))
+            return candidates[i];
+    return NULL;
+}
+
+static bool vp_python_discover(vp_graph *g) {
+    g->python_targets = calloc(VP_MAX_PYTHON_TARGETS, sizeof(*g->python_targets));
+    g->python_tests = calloc(VP_MAX_PYTHON_TARGETS, sizeof(*g->python_tests));
+    if (!g->python_targets || !g->python_tests)
+        return vp_fail(g, FORGE_ERR_MEMORY, "Python validation selection allocation failed");
+    sqlite3_stmt *s = vp_query(g, "SELECT path FROM files ORDER BY path");
+    if (!s)
+        return false;
+    int rc;
+    while ((rc = sqlite3_step(s)) == SQLITE_ROW) {
+        const char *path = (const char *)sqlite3_column_text(s, 0);
+        const char *base = vp_base(path);
+        if (vp_python_configuration_path(path) &&
+            (!strcmp(base, "pytest.ini") || !strcmp(base, ".pytest.ini")))
+            g->python_pytest = true;
+        if (!vp_suffix(path, ".py"))
+            continue;
+        g->python_file_count++;
+        if (!strcmp(base, "conftest.py"))
+            g->python_pytest = true;
+        if (!vp_python_test_path(path))
+            continue;
+        if (!vp_python_test_add(g, path)) {
+            sqlite3_finalize(s);
+            return false;
+        }
+        for (size_t i = 0; i < g->change_count; i++) {
+            if (vp_python_related_test(&g->changes[i], path)) {
+                if (!vp_python_target_add(g, path)) {
+                    sqlite3_finalize(s);
+                    return false;
+                }
+                break;
+            }
+        }
+    }
+    if (!vp_query_done(g, s, rc) || !vp_python_content_signal(g))
+        return false;
+    bool python_change = false, python_configuration_change = false;
+    for (size_t i = 0; i < g->change_count; i++) {
+        vp_change *change = &g->changes[i];
+        const char *base = vp_base(change->path);
+        bool configuration_change = vp_python_configuration_path(change->path);
+        python_change |= change->python;
+        python_configuration_change |= configuration_change;
+        if (configuration_change && (!strcmp(base, "pytest.ini") || !strcmp(base, ".pytest.ini")))
+            g->python_pytest = true;
+        if (change->python && !change->indexed &&
+            !vp_reason_add(
+                g, "unindexed_or_deleted_python_path", change->path,
+                "The changed Python file is absent from the index; it may be deleted, skipped, "
+                "or newer than the index. It cannot be included in the syntax check."))
+            return false;
+    }
+    g->python_applicable = (!g->change_count && g->python_file_count != 0) || python_change ||
+                           (python_configuration_change && g->python_file_count != 0);
+    for (size_t i = 0; i < g->change_count; i++) {
+        if (g->changes[i].python && g->changes[i].indexed)
+            g->python_syntax_count++;
+    }
+    if ((!g->change_count && g->python_file_count) ||
+        (g->python_applicable && !g->python_syntax_count && g->python_file_count)) {
+        g->python_syntax_count = g->python_file_count;
+        g->python_broad_syntax = true;
+    }
+    if (!g->python_applicable)
+        return true;
+    g->python_executable = vp_python_interpreter(g);
+    if (!g->python_executable &&
+        !vp_reason_add(g, "python_executable_unavailable", "",
+                       "Python validation is applicable, but python3/python/py was not found in "
+                       "an executable PATH entry outside the workspace."))
+        return false;
+    if (!g->python_file_count &&
+        !vp_reason_add(g, "no_indexed_python_files", "",
+                       "Python changes are present, but no current indexed Python file can be "
+                       "syntax checked; validation is blocked rather than treated as passing."))
+        return false;
+    if (python_change && g->python_test_count && !g->python_target_count &&
+        !vp_reason_add(g, "python_target_mapping_unavailable", "",
+                       "No related test matched the changed Python basename; broad indexed test "
+                       "execution remains required."))
+        return false;
+    if (!g->python_test_count && !g->python_pytest &&
+        !vp_reason_add(g, "python_tests_not_detected", "",
+                       "No unittest-discoverable file or pytest configuration was detected; the "
+                       "plan can establish syntax only, not test success."))
+        return false;
+    return !g->failed;
 }
 
 static size_t vp_package_find(vp_graph *g, const char *directory, size_t *unused) {
@@ -418,6 +605,104 @@ static bool vp_format_commands(vp_graph *g, yyjson_mut_val *commands) {
     }
     return true;
 }
+
+static bool vp_python_syntax_file(vp_graph *g, yyjson_mut_val *commands, vp_format_batch *batch,
+                                  const char *file, const char *reason) {
+    static const char script[] = "import pathlib,sys;"
+                                 "all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None "
+                                 "for p in sys.argv[1:])";
+    const char *prefix[] = {g->python_executable, "-B", "-c", script};
+    size_t n = strlen(file) + 3;
+    if (!batch->argv || batch->count == VP_BATCH_PACKAGES || batch->bytes + n > VP_BATCH_BYTES) {
+        batch->argv = vp_command(g, commands, ".", prefix, 4, false, reason);
+        batch->count = batch->bytes = 0;
+    }
+    char path[FG_PATH_MAX];
+    snprintf(path, sizeof(path), "./%s", file);
+    vp_append_string(g, batch->argv, path);
+    batch->count++;
+    batch->bytes += n;
+    return !g->failed;
+}
+
+static bool vp_python_syntax_commands(vp_graph *g, yyjson_mut_val *commands) {
+    vp_format_batch batch = {0};
+    if (g->python_broad_syntax) {
+        sqlite3_stmt *s =
+            vp_query(g, "SELECT path FROM files WHERE path GLOB '*.py' ORDER BY path");
+        if (!s)
+            return false;
+        int rc;
+        while ((rc = sqlite3_step(s)) == SQLITE_ROW) {
+            const char *file = (const char *)sqlite3_column_text(s, 0);
+            if (!vp_python_syntax_file(g, commands, &batch, file,
+                                       g->change_count
+                                           ? "indexed_python_files_for_unmapped_changes"
+                                           : "indexed_python_files_for_unknown_changes")) {
+                sqlite3_finalize(s);
+                return false;
+            }
+        }
+        return vp_query_done(g, s, rc);
+    }
+    for (size_t i = 0; i < g->change_count; i++) {
+        vp_change *change = &g->changes[i];
+        if (change->python && change->indexed &&
+            !vp_python_syntax_file(g, commands, &batch, change->path,
+                                   "changed_python_files_syntax"))
+            return false;
+    }
+    return true;
+}
+
+static bool vp_python_file_commands(vp_graph *g, yyjson_mut_val *commands, char *const *files,
+                                    size_t file_count, bool use_pytest, const char *reason) {
+    static const char unittest_script[] =
+        "import sys,unittest;"
+        "p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);"
+        "sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)";
+    const char *pytest_argv[] = {g->python_executable, "-B", "-m", "pytest", "-q", "-p",
+                                 "no:cacheprovider"};
+    const char *unittest_argv[] = {g->python_executable, "-B", "-c", unittest_script};
+    const char *const *prefix = use_pytest ? pytest_argv : unittest_argv;
+    size_t prefix_count = use_pytest ? 7 : 4;
+    vp_format_batch batch = {0};
+    for (size_t i = 0; i < file_count; i++) {
+        const char *file = files[i];
+        size_t n = strlen(file) + 3;
+        if (!batch.argv || batch.count == VP_BATCH_PACKAGES || batch.bytes + n > VP_BATCH_BYTES) {
+            batch.argv = vp_command(g, commands, ".", prefix, prefix_count, false, reason);
+            batch.count = batch.bytes = 0;
+        }
+        char path[FG_PATH_MAX];
+        snprintf(path, sizeof(path), "./%s", file);
+        vp_append_string(g, batch.argv, path);
+        batch.count++;
+        batch.bytes += n;
+        if (g->failed)
+            return false;
+    }
+    return true;
+}
+
+static bool vp_python_target_commands(vp_graph *g, yyjson_mut_val *commands) {
+    return vp_python_file_commands(
+        g, commands, g->python_targets, g->python_target_count, g->python_pytest,
+        g->python_pytest ? "related_pytest_files" : "related_unittest_files");
+}
+
+static bool vp_python_broad_command(vp_graph *g, yyjson_mut_val *commands) {
+    if (!g->python_test_count && !g->python_pytest)
+        return true;
+    if (g->python_pytest) {
+        const char *argv[] = {g->python_executable, "-B", "-m", "pytest", "-q", "-p",
+                              "no:cacheprovider"};
+        vp_command(g, commands, ".", argv, 7, false, "final_python_pytest_discovery");
+    } else
+        vp_python_file_commands(g, commands, g->python_tests, g->python_test_count, false,
+                                "final_python_unittest_files");
+    return !g->failed;
+}
 static bool vp_package_commands(vp_graph *g, yyjson_mut_val *commands, unsigned stage) {
     static const char *const compile[] = {"go",       "test", "-json", "-count=1",
                                           "-vet=off", "-run", "^$"};
@@ -471,17 +756,27 @@ static void vp_stages(vp_graph *g, yyjson_mut_val *array) {
         vp_bool(g, stage, "requires_previous_success", i != 0);
         vp_value(g, stage, "commands", commands);
         vp_append(g, array, stage);
-        if (!g->applicable)
+        if (!g->verification_ready)
             continue;
-        if (i == 0)
-            vp_format_commands(g, commands);
-        else if (i < 5)
-            vp_package_commands(g, commands, i);
-        else
-            for (size_t j = 0; j < g->module_count; j++)
-                vp_command(g, commands, g->modules[j].directory, broad, 5, false,
-                           g->reason_count ? "conservative_fallback_and_final_verification"
-                                           : "final_module_verification");
+        if (g->go_applicable) {
+            if (i == 0)
+                vp_format_commands(g, commands);
+            else if (i < 5)
+                vp_package_commands(g, commands, i);
+            else
+                for (size_t j = 0; j < g->module_count; j++)
+                    vp_command(g, commands, g->modules[j].directory, broad, 5, false,
+                               g->reason_count ? "conservative_fallback_and_final_verification"
+                                               : "final_module_verification");
+        }
+        if (g->python_applicable) {
+            if (i == 1)
+                vp_python_syntax_commands(g, commands);
+            else if (i == 2)
+                vp_python_target_commands(g, commands);
+            else if (i == 5)
+                vp_python_broad_command(g, commands);
+        }
         if (g->failed)
             return;
     }
@@ -494,18 +789,27 @@ static char *vp_serialize(vp_graph *g) {
     }
     yyjson_mut_val *root = vp_object(g);
     yyjson_mut_doc_set_root(g->doc, root);
-    vp_number(g, root, "schema_version", 1);
+    const char *verification_status = !g->applicable          ? "not_applicable"
+                                      : g->verification_ready ? "planned"
+                                                              : "blocked";
+    vp_number(g, root, "schema_version", 2);
     vp_number(g, root, "generation", g->snapshot->generation);
-    vp_string(g, root, "language", "go");
-    vp_string(g, root, "status", "planned");
-    vp_string(g, root, "graph_kind", "syntactic_package_imports");
+    vp_string(g, root, "language", g->go_applicable || !g->python_applicable ? "go" : "python");
+    vp_string(g, root, "status", verification_status);
+    vp_string(g, root, "verification_status", verification_status);
+    vp_string(g, root, "graph_kind", g->go_applicable ? "syntactic_package_imports" : "none");
     vp_bool(g, root, "sound", false);
     vp_bool(g, root, "applicable", g->applicable);
+    vp_bool(g, root, "verification_available", g->verification_ready);
     vp_bool(g, root, "broad_verification_required", g->applicable);
-    yyjson_mut_val *changed = vp_array(g), *modules = vp_array(g), *packages = vp_array(g),
-                   *edges = vp_array(g), *affected = vp_array(g), *dependents = vp_array(g),
-                   *reasons = vp_array(g), *limitations = vp_array(g), *stages = vp_array(g);
+    yyjson_mut_val *changed = vp_array(g), *languages = vp_array(g), *missing_tools = vp_array(g),
+                   *modules = vp_array(g), *packages = vp_array(g), *edges = vp_array(g),
+                   *affected = vp_array(g), *dependents = vp_array(g), *reasons = vp_array(g),
+                   *limitations = vp_array(g), *stages = vp_array(g), *python = vp_object(g),
+                   *python_targets = vp_array(g);
     vp_value(g, root, "changed_paths", changed);
+    vp_value(g, root, "languages", languages);
+    vp_value(g, root, "missing_tools", missing_tools);
     vp_value(g, root, "modules", modules);
     vp_value(g, root, "packages", packages);
     vp_value(g, root, "edges", edges);
@@ -513,7 +817,36 @@ static char *vp_serialize(vp_graph *g) {
     vp_value(g, root, "reverse_dependents", dependents);
     vp_value(g, root, "fallback_reasons", reasons);
     vp_value(g, root, "limitations", limitations);
+    vp_value(g, root, "python", python);
     vp_value(g, root, "stages", stages);
+    if (g->go_applicable)
+        vp_append_string(g, languages, "go");
+    if (g->python_applicable)
+        vp_append_string(g, languages, "python");
+    if (g->python_applicable && !g->python_executable)
+        vp_append_string(g, missing_tools, "python");
+    vp_bool(g, python, "applicable", g->python_applicable);
+    vp_bool(g, python, "executable_available", g->python_executable != NULL);
+    vp_string(g, python, "executable", g->python_executable ? g->python_executable : "");
+    vp_string(g, python, "selection_kind", "changed_files_and_filename_related_tests");
+    vp_string(g, python, "syntax_scope", g->python_broad_syntax ? "all_indexed" : "changed");
+    vp_number(g, python, "source_file_count", (uint64_t)g->python_file_count);
+    vp_number(g, python, "syntax_file_count", (uint64_t)g->python_syntax_count);
+    vp_number(g, python, "test_file_count", (uint64_t)g->python_test_count);
+    vp_number(g, python, "targeted_test_count", (uint64_t)g->python_target_count);
+    vp_bool(g, python, "syntax_scheduled", g->verification_ready && g->python_syntax_count != 0);
+    vp_bool(g, python, "tests_applicable", g->python_test_count != 0 || g->python_pytest);
+    vp_bool(g, python, "tests_scheduled",
+            g->verification_ready && (g->python_test_count != 0 || g->python_pytest));
+    vp_string(g, python, "test_runner",
+              !g->python_test_count && !g->python_pytest ? "none"
+              : g->python_pytest                         ? "pytest"
+                                                         : "unittest");
+    vp_bool(g, python, "bytecode_writes_disabled", true);
+    vp_bool(g, python, "pytest_cache_disabled", g->python_pytest);
+    vp_value(g, python, "targeted_test_files", python_targets);
+    for (size_t i = 0; i < g->python_target_count; i++)
+        vp_append_string(g, python_targets, g->python_targets[i]);
     for (size_t i = 0; i < g->change_count; i++)
         vp_append_string(g, changed, g->changes[i].path);
     for (size_t i = 0; i < g->module_count; i++) {
@@ -554,24 +887,51 @@ static char *vp_serialize(vp_graph *g) {
         vp_string(g, reason, "detail", g->reasons[i].detail);
         vp_append(g, reasons, reason);
     }
-    vp_append_string(
-        g, limitations,
-        "Package imports are syntactic, not type-resolved references or test coverage.");
-    vp_append_string(g, limitations,
-                     "Imports from production and test files are unioned; test-only changes also "
-                     "include reverse dependents conservatively.");
-    vp_append_string(g, limitations,
-                     "Only indexed workspace files and module directives are resolved; generated "
-                     "code, embed inputs, replacement aliases, vendored/external modules and "
-                     "runtime dependencies may escape the graph.");
-    vp_append_string(g, limitations,
-                     "Broad tests cover each indexed module only in the active Go environment; "
-                     "other tags, platforms, toolchains, integration services and modules outside "
-                     "the workspace need separate validation.");
-    vp_append_string(
-        g, limitations,
-        "The compile check uses go test -run ^$ and may execute package initialization and "
-        "TestMain. All Go checks require process permission and may access caches or the network.");
+    if (g->go_applicable) {
+        vp_append_string(
+            g, limitations,
+            "Package imports are syntactic, not type-resolved references or test coverage.");
+        vp_append_string(g, limitations,
+                         "Imports from production and test files are unioned; test-only changes "
+                         "also include reverse dependents conservatively.");
+        vp_append_string(
+            g, limitations,
+            "Only indexed workspace files and module directives are resolved; generated code, "
+            "embed inputs, replacement aliases, vendored/external modules and runtime "
+            "dependencies may escape the graph.");
+        vp_append_string(
+            g, limitations,
+            "Broad tests cover each indexed module only in the active Go environment; other tags, "
+            "platforms, toolchains, integration services and modules outside the workspace need "
+            "separate validation.");
+        vp_append_string(
+            g, limitations,
+            "The compile check uses go test -run ^$ and may execute package initialization and "
+            "TestMain. All Go checks require process permission and may access caches or the "
+            "network.");
+    }
+    if (g->python_applicable) {
+        vp_append_string(
+            g, limitations,
+            "Python has no structural dependency graph; related tests are selected only by "
+            "test_<module>.py and <module>_test.py basenames, then broad verification is "
+            "required.");
+        vp_append_string(
+            g, limitations,
+            "pytest selection uses indexed configuration, conftest files, pytest imports and "
+            "filename conventions; undeclared plugins, environments and services need separate "
+            "validation.");
+        vp_append_string(
+            g, limitations,
+            "Python syntax checks compile source without importing code. Python runs use -B and "
+            "pytest disables its cache provider, but project tests may still mutate inputs and "
+            "must be rejected if the validation snapshot changes.");
+        vp_append_string(
+            g, limitations,
+            "Unittest file paths use the standard loader's path-to-module conversion; a local "
+            "test namespace that collides with an installed regular package may need pytest or "
+            "explicit project configuration.");
+    }
     vp_stages(g, stages);
     vp_number(g, root, "command_count", (uint64_t)g->command_count);
     if (g->failed)
@@ -591,9 +951,15 @@ static char *vp_serialize(vp_graph *g) {
 static void vp_free(vp_graph *g) {
     for (size_t i = 0; i < g->change_count; i++)
         free(g->changes[i].path);
+    for (size_t i = 0; i < g->python_target_count; i++)
+        free(g->python_targets[i]);
+    for (size_t i = 0; i < g->python_test_count; i++)
+        free(g->python_tests[i]);
     for (size_t i = 0; i < g->reason_count; i++)
         free(g->reasons[i].path);
     free(g->changes);
+    free(g->python_targets);
+    free(g->python_tests);
     free(g->affected);
     free(g->dependent);
     fg_go_graph_destroy(g->graph);
@@ -634,7 +1000,7 @@ char *forge_repo_validation_plan(forge_repo *repo, const char *const *paths, siz
     g.modules = fg_go_graph_modules(g.graph, &g.module_count);
     g.packages = fg_go_graph_packages(g.graph, &g.package_count);
     g.edges = fg_go_graph_edges(g.graph, &g.edge_count);
-    g.applicable = fg_go_graph_applicable(g.graph);
+    g.go_applicable = fg_go_graph_applicable(g.graph);
     size_t slots = g.package_count ? g.package_count : 1;
     g.affected = calloc(slots, sizeof(*g.affected));
     g.dependent = calloc(slots, sizeof(*g.dependent));
@@ -649,7 +1015,14 @@ char *forge_repo_validation_plan(forge_repo *repo, const char *const *paths, siz
             goto done;
     if (!vp_mark_changes(&g))
         goto done;
-    if (g.applicable && (!vp_configuration_changes(&g) || !vp_reachability(&g)))
+    if (!vp_python_discover(&g))
+        goto done;
+    g.applicable = g.go_applicable || g.python_applicable;
+    g.verification_ready =
+        g.applicable &&
+        (!g.python_applicable || (g.python_executable != NULL && g.python_file_count != 0 &&
+                                  (g.python_test_count != 0 || g.python_pytest)));
+    if (g.go_applicable && (!vp_configuration_changes(&g) || !vp_reachability(&g)))
         goto done;
     out = vp_serialize(&g);
 done:

@@ -1,0 +1,17 @@
+diff --git a/service.go b/service.go
+index b4e4cbb..ed9ef0c 100644
+--- a/service.go
++++ b/service.go
+@@ -31,7 +31,11 @@ func (c *Cache) Put(key string, value int) {
+ 	}
+ 	_, exists := c.values[key]
+ 	c.values[key] = value
+-	if !exists {
++	if exists {
++		// For existing keys, we need to update the order to make it most recent
++		c.touch(key)
++	} else {
++		// For new keys, we add to the order
+ 		c.touch(key)
+ 	}
+ 	if len(c.values) > c.Capacity {

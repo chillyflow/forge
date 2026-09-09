@@ -1,0 +1,12 @@
+file_sha256:5aa77ebafa8858abab5d52da6790e5f94c955d8609dd14091148c52083caf295
+30: 		if len(ready) == 0 {
+31: 			return nil, fmt.Errorf("cycle")
+32: 		}
+33: 		sort.Strings(ready)
+34: 		for _, job := range ready {
+35: 			done[job] = true
+36: 		}
+37: 		waves = append(waves, ready)
+38: 	}
+39: 	return waves, nil
+40: }

@@ -1,0 +1,10 @@
+file_sha256:680e276f963e806a0af6bb120eaa9ac4206222606b7e00e14cc85703497e610d
+1: import ast
+2: 
+3: def evaluate(expression)
+4:     node = ast.parse(expression, mode="eval").body
+5:     if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Add):
+6:         raise ValueError("unsupported")
+7:     if not isinstance(node.left, ast.Constant) or not isinstance(node.right, ast.Constant):
+8:         raise ValueError("unsupported")
+9:     return node.left.value + node.right.value

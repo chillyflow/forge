@@ -1,0 +1,28 @@
+package holdout
+
+type reading struct{ at, value int }
+type Accumulator struct {
+	Horizon     int
+	readings    []reading
+	previous    int
+	initialized bool
+}
+
+func (w *Accumulator) Observe(now, value int) (int, bool) {
+	if w.initialized && now < w.previous {
+		return 0, false
+	}
+	w.previous = now
+	w.initialized = true
+	w.readings = append(w.readings, reading{now, value})
+	head := 0
+	for head < len(w.readings) && w.readings[head].at <= now-w.Horizon {
+		head++
+	}
+	w.readings = w.readings[head:]
+	aggregate := 0
+	for _, s := range w.readings {
+		aggregate += s.value
+	}
+	return aggregate, true
+}

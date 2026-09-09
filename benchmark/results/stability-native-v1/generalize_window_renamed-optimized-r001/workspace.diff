@@ -1,0 +1,13 @@
+diff --git a/buffer.go b/buffer.go
+index b0bcbca..7953d0b 100644
+--- a/buffer.go
++++ b/buffer.go
+@@ -16,7 +16,7 @@ func (w *Accumulator) Observe(now, value int) (int, bool) {
+ 	w.initialized = true
+ 	w.readings = append(w.readings, reading{now, value})
+ 	head := 0
+-	for head < len(w.readings) && w.readings[head].at < now-w.Horizon {
++	for head < len(w.readings) && w.readings[head].at <= now-w.Horizon {
+ 		head++
+ 	}
+ 	w.readings = w.readings[head:]

@@ -20,9 +20,14 @@ download provenance and GPU settings documented separately.
 
 ## Build
 
-CMake 3.24+, a C17/C++17 compiler, Git, and Python 3.10+ for tests. Go and gofmt
-are needed for Go validation; CI exercises real checks with Go 1.27.0. The first build
-fetches pinned native dependencies. Subsequent builds can run offline.
+CMake 3.24+, a C17/C++17 compiler, Git 2.45+, and Python 3.10+ for tests and
+Python validation. Go and gofmt are needed for Go validation; CI exercises real
+checks with Go 1.27.0. The first build fetches pinned native dependencies.
+Subsequent builds can run offline.
+
+Git 2.45+ is required for the `--no-lazy-fetch` flag used during repository
+enumeration. Older Git is supported but silently falls back to a full filesystem
+scan, which does not exclude `.gitignore` paths; see `docs/INDEX.md`.
 
 ```sh
 # CPU inference (Linux/macOS)
@@ -79,11 +84,13 @@ Ctrl+C requests cancellation; GPU kernels are not preempted mid-dispatch.
 including network access. Use a disposable checkout/container for untrusted
 repositories. Read the [security model](docs/SECURITY.md) before enabling execution.
 
-Go workspaces with edits or launched commands undergo formatting checks, compilation, affected
-and reverse-dependent tests, vet, and broad verification before an agent's final
-answer is accepted. Failures return to the agent for repair; denied execution
-does not become a successful verification. This checks the active Go environment,
-not every build tag/platform or the correctness of arbitrary task claims.
+Go/Python workspaces with relevant edits or arbitrary `run_command` execution
+undergo staged verification before an agent's final answer is accepted. Go checks formatting,
+compilation, affected and reverse-dependent tests, vet, and broad tests. Python
+checks compiler-level syntax, filename-related tests, and broad unittest/pytest
+execution. Failures return to the agent for repair; denied or unavailable
+execution does not become successful verification. This checks the active
+language environment, not every build tag/platform or arbitrary task correctness.
 Validation also compares bounded workspace input snapshots, including unindexed
 test fixtures, before accepting success. See [the validation contract](docs/VALIDATION.md).
 `--no-auto-validation` is an explicit ablation.
@@ -111,19 +118,86 @@ numeric layer settings remain explicit overrides.
 
 | Tool | Behavior |
 | --- | --- |
-| `read_file` | Bounded line ranges with line numbers |
+| `read_file` | Bounded line ranges with line numbers and a full-file SHA-256 edit anchor |
 | `list_directory` | Sorted indexed file map |
 | `search_text` | Literal source search, bounded results |
 | `retrieve_context` | Exact symbol → package graph → literal → FTS5, with snapshot provenance and budgets |
 | `find_symbol` | Go declaration/signature/body expansion |
 | `get_references` | Go identifier occurrences, not type-resolved references |
 | `apply_patch` | One exact, unique replacement; atomic file replacement |
+| `apply_hunk` | SHA-256-anchored inclusive line replacement; rejects stale file revisions |
 | `run_command` | Argument-vector execution, separate stdout/stderr, deadlines |
 | `git_diff`, `git_status` | Git inspection requiring process permission; configured filters can execute |
 | `expand_output` | Retrieve a page of recorded raw output |
 
-The registry generates a GBNF grammar. Schema validation runs again before
-dispatch. Malformed or unknown actions never execute.
+The registry generates a GBNF grammar. Any action may begin with an optional
+`thought` field: one free-text string, at most 2048 bytes, recorded in session
+artifacts and never executed. Schema validation runs again before dispatch.
+Malformed or unknown actions never execute; an invalid thought invalidates the
+whole action.
+
+The channel has independent host-enforced controls. `--no-thought` removes it
+from the generated grammar and schema and refuses any action that still carries
+one, which is the §32 ablation control. `--thought-required` rejects any action
+without a nonempty thought. Both checks run in the host after parsing, so they
+hold even for a backend that ignores the grammar.
+
+A thought never re-enters a later prompt by default. It conditions the
+generation that produced it and is recorded in the session log, but is dropped
+from the stored ACTION segment; `--thought-history` opts back into re-injecting
+it and `--thought-decode-only` states the default explicitly. Retention is off
+because it is measurably harmful once reasoning is actually elicited: across
+five replicated sweeps, every one of the fifteen fixture runs whose outcome
+depended on retention failed with it and passed without it (exact sign test
+p = 6.1e-05), at 2.3x the prompt tokens — and it buys no extra evidence because
+the raw response is already persisted before the strip. See
+[the elicited sweep](benchmark/results/2026-08-30-elicited-sweep/README.md).
+
+`--thought-routed` changes the wire format: the model reasons in bounded plain
+text before its JSON action, and llama.cpp's lazy grammar sampler begins
+constraining output when the actual `tool`, `memory`, or `final` object starts.
+Because a lazy trigger alone elicits nothing (the model can open the action
+object on its first token), routed decoding force-decodes a `Thought: ` cue
+first — steering the continuation into prose rather than prompt echo — then
+withholds action-opening tokens for a minimum prefix budget (32 tokens, or a
+quarter of the turn's token budget if smaller) before the trigger may arm, and
+withholds end-of-generation tokens until the action actually begins, so a
+generation cannot end actionless after reasoning. The cue is host scaffold:
+it is stripped before the thought is bounded, validated, or recorded. The
+host normalizes the prefix into the same validated thought field used by the
+rest of the agent; an over-long prefix is truncated at a UTF-8 boundary to the
+2048-byte bound rather than failing the run, because the raw text is already
+session evidence.
+
+The reasoning phase is bounded per state. After `--thought-budget` sampled
+reasoning tokens (default: at most 256, reduced to half the remaining turn
+budget near exhaustion) without an action, the never-triggered lazy grammar is
+swapped for an eager one, so subsequent output is immediately constrained by
+the full tool grammar. Leading grammar whitespace is excluded after that swap
+until the first action token, so padding cannot consume the remaining budget;
+`forced_action_progress_tokens` records that transition.
+`--no-thought-budget` restores the unbounded phase-1 behavior as an ablation.
+Once the action has begun, generation ends at the first token
+that completes the action object instead of waiting for an end-of-generation
+token — the grammar keeps trailing whitespace legal after the object closes,
+so a model that never emits an end token would otherwise burn the remaining
+turn budget (measured: half of Llama-3.1-8B's routed fixtures died exactly
+this way at turn 1). `--thought-cue` replaces the forced cue for models that
+open reasoning with their own markers; an empty cue disables the cue and the
+action-opening ban window with it. `--thought-native` instead uses a cue-free
+lazy grammar and enables the chat template's native thinking path;
+`--thought-native --disable-thinking` is its grammar-matched safe control.
+`--enable-thinking`, `--disable-thinking`, and `model.enable_thinking` expose
+the template switch directly and fail if the selected template cannot support
+it.
+
+Within the action, the host now distinguishes tool/memory/final selection,
+tool arguments, patch content, final prose, and memory content. Structured
+selection and arguments use deterministic sampling even when prose/patch
+sampling is configured with temperature; the grammar remains active throughout.
+The per-state token counters in `metrics.json` make the policy auditable. See
+the [Phase 2 re-sweep](benchmark/results/2026-08-31-phase2-resweep/README.md)
+and [reasoning-gated evaluation](benchmark/results/2026-08-31-reasoning-gated/README.md).
 
 ### Sessions
 

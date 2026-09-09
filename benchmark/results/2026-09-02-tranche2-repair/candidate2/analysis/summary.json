@@ -1,0 +1,5275 @@
+{
+  "schema_version": 2,
+  "analysis_plan": {
+    "status": "pre-registered before the 29-task primary matrix",
+    "primary_endpoint": "pass rate across all scheduled task/repetition runs",
+    "all_run_timing": "end-to-end time for every run, including failures",
+    "matched_timing": "paired end-to-end differences only where both harnesses pass",
+    "subgroups": [
+      "language",
+      "category"
+    ],
+    "confidence_intervals": {
+      "level": 0.95,
+      "method": "task-cluster percentile bootstrap",
+      "iterations": 20000,
+      "seed": 20260901
+    },
+    "scope": "this fixture suite, locked model, locked hardware, and cold lifecycle only"
+  },
+  "comparable_lifecycle": true,
+  "lifecycles": [
+    "cold"
+  ],
+  "identity": {
+    "model_sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+    "fixture_preparation": "utf8-lf-language-format-v2",
+    "context_tokens": 16384,
+    "output_reserve": 2048,
+    "max_turns": 16,
+    "gpu_layers": "-1",
+    "chat_template": "embedded",
+    "temperature": 0.0,
+    "seed": 42,
+    "task_suite": "all",
+    "repetitions": 3,
+    "order_seed": 20260831,
+    "randomized_order": true,
+    "platform": "Windows-10-10.0.26200-SP0",
+    "gpu": "NVIDIA GeForce RTX 5090 Laptop GPU, 616.56, 24463 MiB",
+    "gpu_index": 0
+  },
+  "environments": {
+    "Forge": {
+      "schema_version": 2,
+      "harness": "forge",
+      "model_file": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "model_sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+      "gpu_layers": "-1",
+      "chat_template": "embedded",
+      "prompt_protocol": "native",
+      "forge_binary_sha256": "47e5dbd8ee03534dd115d19d554551e09cf41e43fffa26ea34ab84961def2e37",
+      "forge_runtime_bundle": {
+        "sha256": "997f6a2c2ba5b0cfe51425bc4fd0b1b2018a8df6ecfbf54aa127aa65dbbd11c0",
+        "files": {
+          "forge.exe": {
+            "sha256": "47e5dbd8ee03534dd115d19d554551e09cf41e43fffa26ea34ab84961def2e37",
+            "bytes": 4112384
+          },
+          "cublas64_13.dll": {
+            "sha256": "f1d500d0cd892f5b8c6b6cdbffd82d0c55d5f5427215668e7ceb55aeeccc1b63",
+            "bytes": 51870320
+          },
+          "cublasLt64_13.dll": {
+            "sha256": "b592cd016d7673e9cb97716a22b27c4010ee635377a3ba28f37070a9bdb76a68",
+            "bytes": 460301424
+          },
+          "cudart64_13.dll": {
+            "sha256": "b00ca6f53699120da815bf3e06e2e4285fae2f201235b883dcbb50eec51e2a2a",
+            "bytes": 551024
+          },
+          "ggml-base.dll": {
+            "sha256": "fb5667744745667362718680b0f9676652715c71d879a38a3806e6053379bfaa",
+            "bytes": 774144
+          },
+          "ggml-cpu-alderlake.dll": {
+            "sha256": "b6e6926136c576be6799259a4cfa24c197ac9103b10c4e5e79093e0241312b46",
+            "bytes": 1182208
+          },
+          "ggml-cpu-cannonlake.dll": {
+            "sha256": "727d8e78dbef74d1d982b7ad05cfa02476e74b21c1dbec99c8e6572638ed5dfe",
+            "bytes": 1397248
+          },
+          "ggml-cpu-cascadelake.dll": {
+            "sha256": "a55f32797ee4f578781ce964d5ca0f7e85704fcd5ae738d55cbbe56adb88f909",
+            "bytes": 1383936
+          },
+          "ggml-cpu-cooperlake.dll": {
+            "sha256": "7fdd34c2021b875a4b39be65747e4339250feab42a6f373743489522e142d994",
+            "bytes": 1384960
+          },
+          "ggml-cpu-haswell.dll": {
+            "sha256": "851af4b2d5b10b0e078efcd1446a50497e42bee6e4cb9f53c9260515ccb4d83e",
+            "bytes": 1186304
+          },
+          "ggml-cpu-icelake.dll": {
+            "sha256": "afb8146a777e2ab9cf1d84aca8ae0d58ecddb8375cc4acefbdcd3339238651ba",
+            "bytes": 1390592
+          },
+          "ggml-cpu-ivybridge.dll": {
+            "sha256": "2ab20d141eb113a58b7450a4002afb8a478b29319e0526259b972e523ba0c791",
+            "bytes": 1075712
+          },
+          "ggml-cpu-piledriver.dll": {
+            "sha256": "c36a261cd1a243e9c8655e889a0d1be111a7f828af567fdaaee5b88eac646016",
+            "bytes": 1079808
+          },
+          "ggml-cpu-sandybridge.dll": {
+            "sha256": "43103b9a8c4ee066df78ff14c6ab4d45d01919f519b3e31e553c72aa67244362",
+            "bytes": 1055744
+          },
+          "ggml-cpu-sapphirerapids.dll": {
+            "sha256": "5e78f73720ca8df99171d72857299297de0559ca54d7b5f1924d2a8f178923ab",
+            "bytes": 1661440
+          },
+          "ggml-cpu-skylakex.dll": {
+            "sha256": "0b96c3e400ad7a23ad6cc7d3de6b15daef31fe6ec56dae346ad8406bf3684212",
+            "bytes": 1391104
+          },
+          "ggml-cpu-sse42.dll": {
+            "sha256": "572dd1ba3be11514d8ccf47628e87fed084400071d0d28b1a878acc056d057ff",
+            "bytes": 878592
+          },
+          "ggml-cpu-x64.dll": {
+            "sha256": "e88ce8d5d7300b5c0980730178431269a057d604b9ca87784222847ec95db85e",
+            "bytes": 871424
+          },
+          "ggml-cpu-zen4.dll": {
+            "sha256": "76d986936a19b828785eeedaa2c5bb415a87a1d2f58fd9be5a03fc0a41b7ffcf",
+            "bytes": 1391616
+          },
+          "ggml-cuda.dll": {
+            "sha256": "3f99137074063cc61dde7d0550d1dc7a205bfef8c50167eee051249e3a41810f",
+            "bytes": 141793792
+          },
+          "ggml-rpc.dll": {
+            "sha256": "b07dc2ed45976884cc182e190be06c260297f030289ed95b34d33e5420dedf6f",
+            "bytes": 138752
+          },
+          "ggml.dll": {
+            "sha256": "25f26d757e39e6b9afbf61e68ec4479fd73e4c8dc0572fe927d937ba61ee3e62",
+            "bytes": 86016
+          },
+          "libomp.dll": {
+            "sha256": "a12116ba72d1d6820407cf30be23da04ce79d6bb8a71a5ee71759c5a1faa6f1c",
+            "bytes": 768000
+          },
+          "llama-batched-bench-impl.dll": {
+            "sha256": "a9ccab3097d244a4e1c290b7765154f1f77dae95468229fff7eedde7c5d4d564",
+            "bytes": 61440
+          },
+          "llama-bench-impl.dll": {
+            "sha256": "cad470a24bf5910d21f8d949fa49bf3a2be077a2e3472728282e6004b46c46f6",
+            "bytes": 395264
+          },
+          "llama-cli-impl.dll": {
+            "sha256": "46cd1abf24c04a40976e3e2d32b7d6267522a0db46e232c5436da94a0b59c015",
+            "bytes": 3496960
+          },
+          "llama-common.dll": {
+            "sha256": "dcbba9aaabb23435fdffb3c35b3ebd8ddfd525e0ae052b76a9cdaf0caa905c60",
+            "bytes": 8086016
+          },
+          "llama-completion-impl.dll": {
+            "sha256": "51e37d3b9a41f6a57e0c0fc41e3068af829f83544a5f98911dfeb73e0e3a6cd9",
+            "bytes": 133120
+          },
+          "llama-fit-params-impl.dll": {
+            "sha256": "d49dde84d0490895ab77581c110ad8feeea197733f5d0cabefb8851d6dd784ab",
+            "bytes": 40960
+          },
+          "llama-perplexity-impl.dll": {
+            "sha256": "9d60dde2c5e4429c21b447a214ce4e611945d919547e997610047164984f1dd3",
+            "bytes": 194048
+          },
+          "llama-quantize-impl.dll": {
+            "sha256": "d851c0cef46f0ba6b44cfa350e3b9884afa2dc136583da5cdbd08f3a8e76149b",
+            "bytes": 137216
+          },
+          "llama-server-impl.dll": {
+            "sha256": "6f4701a79e655eb5ceadbdef26ceb0c19bb94082a4039f6adee4ce36a3b53b98",
+            "bytes": 9989120
+          },
+          "llama.dll": {
+            "sha256": "0db020c722bd869d9e410224bb4674a6b6e080cf9633b82d2dd92b661a79b693",
+            "bytes": 2959872
+          },
+          "mtmd.dll": {
+            "sha256": "4977f7e0d002859da1db24505369741ca90aa8dac2f9916e51b31056bc803874",
+            "bytes": 1716736
+          }
+        }
+      },
+      "fixture_preparation": "utf8-lf-language-format-v2",
+      "context_tokens": 16384,
+      "max_turns": 16,
+      "output_reserve": 2048,
+      "temperature": 0.0,
+      "seed": 42,
+      "task_suite": "all",
+      "repetitions": 3,
+      "order_seed": 20260831,
+      "randomized_order": true,
+      "lifecycle": "cold",
+      "gpu_index": 0,
+      "timing_policy": {
+        "startup": "process spawn through model load (metrics.load_ms)",
+        "agent": "remaining Forge process time after model load",
+        "verification": "independent manifest verify command after Forge exits",
+        "end_to_end": "Forge process spawn through independent verifier exit"
+      },
+      "forge_version": "0.1.0-dev",
+      "platform": "Windows-10-10.0.26200-SP0",
+      "python_version": "Python 3.11.9",
+      "go_version": "go version go1.27.0 windows/amd64",
+      "node_version": "v24.18.0",
+      "gpu": "NVIDIA GeForce RTX 5090 Laptop GPU, 616.56, 24463 MiB"
+    }
+  },
+  "groups": {
+    "Forge/optimized": {
+      "tasks": 29,
+      "runs": 87,
+      "passed": 84,
+      "pass_rate": 0.9655172413793104,
+      "pass_rate_ci": {
+        "count": 87,
+        "task_clusters": 29,
+        "level": 0.95,
+        "method": "task_cluster_percentile_bootstrap",
+        "iterations": 20000,
+        "seed": 10844991825900618925,
+        "estimate": 0.9655172413793104,
+        "lower": 0.896551724137931,
+        "upper": 1.0
+      },
+      "failures": [
+        "reasoning_atomic_transfers-optimized-r001",
+        "reasoning_atomic_transfers-optimized-r003",
+        "reasoning_atomic_transfers-optimized-r002"
+      ],
+      "end_to_end_seconds": {
+        "count": 87,
+        "min": 16.67200000002049,
+        "p50": 19.7039999999688,
+        "p90": 30.368600000022006,
+        "p95": 43.8826999999874,
+        "max": 66.85900000005495,
+        "mean": 23.44437931035244,
+        "stdev": 9.733261843899538
+      },
+      "end_to_end_seconds_ci": {
+        "count": 87,
+        "task_clusters": 29,
+        "level": 0.95,
+        "method": "task_cluster_percentile_bootstrap",
+        "iterations": 20000,
+        "seed": 1061230532914434803,
+        "estimate": 19.7039999999688,
+        "lower": 17.70299999997951,
+        "upper": 23.65700000000652
+      },
+      "startup_seconds": {
+        "count": 87,
+        "min": 7.937,
+        "p50": 7.984,
+        "p90": 8.015,
+        "p95": 8.016,
+        "max": 8.047,
+        "mean": 7.980402298850575,
+        "stdev": 0.02308954246835613
+      },
+      "agent_seconds": {
+        "count": 87,
+        "min": 8.65699999998277,
+        "p50": 11.546999999962281,
+        "p90": 22.25000000001316,
+        "p95": 35.60869999997823,
+        "max": 58.329000000020486,
+        "mean": 15.300517241379337,
+        "stdev": 9.660704261803687
+      },
+      "verification_seconds": {
+        "count": 87,
+        "min": 0.061999999976251274,
+        "p50": 0.15600000001722947,
+        "p90": 0.1720000000204891,
+        "p95": 0.214199999999255,
+        "max": 0.6559999999590218,
+        "mean": 0.1634597701225269,
+        "stdev": 0.10420282152008586
+      },
+      "prompt_tokens": {
+        "count": 87,
+        "min": 14243.0,
+        "p50": 22467.0,
+        "p90": 53611.40000000003,
+        "p95": 88170.60000000002,
+        "max": 120567.0,
+        "mean": 32870.137931034486,
+        "stdev": 23309.461464638163
+      },
+      "prefill_tokens": {
+        "count": 87,
+        "min": 5478.0,
+        "p50": 7926.0,
+        "p90": 21429.00000000001,
+        "p95": 39073.20000000001,
+        "max": 49952.0,
+        "mean": 12286.206896551725,
+        "stdev": 10118.551501651795
+      },
+      "cached_tokens": {
+        "count": 87,
+        "min": 8765.0,
+        "p50": 15072.0,
+        "p90": 33854.600000000006,
+        "p95": 48034.100000000006,
+        "max": 71770.0,
+        "mean": 20583.931034482757,
+        "stdev": 13395.914990662224
+      },
+      "generated_tokens": {
+        "count": 87,
+        "min": 350.0,
+        "p50": 699.0,
+        "p90": 1375.6000000000001,
+        "p95": 2302.1,
+        "max": 5093.0,
+        "mean": 929.5632183908046,
+        "stdev": 802.4969274903063
+      },
+      "peak_process_tree_rss_bytes": {
+        "count": 87,
+        "min": 19066884096.0,
+        "p50": 19158429696.0,
+        "p90": 19210976460.8,
+        "p95": 19219178700.8,
+        "max": 19258748928.0,
+        "mean": 19152126187.402298,
+        "stdev": 52640990.51819627
+      },
+      "peak_gpu_used_bytes": {
+        "count": 87,
+        "min": 21749563392.0,
+        "p50": 21797797888.0,
+        "p90": 21817091686.4,
+        "p95": 21817720832.0,
+        "max": 21869101056.0,
+        "mean": 21800208407.54023,
+        "stdev": 18130244.778108332
+      },
+      "per_task": {
+        "add": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 10375390661648481666,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 18.03100000001723,
+            "p50": 18.04700000002049,
+            "p90": 18.134199999971315,
+            "p95": 18.14509999996517,
+            "max": 18.155999999959022,
+            "mean": 18.077999999998912,
+            "stdev": 0.06802205521269372
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 18317424345143949331,
+            "estimate": 18.04700000002049,
+            "lower": 18.04700000002049,
+            "upper": 18.04700000002049
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 7.969,
+            "p90": 8.0066,
+            "p95": 8.0113,
+            "max": 8.016,
+            "mean": 7.984666666666667,
+            "stdev": 0.027135462651912242
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.87500000000326,
+            "p50": 9.905999999999999,
+            "p90": 10.005999999999998,
+            "p95": 10.0185,
+            "max": 10.030999999999999,
+            "mean": 9.93733333333442,
+            "stdev": 0.08258530942685918
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.1559999999590218,
+            "p50": 0.15600000001722947,
+            "p90": 0.15600000001722947,
+            "p95": 0.15600000001722947,
+            "max": 0.15600000001722947,
+            "mean": 0.1559999999978269,
+            "stdev": 3.3606208697288864e-11
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 21992.0,
+            "p50": 21992.0,
+            "p90": 21992.0,
+            "p95": 21992.0,
+            "max": 21992.0,
+            "mean": 21992.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 7162.0,
+            "p50": 7162.0,
+            "p90": 7162.0,
+            "p95": 7162.0,
+            "max": 7162.0,
+            "mean": 7162.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 14830.0,
+            "p50": 14830.0,
+            "p90": 14830.0,
+            "p95": 14830.0,
+            "max": 14830.0,
+            "mean": 14830.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 357.0,
+            "p50": 363.0,
+            "p90": 365.4,
+            "p95": 365.7,
+            "max": 366.0,
+            "mean": 362.0,
+            "stdev": 4.58257569495584
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19134423040.0,
+            "p50": 19206270976.0,
+            "p90": 19214512128.0,
+            "p95": 19215542272.0,
+            "max": 19216572416.0,
+            "mean": 19185755477.333332,
+            "stdev": 44752589.40501483
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21793603584.0,
+            "p50": 21801992192.0,
+            "p90": 21809541939.2,
+            "p95": 21810485657.6,
+            "max": 21811429376.0,
+            "mean": 21802341717.333332,
+            "stdev": 8918034.597140634
+          }
+        },
+        "average": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 5794129289764466134,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 26.70199999999022,
+            "p50": 26.98499999998603,
+            "p90": 28.046599999978206,
+            "p95": 28.17929999997723,
+            "max": 28.31199999997625,
+            "mean": 27.332999999984168,
+            "stdev": 0.8595655879499725
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 17742107269599781232,
+            "estimate": 26.98499999998603,
+            "lower": 26.98499999998603,
+            "upper": 26.98499999998603
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.954,
+            "p50": 7.969,
+            "p90": 7.9938,
+            "p95": 7.9969,
+            "max": 8.0,
+            "mean": 7.974333333333334,
+            "stdev": 0.02345918441321729
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 18.57699999997299,
+            "p50": 18.82799999997951,
+            "p90": 19.92719999996312,
+            "p95": 20.06459999996107,
+            "max": 20.20199999995902,
+            "mean": 19.20233333330384,
+            "stdev": 0.8747858785536766
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15600000001722947,
+            "p90": 0.1568000000086613,
+            "p95": 0.15690000000759027,
+            "max": 0.15700000000651926,
+            "mean": 0.15633333334699273,
+            "stdev": 0.0005773502630060834
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 43659.0,
+            "p50": 43659.0,
+            "p90": 49526.2,
+            "p95": 50259.6,
+            "max": 50993.0,
+            "mean": 46103.666666666664,
+            "stdev": 4234.286874236715
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 14917.0,
+            "p50": 14917.0,
+            "p90": 16985.0,
+            "p95": 17243.5,
+            "max": 17502.0,
+            "mean": 15778.666666666666,
+            "stdev": 1492.4504458551826
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 28742.0,
+            "p50": 28742.0,
+            "p90": 32541.2,
+            "p95": 33016.1,
+            "max": 33491.0,
+            "mean": 30325.0,
+            "stdev": 2741.8364283815326
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 1071.0,
+            "p50": 1107.0,
+            "p90": 1163.8,
+            "p95": 1170.9,
+            "max": 1178.0,
+            "mean": 1118.6666666666667,
+            "stdev": 54.44569159569316
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19117645824.0,
+            "p50": 19220295680.0,
+            "p90": 19224545689.6,
+            "p95": 19225076940.8,
+            "max": 19225608192.0,
+            "mean": 19187849898.666668,
+            "stdev": 60856509.68293957
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21752709120.0,
+            "p50": 21791506432.0,
+            "p90": 21791506432.0,
+            "p95": 21791506432.0,
+            "max": 21791506432.0,
+            "mean": 21778573994.666668,
+            "stdev": 22399638.5270339
+          }
+        },
+        "ceil_div": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 9487832713616669380,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.32900000002701,
+            "p50": 17.34299999999348,
+            "p90": 17.381400000001303,
+            "p95": 17.386200000002283,
+            "max": 17.39100000000326,
+            "mean": 17.35433333334125,
+            "stdev": 0.032516662387805526
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 7723756265896824547,
+            "estimate": 17.34299999999348,
+            "lower": 17.34299999999348,
+            "upper": 17.34299999999348
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 8.0,
+            "p50": 8.0,
+            "p90": 8.012,
+            "p95": 8.0135,
+            "max": 8.015,
+            "mean": 8.005,
+            "stdev": 0.008660254037844714
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.142000000006519,
+            "p50": 9.186999999976251,
+            "p90": 9.212600000028033,
+            "p95": 9.215800000034506,
+            "max": 9.219000000040978,
+            "mean": 9.182666666674583,
+            "stdev": 0.038682468050193014
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.17199999996228144,
+            "p90": 0.17200000000884758,
+            "p95": 0.17200000001466834,
+            "max": 0.1720000000204891,
+            "mean": 0.16666666666666666,
+            "stdev": 0.009237604292112856
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 14243.0,
+            "p50": 14243.0,
+            "p90": 14243.0,
+            "p95": 14243.0,
+            "max": 14243.0,
+            "mean": 14243.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 5478.0,
+            "p50": 5478.0,
+            "p90": 5478.0,
+            "p95": 5478.0,
+            "max": 5478.0,
+            "mean": 5478.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 8765.0,
+            "p50": 8765.0,
+            "p90": 8765.0,
+            "p95": 8765.0,
+            "max": 8765.0,
+            "mean": 8765.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 385.0,
+            "p50": 387.0,
+            "p90": 387.0,
+            "p95": 387.0,
+            "max": 387.0,
+            "mean": 386.3333333333333,
+            "stdev": 1.1547005383792515
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19101360128.0,
+            "p50": 19104247808.0,
+            "p90": 19180584140.8,
+            "p95": 19190126182.4,
+            "max": 19199668224.0,
+            "mean": 19135092053.333332,
+            "stdev": 55943239.42554136
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21795700736.0,
+            "p50": 21795700736.0,
+            "p90": 21799895040.0,
+            "p95": 21800419328.0,
+            "max": 21800943616.0,
+            "mean": 21797448362.666668,
+            "stdev": 3026978.179328905
+          }
+        },
+        "clamp": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 1114796213817994160,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 18.89000000001397,
+            "p50": 18.891000000061467,
+            "p90": 18.966200000001116,
+            "p95": 18.975599999993573,
+            "max": 18.98499999998603,
+            "mean": 18.92200000002049,
+            "stdev": 0.05456189143319153
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 8280687816206188075,
+            "estimate": 18.891000000061467,
+            "lower": 18.891000000061467,
+            "upper": 18.891000000061467
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.968,
+            "p90": 7.968,
+            "p95": 7.968,
+            "max": 7.968,
+            "mean": 7.963,
+            "stdev": 0.008660254037844203
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 10.751000000040978,
+            "p50": 10.780999999996741,
+            "p90": 10.832200000018346,
+            "p95": 10.838600000021048,
+            "max": 10.845000000023749,
+            "mean": 10.792333333353824,
+            "stdev": 0.04801388687585364
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.17199999996228144,
+            "p90": 0.17200000000884758,
+            "p95": 0.17200000001466834,
+            "max": 0.1720000000204891,
+            "mean": 0.16666666666666666,
+            "stdev": 0.009237604292112856
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 22451.0,
+            "p50": 22451.0,
+            "p90": 22451.0,
+            "p95": 22451.0,
+            "max": 22451.0,
+            "mean": 22451.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 7513.0,
+            "p50": 7513.0,
+            "p90": 7513.0,
+            "p95": 7513.0,
+            "max": 7513.0,
+            "mean": 7513.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 14938.0,
+            "p50": 14938.0,
+            "p90": 14938.0,
+            "p95": 14938.0,
+            "max": 14938.0,
+            "mean": 14938.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 493.0,
+            "p50": 493.0,
+            "p90": 495.4,
+            "p95": 495.7,
+            "max": 496.0,
+            "mean": 494.0,
+            "stdev": 1.7320508075688772
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19116511232.0,
+            "p50": 19204317184.0,
+            "p90": 19209052160.0,
+            "p95": 19209644032.0,
+            "max": 19210235904.0,
+            "mean": 19177021440.0,
+            "stdev": 52486872.31834307
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21751660544.0,
+            "p50": 21800943616.0,
+            "p90": 21804299059.2,
+            "p95": 21804718489.6,
+            "max": 21805137920.0,
+            "mean": 21785914026.666668,
+            "stdev": 29738423.84202346
+          }
+        },
+        "contains": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 14080329642565348678,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.5,
+            "p50": 17.53200000000652,
+            "p90": 17.58079999999609,
+            "p95": 17.586899999994785,
+            "max": 17.59299999999348,
+            "mean": 17.541666666666668,
+            "stdev": 0.047247574889465585
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 7788592111240935645,
+            "estimate": 17.53200000000652,
+            "lower": 17.53200000000652,
+            "upper": 17.53200000000652
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.984,
+            "p50": 7.984,
+            "p90": 7.9968,
+            "p95": 7.9984,
+            "max": 8.0,
+            "mean": 7.989333333333334,
+            "stdev": 0.00923760430703402
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.35999999998277,
+            "p50": 9.35999999998603,
+            "p90": 9.434399999978208,
+            "p95": 9.443699999977229,
+            "max": 9.452999999976251,
+            "mean": 9.390999999981684,
+            "stdev": 0.05369357502993033
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15600000001722947,
+            "p90": 0.16880000001983717,
+            "p95": 0.17040000002016314,
+            "max": 0.1720000000204891,
+            "mean": 0.16133333335164934,
+            "stdev": 0.00923760430891596
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 14548.0,
+            "p50": 14548.0,
+            "p90": 14548.0,
+            "p95": 14548.0,
+            "max": 14548.0,
+            "mean": 14548.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 5729.0,
+            "p50": 5729.0,
+            "p90": 5729.0,
+            "p95": 5729.0,
+            "max": 5729.0,
+            "mean": 5729.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 8819.0,
+            "p50": 8819.0,
+            "p90": 8819.0,
+            "p95": 8819.0,
+            "max": 8819.0,
+            "mean": 8819.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 409.0,
+            "p50": 409.0,
+            "p90": 409.0,
+            "p95": 409.0,
+            "max": 409.0,
+            "mean": 409.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19100663808.0,
+            "p50": 19101716480.0,
+            "p90": 19186778931.2,
+            "p95": 19197411737.6,
+            "max": 19208044544.0,
+            "mean": 19136808277.333332,
+            "stdev": 61694661.81152328
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21797797888.0,
+            "p50": 21797797888.0,
+            "p90": 21800314470.4,
+            "p95": 21800629043.2,
+            "max": 21800943616.0,
+            "mean": 21798846464.0,
+            "stdev": 1816186.907597343
+          }
+        },
+        "go_api_pagination": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 10933485607449556260,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 23.65600000001723,
+            "p50": 23.65700000000652,
+            "p90": 24.256200000015088,
+            "p95": 24.331100000016157,
+            "max": 24.40600000001723,
+            "mean": 23.906333333346993,
+            "stdev": 0.43272431562832675
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 12057263719197745973,
+            "estimate": 23.65700000000652,
+            "lower": 23.65700000000652,
+            "upper": 23.65700000000652
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.984,
+            "p90": 8.0096,
+            "p95": 8.0128,
+            "max": 8.016,
+            "mean": 7.984333333333333,
+            "stdev": 0.031501322723551224
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 15.468999999979511,
+            "p50": 15.48500000002375,
+            "p90": 16.04659999998836,
+            "p95": 16.116799999983936,
+            "max": 16.186999999979513,
+            "mean": 15.713666666660925,
+            "stdev": 0.4099967479422469
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.20300000003771856,
+            "p50": 0.20300000003771856,
+            "p90": 0.21579999999376015,
+            "p95": 0.21739999998826534,
+            "max": 0.21899999998277053,
+            "mean": 0.20833333335273588,
+            "stdev": 0.00923760427530975
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 25448.0,
+            "p50": 25448.0,
+            "p90": 25448.0,
+            "p95": 25448.0,
+            "max": 25448.0,
+            "mean": 25448.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 9447.0,
+            "p50": 9447.0,
+            "p90": 9447.0,
+            "p95": 9447.0,
+            "max": 9447.0,
+            "mean": 9447.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 16001.0,
+            "p50": 16001.0,
+            "p90": 16001.0,
+            "p95": 16001.0,
+            "max": 16001.0,
+            "mean": 16001.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 869.0,
+            "p50": 884.0,
+            "p90": 976.0,
+            "p95": 987.5,
+            "max": 999.0,
+            "mean": 917.3333333333334,
+            "stdev": 71.12196097783956
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19152244736.0,
+            "p50": 19169984512.0,
+            "p90": 19240996044.8,
+            "p95": 19249872486.4,
+            "max": 19258748928.0,
+            "mean": 19193659392.0,
+            "stdev": 57062778.46069201
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21749563392.0,
+            "p50": 21797797888.0,
+            "p90": 21798636748.8,
+            "p95": 21798741606.4,
+            "max": 21798846464.0,
+            "mean": 21782069248.0,
+            "stdev": 28155778.867339045
+          }
+        },
+        "go_compiler_interface": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 6762090868685876179,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 18.014999999955762,
+            "p50": 18.030999999959022,
+            "p90": 18.03179999999702,
+            "p95": 18.03190000000177,
+            "max": 18.03200000000652,
+            "mean": 18.025999999973767,
+            "stdev": 0.009539392030986076
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 5411657481167259428,
+            "estimate": 18.030999999959022,
+            "lower": 18.030999999959022,
+            "upper": 18.030999999959022
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.985,
+            "p90": 7.985,
+            "p95": 7.985,
+            "max": 7.985,
+            "mean": 7.974333333333334,
+            "stdev": 0.01847520861406804
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.858999999982771,
+            "p50": 9.89,
+            "p90": 9.915600000000001,
+            "p95": 9.918800000000001,
+            "max": 9.922,
+            "mean": 9.890333333327591,
+            "stdev": 0.03150132273212017
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.1559999999590218,
+            "p50": 0.15700000000651926,
+            "p90": 0.16819999997969717,
+            "p95": 0.1695999999763444,
+            "max": 0.17099999997299165,
+            "mean": 0.16133333331284425,
+            "stdev": 0.008386497079386173
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 18448.0,
+            "p50": 18448.0,
+            "p90": 18448.0,
+            "p95": 18448.0,
+            "max": 18448.0,
+            "mean": 18448.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 6686.0,
+            "p50": 6686.0,
+            "p90": 6686.0,
+            "p95": 6686.0,
+            "max": 6686.0,
+            "mean": 6686.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 11762.0,
+            "p50": 11762.0,
+            "p90": 11762.0,
+            "p95": 11762.0,
+            "max": 11762.0,
+            "mean": 11762.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 411.0,
+            "p50": 412.0,
+            "p90": 417.6,
+            "p95": 418.3,
+            "max": 419.0,
+            "mean": 414.0,
+            "stdev": 4.358898943540674
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19161563136.0,
+            "p50": 19193049088.0,
+            "p90": 19196040806.4,
+            "p95": 19196414771.2,
+            "max": 19196788736.0,
+            "mean": 19183800320.0,
+            "stdev": 19348527.230214912
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21791506432.0,
+            "p50": 21798846464.0,
+            "p90": 21806396211.2,
+            "p95": 21807339929.6,
+            "max": 21808283648.0,
+            "mean": 21799545514.666668,
+            "stdev": 8410424.962722711
+          }
+        },
+        "go_explore_precedence": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 9189063774898549073,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 24.95300000003772,
+            "p50": 27.67200000002049,
+            "p90": 28.30960000003688,
+            "p95": 28.38930000003893,
+            "max": 28.469000000040978,
+            "mean": 27.031333333366394,
+            "stdev": 1.843476154802926
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 2024680309663665334,
+            "estimate": 27.67200000002049,
+            "lower": 27.67200000002049,
+            "upper": 27.67200000002049
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 7.984,
+            "p90": 7.9968,
+            "p95": 7.9984,
+            "max": 8.0,
+            "mean": 7.984333333333333,
+            "stdev": 0.015502687938977829
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 16.828000000020488,
+            "p50": 19.51600000000326,
+            "p90": 20.178400000030827,
+            "p95": 20.261200000034272,
+            "max": 20.344000000037717,
+            "mean": 18.89600000002049,
+            "stdev": 1.8381686538547723
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.14100000000325963,
+            "p50": 0.15600000001722947,
+            "p90": 0.15600000001722947,
+            "p95": 0.15600000001722947,
+            "max": 0.15600000001722947,
+            "mean": 0.15100000001257285,
+            "stdev": 0.008660254045909876
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 34675.0,
+            "p50": 48100.0,
+            "p90": 48100.0,
+            "p95": 48100.0,
+            "max": 48100.0,
+            "mean": 43625.0,
+            "stdev": 7750.9273638707255
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 12058.0,
+            "p50": 17327.0,
+            "p90": 17327.0,
+            "p95": 17327.0,
+            "max": 17327.0,
+            "mean": 15570.666666666666,
+            "stdev": 3042.058568360138
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 22617.0,
+            "p50": 30773.0,
+            "p90": 30773.0,
+            "p95": 30773.0,
+            "max": 30773.0,
+            "mean": 28054.333333333332,
+            "stdev": 4708.868795510588
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 1037.0,
+            "p50": 1117.0,
+            "p90": 1221.8,
+            "p95": 1234.9,
+            "max": 1248.0,
+            "mean": 1134.0,
+            "stdev": 106.52229813517918
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19204984832.0,
+            "p50": 19213692928.0,
+            "p90": 19214099251.2,
+            "p95": 19214150041.6,
+            "max": 19214200832.0,
+            "mean": 19210959530.666668,
+            "stdev": 5180469.065287943
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21796749312.0,
+            "p50": 21797797888.0,
+            "p90": 21813736243.2,
+            "p95": 21815728537.6,
+            "max": 21817720832.0,
+            "mean": 21804089344.0,
+            "stdev": 11816851.388062388
+          }
+        },
+        "go_multifile_registry": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 18106221669988417311,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 25.766000000061467,
+            "p50": 25.93700000003446,
+            "p90": 26.062600000039673,
+            "p95": 26.078300000040326,
+            "max": 26.094000000040978,
+            "mean": 25.932333333378967,
+            "stdev": 0.1640497891796722
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 10472792849486053988,
+            "estimate": 25.93700000003446,
+            "lower": 25.93700000003446,
+            "upper": 25.93700000003446
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.985,
+            "p50": 8.0,
+            "p90": 8.012,
+            "p95": 8.0135,
+            "max": 8.015,
+            "mean": 8.0,
+            "stdev": 0.015000000000000124
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 17.610000000044238,
+            "p50": 17.76600000001723,
+            "p90": 17.902800000019838,
+            "p95": 17.919900000020164,
+            "max": 17.93700000002049,
+            "mean": 17.771000000027318,
+            "stdev": 0.16355732938695486
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15600000001722947,
+            "p90": 0.16880000001983717,
+            "p95": 0.17040000002016314,
+            "max": 0.1720000000204891,
+            "mean": 0.16133333335164934,
+            "stdev": 0.00923760430891596
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 43333.0,
+            "p50": 43333.0,
+            "p90": 43333.0,
+            "p95": 43333.0,
+            "max": 43333.0,
+            "mean": 43333.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 14794.0,
+            "p50": 14794.0,
+            "p90": 14794.0,
+            "p95": 14794.0,
+            "max": 14794.0,
+            "mean": 14794.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 28539.0,
+            "p50": 28539.0,
+            "p90": 28539.0,
+            "p95": 28539.0,
+            "max": 28539.0,
+            "mean": 28539.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 1075.0,
+            "p50": 1081.0,
+            "p90": 1081.8,
+            "p95": 1081.9,
+            "max": 1082.0,
+            "mean": 1079.3333333333333,
+            "stdev": 3.7859388972001824
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19110739968.0,
+            "p50": 19118297088.0,
+            "p90": 19191808819.2,
+            "p95": 19200997785.6,
+            "max": 19210186752.0,
+            "mean": 19146407936.0,
+            "stdev": 55363169.55743224
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21800943616.0,
+            "p50": 21805137920.0,
+            "p90": 21807654502.4,
+            "p95": 21807969075.2,
+            "max": 21808283648.0,
+            "mean": 21804788394.666668,
+            "stdev": 3682477.8898504376
+          }
+        },
+        "go_multifile_transfer": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 3107272422111621454,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 22.14000000001397,
+            "p50": 22.15700000000652,
+            "p90": 22.23139999995474,
+            "p95": 22.240699999948266,
+            "max": 22.249999999941792,
+            "mean": 22.18233333332076,
+            "stdev": 0.05921430003502592
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 808916304477041021,
+            "estimate": 22.15700000000652,
+            "lower": 22.15700000000652,
+            "upper": 22.15700000000652
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 8.0,
+            "p90": 8.012,
+            "p95": 8.0135,
+            "max": 8.015,
+            "mean": 7.994666666666667,
+            "stdev": 0.02345918441321729
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 13.938000000037718,
+            "p50": 14.015999999986029,
+            "p90": 14.078399999983422,
+            "p95": 14.086199999983096,
+            "max": 14.09399999998277,
+            "mean": 14.016000000002172,
+            "stdev": 0.07799999997252627
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.1559999999590218,
+            "p50": 0.1720000000204891,
+            "p90": 0.18399999998509883,
+            "p95": 0.18549999998067507,
+            "max": 0.18699999997625127,
+            "mean": 0.17166666665192074,
+            "stdev": 0.015502687948159429
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 32677.0,
+            "p50": 32677.0,
+            "p90": 32677.0,
+            "p95": 32677.0,
+            "max": 32677.0,
+            "mean": 32677.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 10773.0,
+            "p50": 10773.0,
+            "p90": 10773.0,
+            "p95": 10773.0,
+            "max": 10773.0,
+            "mean": 10773.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 21904.0,
+            "p50": 21904.0,
+            "p90": 21904.0,
+            "p95": 21904.0,
+            "max": 21904.0,
+            "mean": 21904.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 770.0,
+            "p50": 774.0,
+            "p90": 787.6,
+            "p95": 789.3,
+            "max": 791.0,
+            "mean": 778.3333333333334,
+            "stdev": 11.150485789118488
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19109236736.0,
+            "p50": 19129397248.0,
+            "p90": 19162869760.0,
+            "p95": 19167053824.0,
+            "max": 19171237888.0,
+            "mean": 19136623957.333332,
+            "stdev": 31626013.156468857
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21792555008.0,
+            "p50": 21800943616.0,
+            "p90": 21854630707.2,
+            "p95": 21861341593.6,
+            "max": 21868052480.0,
+            "mean": 21820517034.666668,
+            "stdev": 41380020.64188897
+          }
+        },
+        "go_refactor_clock": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 16277059989124601588,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 19.98399999999674,
+            "p50": 20.015999999945052,
+            "p90": 20.027199999964797,
+            "p95": 20.028599999967263,
+            "max": 20.029999999969732,
+            "mean": 20.009999999970507,
+            "stdev": 0.023579652227072867
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 15640477274949968467,
+            "estimate": 20.015999999945052,
+            "lower": 20.015999999945052,
+            "upper": 20.015999999945052
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.969,
+            "p90": 8.0066,
+            "p95": 8.0113,
+            "max": 8.016,
+            "mean": 7.979333333333334,
+            "stdev": 0.032746501085357545
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 11.82799999998277,
+            "p50": 11.84299999997625,
+            "p90": 11.893399999992642,
+            "p95": 11.899699999994692,
+            "max": 11.905999999996741,
+            "mean": 11.858999999985253,
+            "stdev": 0.0413884041823424
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.17099999997299165,
+            "p50": 0.17199999996228144,
+            "p90": 0.17200000000884758,
+            "p95": 0.17200000001466834,
+            "max": 0.1720000000204891,
+            "mean": 0.17166666665192074,
+            "stdev": 0.0005773502798091884
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 27023.0,
+            "p50": 27023.0,
+            "p90": 27023.0,
+            "p95": 27023.0,
+            "max": 27023.0,
+            "mean": 27023.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 8625.0,
+            "p50": 8625.0,
+            "p90": 8625.0,
+            "p95": 8625.0,
+            "max": 8625.0,
+            "mean": 8625.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 18398.0,
+            "p50": 18398.0,
+            "p90": 18398.0,
+            "p95": 18398.0,
+            "max": 18398.0,
+            "mean": 18398.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 590.0,
+            "p50": 590.0,
+            "p90": 598.0,
+            "p95": 599.0,
+            "max": 600.0,
+            "mean": 593.3333333333334,
+            "stdev": 5.773502691896257
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19176796160.0,
+            "p50": 19203309568.0,
+            "p90": 19209918873.6,
+            "p95": 19210745036.8,
+            "max": 19211571200.0,
+            "mean": 19197225642.666668,
+            "stdev": 18168281.76649023
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21789409280.0,
+            "p50": 21792555008.0,
+            "p90": 21812687667.2,
+            "p95": 21815204249.6,
+            "max": 21817720832.0,
+            "mean": 21799895040.0,
+            "stdev": 15517507.740708364
+          }
+        },
+        "last_index": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 2345674103848176933,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.20400000002701,
+            "p50": 17.28100000001723,
+            "p90": 17.281800000008662,
+            "p95": 17.28190000000759,
+            "max": 17.28200000000652,
+            "mean": 17.255666666683585,
+            "stdev": 0.04474743939652922
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 10006177056463257672,
+            "estimate": 17.28100000001723,
+            "lower": 17.28100000001723,
+            "upper": 17.28100000001723
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.984,
+            "p50": 7.985,
+            "p90": 8.034600000000001,
+            "p95": 8.0408,
+            "max": 8.047,
+            "mean": 8.005333333333335,
+            "stdev": 0.03608785575970609
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.06200000002049,
+            "p50": 9.078,
+            "p90": 9.1284,
+            "p95": 9.1347,
+            "max": 9.141,
+            "mean": 9.093666666673498,
+            "stdev": 0.04176521678004921
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15700000000651926,
+            "p90": 0.15700000000651926,
+            "p95": 0.15700000000651926,
+            "max": 0.15700000000651926,
+            "mean": 0.156666666676756,
+            "stdev": 0.0005773502630060834
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 14517.0,
+            "p50": 14517.0,
+            "p90": 14517.0,
+            "p95": 14517.0,
+            "max": 14517.0,
+            "mean": 14517.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 5699.0,
+            "p50": 5699.0,
+            "p90": 5699.0,
+            "p95": 5699.0,
+            "max": 5699.0,
+            "mean": 5699.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 8818.0,
+            "p50": 8818.0,
+            "p90": 8818.0,
+            "p95": 8818.0,
+            "max": 8818.0,
+            "mean": 8818.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 356.0,
+            "p50": 356.0,
+            "p90": 356.0,
+            "p95": 356.0,
+            "max": 356.0,
+            "mean": 356.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19110395904.0,
+            "p50": 19194081280.0,
+            "p90": 19201929216.0,
+            "p95": 19202910208.0,
+            "max": 19203891200.0,
+            "mean": 19169456128.0,
+            "stdev": 51382304.1211586
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21791506432.0,
+            "p50": 21797797888.0,
+            "p90": 21801153331.2,
+            "p95": 21801572761.6,
+            "max": 21801992192.0,
+            "mean": 21797098837.333332,
+            "stdev": 5277716.795198974
+          }
+        },
+        "prefix": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 2087714319108271704,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.15600000001723,
+            "p50": 17.25099999998929,
+            "p90": 17.32540000003064,
+            "p95": 17.33470000003581,
+            "max": 17.344000000040978,
+            "mean": 17.250333333349165,
+            "stdev": 0.09400177304465683
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 14187596929048522745,
+            "estimate": 17.25099999998929,
+            "lower": 17.25099999998929,
+            "upper": 17.25099999998929
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.968,
+            "p50": 7.969,
+            "p90": 8.0306,
+            "p95": 8.0383,
+            "max": 8.046,
+            "mean": 7.9943333333333335,
+            "stdev": 0.04474743940532569
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.01599999999674,
+            "p50": 9.047999999982771,
+            "p90": 9.172000000012945,
+            "p95": 9.187500000016716,
+            "max": 9.203000000020488,
+            "mean": 9.089,
+            "stdev": 0.10001499889156604
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15700000000651926,
+            "p50": 0.1720000000204891,
+            "p90": 0.1720000000204891,
+            "p95": 0.1720000000204891,
+            "max": 0.1720000000204891,
+            "mean": 0.16700000001583248,
+            "stdev": 0.008660254045909876
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 14338.0,
+            "p50": 14338.0,
+            "p90": 14338.0,
+            "p95": 14338.0,
+            "max": 14338.0,
+            "mean": 14338.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 5556.0,
+            "p50": 5556.0,
+            "p90": 5556.0,
+            "p95": 5556.0,
+            "max": 5556.0,
+            "mean": 5556.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 8782.0,
+            "p50": 8782.0,
+            "p90": 8782.0,
+            "p95": 8782.0,
+            "max": 8782.0,
+            "mean": 8782.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 350.0,
+            "p50": 350.0,
+            "p90": 350.0,
+            "p95": 350.0,
+            "max": 350.0,
+            "mean": 350.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19114000384.0,
+            "p50": 19154853888.0,
+            "p90": 19158386278.4,
+            "p95": 19158827827.2,
+            "max": 19159269376.0,
+            "mean": 19142707882.666668,
+            "stdev": 24959256.66645618
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21794652160.0,
+            "p50": 21794652160.0,
+            "p90": 21796329881.6,
+            "p95": 21796539596.8,
+            "max": 21796749312.0,
+            "mean": 21795351210.666668,
+            "stdev": 1210791.271731562
+          }
+        },
+        "py_api_query": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 9627644343372425802,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 24.469000000040978,
+            "p50": 24.54699999996228,
+            "p90": 33.310200000030456,
+            "p95": 34.40560000003897,
+            "max": 35.5010000000475,
+            "mean": 28.172333333350252,
+            "stdev": 6.346931332042786
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 4599311019763960286,
+            "estimate": 24.54699999996228,
+            "lower": 24.54699999996228,
+            "upper": 24.54699999996228
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 8.0,
+            "p90": 8.0,
+            "p95": 8.0,
+            "max": 8.0,
+            "mean": 7.984333333333333,
+            "stdev": 0.027135462651912242
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 16.39100000000326,
+            "p50": 16.53199999998603,
+            "p90": 25.2440000000136,
+            "p95": 26.333000000017044,
+            "max": 27.42200000002049,
+            "mean": 20.11500000000326,
+            "stdev": 6.328440329195467
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.061999999976251274,
+            "p50": 0.07800000003771856,
+            "p90": 0.0788000000291504,
+            "p95": 0.07890000002807937,
+            "max": 0.07900000002700835,
+            "mean": 0.0730000000136594,
+            "stdev": 0.009539392046240627
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 39048.0,
+            "p50": 39074.0,
+            "p90": 62032.4,
+            "p95": 64902.2,
+            "max": 67772.0,
+            "mean": 48631.333333333336,
+            "stdev": 16576.30867634086
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 13351.0,
+            "p50": 13373.0,
+            "p90": 21328.2,
+            "p95": 22322.6,
+            "max": 23317.0,
+            "mean": 16680.333333333332,
+            "stdev": 5747.5324560487115
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 25697.0,
+            "p50": 25701.0,
+            "p90": 40704.2,
+            "p95": 42579.6,
+            "max": 44455.0,
+            "mean": 31951.0,
+            "stdev": 10828.781833613604
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 1340.0,
+            "p50": 1364.0,
+            "p90": 2115.2,
+            "p95": 2209.1,
+            "max": 2303.0,
+            "mean": 1669.0,
+            "stdev": 549.1912235278346
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19072274432.0,
+            "p50": 19090321408.0,
+            "p90": 19090495078.4,
+            "p95": 19090516787.2,
+            "max": 19090538496.0,
+            "mean": 19084378112.0,
+            "stdev": 10482656.340677014
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21792555008.0,
+            "p50": 21794652160.0,
+            "p90": 21797168742.4,
+            "p95": 21797483315.2,
+            "max": 21797797888.0,
+            "mean": 21795001685.333332,
+            "stdev": 2638858.397599487
+          }
+        },
+        "py_atomic_batch": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 11550986793593972041,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.35899999999674,
+            "p50": 17.375,
+            "p90": 17.399800000013784,
+            "p95": 17.402900000015507,
+            "max": 17.40600000001723,
+            "mean": 17.380000000004657,
+            "stdev": 0.02389560630150276
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 17304720289586702864,
+            "estimate": 17.375,
+            "lower": 17.375,
+            "upper": 17.375
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 7.984,
+            "p90": 7.9848,
+            "p95": 7.9849000000000006,
+            "max": 7.985,
+            "mean": 7.979333333333334,
+            "stdev": 0.008962886439832422
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.295999999959022,
+            "p50": 9.328000000020488,
+            "p90": 9.340799999987706,
+            "p95": 9.34239999998361,
+            "max": 9.343999999979511,
+            "mean": 9.322666666653006,
+            "stdev": 0.024440403722079517
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.0779999999795109,
+            "p50": 0.07800000003771856,
+            "p90": 0.07800000003771856,
+            "p95": 0.07800000003771856,
+            "max": 0.07800000003771856,
+            "mean": 0.07800000001831602,
+            "stdev": 3.3606208697288864e-11
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 18517.0,
+            "p50": 18517.0,
+            "p90": 18517.0,
+            "p95": 18517.0,
+            "max": 18517.0,
+            "mean": 18517.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 6643.0,
+            "p50": 6643.0,
+            "p90": 6643.0,
+            "p95": 6643.0,
+            "max": 6643.0,
+            "mean": 6643.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 11874.0,
+            "p50": 11874.0,
+            "p90": 11874.0,
+            "p95": 11874.0,
+            "max": 11874.0,
+            "mean": 11874.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 699.0,
+            "p50": 699.0,
+            "p90": 699.0,
+            "p95": 699.0,
+            "max": 699.0,
+            "mean": 699.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19072692224.0,
+            "p50": 19093069824.0,
+            "p90": 19094383820.8,
+            "p95": 19094548070.4,
+            "max": 19094712320.0,
+            "mean": 19086824789.333332,
+            "stdev": 12266682.53657872
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21789409280.0,
+            "p50": 21805137920.0,
+            "p90": 21810171084.8,
+            "p95": 21810800230.4,
+            "max": 21811429376.0,
+            "mean": 21801992192.0,
+            "stdev": 11342083.602662785
+          }
+        },
+        "py_compiler_syntax": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 14678334526552848520,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 21.60899999999674,
+            "p50": 21.875000000058208,
+            "p90": 21.924599999992644,
+            "p95": 21.930799999984448,
+            "max": 21.93699999997625,
+            "mean": 21.8070000000104,
+            "stdev": 0.1742526900840162
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 1081365026294531788,
+            "estimate": 21.875000000058208,
+            "lower": 21.875000000058208,
+            "upper": 21.875000000058208
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.953,
+            "p90": 7.9906,
+            "p95": 7.9953,
+            "max": 8.0,
+            "mean": 7.968666666666667,
+            "stdev": 0.027135462651912242
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 13.57800000001723,
+            "p50": 13.797000000020489,
+            "p90": 13.88420000000149,
+            "p95": 13.895099999999116,
+            "max": 13.905999999996741,
+            "mean": 13.76033333334482,
+            "stdev": 0.1670459018667272
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.0779999999795109,
+            "p50": 0.0779999999795109,
+            "p90": 0.07800000002607703,
+            "p95": 0.0780000000318978,
+            "max": 0.07800000003771856,
+            "mean": 0.07799999999891345,
+            "stdev": 3.3606208697288864e-11
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 38958.0,
+            "p50": 38966.0,
+            "p90": 38978.8,
+            "p95": 38980.4,
+            "max": 38982.0,
+            "mean": 38968.666666666664,
+            "stdev": 12.220201853215574
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 12742.0,
+            "p50": 12747.0,
+            "p90": 12755.0,
+            "p95": 12756.0,
+            "max": 12757.0,
+            "mean": 12748.666666666666,
+            "stdev": 7.637626158259733
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 26216.0,
+            "p50": 26219.0,
+            "p90": 26223.8,
+            "p95": 26224.4,
+            "max": 26225.0,
+            "mean": 26220.0,
+            "stdev": 4.58257569495584
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 874.0,
+            "p50": 906.0,
+            "p90": 906.0,
+            "p95": 906.0,
+            "max": 906.0,
+            "mean": 895.3333333333334,
+            "stdev": 18.475208614068023
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19086917632.0,
+            "p50": 19090317312.0,
+            "p90": 19091280691.2,
+            "p95": 19091401113.6,
+            "max": 19091521536.0,
+            "mean": 19089585493.333332,
+            "stdev": 2387603.8052753503
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21800943616.0,
+            "p50": 21800943616.0,
+            "p90": 21854630707.2,
+            "p95": 21861341593.6,
+            "max": 21868052480.0,
+            "mean": 21823313237.333332,
+            "stdev": 38745320.69540998
+          }
+        },
+        "py_explore_slug": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 6447603419414570701,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 16.84399999998277,
+            "p50": 16.892000000050757,
+            "p90": 16.916000000026543,
+            "p95": 16.919000000023516,
+            "max": 16.92200000002049,
+            "mean": 16.886000000018004,
+            "stdev": 0.039344631168252014
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 6548647269742021256,
+            "estimate": 16.892000000050757,
+            "lower": 16.892000000050757,
+            "upper": 16.892000000050757
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 7.985,
+            "p90": 8.009,
+            "p95": 8.012,
+            "max": 8.015,
+            "mean": 7.989666666666667,
+            "stdev": 0.0233523731841828
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 8.797000000003258,
+            "p50": 8.798000000023748,
+            "p90": 8.83399999998836,
+            "p95": 8.838499999983934,
+            "max": 8.842999999979511,
+            "mean": 8.81266666666884,
+            "stdev": 0.026274195179158064
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.0779999999795109,
+            "p50": 0.07900000002700835,
+            "p90": 0.09100000003818423,
+            "p95": 0.09250000003958121,
+            "max": 0.0940000000409782,
+            "mean": 0.08366666668249916,
+            "stdev": 0.008962886462900251
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 18329.0,
+            "p50": 18329.0,
+            "p90": 18329.0,
+            "p95": 18329.0,
+            "max": 18329.0,
+            "mean": 18329.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 6410.0,
+            "p50": 6410.0,
+            "p90": 6410.0,
+            "p95": 6410.0,
+            "max": 6410.0,
+            "mean": 6410.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 11919.0,
+            "p50": 11919.0,
+            "p90": 11919.0,
+            "p95": 11919.0,
+            "max": 11919.0,
+            "mean": 11919.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 620.0,
+            "p50": 620.0,
+            "p90": 620.0,
+            "p95": 620.0,
+            "max": 620.0,
+            "mean": 620.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19077480448.0,
+            "p50": 19085619200.0,
+            "p90": 19085737164.8,
+            "p95": 19085751910.4,
+            "max": 19085766656.0,
+            "mean": 19082955434.666668,
+            "stdev": 4742050.723908099
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21791506432.0,
+            "p50": 21800943616.0,
+            "p90": 21811848806.4,
+            "p95": 21813211955.2,
+            "max": 21814575104.0,
+            "mean": 21802341717.333332,
+            "stdev": 11597711.94954407
+          }
+        },
+        "py_graph_cycle": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 5666212983043327470,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.43800000002375,
+            "p50": 17.46799999999348,
+            "p90": 17.494400000036695,
+            "p95": 17.497700000042094,
+            "max": 17.501000000047497,
+            "mean": 17.469000000021577,
+            "stdev": 0.031511902525716014
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 3994657440432938411,
+            "estimate": 17.46799999999348,
+            "lower": 17.46799999999348,
+            "upper": 17.46799999999348
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 7.984,
+            "p90": 7.9848,
+            "p95": 7.9849000000000006,
+            "max": 7.985,
+            "mean": 7.979333333333334,
+            "stdev": 0.008962886439832422
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.360000000040978,
+            "p50": 9.404999999955763,
+            "p90": 9.443400000007543,
+            "p95": 9.448200000014015,
+            "max": 9.453000000020488,
+            "mean": 9.406000000005742,
+            "stdev": 0.04650806380749656
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.07800000003771856,
+            "p50": 0.07900000002700835,
+            "p90": 0.09099999999161809,
+            "p95": 0.09249999998719431,
+            "max": 0.09399999998277053,
+            "mean": 0.08366666668249916,
+            "stdev": 0.00896288641094586
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 18531.0,
+            "p50": 18531.0,
+            "p90": 18531.0,
+            "p95": 18531.0,
+            "max": 18531.0,
+            "mean": 18531.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 6649.0,
+            "p50": 6649.0,
+            "p90": 6649.0,
+            "p95": 6649.0,
+            "max": 6649.0,
+            "mean": 6649.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 11882.0,
+            "p50": 11882.0,
+            "p90": 11882.0,
+            "p95": 11882.0,
+            "max": 11882.0,
+            "mean": 11882.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 714.0,
+            "p50": 714.0,
+            "p90": 714.0,
+            "p95": 714.0,
+            "max": 714.0,
+            "mean": 714.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19066884096.0,
+            "p50": 19085193216.0,
+            "p90": 19086726758.4,
+            "p95": 19086918451.2,
+            "max": 19087110144.0,
+            "mean": 19079729152.0,
+            "stdev": 11165359.419725278
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21797797888.0,
+            "p50": 21800943616.0,
+            "p90": 21801782476.8,
+            "p95": 21801887334.4,
+            "max": 21801992192.0,
+            "mean": 21800244565.333332,
+            "stdev": 2182785.0070561995
+          }
+        },
+        "py_multifile_invoice": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 6760243569349845460,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 19.2960000000312,
+            "p50": 19.31199999997625,
+            "p90": 19.313600000052247,
+            "p95": 19.313800000061747,
+            "max": 19.314000000071246,
+            "mean": 19.307333333359566,
+            "stdev": 0.009865765725167425
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 13243167989286193355,
+            "estimate": 19.31199999997625,
+            "lower": 19.31199999997625,
+            "upper": 19.31199999997625
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 7.985,
+            "p90": 7.997,
+            "p95": 7.9985,
+            "max": 8.0,
+            "mean": 7.984666666666667,
+            "stdev": 0.015502687938977829
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 11.232999999993481,
+            "p50": 11.23399999999674,
+            "p90": 11.259600000034737,
+            "p95": 11.262800000039487,
+            "max": 11.266000000044237,
+            "mean": 11.24433333334482,
+            "stdev": 0.01877054432879758
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.0779999999795109,
+            "p50": 0.07800000003771856,
+            "p90": 0.0788000000291504,
+            "p95": 0.07890000002807937,
+            "max": 0.07900000002700835,
+            "mean": 0.07833333334807928,
+            "stdev": 0.0005773502798091884
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 35959.0,
+            "p50": 35959.0,
+            "p90": 35959.0,
+            "p95": 35959.0,
+            "max": 35959.0,
+            "mean": 35959.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 11317.0,
+            "p50": 11317.0,
+            "p90": 11317.0,
+            "p95": 11317.0,
+            "max": 11317.0,
+            "mean": 11317.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 24642.0,
+            "p50": 24642.0,
+            "p90": 24642.0,
+            "p95": 24642.0,
+            "max": 24642.0,
+            "mean": 24642.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 636.0,
+            "p50": 636.0,
+            "p90": 636.0,
+            "p95": 636.0,
+            "max": 636.0,
+            "mean": 636.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19071266816.0,
+            "p50": 19080187904.0,
+            "p90": 19086770995.2,
+            "p95": 19087593881.6,
+            "max": 19088416768.0,
+            "mean": 19079957162.666668,
+            "stdev": 8577304.038726699
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21794652160.0,
+            "p50": 21799895040.0,
+            "p90": 21801572761.6,
+            "p95": 21801782476.8,
+            "max": 21801992192.0,
+            "mean": 21798846464.0,
+            "stdev": 3780694.534220928
+          }
+        },
+        "py_refactor_repository": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 15220885959377229042,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 16.67200000002049,
+            "p50": 16.720000000030268,
+            "p90": 16.880800000031012,
+            "p95": 16.900900000031108,
+            "max": 16.9210000000312,
+            "mean": 16.771000000027318,
+            "stdev": 0.13210223314201697
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 4769485607333069159,
+            "estimate": 16.720000000030268,
+            "lower": 16.720000000030268,
+            "upper": 16.720000000030268
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.937,
+            "p50": 7.953,
+            "p90": 8.0154,
+            "p95": 8.023200000000001,
+            "max": 8.031,
+            "mean": 7.9736666666666665,
+            "stdev": 0.05029247790011296
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 8.65699999998277,
+            "p50": 8.68800000000326,
+            "p90": 8.787199999995437,
+            "p95": 8.799599999994458,
+            "max": 8.81199999999348,
+            "mean": 8.718999999993171,
+            "stdev": 0.08201829064520234
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.07800000003771856,
+            "p50": 0.07800000003771856,
+            "p90": 0.0788000000291504,
+            "p95": 0.07890000002807937,
+            "max": 0.07900000002700835,
+            "mean": 0.07833333336748183,
+            "stdev": 0.0005773502630060834
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 22467.0,
+            "p50": 22467.0,
+            "p90": 22467.0,
+            "p95": 22467.0,
+            "max": 22467.0,
+            "mean": 22467.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 7395.0,
+            "p50": 7395.0,
+            "p90": 7395.0,
+            "p95": 7395.0,
+            "max": 7395.0,
+            "mean": 7395.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 15072.0,
+            "p50": 15072.0,
+            "p90": 15072.0,
+            "p95": 15072.0,
+            "max": 15072.0,
+            "mean": 15072.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 513.0,
+            "p50": 513.0,
+            "p90": 513.0,
+            "p95": 513.0,
+            "max": 513.0,
+            "mean": 513.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19090882560.0,
+            "p50": 19093323776.0,
+            "p90": 19094041395.2,
+            "p95": 19094131097.6,
+            "max": 19094220800.0,
+            "mean": 19092809045.333332,
+            "stdev": 1727620.4209273902
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21794652160.0,
+            "p50": 21796749312.0,
+            "p90": 21798427033.6,
+            "p95": 21798636748.8,
+            "max": 21798846464.0,
+            "mean": 21796749312.0,
+            "stdev": 2097152.0
+          }
+        },
+        "range_sum": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 591742444189476500,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 19.31199999997625,
+            "p50": 19.7039999999688,
+            "p90": 19.827999999991153,
+            "p95": 19.843499999993945,
+            "max": 19.85899999999674,
+            "mean": 19.6249999999806,
+            "stdev": 0.2819272955997802
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 8918484493846499766,
+            "estimate": 19.7039999999688,
+            "lower": 19.7039999999688,
+            "upper": 19.7039999999688
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.953,
+            "p90": 7.9906,
+            "p95": 7.9953,
+            "max": 8.0,
+            "mean": 7.968666666666667,
+            "stdev": 0.027135462651912242
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 11.202999999959022,
+            "p50": 11.546999999962281,
+            "p90": 11.696600000020023,
+            "p95": 11.715300000027241,
+            "max": 11.73400000003446,
+            "mean": 11.494666666651922,
+            "stdev": 0.26934055274235724
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15700000000651926,
+            "p90": 0.168999999971129,
+            "p95": 0.17049999996670523,
+            "max": 0.17199999996228144,
+            "mean": 0.16166666666201004,
+            "stdev": 0.00896288641094586
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 18500.0,
+            "p50": 18500.0,
+            "p90": 18500.0,
+            "p95": 18500.0,
+            "max": 18500.0,
+            "mean": 18500.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 6653.0,
+            "p50": 6653.0,
+            "p90": 6653.0,
+            "p95": 6653.0,
+            "max": 6653.0,
+            "mean": 6653.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 11847.0,
+            "p50": 11847.0,
+            "p90": 11847.0,
+            "p95": 11847.0,
+            "max": 11847.0,
+            "mean": 11847.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 647.0,
+            "p50": 697.0,
+            "p90": 732.2,
+            "p95": 736.6,
+            "max": 741.0,
+            "mean": 695.0,
+            "stdev": 47.031904065219386
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19111464960.0,
+            "p50": 19204624384.0,
+            "p90": 19207753728.0,
+            "p95": 19208144896.0,
+            "max": 19208536064.0,
+            "mean": 19174875136.0,
+            "stdev": 54949641.72193329
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21797797888.0,
+            "p50": 21808283648.0,
+            "p90": 21856937574.4,
+            "p95": 21863019315.2,
+            "max": 21869101056.0,
+            "mean": 21825060864.0,
+            "stdev": 38498593.14627027
+          }
+        },
+        "reasoning_atomic_transfers": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 0,
+          "pass_rate": 0.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 10971971894462198032,
+            "estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0
+          },
+          "failures": [
+            "reasoning_atomic_transfers-optimized-r001",
+            "reasoning_atomic_transfers-optimized-r003",
+            "reasoning_atomic_transfers-optimized-r002"
+          ],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 57.29699999996228,
+            "p50": 61.89100000000326,
+            "p90": 65.86540000004462,
+            "p95": 66.36220000004978,
+            "max": 66.85900000005495,
+            "mean": 62.015666666673496,
+            "stdev": 4.782218871379377
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 12732581093391579451,
+            "estimate": 61.89100000000326,
+            "lower": 61.89100000000326,
+            "upper": 61.89100000000326
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.968,
+            "p90": 7.9808,
+            "p95": 7.9824,
+            "max": 7.984,
+            "mean": 7.968333333333334,
+            "stdev": 0.015502687938977829
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 48.68800000000326,
+            "p50": 53.31300000002049,
+            "p90": 57.325800000020486,
+            "p95": 57.82740000002048,
+            "max": 58.329000000020486,
+            "mean": 53.44333333334808,
+            "stdev": 4.821821267261496
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.5620000000344589,
+            "p50": 0.5939999999827705,
+            "p90": 0.6435999999637716,
+            "p95": 0.6497999999613967,
+            "max": 0.6559999999590218,
+            "mean": 0.6039999999920838,
+            "stdev": 0.04779121254576152
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 114491.0,
+            "p50": 116673.0,
+            "p90": 119788.2,
+            "p95": 120177.6,
+            "max": 120567.0,
+            "mean": 117243.66666666667,
+            "stdev": 3077.9358884377907
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 48797.0,
+            "p50": 49530.0,
+            "p90": 49867.6,
+            "p95": 49909.8,
+            "max": 49952.0,
+            "mean": 49426.333333333336,
+            "stdev": 584.4367658980168
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 64961.0,
+            "p50": 66721.0,
+            "p90": 70760.2,
+            "p95": 71265.1,
+            "max": 71770.0,
+            "mean": 67817.33333333333,
+            "stdev": 3534.413718473452
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 3685.0,
+            "p50": 4186.0,
+            "p90": 4911.6,
+            "p95": 5002.3,
+            "max": 5093.0,
+            "mean": 4321.333333333333,
+            "stdev": 713.6892414302833
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19110363136.0,
+            "p50": 19182895104.0,
+            "p90": 19192197939.2,
+            "p95": 19193360793.6,
+            "max": 19194523648.0,
+            "mean": 19162593962.666668,
+            "stdev": 45605374.678896315
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21797797888.0,
+            "p50": 21797797888.0,
+            "p90": 21817930547.2,
+            "p95": 21820447129.6,
+            "max": 21822963712.0,
+            "mean": 21806186496.0,
+            "stdev": 14529495.260778744
+          }
+        },
+        "reasoning_dependency_order": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 13357892501786154254,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 25.68699999997625,
+            "p50": 26.18900000001304,
+            "p90": 26.21300000003539,
+            "p95": 26.216000000038186,
+            "max": 26.219000000040978,
+            "mean": 26.031666666676756,
+            "stdev": 0.298866748487092
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 1264031493121221256,
+            "estimate": 26.18900000001304,
+            "lower": 26.18900000001304,
+            "upper": 26.18900000001304
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 7.984,
+            "p90": 8.0088,
+            "p95": 8.0119,
+            "max": 8.015,
+            "mean": 7.989333333333334,
+            "stdev": 0.023459184413217392
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 17.51600000001723,
+            "p50": 18.063000000006518,
+            "p90": 18.0758000000203,
+            "p95": 18.077400000022024,
+            "max": 18.079000000023747,
+            "mean": 17.88600000001583,
+            "stdev": 0.32052924983433595
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.1559999999590218,
+            "p50": 0.15600000001722947,
+            "p90": 0.1568000000086613,
+            "p95": 0.15690000000759027,
+            "max": 0.15700000000651926,
+            "mean": 0.15633333332759017,
+            "stdev": 0.0005773502798091884
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 41781.0,
+            "p50": 41793.0,
+            "p90": 41793.0,
+            "p95": 41793.0,
+            "max": 41793.0,
+            "mean": 41789.0,
+            "stdev": 6.928203230275509
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 15271.0,
+            "p50": 15280.0,
+            "p90": 15280.0,
+            "p95": 15280.0,
+            "max": 15280.0,
+            "mean": 15277.0,
+            "stdev": 5.196152422706632
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 26510.0,
+            "p50": 26513.0,
+            "p90": 26513.0,
+            "p95": 26513.0,
+            "max": 26513.0,
+            "mean": 26512.0,
+            "stdev": 1.7320508075688772
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 934.0,
+            "p50": 991.0,
+            "p90": 1011.8,
+            "p95": 1014.4,
+            "max": 1017.0,
+            "mean": 980.6666666666666,
+            "stdev": 42.45389656242797
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19124047872.0,
+            "p50": 19158429696.0,
+            "p90": 19178319872.0,
+            "p95": 19180806144.0,
+            "max": 19183292416.0,
+            "mean": 19155256661.333332,
+            "stdev": 29749455.628446132
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21792555008.0,
+            "p50": 21800943616.0,
+            "p90": 21814365388.8,
+            "p95": 21816043110.4,
+            "max": 21817720832.0,
+            "mean": 21803739818.666668,
+            "stdev": 12813810.378437374
+          }
+        },
+        "reasoning_event_replay": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 4847199460059241998,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 33.21799999999348,
+            "p50": 33.82800000003772,
+            "p90": 48.46560000000754,
+            "p95": 50.29530000000377,
+            "max": 52.125,
+            "mean": 39.72366666667707,
+            "stdev": 10.7441996599632
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 17905205965187840673,
+            "estimate": 33.82800000003772,
+            "lower": 33.82800000003772,
+            "upper": 33.82800000003772
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.968,
+            "p90": 7.9688,
+            "p95": 7.9689000000000005,
+            "max": 7.969,
+            "mean": 7.963333333333334,
+            "stdev": 0.008962886439832422
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 25.108999999976252,
+            "p50": 25.703000000020488,
+            "p90": 40.3285999999877,
+            "p95": 42.156799999983605,
+            "max": 43.98499999997951,
+            "mean": 31.598999999992085,
+            "stdev": 10.730701561397536
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15600000001722947,
+            "p90": 0.16880000001983717,
+            "p95": 0.17040000002016314,
+            "max": 0.1720000000204891,
+            "mean": 0.16133333335164934,
+            "stdev": 0.00923760430891596
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 56954.0,
+            "p50": 56954.0,
+            "p90": 86306.0,
+            "p95": 89975.0,
+            "max": 93644.0,
+            "mean": 69184.0,
+            "stdev": 21182.981376567368
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 22554.0,
+            "p50": 22554.0,
+            "p90": 40503.600000000006,
+            "p95": 42747.3,
+            "max": 44991.0,
+            "mean": 30033.0,
+            "stdev": 12954.007989807633
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 34400.0,
+            "p50": 34400.0,
+            "p90": 45802.4,
+            "p95": 47227.7,
+            "max": 48653.0,
+            "mean": 39151.0,
+            "stdev": 8228.973386759735
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 1600.0,
+            "p50": 1671.0,
+            "p90": 2737.4,
+            "p95": 2870.7,
+            "max": 3004.0,
+            "mean": 2091.6666666666665,
+            "stdev": 790.900963037303
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19163340800.0,
+            "p50": 19181678592.0,
+            "p90": 19202188083.2,
+            "p95": 19204751769.6,
+            "max": 19207315456.0,
+            "mean": 19184111616.0,
+            "stdev": 22088057.789629582
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21797797888.0,
+            "p50": 21817720832.0,
+            "p90": 21817720832.0,
+            "p95": 21817720832.0,
+            "max": 21817720832.0,
+            "mean": 21811079850.666668,
+            "stdev": 11502517.08144984
+          }
+        },
+        "reasoning_interval_union": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 1363958018123002744,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 22.92200000002049,
+            "p50": 23.03100000001723,
+            "p90": 23.06860000003362,
+            "p95": 23.07330000003567,
+            "max": 23.07800000003772,
+            "mean": 23.010333333358478,
+            "stdev": 0.08002707875732956
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 14664574885483012326,
+            "estimate": 23.03100000001723,
+            "lower": 23.03100000001723,
+            "upper": 23.03100000001723
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.985,
+            "p90": 7.985,
+            "p95": 7.985,
+            "max": 7.985,
+            "mean": 7.974333333333334,
+            "stdev": 0.01847520861406804
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 14.78000000001397,
+            "p50": 14.92100000001723,
+            "p90": 14.921800000003447,
+            "p95": 14.921900000001724,
+            "max": 14.922,
+            "mean": 14.874333333343733,
+            "stdev": 0.08169659315307802
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15700000000651926,
+            "p90": 0.16900000001769513,
+            "p95": 0.1705000000190921,
+            "max": 0.1720000000204891,
+            "mean": 0.1616666666814126,
+            "stdev": 0.008962886444499737
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 20405.0,
+            "p50": 20405.0,
+            "p90": 20405.0,
+            "p95": 20405.0,
+            "max": 20405.0,
+            "mean": 20405.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 7926.0,
+            "p50": 7926.0,
+            "p90": 7926.0,
+            "p95": 7926.0,
+            "max": 7926.0,
+            "mean": 7926.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 12479.0,
+            "p50": 12479.0,
+            "p90": 12479.0,
+            "p95": 12479.0,
+            "max": 12479.0,
+            "mean": 12479.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 1164.0,
+            "p50": 1164.0,
+            "p90": 1164.0,
+            "p95": 1164.0,
+            "max": 1164.0,
+            "mean": 1164.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19111034880.0,
+            "p50": 19203039232.0,
+            "p90": 19208262451.2,
+            "p95": 19208915353.6,
+            "max": 19209568256.0,
+            "mean": 19174547456.0,
+            "stdev": 55100295.11005341
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21797797888.0,
+            "p50": 21801992192.0,
+            "p90": 21813736243.2,
+            "p95": 21815204249.6,
+            "max": 21816672256.0,
+            "mean": 21805487445.333332,
+            "stdev": 9910753.692226911
+          }
+        },
+        "reasoning_quota_allocation": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 9825854102543542618,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 28.23399999999674,
+            "p50": 28.45300000003772,
+            "p90": 36.640999999979975,
+            "p95": 37.66449999997276,
+            "max": 38.68799999996554,
+            "mean": 31.791666666666668,
+            "stdev": 5.973403580286649
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 6269231164323043881,
+            "estimate": 28.45300000003772,
+            "lower": 28.45300000003772,
+            "upper": 28.45300000003772
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.953,
+            "p90": 7.9778,
+            "p95": 7.9809,
+            "max": 7.984,
+            "mean": 7.963333333333334,
+            "stdev": 0.017897858344878222
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 20.108999999976252,
+            "p50": 20.313000000020487,
+            "p90": 28.175399999990315,
+            "p95": 29.158199999986543,
+            "max": 30.14099999998277,
+            "mean": 23.52099999999317,
+            "stdev": 5.733995465633126
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.1720000000204891,
+            "p90": 0.5095999999903142,
+            "p95": 0.5517999999865424,
+            "max": 0.5939999999827705,
+            "mean": 0.30733333334016305,
+            "stdev": 0.2483894790908302
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 51383.0,
+            "p50": 51383.0,
+            "p90": 76255.8,
+            "p95": 79364.9,
+            "max": 82474.0,
+            "mean": 61746.666666666664,
+            "stdev": 17950.397219374656
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 20679.0,
+            "p50": 20679.0,
+            "p90": 32843.0,
+            "p95": 34363.5,
+            "max": 35884.0,
+            "mean": 25747.333333333332,
+            "stdev": 8778.61084302826
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 30704.0,
+            "p50": 30704.0,
+            "p90": 43412.8,
+            "p95": 45001.399999999994,
+            "max": 46590.0,
+            "mean": 35999.333333333336,
+            "stdev": 9171.786376346396
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 926.0,
+            "p50": 960.0,
+            "p90": 1306.4,
+            "p95": 1349.7,
+            "max": 1393.0,
+            "mean": 1093.0,
+            "stdev": 260.36320784627003
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19132821504.0,
+            "p50": 19150716928.0,
+            "p90": 19184602316.8,
+            "p95": 19188837990.4,
+            "max": 19193073664.0,
+            "mean": 19158870698.666668,
+            "stdev": 30942586.8057253
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21749563392.0,
+            "p50": 21794652160.0,
+            "p90": 21796329881.6,
+            "p95": 21796539596.8,
+            "max": 21796749312.0,
+            "mean": 21780321621.333332,
+            "stdev": 26658038.476587534
+          }
+        },
+        "reasoning_route_specificity": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 16475170920240928301,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 27.25,
+            "p50": 27.78100000001723,
+            "p90": 42.443400000000835,
+            "p95": 44.27619999999879,
+            "max": 46.10899999999674,
+            "mean": 33.71333333333799,
+            "stdev": 10.73824493728797
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 3875596699030295255,
+            "estimate": 27.78100000001723,
+            "lower": 27.78100000001723,
+            "upper": 27.78100000001723
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.953,
+            "p50": 7.969,
+            "p90": 7.981800000000001,
+            "p95": 7.9834000000000005,
+            "max": 7.985,
+            "mean": 7.969,
+            "stdev": 0.016000000000000014
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 19.14099999998277,
+            "p50": 19.656,
+            "p90": 34.292799999981,
+            "p95": 36.122399999978626,
+            "max": 37.95199999997625,
+            "mean": 25.582999999986342,
+            "stdev": 10.714962762409268
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15600000001722947,
+            "p90": 0.16880000001983717,
+            "p95": 0.17040000002016314,
+            "max": 0.1720000000204891,
+            "mean": 0.16133333335164934,
+            "stdev": 0.00923760430891596
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 37239.0,
+            "p50": 37311.0,
+            "p90": 79951.8,
+            "p95": 85281.9,
+            "max": 90612.0,
+            "mean": 55054.0,
+            "stdev": 30794.15235073049
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 14386.0,
+            "p50": 14423.0,
+            "p90": 35236.600000000006,
+            "p95": 37838.3,
+            "max": 40440.0,
+            "mean": 23083.0,
+            "stdev": 15031.61431783027
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 22853.0,
+            "p50": 22888.0,
+            "p90": 44715.2,
+            "p95": 47443.6,
+            "max": 50172.0,
+            "mean": 31971.0,
+            "stdev": 15762.538088772379
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 1222.0,
+            "p50": 1312.0,
+            "p90": 2102.4,
+            "p95": 2201.2,
+            "max": 2300.0,
+            "mean": 1611.3333333333333,
+            "stdev": 598.0980967477938
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19192840192.0,
+            "p50": 19197935616.0,
+            "p90": 19204751360.0,
+            "p95": 19205603328.0,
+            "max": 19206455296.0,
+            "mean": 19199077034.666668,
+            "stdev": 6878945.5341763925
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21792555008.0,
+            "p50": 21797797888.0,
+            "p90": 21801153331.2,
+            "p95": 21801572761.6,
+            "max": 21801992192.0,
+            "mean": 21797448362.666668,
+            "stdev": 4728291.068816019
+          }
+        },
+        "reverse": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 2085667078169600410,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.5789999999688,
+            "p50": 17.67200000002049,
+            "p90": 17.684800000023095,
+            "p95": 17.686400000023422,
+            "max": 17.68800000002375,
+            "mean": 17.64633333333768,
+            "stdev": 0.058858587622788776
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 10120526849374058692,
+            "estimate": 17.67200000002049,
+            "lower": 17.67200000002049,
+            "upper": 17.67200000002049
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.968,
+            "p50": 7.969,
+            "p90": 7.969,
+            "p95": 7.969,
+            "max": 7.969,
+            "mean": 7.968666666666667,
+            "stdev": 0.0005773502691898186
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.438000000006518,
+            "p50": 9.530999999999999,
+            "p90": 9.56940000001639,
+            "p95": 9.57420000001844,
+            "max": 9.57900000002049,
+            "mean": 9.516000000009003,
+            "stdev": 0.0716868188775481
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.14100000000325963,
+            "p50": 0.17199999996228144,
+            "p90": 0.17200000000884758,
+            "p95": 0.17200000001466834,
+            "max": 0.1720000000204891,
+            "mean": 0.16166666666201004,
+            "stdev": 0.01789785833802273
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 14538.0,
+            "p50": 14538.0,
+            "p90": 14538.0,
+            "p95": 14538.0,
+            "max": 14538.0,
+            "mean": 14538.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 5709.0,
+            "p50": 5709.0,
+            "p90": 5709.0,
+            "p95": 5709.0,
+            "max": 5709.0,
+            "mean": 5709.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 8829.0,
+            "p50": 8829.0,
+            "p90": 8829.0,
+            "p95": 8829.0,
+            "max": 8829.0,
+            "mean": 8829.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 429.0,
+            "p50": 434.0,
+            "p90": 445.2,
+            "p95": 446.6,
+            "max": 448.0,
+            "mean": 437.0,
+            "stdev": 9.848857801796104
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19154972672.0,
+            "p50": 19191091200.0,
+            "p90": 19206682214.4,
+            "p95": 19208631091.2,
+            "max": 19210579968.0,
+            "mean": 19185547946.666668,
+            "stdev": 28215041.826055076
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21791506432.0,
+            "p50": 21791506432.0,
+            "p90": 21796539596.8,
+            "p95": 21797168742.4,
+            "max": 21797797888.0,
+            "mean": 21793603584.0,
+            "stdev": 3632373.815194686
+          }
+        },
+        "unique": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 8583154164340466295,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.68699999997625,
+            "p50": 17.70299999997951,
+            "p90": 17.7405999999959,
+            "p95": 17.74529999999795,
+            "max": 17.75,
+            "mean": 17.713333333318587,
+            "stdev": 0.03274650109813928
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 343572878718453452,
+            "estimate": 17.70299999997951,
+            "lower": 17.70299999997951,
+            "upper": 17.70299999997951
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.938,
+            "p50": 7.984,
+            "p90": 7.9968,
+            "p95": 7.9984,
+            "max": 8.0,
+            "mean": 7.974,
+            "stdev": 0.032186953878862314
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.546999999962281,
+            "p50": 9.592999999959023,
+            "p90": 9.606599999978021,
+            "p95": 9.608299999980396,
+            "max": 9.60999999998277,
+            "mean": 9.58333333330136,
+            "stdev": 0.032593455383684175
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.15600000001722947,
+            "p50": 0.15600000001722947,
+            "p90": 0.15600000001722947,
+            "p95": 0.15600000001722947,
+            "max": 0.15600000001722947,
+            "mean": 0.15600000001722947,
+            "stdev": 0.0
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 14624.0,
+            "p50": 14624.0,
+            "p90": 14624.0,
+            "p95": 14624.0,
+            "max": 14624.0,
+            "mean": 14624.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 5791.0,
+            "p50": 5791.0,
+            "p90": 5791.0,
+            "p95": 5791.0,
+            "max": 5791.0,
+            "mean": 5791.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 8833.0,
+            "p50": 8833.0,
+            "p90": 8833.0,
+            "p95": 8833.0,
+            "max": 8833.0,
+            "mean": 8833.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 422.0,
+            "p50": 422.0,
+            "p90": 428.4,
+            "p95": 429.2,
+            "max": 430.0,
+            "mean": 424.6666666666667,
+            "stdev": 4.618802153517006
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19207516160.0,
+            "p50": 19221348352.0,
+            "p90": 19222390374.4,
+            "p95": 19222520627.2,
+            "max": 19222650880.0,
+            "mean": 19217171797.333332,
+            "stdev": 8387350.239041013
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21794652160.0,
+            "p50": 21797797888.0,
+            "p90": 21801153331.2,
+            "p95": 21801572761.6,
+            "max": 21801992192.0,
+            "mean": 21798147413.333332,
+            "stdev": 3682477.8898504376
+          }
+        }
+      },
+      "per_language": {
+        "go": {
+          "tasks": 22,
+          "runs": 66,
+          "passed": 63,
+          "pass_rate": 0.9545454545454546,
+          "pass_rate_ci": {
+            "count": 66,
+            "task_clusters": 22,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 13173532424443709418,
+            "estimate": 0.9545454545454546,
+            "lower": 0.8636363636363636,
+            "upper": 1.0
+          },
+          "failures": [
+            "reasoning_atomic_transfers-optimized-r001",
+            "reasoning_atomic_transfers-optimized-r003",
+            "reasoning_atomic_transfers-optimized-r002"
+          ],
+          "end_to_end_seconds": {
+            "count": 66,
+            "min": 17.15600000001723,
+            "p50": 21.08499999999185,
+            "p90": 33.5230000000156,
+            "p95": 50.620999999999185,
+            "max": 66.85900000005495,
+            "mean": 24.640651515155863,
+            "stdev": 10.645097076544067
+          },
+          "end_to_end_seconds_ci": {
+            "count": 66,
+            "task_clusters": 22,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 15191988782329742095,
+            "estimate": 21.08499999999185,
+            "lower": 18.03100000001723,
+            "upper": 25.851500000047963
+          },
+          "startup_seconds": {
+            "count": 66,
+            "min": 7.938,
+            "p50": 7.984,
+            "p90": 8.015,
+            "p95": 8.016,
+            "max": 8.047,
+            "mean": 7.980545454545455,
+            "stdev": 0.02321682534329313
+          },
+          "agent_seconds": {
+            "count": 66,
+            "min": 9.01599999999674,
+            "p50": 12.92200000001723,
+            "p90": 25.40599999999837,
+            "p95": 42.47674999997869,
+            "max": 58.329000000020486,
+            "mean": 16.46977272727214,
+            "stdev": 10.570078392543195
+          },
+          "verification_seconds": {
+            "count": 66,
+            "min": 0.14100000000325963,
+            "p50": 0.15700000000651926,
+            "p90": 0.19500000000698492,
+            "p95": 0.47625000002153683,
+            "max": 0.6559999999590218,
+            "mean": 0.1903333333382651,
+            "stdev": 0.10638020829555415
+          },
+          "prompt_tokens": {
+            "count": 66,
+            "min": 14243.0,
+            "p50": 23949.5,
+            "p90": 56954.0,
+            "p95": 92886.0,
+            "max": 120567.0,
+            "mean": 34174.13636363636,
+            "stdev": 25716.01252311118
+          },
+          "prefill_tokens": {
+            "count": 66,
+            "min": 5478.0,
+            "p50": 8275.5,
+            "p90": 22554.0,
+            "p95": 43853.25,
+            "max": 49952.0,
+            "mean": 13111.681818181818,
+            "stdev": 11277.246239368751
+          },
+          "cached_tokens": {
+            "count": 66,
+            "min": 8765.0,
+            "p50": 15469.5,
+            "p90": 34400.0,
+            "p95": 49792.25,
+            "max": 71770.0,
+            "mean": 21062.454545454544,
+            "stdev": 14612.761087152892
+          },
+          "generated_tokens": {
+            "count": 66,
+            "min": 350.0,
+            "p50": 755.5,
+            "p90": 1496.5,
+            "p95": 2828.0,
+            "max": 5093.0,
+            "mean": 964.1363636363636,
+            "stdev": 891.7745642406344
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 66,
+            "min": 19100663808.0,
+            "p50": 19191965696.0,
+            "p90": 19213946880.0,
+            "p95": 19221085184.0,
+            "max": 19258748928.0,
+            "mean": 19173428192.969696,
+            "stdev": 41663295.078523174
+          },
+          "peak_gpu_used_bytes": {
+            "count": 66,
+            "min": 21749563392.0,
+            "p50": 21797797888.0,
+            "p90": 21817720832.0,
+            "p95": 21817720832.0,
+            "max": 21869101056.0,
+            "mean": 21799434302.060608,
+            "stdev": 18766629.670707773
+          }
+        },
+        "python": {
+          "tasks": 7,
+          "runs": 21,
+          "passed": 21,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 21,
+            "task_clusters": 7,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 8699888840037685126,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 21,
+            "min": 16.67200000002049,
+            "p50": 17.46799999999348,
+            "p90": 24.469000000040978,
+            "p95": 24.54699999996228,
+            "max": 35.5010000000475,
+            "mean": 19.68466666668454,
+            "stdev": 4.417910052655825
+          },
+          "end_to_end_seconds_ci": {
+            "count": 21,
+            "task_clusters": 7,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 12744725971183078119,
+            "estimate": 17.46799999999348,
+            "lower": 16.9210000000312,
+            "upper": 21.875000000058208
+          },
+          "startup_seconds": {
+            "count": 21,
+            "min": 7.937,
+            "p50": 7.984,
+            "p90": 8.0,
+            "p95": 8.015,
+            "max": 8.031,
+            "mean": 7.979952380952382,
+            "stdev": 0.023245378444921454
+          },
+          "agent_seconds": {
+            "count": 21,
+            "min": 8.65699999998277,
+            "p50": 9.404999999955763,
+            "p90": 16.39100000000326,
+            "p95": 16.53199999998603,
+            "max": 27.42200000002049,
+            "mean": 11.625714285716237,
+            "stdev": 4.417382722192894
+          },
+          "verification_seconds": {
+            "count": 21,
+            "min": 0.061999999976251274,
+            "p50": 0.07800000003771856,
+            "p90": 0.07900000002700835,
+            "p95": 0.09399999998277053,
+            "max": 0.0940000000409782,
+            "mean": 0.07900000001592118,
+            "stdev": 0.006131883891274004
+          },
+          "prompt_tokens": {
+            "count": 21,
+            "min": 18329.0,
+            "p50": 22467.0,
+            "p90": 39048.0,
+            "p95": 39074.0,
+            "max": 67772.0,
+            "mean": 28771.85714285714,
+            "stdev": 12798.74946737264
+          },
+          "prefill_tokens": {
+            "count": 21,
+            "min": 6410.0,
+            "p50": 7395.0,
+            "p90": 13351.0,
+            "p95": 13373.0,
+            "max": 23317.0,
+            "mean": 9691.857142857143,
+            "stdev": 4197.274357076439
+          },
+          "cached_tokens": {
+            "count": 21,
+            "min": 11874.0,
+            "p50": 15072.0,
+            "p90": 26219.0,
+            "p95": 26225.0,
+            "max": 44455.0,
+            "mean": 19080.0,
+            "stdev": 8632.798514966047
+          },
+          "generated_tokens": {
+            "count": 21,
+            "min": 513.0,
+            "p50": 699.0,
+            "p90": 1340.0,
+            "p95": 1364.0,
+            "max": 2303.0,
+            "mean": 820.9047619047619,
+            "stdev": 410.198842607083
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 21,
+            "min": 19066884096.0,
+            "p50": 19087110144.0,
+            "p90": 19093323776.0,
+            "p95": 19094220800.0,
+            "max": 19094712320.0,
+            "mean": 19085177027.04762,
+            "stdev": 8391135.466859289
+          },
+          "peak_gpu_used_bytes": {
+            "count": 21,
+            "min": 21789409280.0,
+            "p50": 21799895040.0,
+            "p90": 21811429376.0,
+            "p95": 21814575104.0,
+            "max": 21868052480.0,
+            "mean": 21802641310.47619,
+            "stdev": 16144243.973610928
+          }
+        }
+      },
+      "per_category": {
+        "algorithm": {
+          "tasks": 1,
+          "runs": 3,
+          "passed": 3,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 7563254755917034738,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 3,
+            "min": 17.43800000002375,
+            "p50": 17.46799999999348,
+            "p90": 17.494400000036695,
+            "p95": 17.497700000042094,
+            "max": 17.501000000047497,
+            "mean": 17.469000000021577,
+            "stdev": 0.031511902525716014
+          },
+          "end_to_end_seconds_ci": {
+            "count": 3,
+            "task_clusters": 1,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 3630912074956611388,
+            "estimate": 17.46799999999348,
+            "lower": 17.46799999999348,
+            "upper": 17.46799999999348
+          },
+          "startup_seconds": {
+            "count": 3,
+            "min": 7.969,
+            "p50": 7.984,
+            "p90": 7.9848,
+            "p95": 7.9849000000000006,
+            "max": 7.985,
+            "mean": 7.979333333333334,
+            "stdev": 0.008962886439832422
+          },
+          "agent_seconds": {
+            "count": 3,
+            "min": 9.360000000040978,
+            "p50": 9.404999999955763,
+            "p90": 9.443400000007543,
+            "p95": 9.448200000014015,
+            "max": 9.453000000020488,
+            "mean": 9.406000000005742,
+            "stdev": 0.04650806380749656
+          },
+          "verification_seconds": {
+            "count": 3,
+            "min": 0.07800000003771856,
+            "p50": 0.07900000002700835,
+            "p90": 0.09099999999161809,
+            "p95": 0.09249999998719431,
+            "max": 0.09399999998277053,
+            "mean": 0.08366666668249916,
+            "stdev": 0.00896288641094586
+          },
+          "prompt_tokens": {
+            "count": 3,
+            "min": 18531.0,
+            "p50": 18531.0,
+            "p90": 18531.0,
+            "p95": 18531.0,
+            "max": 18531.0,
+            "mean": 18531.0,
+            "stdev": 0.0
+          },
+          "prefill_tokens": {
+            "count": 3,
+            "min": 6649.0,
+            "p50": 6649.0,
+            "p90": 6649.0,
+            "p95": 6649.0,
+            "max": 6649.0,
+            "mean": 6649.0,
+            "stdev": 0.0
+          },
+          "cached_tokens": {
+            "count": 3,
+            "min": 11882.0,
+            "p50": 11882.0,
+            "p90": 11882.0,
+            "p95": 11882.0,
+            "max": 11882.0,
+            "mean": 11882.0,
+            "stdev": 0.0
+          },
+          "generated_tokens": {
+            "count": 3,
+            "min": 714.0,
+            "p50": 714.0,
+            "p90": 714.0,
+            "p95": 714.0,
+            "max": 714.0,
+            "mean": 714.0,
+            "stdev": 0.0
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 3,
+            "min": 19066884096.0,
+            "p50": 19085193216.0,
+            "p90": 19086726758.4,
+            "p95": 19086918451.2,
+            "max": 19087110144.0,
+            "mean": 19079729152.0,
+            "stdev": 11165359.419725278
+          },
+          "peak_gpu_used_bytes": {
+            "count": 3,
+            "min": 21797797888.0,
+            "p50": 21800943616.0,
+            "p90": 21801782476.8,
+            "p95": 21801887334.4,
+            "max": 21801992192.0,
+            "mean": 21800244565.333332,
+            "stdev": 2182785.0070561995
+          }
+        },
+        "api": {
+          "tasks": 2,
+          "runs": 6,
+          "passed": 6,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 6,
+            "task_clusters": 2,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 16752156425630114136,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 6,
+            "min": 23.65600000001723,
+            "p50": 24.437500000029104,
+            "p90": 30.02400000000489,
+            "p95": 32.76250000002619,
+            "max": 35.5010000000475,
+            "mean": 26.039333333348623,
+            "stdev": 4.652734880348257
+          },
+          "end_to_end_seconds_ci": {
+            "count": 6,
+            "task_clusters": 2,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 3033363650898231555,
+            "estimate": 24.437500000029104,
+            "lower": 23.65700000000652,
+            "upper": 24.54699999996228
+          },
+          "startup_seconds": {
+            "count": 6,
+            "min": 7.953,
+            "p50": 7.992,
+            "p90": 8.008,
+            "p95": 8.012,
+            "max": 8.016,
+            "mean": 7.984333333333333,
+            "stdev": 0.026295753776354455
+          },
+          "agent_seconds": {
+            "count": 6,
+            "min": 15.468999999979511,
+            "p50": 16.288999999991386,
+            "p90": 21.977000000003258,
+            "p95": 24.699500000011874,
+            "max": 27.42200000002049,
+            "mean": 17.91433333333209,
+            "stdev": 4.679575009203448
+          },
+          "verification_seconds": {
+            "count": 6,
+            "min": 0.061999999976251274,
+            "p50": 0.14100000003236346,
+            "p90": 0.21100000001024455,
+            "p95": 0.21499999999650754,
+            "max": 0.21899999998277053,
+            "mean": 0.14066666668319763,
+            "stdev": 0.0745993744420375
+          },
+          "prompt_tokens": {
+            "count": 6,
+            "min": 25448.0,
+            "p50": 32248.0,
+            "p90": 53423.0,
+            "p95": 60597.5,
+            "max": 67772.0,
+            "mean": 37039.666666666664,
+            "stdev": 16466.62342639397
+          },
+          "prefill_tokens": {
+            "count": 6,
+            "min": 9447.0,
+            "p50": 11399.0,
+            "p90": 18345.0,
+            "p95": 20831.0,
+            "max": 23317.0,
+            "mean": 13063.666666666666,
+            "stdev": 5376.80063482613
+          },
+          "cached_tokens": {
+            "count": 6,
+            "min": 16001.0,
+            "p50": 20849.0,
+            "p90": 35078.0,
+            "p95": 39766.5,
+            "max": 44455.0,
+            "mean": 23976.0,
+            "stdev": 11100.709725058123
+          },
+          "generated_tokens": {
+            "count": 6,
+            "min": 869.0,
+            "p50": 1169.5,
+            "p90": 1833.5,
+            "p95": 2068.25,
+            "max": 2303.0,
+            "mean": 1293.1666666666667,
+            "stdev": 540.526194246557
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 6,
+            "min": 19072274432.0,
+            "p50": 19121391616.0,
+            "p90": 19214366720.0,
+            "p95": 19236557824.0,
+            "max": 19258748928.0,
+            "mean": 19139018752.0,
+            "stdev": 70207821.18379562
+          },
+          "peak_gpu_used_bytes": {
+            "count": 6,
+            "min": 21749563392.0,
+            "p50": 21796225024.0,
+            "p90": 21798322176.0,
+            "p95": 21798584320.0,
+            "max": 21798846464.0,
+            "mean": 21788535466.666668,
+            "stdev": 19236916.68438082
+          }
+        },
+        "compiler-failure": {
+          "tasks": 2,
+          "runs": 6,
+          "passed": 6,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 6,
+            "task_clusters": 2,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 386178049792222300,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 6,
+            "min": 18.014999999955762,
+            "p50": 19.82050000000163,
+            "p90": 21.90600000001723,
+            "p95": 21.92149999999674,
+            "max": 21.93699999997625,
+            "mean": 19.916499999992084,
+            "stdev": 2.073878082261307
+          },
+          "end_to_end_seconds_ci": {
+            "count": 6,
+            "task_clusters": 2,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 772480201375016104,
+            "estimate": 19.82050000000163,
+            "lower": 18.030999999959022,
+            "upper": 21.875000000058208
+          },
+          "startup_seconds": {
+            "count": 6,
+            "min": 7.953,
+            "p50": 7.969,
+            "p90": 7.9925,
+            "p95": 7.99625,
+            "max": 8.0,
+            "mean": 7.9715,
+            "stdev": 0.020992855927672086
+          },
+          "agent_seconds": {
+            "count": 6,
+            "min": 9.858999999982771,
+            "p50": 11.750000000008615,
+            "p90": 13.851500000008615,
+            "p95": 13.878750000002679,
+            "max": 13.905999999996741,
+            "mean": 11.825333333336205,
+            "stdev": 2.1224110503636524
+          },
+          "verification_seconds": {
+            "count": 6,
+            "min": 0.0779999999795109,
+            "p50": 0.11699999999837019,
+            "p90": 0.16399999998975545,
+            "p95": 0.16749999998137355,
+            "max": 0.17099999997299165,
+            "mean": 0.11966666665587884,
+            "stdev": 0.04595069820653683
+          },
+          "prompt_tokens": {
+            "count": 6,
+            "min": 18448.0,
+            "p50": 28703.0,
+            "p90": 38974.0,
+            "p95": 38978.0,
+            "max": 38982.0,
+            "mean": 28708.333333333332,
+            "stdev": 11239.634685641107
+          },
+          "prefill_tokens": {
+            "count": 6,
+            "min": 6686.0,
+            "p50": 9714.0,
+            "p90": 12752.0,
+            "p95": 12754.5,
+            "max": 12757.0,
+            "mean": 9717.333333333334,
+            "stdev": 3320.662805324664
+          },
+          "cached_tokens": {
+            "count": 6,
+            "min": 11762.0,
+            "p50": 18989.0,
+            "p90": 26222.0,
+            "p95": 26223.5,
+            "max": 26225.0,
+            "mean": 18991.0,
+            "stdev": 7918.973266781496
+          },
+          "generated_tokens": {
+            "count": 6,
+            "min": 411.0,
+            "p50": 646.5,
+            "p90": 906.0,
+            "p95": 906.0,
+            "max": 906.0,
+            "mean": 654.6666666666666,
+            "stdev": 263.9103383095605
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 6,
+            "min": 19086917632.0,
+            "p50": 19126542336.0,
+            "p90": 19194918912.0,
+            "p95": 19195853824.0,
+            "max": 19196788736.0,
+            "mean": 19136692906.666668,
+            "stdev": 53056163.942681976
+          },
+          "peak_gpu_used_bytes": {
+            "count": 6,
+            "min": 21791506432.0,
+            "p50": 21800943616.0,
+            "p90": 21838168064.0,
+            "p95": 21853110272.0,
+            "max": 21868052480.0,
+            "mean": 21811429376.0,
+            "stdev": 28253237.72181475
+          }
+        },
+        "exploration": {
+          "tasks": 2,
+          "runs": 6,
+          "passed": 6,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 6,
+            "task_clusters": 2,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 17862884734371835084,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 6,
+            "min": 16.84399999998277,
+            "p50": 20.937500000029104,
+            "p90": 28.070500000030734,
+            "p95": 28.269750000035856,
+            "max": 28.469000000040978,
+            "mean": 21.9586666666922,
+            "stdev": 5.677879662933734
+          },
+          "end_to_end_seconds_ci": {
+            "count": 6,
+            "task_clusters": 2,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 13210199675394801674,
+            "estimate": 20.937500000029104,
+            "lower": 16.892000000050757,
+            "upper": 27.67200000002049
+          },
+          "startup_seconds": {
+            "count": 6,
+            "min": 7.969,
+            "p50": 7.984500000000001,
+            "p90": 8.0075,
+            "p95": 8.01125,
+            "max": 8.015,
+            "mean": 7.987000000000001,
+            "stdev": 0.017966635745180613
+          },
+          "agent_seconds": {
+            "count": 6,
+            "min": 8.797000000003258,
+            "p50": 12.8355,
+            "p90": 19.930000000020488,
+            "p95": 20.137000000029104,
+            "max": 20.344000000037717,
+            "mean": 13.854333333344664,
+            "stdev": 5.643926387434795
+          },
+          "verification_seconds": {
+            "count": 6,
+            "min": 0.0779999999795109,
+            "p50": 0.11750000002211891,
+            "p90": 0.15600000001722947,
+            "p95": 0.15600000001722947,
+            "max": 0.15600000001722947,
+            "mean": 0.117333333347536,
+            "stdev": 0.037712950915517865
+          },
+          "prompt_tokens": {
+            "count": 6,
+            "min": 18329.0,
+            "p50": 26502.0,
+            "p90": 48100.0,
+            "p95": 48100.0,
+            "max": 48100.0,
+            "mean": 30977.0,
+            "stdev": 14696.837578200284
+          },
+          "prefill_tokens": {
+            "count": 6,
+            "min": 6410.0,
+            "p50": 9234.0,
+            "p90": 17327.0,
+            "p95": 17327.0,
+            "max": 17327.0,
+            "mean": 10990.333333333334,
+            "stdev": 5373.7316891213195
+          },
+          "cached_tokens": {
+            "count": 6,
+            "min": 11919.0,
+            "p50": 17268.0,
+            "p90": 30773.0,
+            "p95": 30773.0,
+            "max": 30773.0,
+            "mean": 19986.666666666668,
+            "stdev": 9325.989098571083
+          },
+          "generated_tokens": {
+            "count": 6,
+            "min": 620.0,
+            "p50": 828.5,
+            "p90": 1182.5,
+            "p95": 1215.25,
+            "max": 1248.0,
+            "mean": 877.0,
+            "stdev": 289.4781511617069
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 6,
+            "min": 19077480448.0,
+            "p50": 19145375744.0,
+            "p90": 19213946880.0,
+            "p95": 19214073856.0,
+            "max": 19214200832.0,
+            "mean": 19146957482.666668,
+            "stdev": 70251293.93651745
+          },
+          "peak_gpu_used_bytes": {
+            "count": 6,
+            "min": 21791506432.0,
+            "p50": 21799370752.0,
+            "p90": 21816147968.0,
+            "p95": 21816934400.0,
+            "max": 21817720832.0,
+            "mean": 21803215530.666668,
+            "stdev": 10515427.683488345
+          }
+        },
+        "multi-file": {
+          "tasks": 4,
+          "runs": 12,
+          "passed": 12,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 12,
+            "task_clusters": 4,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 7470487913977942821,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 12,
+            "min": 17.35899999999674,
+            "p50": 20.727000000042608,
+            "p90": 25.91990000003716,
+            "p95": 26.007650000037394,
+            "max": 26.094000000040978,
+            "mean": 21.20050000001599,
+            "stdev": 3.366490011877783
+          },
+          "end_to_end_seconds_ci": {
+            "count": 12,
+            "task_clusters": 4,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 4170870477620775973,
+            "estimate": 20.727000000042608,
+            "lower": 17.390500000008615,
+            "upper": 25.851500000047963
+          },
+          "startup_seconds": {
+            "count": 12,
+            "min": 7.969,
+            "p50": 7.985,
+            "p90": 8.0135,
+            "p95": 8.015,
+            "max": 8.015,
+            "mean": 7.989666666666667,
+            "stdev": 0.016466678935095447
+          },
+          "agent_seconds": {
+            "count": 12,
+            "min": 9.295999999959022,
+            "p50": 12.602000000040977,
+            "p90": 17.75040000001993,
+            "p95": 17.842950000018696,
+            "max": 17.93700000002049,
+            "mean": 13.08850000000683,
+            "stdev": 3.318996439245243
+          },
+          "verification_seconds": {
+            "count": 12,
+            "min": 0.0779999999795109,
+            "p50": 0.11749999999301508,
+            "p90": 0.1720000000204891,
+            "p95": 0.17875000000058205,
+            "max": 0.18699999997625127,
+            "mean": 0.12233333334249134,
+            "stdev": 0.0469241812622779
+          },
+          "prompt_tokens": {
+            "count": 12,
+            "min": 18517.0,
+            "p50": 34318.0,
+            "p90": 43333.0,
+            "p95": 43333.0,
+            "max": 43333.0,
+            "mean": 32621.5,
+            "stdev": 9412.010784099219
+          },
+          "prefill_tokens": {
+            "count": 12,
+            "min": 6643.0,
+            "p50": 11045.0,
+            "p90": 14794.0,
+            "p95": 14794.0,
+            "max": 14794.0,
+            "mean": 10881.75,
+            "stdev": 3021.4673173807455
+          },
+          "cached_tokens": {
+            "count": 12,
+            "min": 11874.0,
+            "p50": 23273.0,
+            "p90": 28539.0,
+            "p95": 28539.0,
+            "max": 28539.0,
+            "mean": 21739.75,
+            "stdev": 6438.79273163138
+          },
+          "generated_tokens": {
+            "count": 12,
+            "min": 636.0,
+            "p50": 734.5,
+            "p90": 1080.4,
+            "p95": 1081.45,
+            "max": 1082.0,
+            "mean": 798.1666666666666,
+            "stdev": 177.6149222505266
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 12,
+            "min": 19071266816.0,
+            "p50": 19101974528.0,
+            "p90": 19167053824.0,
+            "p95": 19188764876.8,
+            "max": 19210186752.0,
+            "mean": 19112453461.333332,
+            "stdev": 41482226.46799746
+          },
+          "peak_gpu_used_bytes": {
+            "count": 12,
+            "min": 21789409280.0,
+            "p50": 21801467904.0,
+            "p90": 21811114803.2,
+            "p95": 21836909772.8,
+            "max": 21868052480.0,
+            "mean": 21806536021.333332,
+            "stdev": 20388281.74142387
+          }
+        },
+        "refactor": {
+          "tasks": 2,
+          "runs": 6,
+          "passed": 6,
+          "pass_rate": 1.0,
+          "pass_rate_ci": {
+            "count": 6,
+            "task_clusters": 2,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 674676628492701102,
+            "estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0
+          },
+          "failures": [],
+          "end_to_end_seconds": {
+            "count": 6,
+            "min": 16.67200000002049,
+            "p50": 18.45250000001397,
+            "p90": 20.022999999957392,
+            "p95": 20.026499999963562,
+            "max": 20.029999999969732,
+            "mean": 18.390499999998912,
+            "stdev": 1.7761022211262778
+          },
+          "end_to_end_seconds_ci": {
+            "count": 6,
+            "task_clusters": 2,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 11782250963294930211,
+            "estimate": 18.45250000001397,
+            "lower": 16.720000000030268,
+            "upper": 20.015999999945052
+          },
+          "startup_seconds": {
+            "count": 6,
+            "min": 7.937,
+            "p50": 7.961,
+            "p90": 8.0235,
+            "p95": 8.02725,
+            "max": 8.031,
+            "mean": 7.976500000000001,
+            "stdev": 0.03808280451857508
+          },
+          "agent_seconds": {
+            "count": 6,
+            "min": 8.65699999998277,
+            "p50": 10.319999999988125,
+            "p90": 11.874499999986496,
+            "p95": 11.890249999991617,
+            "max": 11.905999999996741,
+            "mean": 10.288999999989212,
+            "stdev": 1.720830032276731
+          },
+          "verification_seconds": {
+            "count": 6,
+            "min": 0.07800000003771856,
+            "p50": 0.125,
+            "p90": 0.17199999999138527,
+            "p95": 0.17200000000593718,
+            "max": 0.1720000000204891,
+            "mean": 0.12500000000970127,
+            "stdev": 0.05112338014317872
+          },
+          "prompt_tokens": {
+            "count": 6,
+            "min": 22467.0,
+            "p50": 24745.0,
+            "p90": 27023.0,
+            "p95": 27023.0,
+            "max": 27023.0,
+            "mean": 24745.0,
+            "stdev": 2495.4239719935367
+          },
+          "prefill_tokens": {
+            "count": 6,
+            "min": 7395.0,
+            "p50": 8010.0,
+            "p90": 8625.0,
+            "p95": 8625.0,
+            "max": 8625.0,
+            "mean": 8010.0,
+            "stdev": 673.6987457313543
+          },
+          "cached_tokens": {
+            "count": 6,
+            "min": 15072.0,
+            "p50": 16735.0,
+            "p90": 18398.0,
+            "p95": 18398.0,
+            "max": 18398.0,
+            "mean": 16735.0,
+            "stdev": 1821.7252262621826
+          },
+          "generated_tokens": {
+            "count": 6,
+            "min": 513.0,
+            "p50": 551.5,
+            "p90": 595.0,
+            "p95": 597.5,
+            "max": 600.0,
+            "mean": 553.1666666666666,
+            "stdev": 44.151632661393926
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 6,
+            "min": 19090882560.0,
+            "p50": 19135508480.0,
+            "p90": 19207440384.0,
+            "p95": 19209505792.0,
+            "max": 19211571200.0,
+            "mean": 19145017344.0,
+            "stdev": 58344461.54921302
+          },
+          "peak_gpu_used_bytes": {
+            "count": 6,
+            "min": 21789409280.0,
+            "p50": 21795700736.0,
+            "p90": 21808283648.0,
+            "p95": 21813002240.0,
+            "max": 21817720832.0,
+            "mean": 21798322176.0,
+            "stdev": 10052120.10436676
+          }
+        },
+        "repair": {
+          "tasks": 16,
+          "runs": 48,
+          "passed": 45,
+          "pass_rate": 0.9375,
+          "pass_rate_ci": {
+            "count": 48,
+            "task_clusters": 16,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 16582908491671585909,
+            "estimate": 0.9375,
+            "lower": 0.8125,
+            "upper": 1.0
+          },
+          "failures": [
+            "reasoning_atomic_transfers-optimized-r001",
+            "reasoning_atomic_transfers-optimized-r003",
+            "reasoning_atomic_transfers-optimized-r002"
+          ],
+          "end_to_end_seconds": {
+            "count": 48,
+            "min": 17.15600000001723,
+            "p50": 19.14849999998114,
+            "p90": 40.91429999997488,
+            "p95": 55.486799999975474,
+            "max": 66.85900000005495,
+            "mean": 25.31287500000447,
+            "stdev": 12.290165043340792
+          },
+          "end_to_end_seconds_ci": {
+            "count": 48,
+            "task_clusters": 16,
+            "level": 0.95,
+            "method": "task_cluster_percentile_bootstrap",
+            "iterations": 20000,
+            "seed": 15368790779885815580,
+            "estimate": 19.14849999998114,
+            "lower": 17.67200000002049,
+            "upper": 26.98499999998603
+          },
+          "startup_seconds": {
+            "count": 48,
+            "min": 7.938,
+            "p50": 7.969,
+            "p90": 8.0045,
+            "p95": 8.01565,
+            "max": 8.047,
+            "mean": 7.978437500000001,
+            "stdev": 0.023538023787688427
+          },
+          "agent_seconds": {
+            "count": 48,
+            "min": 9.01599999999674,
+            "p50": 11.023999999991386,
+            "p90": 32.48429999998079,
+            "p95": 47.04194999999494,
+            "max": 58.329000000020486,
+            "mean": 17.13681249999771,
+            "stdev": 12.201797782881552
+          },
+          "verification_seconds": {
+            "count": 48,
+            "min": 0.14100000000325963,
+            "p50": 0.15700000000651926,
+            "p90": 0.1720000000204891,
+            "p95": 0.5828000000008614,
+            "max": 0.6559999999590218,
+            "mean": 0.19762500000676178,
+            "stdev": 0.12369946850807906
+          },
+          "prompt_tokens": {
+            "count": 48,
+            "min": 14243.0,
+            "p50": 21198.5,
+            "p90": 84915.39999999998,
+            "p95": 107194.54999999997,
+            "max": 120567.0,
+            "mean": 35079.8125,
+            "stdev": 29598.633163996976
+          },
+          "prefill_tokens": {
+            "count": 48,
+            "min": 5478.0,
+            "p50": 7337.5,
+            "p90": 37250.79999999999,
+            "p95": 47464.899999999994,
+            "max": 49952.0,
+            "mean": 13910.083333333334,
+            "stdev": 13005.535071789476
+          },
+          "cached_tokens": {
+            "count": 48,
+            "min": 8765.0,
+            "p50": 13654.5,
+            "p90": 47208.899999999994,
+            "p95": 59784.84999999998,
+            "max": 71770.0,
+            "mean": 21169.729166666668,
+            "stdev": 16733.58432021318
+          },
+          "generated_tokens": {
+            "count": 48,
+            "min": 350.0,
+            "p50": 571.5,
+            "p90": 1859.6999999999982,
+            "p95": 3446.649999999999,
+            "max": 5093.0,
+            "mean": 1018.4166666666666,
+            "stdev": 1031.0133175633125
+          },
+          "peak_process_tree_rss_bytes": {
+            "count": 48,
+            "min": 19100663808.0,
+            "p50": 19191965696.0,
+            "p90": 19212377702.4,
+            "p95": 19220979916.8,
+            "max": 19225608192.0,
+            "mean": 19171671466.666668,
+            "stdev": 41984296.067185104
+          },
+          "peak_gpu_used_bytes": {
+            "count": 48,
+            "min": 21749563392.0,
+            "p50": 21797797888.0,
+            "p90": 21816986828.8,
+            "p95": 21817720832.0,
+            "max": 21869101056.0,
+            "mean": 21798540629.333332,
+            "stdev": 17579277.559377022
+          }
+        }
+      }
+    }
+  },
+  "pairwise_comparisons": {}
+}

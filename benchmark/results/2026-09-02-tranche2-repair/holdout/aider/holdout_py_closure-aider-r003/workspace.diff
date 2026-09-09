@@ -1,0 +1,35 @@
+diff --git a/service.py b/service.py
+index 11d10cb..583d50e 100644
+--- a/service.py
++++ b/service.py
+@@ -1,18 +1,22 @@
+ def requirements(graph, targets):
+-    active, visited = set(), set()
++    visited = set()
++    
+     def visit(node):
+-        if node in active:
+-            raise ValueError('cycle')
+-        if node in visited:
+-            return
+         if node not in graph:
+             raise ValueError('missing job')
+-        active.add(node)
++        
++        if node in visited:
++            return
++            
++        # Mark as being visited (for cycle detection)
++        visited.add(node)
++        
++        # Visit all dependencies
+         for dependency in graph[node]:
+             visit(dependency)
+-        # Keep the traversal history for later visits.
+-        visited.add(node)
++    
+     targets = set(targets)
+     for target in targets:
+         visit(target)
++    
+     return visited - targets

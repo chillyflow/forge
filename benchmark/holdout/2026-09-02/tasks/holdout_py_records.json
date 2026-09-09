@@ -1,0 +1,21 @@
+{
+  "id": "holdout_py_records",
+  "suite": "holdout-2026-09-02",
+  "language": "python",
+  "category": "parser",
+  "prompt": "read_records parses comma-separated records with the standard csv module. Quoted cells may contain commas, line breaks, or doubled quotes. Preserve blank cells and use all physical lines belonging to a quoted record. Return a list of rows. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-v"
+  ],
+  "files": {
+    "service.py": "import csv\nimport io\ndef read_records(text):\n    return list(csv.reader(text.splitlines()))\n",
+    "test_service.py": "import unittest\nfrom service import read_records\nclass Records(unittest.TestCase):\n    def test_embedded_lines(self):\n        self.assertEqual(read_records('id,note\\r\\n1,\"hello\\r\\nworld\"\\r\\n'),\n                         [['id', 'note'], ['1', 'hello\\r\\nworld']])\n    def test_quotes_and_blanks(self):\n        self.assertEqual(read_records('a,\"b,c\",\"d\"\"e\",\\n'), [['a', 'b,c', 'd\"e', '']])\n        self.assertEqual(read_records(''), [])\n        self.assertEqual(read_records('a,b'), [['a', 'b']])\n"
+  },
+  "oracle_files": {
+    "service.py": "import csv\nimport io\ndef read_records(text):\n    return list(csv.reader(io.StringIO(text, newline='')))\n"
+  }
+}

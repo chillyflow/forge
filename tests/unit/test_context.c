@@ -13,6 +13,23 @@ static size_t count_overflow(const char *text, void *user) {
     (void)user;
     return SIZE_MAX;
 }
+static size_t count_complete_prompt(const char *text, void *user) {
+    (void)text;
+    (void)user;
+    return 7;
+}
+static size_t count_template_overhead(const char *text, void *user) {
+    (void)user;
+    return strlen(text) + 200;
+}
+static size_t count_native_messages(const char *text, void *user) {
+    (void)user;
+    yyjson_doc *doc = yyjson_read(text, strlen(text), 0);
+    assert(doc);
+    size_t count = yyjson_arr_size(yyjson_obj_get(yyjson_doc_get_root(doc), "messages"));
+    yyjson_doc_free(doc);
+    return count * 100;
+}
 static forge_segment_view view(const forge_context *c, size_t index) {
     forge_segment_view v = {0};
     assert(forge_context_get(c, index, &v));
@@ -235,13 +252,79 @@ static void put_uint(yyjson_mut_doc *d, yyjson_mut_val *o, const char *key, uint
 static void put_bool(yyjson_mut_doc *d, yyjson_mut_val *o, const char *key, bool value) {
     assert(yyjson_mut_obj_put(o, yyjson_mut_str(d, key), yyjson_mut_bool(d, value)));
 }
+static void test_snapshot_prompt_protocol_roundtrip(void) {
+    char *schemas = fg_tool_native_schema();
+    assert(schemas);
+    forge_context *native = forge_context_create(1000000, 64, count_chars, NULL);
+    assert(native && forge_context_set_prompt_protocol(native, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    assert(forge_context_add(native, FORGE_SEG_SYSTEM, "Native system", 100, true, 0, 0));
+    assert(forge_context_add(native, FORGE_SEG_TOOLS, schemas, 100, true, 0, 0));
+    assert(forge_context_add(native, FORGE_SEG_TASK, "Inspect", 100, true, 0, 0));
+    free(schemas);
+
+    char *prompt = render(native, NULL, NULL);
+    char *json = snapshot(native);
+    yyjson_doc *document = yyjson_read(json, strlen(json), 0);
+    yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
+    assert(root && yyjson_get_uint(yyjson_obj_get(root, "schema_version")) == 2);
+    assert(yyjson_get_uint(yyjson_obj_get(root, "prompt_protocol")) == FORGE_PROMPT_NATIVE);
+    yyjson_doc_free(document);
+
+    forge_error error = {0};
+    forge_context *copy = forge_context_import(json, count_chars, NULL, &error);
+    if (!copy)
+        fprintf(stderr, "native context import: %s\n", error.message);
+    assert(copy);
+    char *copy_prompt = render(copy, NULL, NULL);
+    assert(!strcmp(prompt, copy_prompt));
+    document = yyjson_read(copy_prompt, strlen(copy_prompt), 0);
+    root = document ? yyjson_doc_get_root(document) : NULL;
+    assert(root && !strcmp(fg_json_str(root, "protocol"), "forge-native-v1"));
+    yyjson_doc_free(document);
+    char *copy_json = snapshot(copy);
+    assert(!strcmp(json, copy_json));
+    free(copy_json);
+    free(copy_prompt);
+    free(json);
+    free(prompt);
+    forge_context_destroy(copy);
+    forge_context_destroy(native);
+
+    forge_context *flat = forge_context_create(4096, 64, count_chars, NULL);
+    assert(flat);
+    assert(forge_context_add(flat, FORGE_SEG_SYSTEM, "S", 100, true, 0, 0));
+    assert(forge_context_add(flat, FORGE_SEG_TOOLS, "T", 100, true, 0, 0));
+    assert(forge_context_add(flat, FORGE_SEG_TASK, "U", 100, true, 0, 0));
+    char *flat_prompt = render(flat, NULL, NULL);
+    char *flat_json = snapshot(flat);
+    document = yyjson_read(flat_json, strlen(flat_json), 0);
+    assert(document);
+    root = yyjson_doc_get_root(document);
+    assert(yyjson_get_uint(yyjson_obj_get(root, "schema_version")) == 1);
+    assert(!yyjson_obj_get(root, "prompt_protocol"));
+    yyjson_doc_free(document);
+    char *legacy_json = fg_strdup(flat_json);
+    assert(legacy_json);
+    forge_context *legacy = forge_context_import(legacy_json, count_chars, NULL, &error);
+    if (!legacy)
+        fprintf(stderr, "legacy context import: %s\n", error.message);
+    assert(legacy);
+    char *legacy_prompt = render(legacy, NULL, NULL);
+    assert(!strcmp(flat_prompt, legacy_prompt));
+    free(legacy_prompt);
+    free(legacy_json);
+    free(flat_json);
+    free(flat_prompt);
+    forge_context_destroy(legacy);
+    forge_context_destroy(flat);
+}
 static void test_reject_invalid_snapshots(void) {
     uint64_t memory;
     forge_context *c = snapshot_fixture(&memory);
     char *prompt = render(c, NULL, NULL);
     free(prompt);
     char *json = snapshot(c);
-    for (unsigned corruption = 0; corruption < 19; corruption++) {
+    for (unsigned corruption = 0; corruption < 20; corruption++) {
         yyjson_doc *read = yyjson_read(json, strlen(json), 0);
         assert(read);
         yyjson_mut_doc *d = yyjson_doc_mut_copy(read, NULL);
@@ -254,7 +337,7 @@ static void test_reject_invalid_snapshots(void) {
         yyjson_mut_val *result = yyjson_mut_arr_get(items, 7);
         switch (corruption) {
         case 0:
-            put_uint(d, root, "schema_version", 2);
+            put_uint(d, root, "schema_version", 3);
             break;
         case 1:
             put_uint(d, root, "reserve", 360);
@@ -310,6 +393,9 @@ static void test_reject_invalid_snapshots(void) {
             break;
         case 18:
             put_uint(d, first, "version", 0);
+            break;
+        case 19:
+            put_uint(d, root, "prompt_protocol", FORGE_PROMPT_NATIVE + 1);
             break;
         }
         char *invalid = yyjson_mut_write(d, 0, NULL);
@@ -475,6 +561,178 @@ static void test_stable_cache_anchor(void) {
     free(prompt);
     forge_context_destroy(c);
 }
+
+static void test_flattened_bytes_and_native_role_pairs(void) {
+    forge_error error = {0};
+    forge_context *flat = forge_context_create(4096, 64, count_chars, NULL);
+    assert(flat);
+    assert(forge_context_add(flat, FORGE_SEG_SYSTEM, "S", 100, true, 0, 0));
+    assert(forge_context_add(flat, FORGE_SEG_TOOLS, "T", 100, true, 0, 0));
+    assert(forge_context_add(flat, FORGE_SEG_TASK, "U", 100, true, 0, 0));
+    assert(forge_context_set_prompt_counter(NULL, count_complete_prompt) == FORGE_ERR_ARGUMENT);
+    assert(forge_context_set_prompt_counter(flat, NULL) == FORGE_ERR_ARGUMENT);
+    assert(forge_context_set_prompt_counter(flat, count_complete_prompt) == FORGE_OK);
+    size_t prompt_tokens = 0;
+    char *prompt = render(flat, &prompt_tokens, NULL);
+    assert(prompt_tokens == 7);
+    assert(!strcmp(prompt, "\n[SYSTEM]\nS\n\n[TOOLS]\nT\n\n[TASK]\nU\n"));
+    free(prompt);
+    assert(forge_context_set_prompt_protocol(flat, FORGE_PROMPT_FLATTENED) == FORGE_OK);
+    prompt = render(flat, NULL, NULL);
+    assert(!strcmp(prompt, "\n[SYSTEM]\nS\n\n[TOOLS]\nT\n\n[TASK]\nU\n"));
+    free(prompt);
+    assert(forge_context_set_prompt_protocol(flat, (forge_prompt_protocol)99) ==
+           FORGE_ERR_ARGUMENT);
+    forge_context_destroy(flat);
+
+    char *schemas = fg_tool_native_schema();
+    assert(schemas);
+    forge_context *native = forge_context_create(1000000, 64, count_chars, NULL);
+    assert(native && forge_context_set_prompt_protocol(native, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    uint64_t system = forge_context_add(native, FORGE_SEG_SYSTEM, "Native system", 100, true, 0, 0);
+    uint64_t tools = forge_context_add(native, FORGE_SEG_TOOLS, schemas, 100, true, 0, 0);
+    uint64_t task = forge_context_add(native, FORGE_SEG_TASK, "Inspect", 100, true, 0, 0);
+    free(schemas);
+    assert(system && tools && task);
+    assert(forge_context_set_flags(native, system, true, true) == FORGE_OK);
+    assert(forge_context_set_flags(native, tools, true, true) == FORGE_OK);
+    uint64_t action =
+        forge_context_add(native, FORGE_SEG_ACTION,
+                          "{\"thought\":\"inspect first\",\"tool\":\"read_file\",\"args\":{"
+                          "\"path\":\"calc.go\",\"start\":1,\"end\":2}}",
+                          80, false, 0, 1);
+    uint64_t result = forge_context_add(native, FORGE_SEG_RESULT, "file text", 90, true, action, 1);
+    uint64_t rejected_final =
+        forge_context_add(native, FORGE_SEG_ACTION,
+                          "{\"thought\":\"too soon\",\"final\":\"premature\"}", 80, false, 0, 1);
+    uint64_t rejection = forge_context_add(
+        native, FORGE_SEG_RESULT, "validation rejected the final", 95, true, rejected_final, 1);
+    assert(action && result && rejected_final && rejection);
+    prompt = render(native, NULL, NULL);
+    yyjson_doc *document = yyjson_read(prompt, strlen(prompt), 0);
+    yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
+    assert(root && !strcmp(fg_json_str(root, "protocol"), "forge-native-v1"));
+    assert(yyjson_is_arr(yyjson_obj_get(root, "tools")));
+    assert(yyjson_get_uint(yyjson_obj_get(root, "anchor_message_count")) == 1);
+    yyjson_val *messages = yyjson_obj_get(root, "messages");
+    assert(yyjson_is_arr(messages) && yyjson_arr_size(messages) == 6);
+    const char *roles[] = {"system", "user", "assistant", "tool", "assistant", "tool"};
+    for (size_t i = 0; i < sizeof(roles) / sizeof(*roles); i++)
+        assert(!strcmp(fg_json_str(yyjson_arr_get(messages, i), "role"), roles[i]));
+    yyjson_val *first_call =
+        yyjson_arr_get(yyjson_obj_get(yyjson_arr_get(messages, 2), "tool_calls"), 0);
+    yyjson_val *first_function = yyjson_obj_get(first_call, "function");
+    assert(!strcmp(fg_json_str(first_function, "name"), "read_file"));
+    assert(!strcmp(fg_json_str(yyjson_arr_get(messages, 2), "reasoning_content"), "inspect first"));
+    const char *first_id = fg_json_str(first_call, "id");
+    assert(first_id && strlen(first_id) == 9 && first_id[0] == 'f' &&
+           !strcmp(first_id, fg_json_str(yyjson_arr_get(messages, 3), "tool_call_id")));
+    yyjson_val *final_call =
+        yyjson_arr_get(yyjson_obj_get(yyjson_arr_get(messages, 4), "tool_calls"), 0);
+    yyjson_val *final_function = yyjson_obj_get(final_call, "function");
+    assert(!strcmp(fg_json_str(final_function, "name"), "final"));
+    assert(
+        !strcmp(fg_json_str(yyjson_obj_get(final_function, "arguments"), "answer"), "premature"));
+    assert(!strcmp(fg_json_str(final_call, "id"),
+                   fg_json_str(yyjson_arr_get(messages, 5), "tool_call_id")));
+    size_t anchor = 0;
+    assert(forge_context_cache_anchor(native, prompt, &anchor, &error) == FORGE_OK && anchor);
+    assert(anchor < strlen(prompt));
+    yyjson_doc_free(document);
+    free(prompt);
+    forge_context_destroy(native);
+
+    schemas = fg_tool_native_schema();
+    assert(schemas);
+    native = forge_context_create(1000000, 64, count_chars, NULL);
+    assert(native && forge_context_set_prompt_protocol(native, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    assert(forge_context_add(native, FORGE_SEG_SYSTEM, "Uncached", 100, true, 0, 0));
+    assert(forge_context_add(native, FORGE_SEG_TOOLS, schemas, 100, true, 0, 0));
+    assert(forge_context_add(native, FORGE_SEG_TASK, "Task", 100, true, 0, 0));
+    free(schemas);
+    prompt = render(native, NULL, NULL);
+    document = yyjson_read(prompt, strlen(prompt), 0);
+    root = document ? yyjson_doc_get_root(document) : NULL;
+    assert(root && yyjson_get_uint(yyjson_obj_get(root, "anchor_message_count")) == 0);
+    anchor = SIZE_MAX;
+    assert(forge_context_cache_anchor(native, prompt, &anchor, &error) == FORGE_OK && !anchor);
+    yyjson_doc_free(document);
+    free(prompt);
+    forge_context_destroy(native);
+}
+
+static void test_native_rejects_ambiguous_result_pairing(void) {
+    char *schemas = fg_tool_native_schema();
+    assert(schemas);
+    forge_context *native = forge_context_create(1000000, 64, count_chars, NULL);
+    assert(native && forge_context_set_prompt_protocol(native, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    assert(forge_context_add(native, FORGE_SEG_SYSTEM, "Native system", 100, true, 0, 0));
+    assert(forge_context_add(native, FORGE_SEG_TOOLS, schemas, 100, true, 0, 0));
+    assert(forge_context_add(native, FORGE_SEG_TASK, "Inspect", 100, true, 0, 0));
+    free(schemas);
+
+    uint64_t first = forge_context_add(
+        native, FORGE_SEG_ACTION, "{\"thought\":\"first\",\"final\":\"first\"}", 80, false, 0, 1);
+    uint64_t second = forge_context_add(
+        native, FORGE_SEG_ACTION, "{\"thought\":\"second\",\"final\":\"second\"}", 80, false, 0, 1);
+    uint64_t result = forge_context_add(native, FORGE_SEG_RESULT, "ambiguous", 90, true, first, 1);
+    assert(first && second && result);
+    assert(forge_context_add_dependency(native, result, second) == FORGE_OK);
+
+    forge_error error = {0};
+    char *prompt = forge_context_plan(native, NULL, NULL, &error);
+    assert(!prompt);
+    forge_context_destroy(native);
+}
+
+static void test_rendered_budget_compaction(void) {
+    forge_context *c = forge_context_create(301, 1, count_chars, NULL);
+    assert(c && forge_context_set_prompt_counter(c, count_template_overhead) == FORGE_OK);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "goal", 100, true, 0, 0));
+    uint64_t shared = forge_context_add(c, FORGE_SEG_SOURCE, "shared", 0, false, 0, 0);
+    assert(shared);
+    assert(forge_context_add(c, FORGE_SEG_SOURCE, "keep", 100, false, shared, 0));
+    assert(forge_context_add(c, FORGE_SEG_SOURCE,
+                             "drop: optional evidence with enough text to exhaust the rendered "
+                             "budget while the estimates still allow the whole dependency graph",
+                             0, false, shared, 0));
+    size_t tokens = 0, evicted = 0;
+    char *prompt = render(c, &tokens, &evicted);
+    assert(tokens == strlen(prompt) + 200 && tokens <= 300 && evicted == 1);
+    assert(view(c, 0).selected && view(c, 1).selected && view(c, 2).selected);
+    assert(!view(c, 3).selected && !strstr(prompt, "drop:"));
+    free(prompt);
+    forge_context_pin(c, view(c, 3).id, true);
+    forge_error error = {0};
+    assert(!forge_context_plan(c, &tokens, &evicted, &error));
+    assert(error.code == FORGE_ERR_LIMIT && !tokens && !evicted);
+    for (size_t i = 0; i < forge_context_size(c); i++)
+        assert(!view(c, i).selected);
+    forge_context_destroy(c);
+
+    c = forge_context_create(501, 1, count_chars, NULL);
+    assert(c && forge_context_set_prompt_protocol(c, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    assert(forge_context_set_prompt_counter(c, count_native_messages) == FORGE_OK);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "goal", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TOOLS, "[]", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TASK, "task", 100, true, 0, 0));
+    uint64_t action = forge_context_add(c, FORGE_SEG_ACTION,
+                                        "{\"tool\":\"read_file\",\"args\":{\"path\":\"old.c\"}}",
+                                        80, false, 0, 1);
+    assert(action && forge_context_add(c, FORGE_SEG_RESULT, "old", 80, false, action, 1));
+    action = forge_context_add(c, FORGE_SEG_ACTION,
+                               "{\"tool\":\"read_file\",\"args\":{\"path\":\"new.c\"}}", 80, false,
+                               0, 2);
+    assert(action && forge_context_add(c, FORGE_SEG_RESULT, "current", 100, true, action, 2));
+    prompt = render(c, &tokens, &evicted);
+    assert(tokens == 400 && evicted == 2);
+    assert(!view(c, 3).selected && !view(c, 4).selected);
+    assert(view(c, 5).selected && view(c, 6).selected);
+    assert(strstr(prompt, "new.c") && !strstr(prompt, "old.c"));
+    free(prompt);
+    forge_context_destroy(c);
+}
+
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -484,10 +742,14 @@ int main(void) {
     test_immutable_and_identical_updates();
     test_transitive_source_invalidation();
     test_snapshot_roundtrip_and_stable_prefix();
+    test_snapshot_prompt_protocol_roundtrip();
     test_reject_invalid_snapshots();
     test_empty_unplanned_and_limits();
     test_deep_graph_and_id_version_limits();
     test_stable_cache_anchor();
+    test_flattened_bytes_and_native_role_pairs();
+    test_native_rejects_ambiguous_result_pairing();
+    test_rendered_budget_compaction();
     puts("Context DAG and snapshot tests passed");
     return 0;
 }

@@ -1,0 +1,43 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+FF
+======================================================================
+FAIL: test_container_replacement (test_service.Overlay.test_container_replacement)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-osw014g1\test_service.py", line 17, in test_container_replacement
+    self.assertEqual(changes['x']['nested'], [])
+AssertionError: Lists differ: [3] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+3
+
+- [3]
+?  -
+
++ []
+
+======================================================================
+FAIL: test_merge_and_delete (test_service.Overlay.test_merge_and_delete)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-osw014g1\test_service.py", line 11, in test_merge_and_delete
+    self.assertEqual(changes['tags'], ['new'])
+AssertionError: Lists differ: ['new', 'later'] != ['new']
+
+First list contains 1 additional elements.
+First extra element 1:
+'later'
+
+- ['new', 'later']
++ ['new']
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+FAILED (failures=2)
+
+next_action_guidance: Treat the diagnostics as the change boundary. Preserve behavior not named as failing and make the smallest local edit that addresses the reported condition. The failing assertion and explicit requirements are authoritative; do not reinterpret them or rewrite an otherwise working function. When a requirement names an ordering or tie-break key, compare that semantic key directly; input position or a surrogate index is not equivalent. For an ID tie-break over indexed records, dereference and compare the IDs; changing only comments cannot repair executable behavior.

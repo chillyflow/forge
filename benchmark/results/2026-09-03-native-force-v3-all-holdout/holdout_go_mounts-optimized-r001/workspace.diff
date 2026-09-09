@@ -1,0 +1,18 @@
+diff --git a/service.go b/service.go
+index 72d3000..1820737 100644
+--- a/service.go
++++ b/service.go
+@@ -10,8 +10,11 @@ func ResolveMount(request string, mounts []string) (string, string, bool) {
+ 	best := ""
+ 	for _, raw := range mounts {
+ 		mount := path.Clean("/" + raw)
+-		if (mount == "/" || strings.HasPrefix(request, mount)) && len(mount) > len(best) {
+-			best = mount
++		// Check if mount is a prefix of request and is either root or at a component boundary
++		if mount == "/" || strings.HasPrefix(request, mount+"/") || request == mount {
++			if len(mount) > len(best) {
++				best = mount
++			}
+ 		}
+ 	}
+ 	if best == "" {

@@ -1,0 +1,13 @@
+diff --git a/repair.go b/repair.go
+index 37570ab..48384f8 100644
+--- a/repair.go
++++ b/repair.go
+@@ -4,7 +4,7 @@ func Unique(xs []int) []int {
+ 	out := []int{}
+ 	seen := map[int]bool{}
+ 	for _, v := range xs {
+-		if seen[v] {
++		if !seen[v] {
+ 			out = append(out, v)
+ 		}
+ 		seen[v] = true

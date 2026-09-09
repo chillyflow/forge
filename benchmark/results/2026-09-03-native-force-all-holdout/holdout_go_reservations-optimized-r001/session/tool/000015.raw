@@ -1,0 +1,22 @@
+TOOL_ERROR [conflict]: old_text must match exactly once in service.go. It does not match the current content; the file may have changed since you last read it. Current content follows. Copy the text you intend to replace from it verbatim, including only bytes that are present.
+package holdout
+
+type Booking struct{ Seat, Customer string }
+
+func Reserve(bookings map[string]string, batch []Booking) bool {
+	// Check all bookings in the batch first to ensure none conflict
+	for _, b := range batch {
+		if b.Seat == "" || b.Customer == "" {
+			return false
+		}
+		if _, exists := bookings[b.Seat]; exists {
+			return false
+		}
+	}
+
+	// All bookings are valid, now add them to the bookings map
+	for _, b := range batch {
+		bookings[b.Seat] = b.Customer
+	}
+	return true
+}

@@ -1,0 +1,8 @@
+from .repository import MemoryRepository
+
+class UserService:
+    def __init__(self, repository):
+        self.repository = repository
+
+    def display_name(self, user_id):
+        return self.repository.users[user_id]["name"].strip().title()

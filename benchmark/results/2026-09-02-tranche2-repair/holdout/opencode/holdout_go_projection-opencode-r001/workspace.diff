@@ -1,0 +1,12 @@
+diff --git a/service.go b/service.go
+index 6634309..38d64c5 100644
+--- a/service.go
++++ b/service.go
+@@ -18,7 +18,6 @@ func Project(events []Event) map[string]string {
+ 		revisions[ev.Key] = ev.Revision
+ 		if ev.Deleted {
+ 			delete(values, ev.Key)
+-			delete(revisions, ev.Key)
+ 		} else {
+ 			values[ev.Key] = ev.Value
+ 		}

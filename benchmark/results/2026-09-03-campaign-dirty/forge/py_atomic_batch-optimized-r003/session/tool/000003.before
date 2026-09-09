@@ -1,0 +1,8 @@
+def apply_batch(inventory, adjustments):
+    for sku, delta in adjustments:
+        if sku not in inventory.quantities:
+            return False
+        inventory.quantities[sku] += delta
+        if inventory.quantities[sku] < 0:
+            return False
+    return True

@@ -1,0 +1,21 @@
+diff --git a/web/query.py b/web/query.py
+index 3650649..24c7c6b 100644
+--- a/web/query.py
++++ b/web/query.py
+@@ -1,5 +1,14 @@
+ from urllib.parse import parse_qs
++import re
+ 
+ def parse_query(value):
+-    parsed = parse_qs(value)
+-    return {key: values[0] for key, values in parsed.items()}
++    # Check for malformed percent-encoding first
++    if value and '%' in value:
++        # Find all percent-encoded sequences
++        percent_matches = re.findall(r'%[0-9a-fA-F]{2}', value)
++        # Check if any percent sequences are malformed (not exactly 2 hex digits)
++        for match in re.findall(r'%[^0-9a-fA-F]{2}|%[0-9a-fA-F][^0-9a-fA-F]|%$', value):
++            raise ValueError("Invalid percent-encoding")
++    
++    parsed = parse_qs(value, keep_blank_values=True)
++    return {key: values[-1] for key, values in parsed.items()}

@@ -1,0 +1,13 @@
+file_sha256:6cba0be12939a48ff4dbbecd1ab2a0046027982cea0d12960aec7d1fe5e2cf5e
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	if Average([]int{1, 2}) != 1.5 {
+7: 		t.Fatal("fraction truncated")
+8: 	}
+9: 	if Average(nil) != 0 {
+10: 		t.Fatal("empty input")
+11: 	}
+12: }

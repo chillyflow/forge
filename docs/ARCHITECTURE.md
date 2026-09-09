@@ -112,12 +112,95 @@ languages have literal search, not AST symbol navigation.
 ## Tools and execution
 
 One declarative registry defines field types, capability, and prompt description.
-The GBNF action grammar is generated from it. JSON is parsed by yyjson and all
-required field types/cardinality are validated before policy or execution.
+The GBNF action grammar is generated from it. Every action envelope accepts an
+optional leading `thought` string, bounded at 2048 bytes: a free-text reasoning
+channel written before the constrained action. Thought is never executed and
+grants no authority. It is retained verbatim in session evidence — the raw
+response is emitted to the session log before any normalization or stripping —
+but by default it is dropped from the stored ACTION segment and so never
+re-enters a later prompt. Host-enforced switches control the channel:
+`--no-thought` removes the field from the generated grammar and schema and
+rejects any action still carrying one (the §32 ablation control, valid for
+unconstrained backends too), `--thought-history` re-injects the thought into
+later prompts, `--thought-decode-only` states the default explicitly, and
+`--thought-required` rejects an empty or absent thought. Both are enforced by the
+host after parsing, not only by the grammar, so they hold for an unconstrained
+backend as well. Retention defaults off
+on measured grounds: with reasoning actually elicited it cost three of ten
+benchmark tasks and 2.3x the prompt tokens, and doubling the turn budget did not
+recover them.
 
-`apply_patch` requires one unique exact match, stages output in a sibling file,
-checks the old content again, and atomically replaces the file. It is not a
-unified-diff parser. Empty old text creates a missing file only.
+`--thought-routed` uses llama.cpp's lazy grammar sampler instead of putting the
+thought inside the action object. Output is unconstrained until a JSON object
+starting with `tool`, `memory`, or `final` triggers the generated action grammar;
+the host then bounds and validates the preceding UTF-8 text and normalizes it
+into the ordinary thought field. The trigger needs steering to elicit
+anything: measured without it, the model opened the action object on its first
+token in every routed action, and merely banning `{` tips greedy decoding into
+prompt echo that burns the whole turn budget (10/10 benchmark limit deaths).
+The llama backend therefore force-decodes `FG_THOUGHT_CUE` (`Thought: `) at the
+start of every routed generation, so the greedy continuation is a reasoning
+sentence; for the next `FG_THOUGHT_MIN_PREFIX_TOKENS` (32) sampled tokens
+(bounded by a quarter of the turn budget) every token containing `{` is
+excluded via logit bias so some reasoning text must follow, and
+end-of-generation tokens stay excluded until the action object actually begins,
+so a routed generation cannot end actionless; the turn's token budget is the
+backstop. The cue is scaffold — streamed and recorded in the raw response, but
+stripped by the host before the prefix is bounded, validated, or normalized, so
+it never satisfies `--thought-required` on its own. Required routed thought
+remains a host validation gate on top: a whitespace-only or cue-only prefix
+still fails it. A cue that cannot be force-decoded (untokenizable, over the
+16-token cue bound, or rendering an action-opening token) fails loudly rather
+than silently arming the bans without steering text, and a turn budget too
+small for the cue is an ordinary limit failure. `--thought-cue` replaces the
+cue; an empty cue drops the cue and the `{`-ban window together, since the ban
+without steering text is the measured prompt-echo configuration.
+
+Routed decoding is a bounded state machine, not an open-ended free phase. The
+reasoning phase ends at the think budget (`--thought-budget`, default at most
+256 tokens and reduced to half the remaining turn budget near exhaustion;
+`--no-thought-budget` is the unbounded ablation): if the action has
+not begun by then, the never-triggered lazy grammar sampler is replaced in the
+chain by an eager grammar over the same GBNF, so every subsequent token is
+grammar-sanctioned and the action opens under full tool constraints, with all
+three envelope alternatives still available. If the swap lands mid-character,
+host normalization drops the stranded trailing bytes instead of failing the
+turn. After the swap, leading-whitespace tokens are biased out until the first
+action-progress token, closing the padding loophole without removing legal
+whitespace later in the grammar. Once the action region begins —
+at the lazy trigger, the forced swap, or token 0 under an eager grammar — the
+host ends generation at the first token that completes the action object
+(objects can only close on a `}` piece, and the completeness scan starts at
+the recorded action offset, never inside reasoning prose, which may legally
+contain complete JSON objects that never armed the grammar). Waiting for an
+end token instead would leave the post-close whitespace tail legal until the
+budget dies. Per-state metrics (`think_tokens`, `forced_actions`,
+`action_stops`) record the machine's behavior in `metrics.json`;
+`think_tokens` is tokenizer-relative and never comparable across models.
+`forced_action_progress_tokens` proves a forced swap produced an action token.
+
+The action state is further classified as envelope selection, tool arguments,
+patch content, final prose, or memory content. Selection and ordinary arguments
+use a deterministic sampler policy; patch and final prose retain the configured
+sampling policy. Inline-thought envelopes are classified from the top-level
+action object, so strings inside the thought cannot impersonate an action key.
+The generated GBNF remains active through every substate, and the corresponding
+token counters are serialized in `metrics.json`. JSON is parsed by yyjson and
+all required field types/cardinality are validated before policy or execution.
+
+For chat templates that natively think, `--thought-native` uses a cue-free lazy
+grammar and requests `enable_thinking`; `--disable-thinking` supplies a
+grammar-matched safe control. The same template switch is available as
+`--enable-thinking` / `--disable-thinking` and `model.enable_thinking`.
+
+`apply_patch` requires one unique exact match. `apply_hunk` instead replaces an
+inclusive line range only when the caller supplies the full-file SHA-256 emitted
+by `read_file`; this makes narrow edits unambiguous and rejects stale line
+coordinates. Both tools stage output in a sibling file, record the proposed
+bytes, check Go syntax in-process, recheck the old content, and atomically
+replace the file. A syntax-invalid Go candidate is recorded as aborted and
+never replaces the target. Neither tool is a unified-diff parser. Empty old text
+creates a missing file only through `apply_patch`.
 
 The process runner uses `fork/exec` and process groups on POSIX, or `CreateProcess`
 and kill-on-close Job Objects on Windows. It captures stdout/stderr separately,
@@ -164,9 +247,13 @@ generated action/final and rebuild source context; the discarded inference
 still counts toward token and turn limits. Native notification delivery and
 filesystem reads are not atomic against concurrent writers.
 
-Before accepting a final answer after edits, the host runs the deterministic Go
-validation plan with the same process policy and deadlines. It stops at the first
-failure and returns diagnostics for repair; mutation during validation invalidates
-the result. Other languages and explicit `--no-auto-validation` runs have no such
-automatic proof. Even passing Go checks does not prove arbitrary task correctness.
+Before accepting a final answer after edits, the host runs the deterministic
+Go/Python validation plan with the same process policy and deadlines. Go uses
+its syntactic package graph; Python uses non-importing, in-memory compiler
+syntax checks, filename-related tests, broad pytest discovery, and explicit
+execution of every indexed unittest file. A missing Python runtime blocks an
+applicable plan. Validation stops at the first failure and returns diagnostics
+for repair; mutation during validation invalidates the result. Other languages
+and explicit `--no-auto-validation` runs have no such automatic proof. Even
+passing checks does not prove arbitrary task correctness.
 `bench` additionally runs its explicit independent verification command.

@@ -1,0 +1,3 @@
+
+# 2026-09-03 15:53:22.282022
++ReplayEvents must rebuild per-key counters from an event stream. Sequence numbers are global and contiguous from one, duplicate event IDs are idempotent only when their full payload matches, Delete removes a key, Add must not overflow, and any invalid event rejects the entire stream. Inspect the implementation, repair it, and run go test -json ./... without modifying tests.

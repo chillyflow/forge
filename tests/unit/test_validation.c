@@ -15,7 +15,7 @@
 #endif
 
 /* Fixtures are outside the checkout: git ls-files must not accidentally index
- * an enclosing repository. No Go executable, model, or GPU is used by these tests. */
+ * an enclosing repository. Validation commands are planned but never executed. */
 typedef struct {
     char root[FG_PATH_MAX];
     char *files[256], *directories[256];
@@ -126,6 +126,16 @@ static bool array_has(yyjson_val *array, const char *text) {
     }
     return false;
 }
+static bool array_has_substring(yyjson_val *array, const char *text) {
+    size_t i, max;
+    yyjson_val *value;
+    yyjson_arr_foreach(array, i, max, value) {
+        const char *s = yyjson_get_str(value);
+        if (s && strstr(s, text))
+            return true;
+    }
+    return false;
+}
 static yyjson_val *named(yyjson_val *array, const char *field, const char *name) {
     size_t i, max;
     yyjson_val *value;
@@ -150,6 +160,13 @@ static yyjson_val *command_for(yyjson_val *root, const char *stage, const char *
                                                    array_has(yyjson_obj_get(command, "argv"),
                                                              target)) return command;
     return NULL;
+}
+static void path_set(const char *value) {
+#ifdef _WIN32
+    assert(_putenv_s("PATH", value) == 0);
+#else
+    assert(setenv("PATH", value, 1) == 0);
+#endif
 }
 static yyjson_val *edge_for(yyjson_val *root, const char *from, const char *to) {
     yyjson_val *edges = yyjson_obj_get(root, "edges");
@@ -196,7 +213,10 @@ static void test_no_go_and_input_validation(void) {
     fixture_index(&f);
     yyjson_doc *doc = plan(&f, "README.md");
     yyjson_val *root = yyjson_doc_get_root(doc);
+    assert(yyjson_get_uint(yyjson_obj_get(root, "schema_version")) == 2);
     assert(!yyjson_get_bool(yyjson_obj_get(root, "applicable")));
+    assert(!yyjson_get_bool(yyjson_obj_get(root, "verification_available")));
+    assert(!strcmp(fg_json_str(root, "verification_status"), "not_applicable"));
     assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 0);
     yyjson_doc_free(doc);
     static const char *const invalid[] = {
@@ -572,6 +592,250 @@ static void test_malformed_shared_graph(void) {
     yyjson_doc_free(doc);
     fixture_finish(&f);
 }
+
+static void test_python_pytest_plan(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "lib/calc.py", "def add(left, right):\n    return left + right\n");
+    fixture_write(&f, "tests/test_calc.py",
+                  "import pytest\nfrom lib.calc import add\n"
+                  "def test_add():\n    assert add(1, 2) == 3\n");
+    fixture_write(&f, "pytest.ini", "[pytest]\ntestpaths = tests\n");
+    fixture_index(&f);
+    yyjson_doc *doc = plan(&f, "lib/calc.py");
+    yyjson_val *root = yyjson_doc_get_root(doc), *python = yyjson_obj_get(root, "python");
+    assert(!strcmp(fg_json_str(root, "language"), "python"));
+    assert(array_has(yyjson_obj_get(root, "languages"), "python"));
+    assert(!array_has(yyjson_obj_get(root, "languages"), "go"));
+    if (!yyjson_get_bool(yyjson_obj_get(root, "verification_available"))) {
+        assert(!strcmp(fg_json_str(root, "verification_status"), "blocked"));
+        assert(array_has(yyjson_obj_get(root, "missing_tools"), "python"));
+        yyjson_doc_free(doc);
+        fixture_finish(&f);
+        return;
+    }
+    assert(!strcmp(fg_json_str(root, "verification_status"), "planned"));
+    assert(!strcmp(fg_json_str(python, "test_runner"), "pytest"));
+    assert(yyjson_get_bool(yyjson_obj_get(python, "bytecode_writes_disabled")));
+    assert(yyjson_get_bool(yyjson_obj_get(python, "pytest_cache_disabled")));
+    assert(yyjson_get_uint(yyjson_obj_get(python, "syntax_file_count")) == 1);
+    assert(yyjson_get_uint(yyjson_obj_get(python, "targeted_test_count")) == 1);
+    assert(array_has(yyjson_obj_get(python, "targeted_test_files"), "tests/test_calc.py"));
+    yyjson_val *syntax = command_for(root, "compile", ".", "./lib/calc.py");
+    assert(syntax);
+    yyjson_val *argv = yyjson_obj_get(syntax, "argv");
+    assert(array_has(argv, "-B"));
+    assert(array_has(argv, "-c"));
+    assert(array_has_substring(argv, "compile("));
+    assert(array_has_substring(argv, "read_bytes"));
+    assert(!array_has_substring(argv, "PyCF_ONLY_AST"));
+    assert(!array_has_substring(argv, "py_compile"));
+    yyjson_val *targeted = command_for(root, "affected_tests", ".", "./tests/test_calc.py");
+    assert(targeted);
+    argv = yyjson_obj_get(targeted, "argv");
+    assert(array_has(argv, "pytest"));
+    assert(array_has(argv, "no:cacheprovider"));
+    assert(array_has(argv, "-B"));
+    yyjson_val *broad = command_for(root, "broad_tests", ".", "pytest");
+    assert(broad);
+    argv = yyjson_obj_get(broad, "argv");
+    assert(array_has(argv, "no:cacheprovider"));
+    assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 3);
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
+static void test_python_pytest_with_unittest_mock(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "calc.py", "def double(value):\n    return value * 2\n");
+    fixture_write(&f, "tests/test_calc.py",
+                  "from unittest.mock import Mock\nfrom calc import double\n"
+                  "def test_double():\n    probe = Mock(return_value=double(2))\n"
+                  "    assert probe() == 4\n");
+    fixture_index(&f);
+    yyjson_doc *doc = plan(&f, "calc.py");
+    yyjson_val *root = yyjson_doc_get_root(doc), *python = yyjson_obj_get(root, "python");
+    assert(!strcmp(fg_json_str(python, "test_runner"), "pytest"));
+    assert(yyjson_get_bool(yyjson_obj_get(python, "tests_applicable")));
+    if (yyjson_get_bool(yyjson_obj_get(root, "verification_available"))) {
+        yyjson_val *targeted = command_for(root, "affected_tests", ".", "./tests/test_calc.py");
+        assert(targeted);
+        assert(array_has(yyjson_obj_get(targeted, "argv"), "pytest"));
+        assert(command_for(root, "broad_tests", ".", "pytest"));
+    } else
+        assert(array_has(yyjson_obj_get(root, "missing_tools"), "python"));
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
+static void test_python_pytest_configuration_only_pattern(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "lib/calc.py", "def add(left, right):\n    return left + right\n");
+    fixture_write(&f, "specs/calc_spec.py",
+                  "from lib.calc import add\n"
+                  "def check_add():\n    assert add(1, 2) == 3\n");
+    fixture_write(&f, "pytest.ini",
+                  "[pytest]\npython_files = *_spec.py\npython_functions = check_*\n");
+    fixture_index(&f);
+    yyjson_doc *doc = plan(&f, "lib/calc.py");
+    yyjson_val *root = yyjson_doc_get_root(doc), *python = yyjson_obj_get(root, "python");
+    assert(!strcmp(fg_json_str(python, "test_runner"), "pytest"));
+    assert(yyjson_get_uint(yyjson_obj_get(python, "test_file_count")) == 0);
+    assert(yyjson_get_uint(yyjson_obj_get(python, "targeted_test_count")) == 0);
+    assert(yyjson_get_bool(yyjson_obj_get(python, "tests_applicable")));
+    if (yyjson_get_bool(yyjson_obj_get(root, "verification_available"))) {
+        assert(command_for(root, "compile", ".", "./lib/calc.py"));
+        assert(yyjson_arr_size(stage_commands(root, "affected_tests")) == 0);
+        assert(command_for(root, "broad_tests", ".", "pytest"));
+    } else
+        assert(array_has(yyjson_obj_get(root, "missing_tools"), "python"));
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
+static void test_python_unittest_plan(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "calc.py", "def double(value):\n    return value * 2\n");
+    fixture_write(&f, "tests/test_calc.py",
+                  "import unittest\nfrom calc import double\n"
+                  "class CalcTest(unittest.TestCase):\n"
+                  "    def test_double(self):\n        self.assertEqual(double(2), 4)\n");
+    fixture_index(&f);
+    yyjson_doc *doc = plan(&f, "calc.py");
+    yyjson_val *root = yyjson_doc_get_root(doc), *python = yyjson_obj_get(root, "python");
+    if (!yyjson_get_bool(yyjson_obj_get(root, "verification_available"))) {
+        assert(!strcmp(fg_json_str(root, "verification_status"), "blocked"));
+        yyjson_doc_free(doc);
+        fixture_finish(&f);
+        return;
+    }
+    assert(!strcmp(fg_json_str(python, "test_runner"), "unittest"));
+    assert(!yyjson_get_bool(yyjson_obj_get(python, "pytest_cache_disabled")));
+    yyjson_val *targeted = command_for(root, "affected_tests", ".", "./tests/test_calc.py");
+    assert(targeted);
+    yyjson_val *argv = yyjson_obj_get(targeted, "argv");
+    assert(array_has_substring(argv, "unittest.main"));
+    assert(array_has(argv, "-B"));
+    assert(array_has(argv, "-c"));
+    assert(array_has_substring(argv, "testsRun==0"));
+    assert(!array_has(argv, "discover"));
+    yyjson_val *broad = command_for(root, "broad_tests", ".", "./tests/test_calc.py");
+    assert(broad);
+    assert(array_has_substring(yyjson_obj_get(broad, "argv"), "unittest.main"));
+    assert(array_has_substring(yyjson_obj_get(broad, "argv"), "testsRun==0"));
+    assert(!array_has(yyjson_obj_get(broad, "argv"), "discover"));
+    assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 3);
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
+static void test_python_without_tests_is_blocked(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "worker.py", "def run():\n    return True\n");
+    fixture_index(&f);
+    yyjson_doc *doc = plan(&f, "worker.py");
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    assert(yyjson_get_bool(yyjson_obj_get(root, "applicable")));
+    assert(!yyjson_get_bool(yyjson_obj_get(root, "verification_available")));
+    assert(!strcmp(fg_json_str(root, "verification_status"), "blocked"));
+    assert(reason(root, "python_tests_not_detected"));
+    assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 0);
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
+static void test_mixed_go_python_plan(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "go.mod", "module example.test/mixed\n\ngo 1.22\n");
+    fixture_write(&f, "main.go", "package mixed\nfunc Value() int { return 1 }\n");
+    fixture_write(&f, "solver.py", "def solve():\n    return 1\n");
+    fixture_write(&f, "test_solver.py",
+                  "import unittest\nfrom solver import solve\n"
+                  "class SolverTest(unittest.TestCase):\n"
+                  "    def test_solve(self):\n        self.assertEqual(solve(), 1)\n");
+    fixture_index(&f);
+    const char *changed[] = {"main.go", "solver.py"};
+    char *text = plan_text(&f, changed, 2);
+    yyjson_doc *doc = yyjson_read(text, strlen(text), 0);
+    forge_free(text);
+    assert(doc);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    assert(!strcmp(fg_json_str(root, "language"), "go"));
+    assert(array_has(yyjson_obj_get(root, "languages"), "go"));
+    assert(array_has(yyjson_obj_get(root, "languages"), "python"));
+    if (yyjson_get_bool(yyjson_obj_get(root, "verification_available"))) {
+        assert(command_for(root, "compile", ".", "."));
+        assert(command_for(root, "compile", ".", "./solver.py"));
+        assert(command_for(root, "affected_tests", ".", "./test_solver.py"));
+        assert(command_for(root, "broad_tests", ".", "./..."));
+        assert(command_for(root, "broad_tests", ".", "./test_solver.py"));
+    } else {
+        assert(!strcmp(fg_json_str(root, "verification_status"), "blocked"));
+        assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 0);
+    }
+    assert(yyjson_arr_size(yyjson_obj_get(root, "stages")) == 6);
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
+static void test_go_only_change_ignores_incidental_python(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "go.mod", "module example.test/mixed\n\ngo 1.22\n");
+    fixture_write(&f, "main.go", "package mixed\nfunc Value() int { return 1 }\n");
+    fixture_write(&f, "scripts/generate.py", "def generate():\n    return 'generated'\n");
+    fixture_index(&f);
+    const char *current = getenv("PATH");
+    char *saved = fg_strdup(current ? current : "");
+    assert(saved);
+    path_set("");
+    yyjson_doc *doc = plan(&f, "main.go");
+    path_set(saved);
+    free(saved);
+    yyjson_val *root = yyjson_doc_get_root(doc), *python = yyjson_obj_get(root, "python");
+    assert(yyjson_get_bool(yyjson_obj_get(root, "applicable")));
+    assert(yyjson_get_bool(yyjson_obj_get(root, "verification_available")));
+    assert(!strcmp(fg_json_str(root, "verification_status"), "planned"));
+    assert(array_has(yyjson_obj_get(root, "languages"), "go"));
+    assert(!array_has(yyjson_obj_get(root, "languages"), "python"));
+    assert(!yyjson_get_bool(yyjson_obj_get(python, "applicable")));
+    assert(yyjson_get_uint(yyjson_obj_get(python, "source_file_count")) == 1);
+    assert(yyjson_get_uint(yyjson_obj_get(python, "syntax_file_count")) == 0);
+    assert(!array_has(yyjson_obj_get(root, "missing_tools"), "python"));
+    assert(command_for(root, "compile", ".", "."));
+    assert(command_for(root, "broad_tests", ".", "./..."));
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
+static void test_python_missing_tool_is_blocked(void) {
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "worker.py", "def run():\n    return True\n");
+    fixture_index(&f);
+    const char *current = getenv("PATH");
+    char *saved = fg_strdup(current ? current : "");
+    assert(saved);
+    path_set("");
+    yyjson_doc *doc = plan(&f, "worker.py");
+    path_set(saved);
+    free(saved);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    assert(yyjson_get_bool(yyjson_obj_get(root, "applicable")));
+    assert(!yyjson_get_bool(yyjson_obj_get(root, "verification_available")));
+    assert(!strcmp(fg_json_str(root, "verification_status"), "blocked"));
+    assert(array_has(yyjson_obj_get(root, "missing_tools"), "python"));
+    assert(reason(root, "python_executable_unavailable"));
+    assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 0);
+    yyjson_doc_free(doc);
+    fixture_finish(&f);
+}
+
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -586,6 +850,14 @@ int main(void) {
     test_unreadable_module_boundary();
     test_delta_index_transaction_and_graph();
     test_malformed_shared_graph();
-    puts("Go validation planner tests passed");
+    test_python_pytest_plan();
+    test_python_pytest_with_unittest_mock();
+    test_python_pytest_configuration_only_pattern();
+    test_python_unittest_plan();
+    test_python_without_tests_is_blocked();
+    test_mixed_go_python_plan();
+    test_go_only_change_ignores_incidental_python();
+    test_python_missing_tool_is_blocked();
+    puts("Go/Python validation planner tests passed");
     return 0;
 }

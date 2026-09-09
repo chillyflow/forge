@@ -1,0 +1,22 @@
+diff --git a/service.py b/service.py
+index ecad096..8792766 100644
+--- a/service.py
++++ b/service.py
+@@ -1,9 +1,16 @@
+ def commit(documents, updates):
+-    staged = documents
++    # Create a copy of the documents to work with
++    staged = documents.copy()
++    
++    # Apply updates sequentially, checking version consistency at each step
+     for key, expected, value in updates:
++        # Check if document exists and has correct version
+         if key not in staged or staged[key][0] != expected:
+             return False
++        # Apply the update
+         staged[key] = (expected + 1, value)
++    
++    # If all updates are valid, apply them to the original documents
+     documents.clear()
+     documents.update(staged)
+     return True

@@ -1,0 +1,16 @@
+file_sha256:2106fae3aa766982a4235be0da1841bcdbd728ab0d87f53e43d7739e6b7858c4
+30: 			if event.Delta > 0 && current > maxInt-event.Delta || event.Delta < 0 && current < minInt-event.Delta {
+31: 				return nil, false
+32: 			}
+33: 			state[event.Key] = current + event.Delta
+34: 		case "Delete":
+35: 			if event.Delta != 0 {
+36: 				return nil, false
+37: 			}
+38: 			delete(state, event.Key)
+39: 		default:
+40: 			return nil, false
+41: 		}
+42: 	}
+43: 	return state, true
+44: }

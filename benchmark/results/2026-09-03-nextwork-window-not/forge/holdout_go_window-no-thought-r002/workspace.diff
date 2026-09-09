@@ -1,0 +1,21 @@
+diff --git a/service.go b/service.go
+index 0826199..8c4e47e 100644
+--- a/service.go
++++ b/service.go
+@@ -9,14 +9,14 @@ type Window struct {
+ }
+ 
+ func (w *Window) Add(now, value int) (int, bool) {
+-	if w.started && now < w.last {
++	if now < w.last {
+ 		return 0, false
+ 	}
+ 	w.last = now
+ 	w.started = true
+ 	w.samples = append(w.samples, sample{now, value})
+ 	first := 0
+-	for first < len(w.samples) && w.samples[first].at < now-w.Width {
++	for first < len(w.samples) && w.samples[first].at <= now-w.Width {
+ 		first++
+ 	}
+ 	w.samples = w.samples[first:]

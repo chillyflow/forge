@@ -1,0 +1,56 @@
+diff --git a/repair.go b/repair.go
+index e4ccfb5..ca8e651 100644
+--- a/repair.go
++++ b/repair.go
+@@ -6,14 +6,18 @@ type Transfer struct {
+ }
+ 
+ func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+-	next := make(map[string]int, len(balances))
++	maxInt := int(^uint(0) >> 1)
++	
++	// Create a copy of balances for validation
++	validBalances := make(map[string]int, len(balances))
+ 	for key, value := range balances {
+-		next[key] = value
++		validBalances[key] = value
+ 	}
+-	maxInt := int(^uint(0) >> 1)
++	
++	// First, validate all transfers to ensure atomicity
+ 	for _, tr := range transfers {
+-		from, fromOK := balances[tr.From]
+-		to, toOK := balances[tr.To]
++		from, fromOK := validBalances[tr.From]
++		to, toOK := validBalances[tr.To]
+ 		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+ 			return false
+ 		}
+@@ -23,11 +27,23 @@ func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+ 		if to > maxInt-tr.Amount {
+ 			return false
+ 		}
+-		next[tr.From] = from - tr.Amount
+-		next[tr.To] = to + tr.Amount
++		// Update the validation balances for the next iteration
++		validBalances[tr.From] = from - tr.Amount
++		validBalances[tr.To] = to + tr.Amount
+ 	}
+-	for key, value := range next {
+-		balances[key] = value
++	
++	// If all validations pass, apply transfers to the original balances
++	for _, tr := range transfers {
++		from, fromOK := balances[tr.From]
++		to, toOK := balances[tr.To]
++		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
++			return false
++		}
++		if tr.From == tr.To {
++			continue
++		}
++		balances[tr.From] = from - tr.Amount
++		balances[tr.To] = to + tr.Amount
+ 	}
+ 	return true
+ }

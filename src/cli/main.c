@@ -27,7 +27,7 @@ static void usage(void) {
          "  forge summarize PATH --summary-producer ID --model MODEL   cached model summary\n"
          "  forge watch [--wall-ms N]              update index from native file events\n"
          "  forge index-info PATH                 report indexed source/AST/symbol hashes\n"
-         "  forge validation-plan [CHANGED_PATH]   print staged Go verification plan\n"
+         "  forge validation-plan [CHANGED_PATH]   print staged Go/Python verification plan\n"
          "  forge validate [CHANGED_PATH] --allow-exec   execute staged verification\n"
          "  forge hardware-plan [--model model.gguf] [--json]\n"
          "  forge replay SESSION | stats SESSION | context SESSION\n"
@@ -43,6 +43,8 @@ static void usage(void) {
          "  --context N          context capacity (default 16384)\n"
          "  --output-reserve N   per-turn generation budget (default 2048)\n"
          "  --max-turns N        hard agent turn limit (default 32)\n"
+         "  --minimal-agent      experimental basic native tool loop; no automatic validation\n"
+         "                       full history; ignores semantic, compaction and thought-history settings\n"
          "  --max-tokens N       total generated-token limit (default 32768)\n"
          "  --max-input N        total prompt-token limit (default 262144)\n"
          "  --timeout-ms N       command timeout (default 120000)\n"
@@ -53,6 +55,8 @@ static void usage(void) {
          "  --temperature N      finite sampling temperature 0..2\n"
          "  --seed N             sampling seed 0..4294967295\n"
          "  --chat-template NAME override unsupported model chat template\n"
+         "  --prompt-protocol NAME  native roles/tools (default) or flattened compatibility\n"
+         "  --enable-thinking | --disable-thinking  set Jinja template thinking control\n"
          "  --allow-write        permit repository patches\n"
          "  --allow-exec         permit UNSANDBOXED commands, including repository code\n"
          "  --json               JSON-lines events\n"
@@ -63,7 +67,17 @@ static void usage(void) {
          "  --checkpoint-cache-min-tokens N   minimum eligible prefix length\n"
          "  --checkpoint-cache-captures N     captures per prompt (1..4)\n"
          "  --grammar-first      disable greedy grammar fast path (ablation)\n"
-         "  --no-auto-validation skip final Go validation (explicit ablation)\n"
+         "  --no-thought         remove the reasoning channel from the action grammar\n"
+         "  --thought-decode-only  keep thought out of retained action history\n"
+         "  --thought-history    retain thought in later prompts (default: off)\n"
+         "  --thought-required   require a leading thought on every action (ablation)\n"
+         "  --thought-routed     reason freely, then lazily constrain the action JSON\n"
+         "  --thought-native     cue-free lazy grammar; enables template thinking\n"
+         "                       append --disable-thinking for its matched safe baseline\n"
+         "  --thought-budget N   max reasoning tokens before forcing action (default: <=256)\n"
+         "  --no-thought-budget  unbounded routed reasoning (ablation)\n"
+         "  --thought-cue TEXT   replace the forced reasoning cue; empty disables it\n"
+         "  --no-auto-validation skip final Go/Python validation (explicit ablation)\n"
          "  --script FILE        explicit simulated test backend (not inference)\n"
          "  --depth N            symbol expansion or retrieval graph hops, 0..3\n"
          "  --summary-scope NAME repository/module/package/file/symbol (default file)\n"
@@ -99,6 +113,16 @@ static int option_arity(const char *option) {
                                         "--grammar-first",
                                         "--no-semantic",
                                         "--no-compaction",
+                                        "--no-thought",
+                                        "--minimal-agent",
+                                        "--thought-decode-only",
+                                        "--thought-history",
+                                        "--thought-required",
+                                        "--thought-routed",
+                                        "--thought-native",
+                                        "--no-thought-budget",
+                                        "--enable-thinking",
+                                        "--disable-thinking",
                                         "--no-auto-validation",
                                         "--summary-full-source",
                                         "--no-config"};
@@ -108,6 +132,9 @@ static int option_arity(const char *option) {
                                          "--model",
                                          "--script",
                                          "--chat-template",
+                                         "--prompt-protocol",
+                                         "--thought-budget",
+                                         "--thought-cue",
                                          "--summary-scope",
                                          "--summary-symbol",
                                          "--summary-producer",
@@ -589,6 +616,14 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     ac.limits = config->limits;
     ac.semantic_output = config->semantic_output;
     ac.compact_context = config->compact_context;
+    ac.thought = config->thought;
+    ac.thought_in_history = config->thought_in_history;
+    ac.thought_required = config->thought_required;
+    ac.thought_routed = config->thought_routed;
+    ac.thought_native = config->thought_native;
+    ac.thought_cue = config->thought_cue;
+    ac.thought_budget = config->thought_budget;
+    ac.thought_budget_unbounded = config->thought_budget_unbounded;
     ac.cancelled = cancelled;
     const char *command = NULL, *argument = NULL;
     bool json = false;
@@ -663,6 +698,55 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             ac.compact_context = false;
             continue;
         }
+        if (!strcmp(a, "--minimal-agent")) {
+            ac.minimal_agent = true;
+            continue;
+        }
+        if (!strcmp(a, "--no-thought")) {
+            ac.thought = false;
+            continue;
+        }
+        if (!strcmp(a, "--thought-decode-only")) {
+            ac.thought_in_history = false;
+            continue;
+        }
+        if (!strcmp(a, "--thought-history")) {
+            ac.thought_in_history = true;
+            continue;
+        }
+        if (!strcmp(a, "--thought-required")) {
+            ac.thought_required = true;
+            continue;
+        }
+        if (!strcmp(a, "--thought-routed")) {
+            ac.thought_routed = true;
+            ac.thought_native = false;
+            continue;
+        }
+        if (!strcmp(a, "--thought-native")) {
+            ac.thought_routed = true;
+            ac.thought_native = true;
+            ac.thought_cue = NULL;
+            ac.thought_budget = 0;
+            ac.thought_budget_unbounded = false;
+            mc.thinking = FORGE_THINKING_ENABLED;
+            continue;
+        }
+        if (!strcmp(a, "--enable-thinking")) {
+            mc.thinking = FORGE_THINKING_ENABLED;
+            continue;
+        }
+        if (!strcmp(a, "--disable-thinking")) {
+            mc.thinking = FORGE_THINKING_DISABLED;
+            continue;
+        }
+        if (!strcmp(a, "--no-thought-budget")) {
+            /* Last flag wins against --thought-budget, checkpoint-cache style. */
+            ac.thought_budget_unbounded = true;
+            ac.thought_budget = 0;
+            ac.thought_native = false;
+            continue;
+        }
         if (i + 1 >= argc) {
             fg_error(&error, FORGE_ERR_ARGUMENT, "Missing value for %s", a);
             return failed(&error);
@@ -697,7 +781,31 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             explicit_script = true;
         } else if (!strcmp(a, "--chat-template"))
             mc.chat_template = value;
-        else if (!strcmp(a, "--temperature")) {
+        else if (!strcmp(a, "--prompt-protocol")) {
+            if (!strcmp(value, "flattened"))
+                mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
+            else if (!strcmp(value, "native"))
+                mc.prompt_protocol = FORGE_PROMPT_NATIVE;
+            else {
+                fg_error(&error, FORGE_ERR_ARGUMENT,
+                         "--prompt-protocol must be flattened or native");
+                return failed(&error);
+            }
+        } else if (!strcmp(a, "--thought-cue")) {
+            ac.thought_cue = value;
+            ac.thought_native = false;
+        } else if (!strcmp(a, "--thought-budget")) {
+            size_t budget = 0;
+            /* 0 is the unset sentinel, and a zero budget under
+             * --thought-required is a guaranteed first-turn death. */
+            if (!number(value, &budget) || !budget || budget > INT32_MAX) {
+                fg_error(&error, FORGE_ERR_ARGUMENT, "--thought-budget must be in [1, 2147483647]");
+                return failed(&error);
+            }
+            ac.thought_budget = budget;
+            ac.thought_budget_unbounded = false;
+            ac.thought_native = false;
+        } else if (!strcmp(a, "--temperature")) {
             char *end = NULL;
             errno = 0;
             float temperature = strtof(value, &end);
@@ -768,6 +876,32 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     config->limits = ac.limits;
     config->semantic_output = ac.semantic_output;
     config->compact_context = ac.compact_context;
+    config->thought = ac.thought;
+    config->thought_in_history = ac.thought_in_history;
+    config->thought_required = ac.thought_required;
+    config->thought_routed = ac.thought_routed;
+    config->thought_native = ac.thought_native;
+    config->thought_cue = ac.thought_cue;
+    config->thought_budget = ac.thought_budget;
+    config->thought_budget_unbounded = ac.thought_budget_unbounded;
+    /* An ablation must not run under contradictory settings and silently
+     * report one arm's numbers under the other arm's name. */
+    if ((ac.thought_required || ac.thought_routed) && !ac.thought) {
+        fg_error(&error, FORGE_ERR_ARGUMENT,
+                 "--thought-required/--thought-routed contradicts --no-thought: the channel "
+                 "cannot be requested and absent");
+        return failed(&error);
+    }
+    if ((ac.thought_cue || ac.thought_budget || ac.thought_budget_unbounded || ac.thought_native) &&
+        !ac.thought_routed) {
+        fg_error(&error, FORGE_ERR_ARGUMENT,
+                 "--thought-budget/--no-thought-budget/--thought-cue require --thought-routed");
+        return failed(&error);
+    }
+    if (ac.minimal_agent && mc.prompt_protocol != FORGE_PROMPT_NATIVE) {
+        fg_error(&error, FORGE_ERR_ARGUMENT, "--minimal-agent requires --prompt-protocol native");
+        return failed(&error);
+    }
     if (forge_config_validate(config, &error) != FORGE_OK ||
         forge_config_check_exec(config, ac.allow_exec, &error) != FORGE_OK)
         return failed(&error);
