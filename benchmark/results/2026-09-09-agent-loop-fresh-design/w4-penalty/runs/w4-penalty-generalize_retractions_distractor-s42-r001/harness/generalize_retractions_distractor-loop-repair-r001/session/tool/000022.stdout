@@ -1,0 +1,13 @@
+Step by step trace:
+Initial: seen=set(), cancelled=set(), postings={}, totals={}
+Step 0: Event={'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Posting: added 7 to cash, totals={'cash': 7}
+Step 1: Event={'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Skipped due to idempotency
+Step 1: Event={'id': 'r', 'kind': 'retract', 'target': 'p'}
+  Retraction: target=p
+  Cancelled posting: subtracted 7 from cash, totals={'cash': 0}
+Step 2: Event={'id': 's', 'kind': 'retract', 'target': 'p'}
+  Retraction: target=p
+  Already cancelled, skipping
+Final result: {'cash': 0}

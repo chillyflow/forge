@@ -1,0 +1,24 @@
+file_sha256:b286f0c95d8507c0bb89443455edb0d5c5583681ec92b901019ac15adf8cd945
+1: def positions_for(messages):
+2:     entries, positions = {}, {}
+3:     voided = set()
+4:     
+5:     for message in messages:
+6:         if message['kind'] == 'post':
+7:             bucket, delta = message['bucket'], message['delta']
+8:             entries[message['key']] = (bucket, delta)
+9:             positions.setdefault(bucket, 0)
+10:             positions[bucket] += delta
+11:         else:  # message['kind'] == 'retract'
+12:             reference = message['reference']
+13:             if reference in voided:
+14:                 continue
+15:             voided.add(reference)
+16:             if reference in entries:
+17:                 bucket, delta = entries[reference]
+18:                 positions[bucket] -= delta
+19:                 del entries[reference]
+20:             # If the referenced post hasn't arrived yet, we still mark it as voided
+21:             # so that when it arrives later, it won't affect the balance
+22:     
+23:     return positions

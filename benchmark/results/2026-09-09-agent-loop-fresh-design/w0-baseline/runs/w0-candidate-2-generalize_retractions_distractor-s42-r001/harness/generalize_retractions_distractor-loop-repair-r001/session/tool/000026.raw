@@ -1,0 +1,10 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+My trace:
+Step 1: post p,7 -> totals["cash"] = 7
+Step 2: post p,7 -> totals["cash"] = 14
+Step 3: retract r,p -> totals["cash"] = 7 (cancelled first p)
+Step 4: retract s,p -> totals["cash"] = 7 (p already cancelled)
+Expected: 0, Got: {'cash': -7}
+
+stderr:

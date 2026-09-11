@@ -1,0 +1,15 @@
+{
+  "id": "reverse",
+  "prompt": "Reverse reverses a slice in place without dropping the middle element. Inspect the source, fix the bug, and run go test -json ./... to verify. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module forgebench\n\ngo 1.24\n",
+    "repair.go": "package repair\n\nfunc Reverse(xs []int) { for i,j:=0,len(xs)-1; i<j; i,j=i+1,j-1 { xs[i]=xs[j]; xs[j]=xs[i] } }\n",
+    "repair_test.go": "package repair\n\nimport \"testing\"\nfunc TestRepair(t *testing.T) { xs:=[]int{1,2,3,4,5}; Reverse(xs); for i,v:=range xs { if v!=5-i { t.Fatalf(\"got %v\",xs) } }; Reverse(nil) }\n"
+  }
+}

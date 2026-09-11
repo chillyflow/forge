@@ -1,0 +1,60 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http/httptest"
+	"reflect"
+	"testing"
+)
+
+func TestPagination(t *testing.T) {
+	h := ListHandler([]string{"a", "b", "c", "d", "e"})
+	r := httptest.NewRequest("GET", "/?page=2&size=2", nil)
+	w := httptest.NewRecorder()
+	h(w, r)
+	var got []string
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if !reflect.DeepEqual(got, []string{"c", "d"}) {
+		t.Fatalf("got %v", got)
+	}
+	bad := httptest.NewRequest("GET", "/?page=1&size=nope", nil)
+	bw := httptest.NewRecorder()
+	h(bw, bad)
+	if bw.Code != 400 {
+		t.Fatalf("bad status %d", bw.Code)
+	}
+	
+	// Test invalid page number
+	bad2 := httptest.NewRequest("GET", "/?page=invalid&size=2", nil)
+	bw2 := httptest.NewRecorder()
+	h(bw2, bad2)
+	if bw2.Code != 400 {
+		t.Fatalf("bad status %d", bw2.Code)
+	}
+	
+	// Test negative page number
+	bad3 := httptest.NewRequest("GET", "/?page=-1&size=2", nil)
+	bw3 := httptest.NewRecorder()
+	h(bw3, bad3)
+	if bw3.Code != 400 {
+		t.Fatalf("bad status %d", bw3.Code)
+	}
+	
+	// Test negative size
+	bad4 := httptest.NewRequest("GET", "/?page=1&size=-5", nil)
+	bw4 := httptest.NewRecorder()
+	h(bw4, bad4)
+	if bw4.Code != 400 {
+		t.Fatalf("bad status %d", bw4.Code)
+	}
+	
+	// Test valid pagination with different parameters
+	r2 := httptest.NewRequest("GET", "/?page=1&size=3", nil)
+	w2 := httptest.NewRecorder()
+	h(w2, r2)
+	var got2 []string
+	json.Unmarshal(w2.Body.Bytes(), &got2)
+	if !reflect.DeepEqual(got2, []string{"a", "b", "c"}) {
+		t.Fatalf("got %v", got2)
+	}
+}

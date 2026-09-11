@@ -1,0 +1,9 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Case analysis:
+1. [post(p,7)] -> {'cash': 7}
+2. [post(p,7), retract(r,p)] -> {'cash': 0}
+3. [retract(r,p), post(p,7)] -> {}
+4. [retract(r,p), post(p,7), post(q,5)] -> {'cash': 5}
+
+stderr:

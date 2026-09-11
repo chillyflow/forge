@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "scope": "Proposed copy only; no live source/runtime edits, build, compiler invocation, test execution, or GPU use.",
+  "test": "test_pass_invalidated_before_next_prompt",
+  "test_status": "uncompiled and unexecuted; waits for frozen batch completion and authorized integration build",
+  "live_unchanged": true,
+  "files": {
+    "tests/unit/test_verification.c": "e1a2cccd5a30cff1041874f292a4645d9fdce8919dfdbe5afec5042a33bfeb2d",
+    "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/originals/tests/unit/test_verification.c": "e1a2cccd5a30cff1041874f292a4645d9fdce8919dfdbe5afec5042a33bfeb2d",
+    "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/tests/unit/test_verification.c": "1688bde7437fac8ef1d23de059a2afda22d2ea214929a5aef36d48b589c81494",
+    "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/agent-record-pass-mutation-test.patch": "07ecafadf7b229a6aa4eac18f786ecace80ada8c32568603429db928968cc78f"
+  },
+  "scenario": [
+    "Native action 1 edits main.go return 1 to return 2.",
+    "Action 2 completes validation and emits PASS; synchronous candidate_checkpoint callback then changes unindexed fixture.txt.",
+    "Prompt 3 must identify current UNVERIFIED and historical PASSED with distinct input identities and validation ID 1; exact ordinary six-tool schema is available. Action 3 reads the changed fixture.",
+    "Action 4 completes validation of changed inputs and emits a distinct PASS identity.",
+    "Prompt 5 must identify current PASSED and matching result ID 2 with only final available. Action 5 checks the matching snapshot and accepts one guarded final."
+  ],
+  "cleanup": "Script is outside workspace; additional agent session path is verified under the fixture sessions directory before file traversal, known-directory removal, and existing fixture_finish.",
+  "limitations": [
+    "Self-copied Go/gofmt helper checks host orchestration only, not Go correctness.",
+    "Script backend tests host contracts, not real-model quality or tokenizer capacity.",
+    "The independent read-only review and its hashes remain unchanged."
+  ]
+}

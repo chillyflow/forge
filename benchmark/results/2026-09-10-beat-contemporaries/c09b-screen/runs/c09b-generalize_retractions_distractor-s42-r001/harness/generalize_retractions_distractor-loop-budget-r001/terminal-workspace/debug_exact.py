@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+
+# Reproduce the exact failing test case
+from service import balances
+
+def post(i, amount): 
+    return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
+
+def retract(i, target): 
+    return {'id': i, 'kind': 'retract', 'target': target}
+
+# This is the exact failing test case
+p = post('p', 7)
+events = [p, p, retract('r', 'p'), retract('s', 'p')]
+
+print("Events:", events)
+result = balances(events)
+print("Result:", result)
+print("Expected: {'cash': 0}")
+
+# Let's trace through manually what should happen:
+print("\nManual trace:")
+print("1. p (posting): postings['p'] = ('cash', 7), totals['cash'] = 7")
+print("2. p (duplicate): skip")
+print("3. retract('r', 'p'): cancel 'p', totals['cash'] = 0")
+print("4. retract('s', 'p'): 'p' already cancelled, skip")
+print("Final: totals['cash'] = 0 ✓")

@@ -1,0 +1,73 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http/httptest"
+	"reflect"
+	"testing"
+)
+
+func TestPaginationEdgeCases(t *testing.T) {
+	h := ListHandler([]string{"a", "b", "c", "d", "e", "f", "g", "h"})
+	
+	// Test valid pagination
+	r := httptest.NewRequest("GET", "/?page=1&size=3", nil)
+	w := httptest.NewRecorder()
+	h(w, r)
+	var got []string
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if !reflect.DeepEqual(got, []string{"a", "b", "c"}) {
+		t.Fatalf("got %v, want [a, b, c]", got)
+	}
+	
+	// Test second page
+	r = httptest.NewRequest("GET", "/?page=2&size=3", nil)
+	w = httptest.NewRecorder()
+	h(w, r)
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if !reflect.DeepEqual(got, []string{"d", "e", "f"}) {
+		t.Fatalf("got %v, want [d, e, f]", got)
+	}
+	
+	// Test invalid page size (non-numeric)
+	r = httptest.NewRequest("GET", "/?page=1&size=invalid", nil)
+	w = httptest.NewRecorder()
+	h(w, r)
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	
+	// Test invalid page size (zero)
+	r = httptest.NewRequest("GET", "/?page=1&size=0", nil)
+	w = httptest.NewRecorder()
+	h(w, r)
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	
+	// Test invalid page (zero)
+	r = httptest.NewRequest("GET", "/?page=0&size=2", nil)
+	w = httptest.NewRecorder()
+	h(w, r)
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	
+	// Test invalid page (negative)
+	r = httptest.NewRequest("GET", "/?page=-1&size=2", nil)
+	w = httptest.NewRecorder()
+	h(w, r)
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	
+	// Test page beyond range
+	r = httptest.NewRequest("GET", "/?page=10&size=2", nil)
+	w = httptest.NewRecorder()
+	h(w, r)
+	var got2 []string
+	json.Unmarshal(w.Body.Bytes(), &got2)
+	if len(got2) != 0 {
+		t.Fatalf("expected empty slice, got %v", got2)
+	}
+}

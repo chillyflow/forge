@@ -1,0 +1,9 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Direct test: {'cash': 0}
+Manual trace:
+  1. Post p: account=cash, amount=7
+  2. Retract r targeting p: should cancel post p
+  3. Expected: {"cash": 0}
+
+stderr:

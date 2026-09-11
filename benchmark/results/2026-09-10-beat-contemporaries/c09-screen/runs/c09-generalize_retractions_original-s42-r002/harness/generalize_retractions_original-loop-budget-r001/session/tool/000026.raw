@@ -1,0 +1,28 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Test passed: True
+
+Step-by-step trace:
+Initial: seen=set(), cancelled=set(), postings={}, totals={}
+
+Event 0: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Added to seen
+  Posting: added 7 to cash, totals now {'cash': 7}
+  Current state: seen={'p'}, cancelled=set(), postings={'p': ('cash', 7)}, totals={'cash': 7}
+
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Skipped due to duplicate ID
+
+Event 2: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  Added to seen
+  Retraction for target p
+  Cancelled posting p: removed 7 from cash, totals now {'cash': 0}
+  Current state: seen={'r', 'p'}, cancelled={'p'}, postings={'p': ('cash', 7)}, totals={'cash': 0}
+
+Event 3: {'id': 's', 'kind': 'retract', 'target': 'p'}
+  Added to seen
+  Already cancelled, skipping
+
+stderr:

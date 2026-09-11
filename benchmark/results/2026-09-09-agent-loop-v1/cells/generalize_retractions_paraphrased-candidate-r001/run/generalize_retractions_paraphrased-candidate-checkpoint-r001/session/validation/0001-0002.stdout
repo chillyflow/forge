@@ -1,0 +1,40 @@
+Test case [p, retract('r', 'p')]:
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Match: True
+
+Test case [retract('r', 'p'), p]:
+Result: {}
+Expected: {'cash': 0}
+Match: False
+
+Test case [p, p, retract('r', 'p'), retract('s', 'p')]:
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Match: True
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Result2: {}
+Result3: {'cash': 0}
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Match: True
+=== Tracing [retract('r', 'p'), p] ===
+Initial state:
+  seen: set()
+  cancelled: set()
+  postings: {}
+  totals: {}
+
+Event 0: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  Added to seen: {'r'}
+  Processing retract targeting: p
+  Added to cancelled: {'p'}
+  Target p not in postings
+
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Added to seen: {'r', 'p'}
+  Processing post: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Post was cancelled, skipping
+
+Final result: {}

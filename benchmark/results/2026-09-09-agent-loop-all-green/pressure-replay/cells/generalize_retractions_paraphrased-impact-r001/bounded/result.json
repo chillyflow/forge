@@ -1,0 +1,366 @@
+{
+  "source_cell_id": "generalize_retractions_paraphrased-impact-r001",
+  "policy": "bounded",
+  "arm": "impact",
+  "original_stop_action": 27,
+  "archived_action_count": 26,
+  "exact_archived_prefix_actions_replayed": 26,
+  "all_archived_actions_replayed_exactly": true,
+  "executed_native_actions": 28,
+  "after_original_stop": [
+    {
+      "turn": 27,
+      "sequence": 339,
+      "type": "tool_call",
+      "data": {
+        "tool": "validate_candidate",
+        "args": {}
+      }
+    },
+    {
+      "turn": 28,
+      "sequence": 352,
+      "type": "final_rejected",
+      "data": "CANDIDATE_CHECKPOINT: NOT PASSED. The repair episode remains active.\nThis candidate was already assessed. Change the implementation before validating again.\n"
+    }
+  ],
+  "reached_next_action_after_original_prefix": true,
+  "returncode": 1,
+  "timed_out": false,
+  "wall_seconds": 1.2810000000026776,
+  "metrics": {
+    "schema_version": 1,
+    "status": "model",
+    "simulated": true,
+    "prompt_tokens": 212539,
+    "generated_tokens": 7832,
+    "cached_tokens": 128042,
+    "prefill_tokens": 84497,
+    "turns": 29,
+    "tool_calls": 27,
+    "raw_tool_bytes": 13780,
+    "visible_tool_bytes": 13780,
+    "files_modified": 1,
+    "context_evictions": 60,
+    "loop_warnings": 0,
+    "grammar_fast_tokens": 0,
+    "grammar_fallback_tokens": 0,
+    "think_tokens": 0,
+    "forced_actions": 0,
+    "action_stops": 0,
+    "action_select_tokens": 0,
+    "action_argument_tokens": 0,
+    "patch_tokens": 0,
+    "final_tokens": 0,
+    "memory_tokens": 0,
+    "forced_action_progress_tokens": 0,
+    "raw_tool_tokens": 3456,
+    "visible_tool_tokens": 3456,
+    "files_opened": 4,
+    "validation_commands": 2,
+    "validation_failures": 1,
+    "generation_arena_peak_bytes": 0,
+    "repo_full_scans": 2,
+    "repo_delta_scans": 0,
+    "filesystem_events": 0,
+    "watch_reopens": 0,
+    "stale_generations": 0,
+    "index_cold_parses": 0,
+    "index_incremental_parses": 0,
+    "index_cache_hits": 0,
+    "index_cache_evictions": 0,
+    "peak_index_source_bytes": 0,
+    "peak_index_nodes": 0,
+    "checkpoint_lookups": 0,
+    "checkpoint_hits": 0,
+    "checkpoint_misses": 0,
+    "checkpoint_captures": 0,
+    "checkpoint_evictions": 0,
+    "checkpoint_restored_tokens": 0,
+    "checkpoint_reused_tokens": 0,
+    "checkpoint_additional_tokens": 0,
+    "checkpoint_peak_bytes": 0,
+    "load_ms": 0.0,
+    "prefill_ms": 0.0,
+    "decode_ms": 0.0,
+    "sampling_ms": 0.0,
+    "duration_ms": 1250.0,
+    "tool_ms": 812.0,
+    "validation_ms": 188.0,
+    "index_ms": 0.0,
+    "checkpoint_probe_ms": 0.0,
+    "checkpoint_capture_ms": 0.0,
+    "checkpoint_restore_ms": 0.0
+  },
+  "fixture": {
+    "fixture_preparation": "utf8-lf-language-format-v2",
+    "fixture_sha256": "114468926283371aefc6cf841001a6786a608ff5c789c3308e5e7e94cfd66523",
+    "fixture_files": {
+      "service.py": "0bfc7661de632302ebd1d82277db844a4ed9e25ba30c45cba4275725ec24470e",
+      "test_service.py": "d8974cd59ed9f00fcf05b4eecf05f336c39490fb6fc782004516a52af6b89c00"
+    }
+  },
+  "protected_files_unchanged": true,
+  "terminal_source_sha256": {
+    "service.py": "6decf6a5c7b70006f850f3a6d55e937ca63943a5f309188d4593c99687cd82f4",
+    "test_service.py": "d8974cd59ed9f00fcf05b4eecf05f336c39490fb6fc782004516a52af6b89c00",
+    "__pycache__/service.cpython-311.pyc": "58ee6e218128da1b049afc344b3f31766210b0a726cb376bfa9715b940ac10cf",
+    "__pycache__/test_service.cpython-311.pyc": "fe5c517b65263828ec592110bf08c8d18d3b5a7dcfd790291a7fde7fc3a5b3ea"
+  },
+  "terminal_verification": {
+    "argv": [
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-v"
+    ],
+    "returncode": 1,
+    "timed_out": false,
+    "passed": false
+  },
+  "latest_host_validation": {
+    "schema_version": 1,
+    "attempt": 1,
+    "generation": 2,
+    "applicable": true,
+    "session": "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-q4wujfe8\\workspace/.forge/sessions/bfe0bc5b12a970503182ae5c98dc17b1",
+    "plan": {
+      "schema_version": 2,
+      "generation": 2,
+      "language": "python",
+      "status": "planned",
+      "verification_status": "planned",
+      "graph_kind": "none",
+      "sound": false,
+      "applicable": true,
+      "verification_available": true,
+      "broad_verification_required": true,
+      "changed_paths": [],
+      "languages": [
+        "python"
+      ],
+      "missing_tools": [],
+      "modules": [],
+      "packages": [],
+      "edges": [],
+      "affected_packages": [],
+      "reverse_dependents": [],
+      "fallback_reasons": [],
+      "limitations": [
+        "Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.",
+        "pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.",
+        "Python syntax checks compile source without importing code. Python runs use -B and pytest disables its cache provider, but project tests may still mutate inputs and must be rejected if the validation snapshot changes.",
+        "Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration."
+      ],
+      "python": {
+        "applicable": true,
+        "executable_available": true,
+        "executable": "python",
+        "selection_kind": "changed_files_and_filename_related_tests",
+        "syntax_scope": "all_indexed",
+        "source_file_count": 2,
+        "syntax_file_count": 2,
+        "test_file_count": 1,
+        "targeted_test_count": 0,
+        "syntax_scheduled": true,
+        "tests_applicable": true,
+        "tests_scheduled": true,
+        "test_runner": "unittest",
+        "bytecode_writes_disabled": true,
+        "pytest_cache_disabled": false,
+        "targeted_test_files": []
+      },
+      "stages": [
+        {
+          "name": "format",
+          "requires_previous_success": false,
+          "commands": []
+        },
+        {
+          "name": "compile",
+          "requires_previous_success": true,
+          "commands": [
+            {
+              "cwd": ".",
+              "argv": [
+                "python",
+                "-B",
+                "-c",
+                "import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])",
+                "./service.py",
+                "./test_service.py"
+              ],
+              "require_empty_stdout": false,
+              "reason": "indexed_python_files_for_unknown_changes"
+            }
+          ]
+        },
+        {
+          "name": "affected_tests",
+          "requires_previous_success": true,
+          "commands": []
+        },
+        {
+          "name": "dependent_tests",
+          "requires_previous_success": true,
+          "commands": []
+        },
+        {
+          "name": "vet",
+          "requires_previous_success": true,
+          "commands": []
+        },
+        {
+          "name": "broad_tests",
+          "requires_previous_success": true,
+          "commands": [
+            {
+              "cwd": ".",
+              "argv": [
+                "python",
+                "-B",
+                "-c",
+                "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+                "./test_service.py"
+              ],
+              "require_empty_stdout": false,
+              "reason": "final_python_unittest_files"
+            }
+          ]
+        }
+      ],
+      "command_count": 2,
+      "structural_impact": {
+        "fallback_reasons": [
+          {
+            "code": "python_structure_unresolved",
+            "path": "service.py",
+            "detail": "Python definition and caller candidates are lexical; decorators, scopes and imports are unresolved."
+          }
+        ],
+        "changed_paths": [
+          "service.py"
+        ],
+        "changed_symbols": [
+          {
+            "path": "service.py",
+            "name": "balances",
+            "kind": "python_definition_candidate",
+            "change": "modified",
+            "range_evidence": "python_lexical_candidate",
+            "start_byte": 0,
+            "end_byte": 687,
+            "line": 1
+          }
+        ],
+        "caller_candidates": [
+          {
+            "path": "test_service.py",
+            "name": "test_order_and_duplicates",
+            "referenced_symbol": "balances",
+            "resolution": "identifier_occurrence_candidate"
+          },
+          {
+            "path": "test_service.py",
+            "name": "test_independent_postings",
+            "referenced_symbol": "balances",
+            "resolution": "identifier_occurrence_candidate"
+          }
+        ],
+        "targeted_tests": [
+          {
+            "language": "python",
+            "path": "test_service.py",
+            "name": "",
+            "package_directory": ".",
+            "module_directory": ".",
+            "reason": "python_identifier_candidate_full_file"
+          }
+        ],
+        "reverse_dependents": [],
+        "schema_version": 1,
+        "baseline_generation": 1,
+        "generation": 2,
+        "sound": false,
+        "broad_verification_required": true,
+        "selection_kind": "preliminary_syntactic_symbol_candidates",
+        "limitations": "Go ranges come from the AST; caller candidates are name occurrences, not resolved calls. Python ranges and references are lexical candidates. Selected tests are preliminary, not coverage; the existing broad final verification is always required. Only indexed files enter the impact map; unindexed resources are covered by the validation input snapshot and broad final checks, not by symbol selection.",
+        "fallback": true
+      }
+    },
+    "commands": [
+      {
+        "id": 1,
+        "stage": "compile",
+        "cwd": ".",
+        "argv": [
+          "python",
+          "-B",
+          "-c",
+          "import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])",
+          "./service.py",
+          "./test_service.py"
+        ],
+        "require_empty_stdout": false,
+        "started": true,
+        "exit_code": 0,
+        "timeout": false,
+        "cancelled": false,
+        "truncated": false,
+        "duration_ms": 63.0,
+        "stdout_bytes": 0,
+        "stderr_bytes": 0,
+        "stdout_artifact": "validation/0001-0001.stdout",
+        "stderr_artifact": "validation/0001-0001.stderr",
+        "status": "ok"
+      },
+      {
+        "id": 2,
+        "stage": "broad_tests",
+        "cwd": ".",
+        "argv": [
+          "python",
+          "-B",
+          "-c",
+          "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+          "./test_service.py"
+        ],
+        "require_empty_stdout": false,
+        "started": true,
+        "exit_code": 1,
+        "timeout": false,
+        "cancelled": false,
+        "truncated": false,
+        "duration_ms": 62.0,
+        "stdout_bytes": 0,
+        "stderr_bytes": 822,
+        "stdout_artifact": "validation/0001-0002.stdout",
+        "stderr_artifact": "validation/0001-0002.stderr",
+        "status": "conflict"
+      }
+    ],
+    "generation_after": 2,
+    "commands_attempted": 2,
+    "commands_run": 2,
+    "stages_passed": 1,
+    "inputs_changed": false,
+    "inputs_checked": true,
+    "input_max_files": 100000,
+    "input_max_bytes": 2147483648,
+    "input_hash_before": "273ffb444eea74be",
+    "input_hash_after": "273ffb444eea74be",
+    "snapshot_ms": 0.0,
+    "duration_ms": 188.0,
+    "passed": false,
+    "checks_passed": false,
+    "evidence_complete": true,
+    "status": "conflict",
+    "summary": "Automatic validation stopped at broad_tests: Validation stage broad_tests failed (exit_code=1)\nexit_code=1 timeout=false cancelled=false truncated=false\nstdout:\n\nstderr:\ntest_independent_postings (test_service.BehaviorChecks.test_independent_postings) ... ok\r\ntest_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates) ... FAIL\r\n\r\n======================================================================\r\nFAIL: test_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates)\r\n----------------------------------------------------------------------\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-q4wujfe8\\workspace\\test_service.py\", line 10, in test_order_and_duplicates\r\n    self.assertEqual(balances(events), {'cash': 0})\r\nAssertionError: {} != {'cash': 0}\r\n- {}\r\n+ {'cash': 0}\r\n\r\n----------------------------------------------------------------------\r\nRan 2 tests in 0.000s\r\n\r\nFAILED (failures=1)\r\n"
+  },
+  "context_omissions_observed": true,
+  "stderr": "Session: C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-q4wujfe8\\workspace/.forge/sessions/bfe0bc5b12a970503182ae5c98dc17b1\nSIMULATED turns=29 prompt=212539 generated=7832 cached=128042 elapsed=1250ms\nforge: model: Scripted test fixture exhausted\n",
+  "session": "C:\\Users\\flowc\\dev\\forge\\benchmark\\results\\2026-09-09-agent-loop-all-green\\pressure-replay\\cells\\generalize_retractions_paraphrased-impact-r001\\bounded\\terminal-workspace\\.forge\\sessions\\bfe0bc5b12a970503182ae5c98dc17b1",
+  "simulated": true,
+  "counts_toward_model_acceptance": false
+}

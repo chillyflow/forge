@@ -1,0 +1,8 @@
+Step by step trace:
+1. Retraction event: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+   - target = p
+   - cancelled set after this step: {'p'}
+2. Posting event: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+   - event["id"] = p
+   - Is p in cancelled? True
+   - Result: {}

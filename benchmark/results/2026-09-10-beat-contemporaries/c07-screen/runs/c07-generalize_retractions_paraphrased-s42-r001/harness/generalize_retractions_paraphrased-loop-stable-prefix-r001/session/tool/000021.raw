@@ -1,0 +1,12 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+--- Testing [retract('r', 'p'), p] ---
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {}
+Expected: {'cash': 0}
+
+stderr:

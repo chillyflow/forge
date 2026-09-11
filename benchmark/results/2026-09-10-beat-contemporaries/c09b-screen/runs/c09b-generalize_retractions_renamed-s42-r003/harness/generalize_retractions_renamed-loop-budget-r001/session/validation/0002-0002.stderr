@@ -1,0 +1,36 @@
+test_order_and_duplicates (exact_test.JournalCases.test_order_and_duplicates) ... FAIL
+test_independent_postings (test_ledger.JournalCases.test_independent_postings) ... ok
+test_order_and_duplicates (test_ledger.JournalCases.test_order_and_duplicates) ... FAIL
+
+======================================================================
+FAIL: test_order_and_duplicates (exact_test.JournalCases.test_order_and_duplicates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-e6dpe4hu\exact_test.py", line 25, in test_order_and_duplicates
+    self.assertEqual(result, expected)
+AssertionError: {'cash': 7} != {'cash': 0}
+- {'cash': 7}
+?          ^
+
++ {'cash': 0}
+?          ^
+
+
+======================================================================
+FAIL: test_order_and_duplicates (test_ledger.JournalCases.test_order_and_duplicates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-e6dpe4hu\test_ledger.py", line 10, in test_order_and_duplicates
+    self.assertEqual(positions_for(messages), {'cash': 0})
+AssertionError: {'cash': 7} != {'cash': 0}
+- {'cash': 7}
+?          ^
+
++ {'cash': 0}
+?          ^
+
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.001s
+
+FAILED (failures=2)

@@ -1,0 +1,14 @@
+diff --git a/repair.go b/repair.go
+index e4ccfb5..aeeef9b 100644
+--- a/repair.go
++++ b/repair.go
+@@ -23,6 +23,9 @@ func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+ 		if to > maxInt-tr.Amount {
+ 			return false
+ 		}
++		if from < tr.Amount {
++			return false
++		}
+ 		next[tr.From] = from - tr.Amount
+ 		next[tr.To] = to + tr.Amount
+ 	}

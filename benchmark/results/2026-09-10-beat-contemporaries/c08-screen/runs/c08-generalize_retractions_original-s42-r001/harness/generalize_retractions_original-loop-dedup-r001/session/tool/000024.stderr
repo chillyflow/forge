@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    from service import balances; def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}; def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}; p = post('p', 7); r = retract('r', 'p'); s = retract('s', 'p'); print('Case 1 [p,r]:', balances([p, r])); print('Case 2 [r,p]:', balances([r, p])); print('Case 3 [p,p,r,s]:', balances([p, p, r, s]))
+                                  ^^^
+SyntaxError: invalid syntax

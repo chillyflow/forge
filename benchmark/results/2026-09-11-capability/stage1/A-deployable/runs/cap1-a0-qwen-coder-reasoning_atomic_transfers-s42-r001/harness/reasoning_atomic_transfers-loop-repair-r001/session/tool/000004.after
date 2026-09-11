@@ -1,0 +1,55 @@
+package repair
+
+import "math"
+
+type Transfer struct {
+	From, To string
+	Amount   int
+}
+
+func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+	// Create a copy of balances to work with
+	next := make(map[string]int, len(balances))
+	for key, value := range balances {
+		next[key] = value
+	}
+	
+	// Check all transfers first for validity
+	for _, tr := range transfers {
+		// Check if accounts exist
+		fromBalance, fromExists := balances[tr.From]
+		toBalance, toExists := balances[tr.To]
+		
+		// Reject if accounts don't exist, amount is negative, or insufficient funds
+		if !fromExists || !toExists || tr.Amount < 0 || fromBalance < tr.Amount {
+			return false
+		}
+		
+		// Check for integer overflow in destination account
+		if toBalance > math.MaxInt32-tr.Amount {
+			return false
+		}
+		
+		// Check for integer overflow in source account (though this shouldn't happen with the above check)
+		if fromBalance < tr.Amount {
+			return false
+		}
+	}
+	
+	// Apply all transfers if all are valid
+	for _, tr := range transfers {
+		if tr.From == tr.To {
+			continue
+		}
+		fromBalance := balances[tr.From]
+		toBalance := balances[tr.To]
+		next[tr.From] = fromBalance - tr.Amount
+		next[tr.To] = toBalance + tr.Amount
+	}
+	
+	// Update original balances
+	for key, value := range next {
+		balances[key] = value
+	}
+	return true
+}

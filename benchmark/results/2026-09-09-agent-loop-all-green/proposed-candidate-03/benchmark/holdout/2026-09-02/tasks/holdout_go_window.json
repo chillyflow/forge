@@ -1,0 +1,21 @@
+{
+  "id": "holdout_go_window",
+  "suite": "holdout-2026-09-02",
+  "language": "go",
+  "category": "algorithm",
+  "prompt": "Window.Add accepts nondecreasing integer timestamps and sums values in (now-width, now]. Rejected out-of-order timestamps must leave the window unchanged. Width is positive. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module holdout\n\ngo 1.24\n",
+    "service.go": "package holdout\ntype sample struct { at,value int }\ntype Window struct { Width int; samples []sample; last int; started bool }\nfunc (w *Window) Add(now,value int) (int,bool) {\n    if w.started && now<w.last { return 0,false }\n    w.last=now; w.started=true\n    w.samples=append(w.samples,sample{now,value})\n    first:=0\n    for first<len(w.samples) && w.samples[first].at<now-w.Width { first++ }\n    w.samples=w.samples[first:]\n    sum:=0; for _,s:=range w.samples { sum+=s.value }\n    return sum,true\n}\n",
+    "service_test.go": "package holdout\nimport \"testing\"\nfunc TestWindow(t *testing.T) {\n    w:=Window{Width:5}\n    for _,tc:=range []struct{at,value,want int}{{0,3,3},{4,2,5},{5,7,9},{5,-2,7},{10,1,1}} {\n        got,ok:=w.Add(tc.at,tc.value); if !ok || got!=tc.want { t.Fatalf(\"at %d sum %d\",tc.at,got) }\n    }\n    if _,ok:=w.Add(9,100);ok { t.Fatal(\"backdated sample accepted\") }\n    if got,ok:=w.Add(10,2);!ok || got!=3 { t.Fatal(got,ok) }\n}\n"
+  },
+  "oracle_files": {
+    "service.go": "package holdout\ntype sample struct { at,value int }\ntype Window struct { Width int; samples []sample; last int; started bool }\nfunc (w *Window) Add(now,value int) (int,bool) {\n    if w.started && now<w.last { return 0,false }\n    w.last=now; w.started=true\n    w.samples=append(w.samples,sample{now,value})\n    first:=0\n    for first<len(w.samples) && w.samples[first].at<=now-w.Width { first++ }\n    w.samples=w.samples[first:]\n    sum:=0; for _,s:=range w.samples { sum+=s.value }\n    return sum,true\n}\n"
+  }
+}

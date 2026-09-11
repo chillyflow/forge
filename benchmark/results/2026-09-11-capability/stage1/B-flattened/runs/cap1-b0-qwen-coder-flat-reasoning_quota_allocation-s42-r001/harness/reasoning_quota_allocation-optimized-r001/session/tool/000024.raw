@@ -1,0 +1,24 @@
+file_sha256:417097ff121a0133763a9f5ef5fb0103ca54d122f8f9d719cc9079933914b642
+70: 		}
+71: 		// Handle rounding leftovers by largest fractional remainder with ID tie-break
+72: 		sort.SliceStable(shares, func(i, j int) bool {
+73: 			if shares[i].remainder == shares[j].remainder {
+74: 				return shares[i].index < shares[j].index
+75: 			}
+76: 			return shares[i].remainder > shares[j].remainder
+77: 		})
+78: 		progressed := false
+79: 		for _, share := range shares {
+80: 			id := requests[share.index].ID
+81: 			if left > 0 && out[id] < requests[share.index].Max {
+82: 				out[id]++
+83: 				left--
+84: 				preferred = true
+85: 			}
+86: 		}
+87: 		if !progressed {
+88: 			break
+89: 		}
+90: 	}
+91: 	return out, true
+92: }

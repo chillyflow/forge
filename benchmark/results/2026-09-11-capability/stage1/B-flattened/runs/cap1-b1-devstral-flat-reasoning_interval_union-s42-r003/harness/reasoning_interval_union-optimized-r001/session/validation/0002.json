@@ -1,0 +1,319 @@
+{
+    "schema_version": 1,
+    "attempt": 2,
+    "generation": 7,
+    "applicable": true,
+    "session": "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-16iwabkn/.forge/sessions/86e5118d85c9c783f6bd8330c74ccdc2",
+    "plan": {
+        "schema_version": 2,
+        "generation": 7,
+        "language": "go",
+        "status": "planned",
+        "verification_status": "planned",
+        "graph_kind": "syntactic_package_imports",
+        "sound": false,
+        "applicable": true,
+        "verification_available": true,
+        "broad_verification_required": true,
+        "changed_paths": [],
+        "languages": [
+            "go"
+        ],
+        "missing_tools": [],
+        "modules": [
+            {
+                "directory": ".",
+                "module_path": "forgebench",
+                "synthetic": false
+            }
+        ],
+        "packages": [
+            {
+                "directory": ".",
+                "import_path": "forgebench",
+                "module_directory": ".",
+                "present": true,
+                "has_tests": true,
+                "affected": true,
+                "dependent": false
+            }
+        ],
+        "edges": [],
+        "affected_packages": [
+            "."
+        ],
+        "reverse_dependents": [],
+        "fallback_reasons": [
+            {
+                "code": "no_changed_paths",
+                "path": "",
+                "detail": "No changed-file set was supplied; compile, test and vet all indexed packages before final module verification."
+            }
+        ],
+        "limitations": [
+            "Package imports are syntactic, not type-resolved references or test coverage.",
+            "Imports from production and test files are unioned; test-only changes also include reverse dependents conservatively.",
+            "Only indexed workspace files and module directives are resolved; generated code, embed inputs, replacement aliases, vendored/external modules and runtime dependencies may escape the graph.",
+            "Broad tests cover each indexed module only in the active Go environment; other tags, platforms, toolchains, integration services and modules outside the workspace need separate validation.",
+            "The compile check uses go test -run ^$ and may execute package initialization and TestMain. All Go checks require process permission and may access caches or the network."
+        ],
+        "python": {
+            "applicable": false,
+            "executable_available": false,
+            "executable": "",
+            "selection_kind": "changed_files_and_filename_related_tests",
+            "syntax_scope": "changed",
+            "source_file_count": 0,
+            "syntax_file_count": 0,
+            "test_file_count": 0,
+            "targeted_test_count": 0,
+            "syntax_scheduled": false,
+            "tests_applicable": false,
+            "tests_scheduled": false,
+            "test_runner": "none",
+            "bytecode_cache_isolated": true,
+            "bytecode_cache_prefix": ".forge/pycache",
+            "pytest_cache_disabled": false,
+            "targeted_test_files": []
+        },
+        "stages": [
+            {
+                "name": "format",
+                "requires_previous_success": false,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "gofmt",
+                            "-l",
+                            "./repair.go",
+                            "./repair_test.go"
+                        ],
+                        "require_empty_stdout": true,
+                        "reason": "indexed_go_files_for_unknown_changes"
+                    }
+                ]
+            },
+            {
+                "name": "compile",
+                "requires_previous_success": true,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "go",
+                            "test",
+                            "-json",
+                            "-count=1",
+                            "-vet=off",
+                            "-run",
+                            "^$",
+                            "."
+                        ],
+                        "require_empty_stdout": false,
+                        "reason": "directly_affected_packages"
+                    }
+                ]
+            },
+            {
+                "name": "affected_tests",
+                "requires_previous_success": true,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "go",
+                            "test",
+                            "-json",
+                            "-count=1",
+                            "-vet=off",
+                            "."
+                        ],
+                        "require_empty_stdout": false,
+                        "reason": "directly_affected_packages"
+                    }
+                ]
+            },
+            {
+                "name": "dependent_tests",
+                "requires_previous_success": true,
+                "commands": []
+            },
+            {
+                "name": "vet",
+                "requires_previous_success": true,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "go",
+                            "vet",
+                            "."
+                        ],
+                        "require_empty_stdout": false,
+                        "reason": "affected_and_dependent_packages"
+                    }
+                ]
+            },
+            {
+                "name": "broad_tests",
+                "requires_previous_success": true,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "go",
+                            "test",
+                            "-json",
+                            "-count=1",
+                            "./..."
+                        ],
+                        "require_empty_stdout": false,
+                        "reason": "conservative_fallback_and_final_verification"
+                    }
+                ]
+            }
+        ],
+        "command_count": 5
+    },
+    "commands": [
+        {
+            "id": 1,
+            "stage": "format",
+            "cwd": ".",
+            "argv": [
+                "gofmt",
+                "-l",
+                "./repair.go",
+                "./repair_test.go"
+            ],
+            "require_empty_stdout": true,
+            "started": true,
+            "exit_code": 0,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 16.0,
+            "stdout_bytes": 0,
+            "stderr_bytes": 0,
+            "stdout_artifact": "validation/0002-0001.stdout",
+            "stderr_artifact": "validation/0002-0001.stderr",
+            "status": "ok"
+        },
+        {
+            "id": 2,
+            "stage": "compile",
+            "cwd": ".",
+            "argv": [
+                "go",
+                "test",
+                "-json",
+                "-count=1",
+                "-vet=off",
+                "-run",
+                "^$",
+                "."
+            ],
+            "require_empty_stdout": false,
+            "started": true,
+            "exit_code": 0,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 484.0,
+            "stdout_bytes": 585,
+            "stderr_bytes": 0,
+            "stdout_artifact": "validation/0002-0002.stdout",
+            "stderr_artifact": "validation/0002-0002.stderr",
+            "status": "ok"
+        },
+        {
+            "id": 3,
+            "stage": "affected_tests",
+            "cwd": ".",
+            "argv": [
+                "go",
+                "test",
+                "-json",
+                "-count=1",
+                "-vet=off",
+                "."
+            ],
+            "require_empty_stdout": false,
+            "started": true,
+            "exit_code": 0,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 469.0,
+            "stdout_bytes": 1031,
+            "stderr_bytes": 0,
+            "stdout_artifact": "validation/0002-0003.stdout",
+            "stderr_artifact": "validation/0002-0003.stderr",
+            "status": "ok"
+        },
+        {
+            "id": 4,
+            "stage": "vet",
+            "cwd": ".",
+            "argv": [
+                "go",
+                "vet",
+                "."
+            ],
+            "require_empty_stdout": false,
+            "started": true,
+            "exit_code": 0,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 125.0,
+            "stdout_bytes": 0,
+            "stderr_bytes": 0,
+            "stdout_artifact": "validation/0002-0004.stdout",
+            "stderr_artifact": "validation/0002-0004.stderr",
+            "status": "ok"
+        },
+        {
+            "id": 5,
+            "stage": "broad_tests",
+            "cwd": ".",
+            "argv": [
+                "go",
+                "test",
+                "-json",
+                "-count=1",
+                "./..."
+            ],
+            "require_empty_stdout": false,
+            "started": true,
+            "exit_code": 0,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 469.0,
+            "stdout_bytes": 1031,
+            "stderr_bytes": 0,
+            "stdout_artifact": "validation/0002-0005.stdout",
+            "stderr_artifact": "validation/0002-0005.stderr",
+            "status": "ok"
+        }
+    ],
+    "generation_after": 7,
+    "commands_attempted": 5,
+    "commands_run": 5,
+    "stages_passed": 5,
+    "inputs_changed": false,
+    "inputs_checked": true,
+    "input_max_files": 100000,
+    "input_max_bytes": 2147483648,
+    "input_hash_before": "f97149298952a9d4",
+    "input_hash_after": "f97149298952a9d4",
+    "snapshot_ms": 0.0,
+    "duration_ms": 1609.0,
+    "passed": true,
+    "checks_passed": true,
+    "evidence_complete": true,
+    "status": "ok",
+    "summary": "Automatic staged validation passed: 5 commands across 5 stages, repository generation=7."
+}

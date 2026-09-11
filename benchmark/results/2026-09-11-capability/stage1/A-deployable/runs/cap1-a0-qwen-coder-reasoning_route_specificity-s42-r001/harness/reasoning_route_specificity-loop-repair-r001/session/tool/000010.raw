@@ -1,0 +1,101 @@
+file_sha256:47ede2ccc19905edea30c92b447f6d329acfcc7892102adcdcc84ca01c65958b
+1: package repair
+2: 
+3: import "strings"
+4: 
+5: type Route struct{ Method, Pattern, Name string }
+6: type routeMatch struct {
+7: 	name                                    string
+8: 	params                                  map[string]string
+9: 	literals, methodExact, wildcards, index int
+10: }
+11: 
+12: func routeSegments(value string) []string {
+13: 	value = strings.Trim(value, "/")
+14: 	if value == "" {
+15: 		return nil
+16: 	}
+17: 	return strings.Split(value, "/")
+18: }
+19: 
+20: func MatchRoute(method, path string, routes []Route) (string, map[string]string, bool) {
+21: 	actual := routeSegments(path)
+22: 	var best routeMatch
+23: 	found := false
+24: 
+25: 	for index, route := range routes {
+26: 		// Check method match - "*" matches any method, exact method match is preferred
+27: 		if route.Method != "*" && route.Method != method {
+28: 			continue
+29: 		}
+30: 
+31: 		pattern := routeSegments(route.Pattern)
+32: 		params := map[string]string{}
+33: 		literals, wildcards := 0, 0
+34: 		pi, ai := 0, 0
+35: 		ok := true
+36: 
+37: 		// Match pattern segments with path segments
+38: 		for pi < len(pattern) && ai < len(actual) {
+39: 			part := pattern[pi]
+40: 			if part == "*" {
+41: 				// Wildcard must be at the end and consume the rest of the path
+42: 				if pi != len(pattern)-1 {
+43: 					ok = false
+44: 					break
+45: 				}
+46: 				// Check that we have at least one segment to consume (non-empty suffix)
+47: 				if len(actual[ai:]) == 0 {
+48: 					ok = false
+49: 					break
+50: 				}
+51: 				params["*"] = strings.Join(actual[ai:], "/")
+52: 				wildcards++
+53: 				ai = len(actual)
+54: 				pi++
+55: 				break
+56: 			}
+57: 
+58: 			if strings.HasPrefix(part, ":") && len(part) > 1 {
+59: 				// Parameter capture
+60: 				params[part[1:]] = actual[ai]
+61: 				wildcards++
+62: 			} else if part == actual[ai] {
+63: 				// Literal match
+64: 				literals++
+65: 			} else {
+66: 				// No match
+67: 				ok = false
+68: 				break
+69: 			}
+70: 			pi++
+71: 			ai++
+72: 		}
+73: 
+74: 		// Check if we consumed all pattern and all path segments
+75: 		if !ok || pi != len(pattern) || ai != len(actual) {
+76: 			continue
+77: 		}
+78: 
+79: 		// Calculate match quality
+80: 		methodExact := 0
+81: 		if route.Method == method {
+82: 			methodExact = 1
+83: 		}
+84: 
+85: 		candidate := routeMatch{route.Name, params, literals, methodExact, wildcards, index}
+86: 
+87: 		// Apply tie-breaking rules:
+88: 		// 1. Prefer more literal segments
+89: 		// 2. Prefer exact method over wildcard method
+90: 		// 3. Prefer fewer wildcards
+91: 		// 4. Preserve declaration order (index)
+92: 		if !found ||
+93: 			candidate.literals > best.literals ||
+94: 			(candidate.literals == best.literals && candidate.methodExact > best.methodExact) ||
+95: 			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards < best.wildcards) ||
+96: 			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards == best.wildcards && candidate.index < best.index) {
+97: 			best = candidate
+98: 			found = true
+99: 		}
+100: 	}

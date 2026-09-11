@@ -1,0 +1,11 @@
+Debugging case by case:
+Case 1 [p, retract(r,p)]:
+p: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+r: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+Result: {'cash': 0}
+
+Case 2 [retract(r,p), p]:
+Result: {}
+
+Case 3 [p, p, retract(r,p), retract(s,p)]:
+Result: {'cash': 0}

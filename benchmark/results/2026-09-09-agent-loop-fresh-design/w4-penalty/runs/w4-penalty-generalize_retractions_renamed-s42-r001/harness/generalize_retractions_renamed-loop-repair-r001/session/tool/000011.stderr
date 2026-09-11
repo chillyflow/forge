@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    from ledger import positions_for; def post(i, delta): return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}; def retract(i, reference): return {'key': i, 'kind': 'retract', 'reference': reference}; p = post('p', 7); result = positions_for([p, retract('r', 'p')]); print('Result:', result); print('Expected: {"cash": 0}')
+                                      ^^^
+SyntaxError: invalid syntax

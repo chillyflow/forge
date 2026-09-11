@@ -1,0 +1,187 @@
+{
+    "schema_version": 1,
+    "attempt": 6,
+    "generation": 13,
+    "applicable": true,
+    "session": "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-ih4x0t6d/.forge/sessions/0e75cbc57124e704e44bd8aae9c08885",
+    "plan": {
+        "schema_version": 2,
+        "generation": 13,
+        "language": "python",
+        "status": "planned",
+        "verification_status": "planned",
+        "graph_kind": "none",
+        "sound": false,
+        "applicable": true,
+        "verification_available": true,
+        "broad_verification_required": true,
+        "changed_paths": [],
+        "languages": [
+            "python"
+        ],
+        "missing_tools": [],
+        "modules": [],
+        "packages": [],
+        "edges": [],
+        "affected_packages": [],
+        "reverse_dependents": [],
+        "fallback_reasons": [],
+        "limitations": [
+            "Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.",
+            "pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.",
+            "Python syntax checks compile source without importing code. Python test runs both redirect the bytecode cache to an unwritten prefix and disable bytecode writes, so imports made by the test process itself compile from current source and cannot be satisfied by a workspace __pycache__ or a previous candidate's bytecode; the cost is one compile per command. These are interpreter options and do not reach a further interpreter that a test spawns itself, which retains ordinary bytecode behaviour. pytest also disables its cache provider. Project tests may still mutate inputs and must be rejected if the validation snapshot changes.",
+            "Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration."
+        ],
+        "python": {
+            "applicable": true,
+            "executable_available": true,
+            "executable": "python",
+            "selection_kind": "changed_files_and_filename_related_tests",
+            "syntax_scope": "all_indexed",
+            "source_file_count": 2,
+            "syntax_file_count": 2,
+            "test_file_count": 1,
+            "targeted_test_count": 0,
+            "syntax_scheduled": true,
+            "tests_applicable": true,
+            "tests_scheduled": true,
+            "test_runner": "unittest",
+            "bytecode_cache_isolated": true,
+            "bytecode_cache_prefix": ".forge/pycache",
+            "pytest_cache_disabled": false,
+            "targeted_test_files": []
+        },
+        "stages": [
+            {
+                "name": "format",
+                "requires_previous_success": false,
+                "commands": []
+            },
+            {
+                "name": "compile",
+                "requires_previous_success": true,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "python",
+                            "-B",
+                            "-c",
+                            "import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])",
+                            "./service.py",
+                            "./test_service.py"
+                        ],
+                        "require_empty_stdout": false,
+                        "reason": "indexed_python_files_for_unknown_changes"
+                    }
+                ]
+            },
+            {
+                "name": "affected_tests",
+                "requires_previous_success": true,
+                "commands": []
+            },
+            {
+                "name": "dependent_tests",
+                "requires_previous_success": true,
+                "commands": []
+            },
+            {
+                "name": "vet",
+                "requires_previous_success": true,
+                "commands": []
+            },
+            {
+                "name": "broad_tests",
+                "requires_previous_success": true,
+                "commands": [
+                    {
+                        "cwd": ".",
+                        "argv": [
+                            "python",
+                            "-B",
+                            "-X",
+                            "pycache_prefix=.forge/pycache",
+                            "-c",
+                            "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+                            "./test_service.py"
+                        ],
+                        "require_empty_stdout": false,
+                        "reason": "final_python_unittest_files"
+                    }
+                ]
+            }
+        ],
+        "command_count": 2
+    },
+    "commands": [
+        {
+            "id": 1,
+            "stage": "compile",
+            "cwd": ".",
+            "argv": [
+                "python",
+                "-B",
+                "-c",
+                "import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])",
+                "./service.py",
+                "./test_service.py"
+            ],
+            "require_empty_stdout": false,
+            "started": true,
+            "exit_code": 0,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 32.0,
+            "stdout_bytes": 0,
+            "stderr_bytes": 0,
+            "stdout_artifact": "validation/0006-0001.stdout",
+            "stderr_artifact": "validation/0006-0001.stderr",
+            "status": "ok"
+        },
+        {
+            "id": 2,
+            "stage": "broad_tests",
+            "cwd": ".",
+            "argv": [
+                "python",
+                "-B",
+                "-X",
+                "pycache_prefix=.forge/pycache",
+                "-c",
+                "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+                "./test_service.py"
+            ],
+            "require_empty_stdout": false,
+            "started": true,
+            "exit_code": 1,
+            "timeout": false,
+            "cancelled": false,
+            "truncated": false,
+            "duration_ms": 140.0,
+            "stdout_bytes": 0,
+            "stderr_bytes": 1450,
+            "stdout_artifact": "validation/0006-0002.stdout",
+            "stderr_artifact": "validation/0006-0002.stderr",
+            "status": "conflict"
+        }
+    ],
+    "generation_after": 13,
+    "commands_attempted": 2,
+    "commands_run": 2,
+    "stages_passed": 1,
+    "inputs_changed": false,
+    "inputs_checked": true,
+    "input_max_files": 100000,
+    "input_max_bytes": 2147483648,
+    "input_hash_before": "4d6b76201b43b00d",
+    "input_hash_after": "4d6b76201b43b00d",
+    "snapshot_ms": 0.0,
+    "duration_ms": 204.0,
+    "passed": false,
+    "checks_passed": false,
+    "evidence_complete": true,
+    "status": "conflict",
+    "summary": "Automatic validation stopped at broad_tests: Validation stage broad_tests failed (exit_code=1)\nexit_code=1 timeout=false cancelled=false truncated=false\nstdout:\n\nstderr:\ntest_independent_postings (test_service.BehaviorChecks.test_independent_postings) ... FAIL\r\ntest_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates) ... FAIL\r\n\r\n======================================================================\r\nFAIL: test_independent_postings (test_service.BehaviorChecks.test_independent_postings)\r\n----------------------------------------------------------------------\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-ih4x0t6d\\test_service.py\", line 12, in test_independent_postings\r\n    self.assertEqual(balances([post('a', 7), post('b', -2), retract('r', 'a')]), {'cash': -2})\r\nAssertionError: {'cash': 5} != {'cash': -2}\r\n- {'cash': 5}\r\n?          ^\r\n\r\n+ {'cash': -2}\r\n?          ^^\r\n\r\n\r\n======================================================================\r\nFAIL: test_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates)\r\n----------------------------------------------------------------------\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-ih4x0t6d\\test_service.py\", line 10, in test_order_and_duplicates\r\n    self.assertEqual(balances(events), {'cash': 0})\r\nAssertionError: {'cash': 7} != {'cash': 0}\r\n- {'cash': 7}\r\n?          ^\r\n\r\n+ {'cash': 0}\r\n?          ^\r\n\r\n\r\n----------------------------------------------------------------------\r\nRan 2 tests in 0.001s\r\n\r\nFAILED (failures=2)\r\n"
+}

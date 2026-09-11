@@ -1,0 +1,8 @@
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Testing all cases from test_order_and_duplicates:
+Case 1 [p, retract('r', 'p')]: {'cash': 0} Expected: {'cash': 0}
+Case 2 [retract('r', 'p'), p]: {'cash': 7} Expected: {'cash': 0}
+Case 3 [p, p, retract('r', 'p'), retract('s', 'p')]: {'cash': 0} Expected: {'cash': 0}

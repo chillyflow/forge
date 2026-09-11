@@ -1,0 +1,23 @@
+diff --git "a/debug_test.go" "b/debug_test.go"
+new file mode 100644
+--- /dev/null
++++ "b/debug_test.go"
+@@ -0,0 +1,17 @@
++package main
++
++import (
++	"fmt"
++	"repair"
++)
++
++func main() {
++	tasks := []string{"package", "compile", "generate", "lint"}
++	deps := map[string][]string{"package": {"compile"}, "compile": {"generate"}}
++	result, ok := repair.OrderBuild(tasks, deps)
++	fmt.Printf("Result: %v, OK: %v\n", result, ok)
++	
++	// Expected: ["generate", "compile", "lint", "package"]
++	// This is because generate has no deps, compile depends on generate, 
++	// package depends on compile, lint has no deps
++}
+\ No newline at end of file

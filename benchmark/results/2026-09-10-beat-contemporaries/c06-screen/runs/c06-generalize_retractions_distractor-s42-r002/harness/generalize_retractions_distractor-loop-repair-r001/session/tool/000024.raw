@@ -1,0 +1,14 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+Type of events: <class 'list'>
+First element: <class 'list'>
+First element contents: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Calling balances with nested list:
+
+stderr:
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-hakf_gh1\service.py", line 8, in balances
+    if event['id'] in seen:
+       ~~~~~^^^^^^
+TypeError: list indices must be integers or slices, not str

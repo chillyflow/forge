@@ -1,0 +1,21 @@
+{
+  "id": "holdout_py_queue",
+  "suite": "holdout-2026-09-02",
+  "language": "python",
+  "category": "stateful",
+  "prompt": "Queue uses integer priority (smaller first), with FIFO order for ties. Scheduling an existing key replaces its pending item; cancellation removes it. Stale heap entries must never run and must not consume a later replacement. pop returns (key, value), or None when empty. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-v"
+  ],
+  "files": {
+    "service.py": "import heapq\nclass Queue:\n    def __init__(self):\n        self.heap, self.current, self.serial = [], {}, 0\n    def schedule(self, key, priority, value):\n        self.serial += 1\n        self.current[key] = (self.serial, value)\n        heapq.heappush(self.heap, (priority, self.serial, key))\n    def cancel(self, key):\n        self.current.pop(key, None)\n    def pop(self):\n        while self.heap:\n            _, serial, key = heapq.heappop(self.heap)\n            entry = self.current.pop(key, None)\n            if entry is None or entry[0] != serial:\n                continue\n            # Entry was removed while reading it.\n            return key, entry[1]\n        return None\n",
+    "test_service.py": "import unittest\nfrom service import Queue\nclass Queues(unittest.TestCase):\n    def test_reschedule_does_not_consume_replacement(self):\n        q = Queue()\n        q.schedule('x', 0, 'old')\n        q.schedule('y', 1, 'other')\n        q.schedule('x', 2, 'new')\n        self.assertEqual(q.pop(), ('y', 'other'))\n        self.assertEqual(q.pop(), ('x', 'new'))\n        self.assertIsNone(q.pop())\n    def test_cancel_readd_and_fifo(self):\n        q = Queue()\n        q.schedule('b', 1, 1); q.cancel('b'); q.schedule('a', 1, 2); q.schedule('b', 1, 3)\n        self.assertEqual(q.pop(), ('a', 2)); self.assertEqual(q.pop(), ('b', 3))\n        q.cancel('missing'); self.assertIsNone(q.pop())\n"
+  },
+  "oracle_files": {
+    "service.py": "import heapq\nclass Queue:\n    def __init__(self):\n        self.heap, self.current, self.serial = [], {}, 0\n    def schedule(self, key, priority, value):\n        self.serial += 1\n        self.current[key] = (self.serial, value)\n        heapq.heappush(self.heap, (priority, self.serial, key))\n    def cancel(self, key):\n        self.current.pop(key, None)\n    def pop(self):\n        while self.heap:\n            _, serial, key = heapq.heappop(self.heap)\n            entry = self.current.get(key)\n            if entry is None or entry[0] != serial:\n                continue\n            del self.current[key]\n            return key, entry[1]\n        return None\n"
+  }
+}

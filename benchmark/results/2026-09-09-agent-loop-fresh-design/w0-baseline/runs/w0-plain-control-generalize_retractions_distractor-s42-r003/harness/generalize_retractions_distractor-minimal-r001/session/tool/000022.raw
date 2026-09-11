@@ -1,0 +1,30 @@
+file_sha256:1d950bab8f347cea632461791b29d3aa3fbca88af24b3bd00668a3b3d1506468
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     for event in events:
+5:         if event['id'] in seen:
+6:             continue
+7:         seen.add(event['id'])
+8:         if event['kind'] == 'post':
+9:             account, amount = event['account'], event['amount']
+10:             # If this posting has been cancelled by a retraction, skip it
+11:             if event['id'] in cancelled:
+12:                 continue
+13:             postings[event['id']] = (account, amount)
+14:             totals.setdefault(account, 0)
+15:             totals[account] += amount
+16:         else:
+17:             target = event['target']
+18:             # A retraction cancels its referenced posting exactly once
+19:             if target in cancelled:
+20:                 continue
+21:             cancelled.add(target)
+22:             if target in postings:
+23:                 account, amount = postings[target]
+24:                 totals[account] -= amount
+25:                 # Remove the posting from postings dict to prevent double cancellation
+26:                 del postings[target]
+27:     # Ensure all accounts with cancelled postings still show up with zero balance
+28:     # This is already handled by the fact that we don't add cancelled postings to totals
+29:     return totals

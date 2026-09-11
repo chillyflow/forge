@@ -1,0 +1,8 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+  File "<string>", line 1
+    import unittest; from service import balances; def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}; def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}; p = post('p', 7); r = retract('r', 'p'); print('Event 1:', p); print('Event 2:', r); print('Result:', balances([p, r])); print('Event 1 target:', p.get('target', 'None')); print('Event 2 target:', r.get('target', 'None'))
+                                                   ^^^
+SyntaxError: invalid syntax

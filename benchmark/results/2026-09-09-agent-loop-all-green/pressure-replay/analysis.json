@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "counts": {
+    "append-only": {
+      "scheduled": 11,
+      "dispatch_after_original_prefix": 8,
+      "exact_accepted_prefix_then_dispatch": 8,
+      "context_omission_runs": 0,
+      "terminal_tests_pass": 0
+    },
+    "bounded": {
+      "scheduled": 11,
+      "dispatch_after_original_prefix": 11,
+      "exact_accepted_prefix_then_dispatch": 10,
+      "context_omission_runs": 7,
+      "terminal_tests_pass": 0
+    }
+  },
+  "strict_source_inventory_files_verified": 17,
+  "runner_copy_sha256": "2dfa1717076a6c48b698d45db85a7968182c2492df5c5cb97f79d7b5efd3b117",
+  "all_22_simulated_and_within_unchanged_token_action_limits": true,
+  "all_22_terminal_verifications_failed": true,
+  "replay_tail_dispatch_conflicts": [
+    {
+      "source_cell_id": "generalize_retractions_renamed-impact-r001",
+      "policy": "append-only",
+      "reason": "Session: C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-gnw2rrql\\workspace/.forge/sessions/9ed1e428865eff102b28bd6dde81cd57\nSIMULATED turns=31 prompt=216585 generated=7866 cached=190008 elapsed=1703ms\nforge: limit: Reserved checkpoint action was not respected"
+    },
+    {
+      "source_cell_id": "generalize_retractions_renamed-impact-r001",
+      "policy": "bounded",
+      "reason": "Session: C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-_6630qf0\\workspace/.forge/sessions/c60818ed4aa8493cd0c23b76ec9f54bd\nSIMULATED turns=31 prompt=224317 generated=7866 cached=170600 elapsed=1813ms\nforge: limit: Reserved checkpoint action was not respected"
+    },
+    {
+      "source_cell_id": "generalize_retractions_renamed-semantic-r001",
+      "policy": "append-only",
+      "reason": "Session: C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-wgnw0beb\\workspace/.forge/sessions/d93bd00b95f974ae924dad9b534aba4a\nSIMULATED turns=31 prompt=211908 generated=8141 cached=184965 elapsed=1703ms\nforge: limit: Reserved checkpoint action was not respected"
+    },
+    {
+      "source_cell_id": "generalize_retractions_renamed-semantic-r001",
+      "policy": "bounded",
+      "reason": "Session: C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-ywob12wc\\workspace/.forge/sessions/28e9a8d7ac4cba6814f108ef746aa6f6\nSIMULATED turns=31 prompt=217017 generated=8141 cached=165555 elapsed=1750ms\nforge: limit: Reserved checkpoint action was not respected"
+    }
+  ],
+  "distinctions": [
+    "Raw dispatch after the archived prefix occurred for 11 bounded runs; 10 also preserve every accepted historical ACTION.",
+    "In distractor/reflection the archived reflection was supplied verbatim but exceeds 256 script-count tokens; bounded records that failed attempt and resumes.",
+    "The two 29-action prefixes append validation at 30 and final at 31; the existing host reserve correctly requires validation on 31, rejecting that final. Neither tail is evidence of a repair failure beyond the already failing prefix.",
+    "Finite script exhaustion after rejected finals and reserved-turn conflicts are replay-tail artifacts, not model-generation outcomes.",
+    "These results are not real Qwen tokenizer/template replay acceptance and are not coding success."
+  ]
+}

@@ -1,0 +1,14 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {}
+Expected: {'cash': 0}
+
+--- Other test cases ---
+
+stderr:
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-ssz9jme4\debug_test.py", line 15, in <module>
+    events2 = [p, retract('r', 'p')]
+               ^
+NameError: name 'p' is not defined

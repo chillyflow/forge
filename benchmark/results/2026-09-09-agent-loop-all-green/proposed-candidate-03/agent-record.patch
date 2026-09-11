@@ -1,0 +1,216 @@
+--- a/src/core/agent.c
++++ b/src/core/agent.c
+@@ -894,6 +894,7 @@
+     size_t incomplete_validation_id;
+     uint64_t latest_input_hash;
+     size_t latest_validation_id;
++    bool latest_validation_passed;
+     char last_path[FG_PATH_MAX];
+     size_t source_line;
+     char *last_delta;
+@@ -1055,7 +1056,11 @@
+         cp->incomplete_validation_id = tools->validation_id;
+     }
+     if (a->config.bounded_repair && (validated || passed)) {
+-        char *retained = fg_strdup(feedback.data ? feedback.data : "Validation evidence unavailable.");
++        /* Retain the observed result, not the tool reply's operational guidance.
++         * A later edit must not inherit an old "NOT PASSED" or "Call final now". */
++        char *retained = fg_strdup(result.summary ? result.summary
++            : passed ? "All applicable validation commands passed for the recorded inputs."
++                     : "Complete validation failed for the recorded inputs.");
+         if (!retained) {
+             fg_buf_clear(&feedback);
+             fg_error(e, FORGE_ERR_MEMORY, "Cannot retain current validation evidence");
+@@ -1065,6 +1070,7 @@
+         cp->latest_feedback = retained;
+         cp->latest_input_hash = input_hash;
+         cp->latest_validation_id = tools->validation_id;
++        cp->latest_validation_passed = passed;
+         free(cp->incomplete_feedback);
+         cp->incomplete_feedback = NULL;
+         free(cp->failed_command);
+@@ -1154,13 +1160,32 @@
+                   (unsigned long long)cp->latest_input_hash, cp->latest_validation_id,
+                   a->config.limits.max_generated_tokens - a->metrics.generated_tokens,
+                   a->config.limits.max_input_tokens - a->metrics.prompt_tokens);
++    bool matching_inputs = cp->latest_feedback && cp->latest_input_hash == current_hash;
++    if (cp->passed)
++        fg_buf_puts(&text, "CURRENT_CANDIDATE_VALIDATION: PASSED. The host checked the current "
++                           "changed inputs; completion is now available.\n");
++    else if (matching_inputs && !cp->latest_validation_passed)
++        fg_buf_puts(&text, "CURRENT_CANDIDATE_VALIDATION: FAILED. Current input identity matches "
++                           "the complete failed check below.\n");
++    else
++        fg_buf_puts(&text, "CURRENT_CANDIDATE_VALIDATION: UNVERIFIED. No retained result authorizes "
++                           "completion for the current inputs. A result for previous inputs does "
++                           "not establish whether the current edit passes or fails. Complete related "
++                           "edits, then validate_candidate to assess this candidate.\n");
+     fg_buf_puts(&text, "Older exchanges are historical observations, not claims about current "
+                        "source. Complete older exchanges may be omitted to fit the unchanged "
+                        "budget; raw history is retained in the session artifacts. Model reasoning "
+                        "and reflections are hypotheses, never host verdicts.\n");
+     if (cp->latest_feedback) {
+-        fg_buf_puts(&text, "LATEST_COMPLETE_CHECKPOINT_OBSERVATION (applies only to its recorded inputs):\n");
++        fg_buf_printf(&text, "LATEST_COMPLETE_CHECKPOINT_OBSERVATION outcome=%s input_relation=%s "
++                             "(observed result, not an instruction):\n",
++                      cp->latest_validation_passed ? "PASSED" : "FAILED",
++                      matching_inputs ? "matching" : "historical");
++        if (!matching_inputs)
++            fg_buf_puts(&text, "This check ran before the current input changes. Its diagnostic "
++                               "is historical evidence; it did not test the current candidate.\n");
+         fg_buf_puts(&text, cp->latest_feedback);
++        fg_buf_puts(&text, "\nEND_CHECKPOINT_OBSERVATION\n");
+     } else
+         fg_buf_puts(&text, "No candidate has completed host validation.\n");
+     if (cp->incomplete_feedback)
+@@ -1172,7 +1197,7 @@
+         if (cp->failed_command)
+             fg_buf_printf(&text, "FAILING_COMMAND_IDENTITY: %s\n", cp->failed_command);
+         if (cp->last_delta) {
+-            fg_buf_puts(&text, "PREVIOUS_APPLIED_DELTA (historical tool arguments):\n");
++            fg_buf_puts(&text, "PREVIOUS_APPLIED_DELTA (observed tool arguments, historical excerpt):\n");
+             fg_buf_puts(&text, cp->last_delta);
+             fg_buf_puts(&text, "\n");
+         }
+@@ -1333,7 +1358,7 @@
+         !fg_session_emit(
+             &a->session, "agent_mode",
+             a->config.bounded_repair
+-                ? "{\"name\":\"bounded-repair\",\"version\":1,\"append_only\":false,"
++                ? "{\"name\":\"bounded-repair\",\"version\":2,\"append_only\":false,"
+                   "\"automatic_validation\":true,\"raw_history_retained\":true,"
+                   "\"recovery\":true,\"corrective_prompts\":true}"
+             : a->config.candidate_checkpoint
+@@ -1710,8 +1735,26 @@
+                         fg_input_snapshot_destroy(checkpoint.passed);
+                         checkpoint.passed = NULL;
+                         checkpoint.episode_active = true;
+-                        free(checkpoint.last_delta);
+-                        checkpoint.last_delta = fg_compress_output(action, 2048, NULL, NULL);
++                        /* Raw ACTION keeps the complete model prose. The host's
++                         * applied-delta record contains only the actual tool
++                         * arguments, so a hypothesis cannot crowd out the edit. */
++                        char *arguments = yyjson_val_write(args, 0, NULL);
++                        char *excerpt = arguments ? fg_compress_output(arguments, 2048, NULL, NULL) : NULL;
++                        fg_buf delta = {0};
++                        if (excerpt) {
++                            fg_buf_printf(&delta, "tool=%s call_id=%zu\n", name, tools.call_id);
++                            fg_buf_puts(&delta, excerpt);
++                        }
++                        char *retained = excerpt && !delta.failed ? fg_buf_take(&delta) : NULL;
++                        free(arguments);
++                        free(excerpt);
++                        fg_buf_clear(&delta);
++                        if (!retained)
++                            status = fg_error(e, FORGE_ERR_MEMORY, "Cannot retain observed applied edit");
++                        else {
++                            free(checkpoint.last_delta);
++                            checkpoint.last_delta = retained;
++                        }
+                     }
+                 }
+                 if (a->config.bounded_repair && !tool_error.code &&
+--- a/tests/integration/test_bounded_repair.py
++++ b/tests/integration/test_bounded_repair.py
+@@ -159,16 +159,101 @@
+         checkpoints = self.kind(events, "candidate_checkpoint")
+         self.assertFalse(checkpoints[0]["passed"])
+         self.assertTrue(checkpoints[-1]["passed"])
++        unchanged_failure = self.host_text(self.prompt(session, 3))
++        self.assertIn("CURRENT_CANDIDATE_VALIDATION: FAILED", unchanged_failure)
++        self.assertIn("outcome=FAILED input_relation=matching", unchanged_failure)
+         after_edit = self.host_text(self.prompt(session, 5))
+         identities = re.search(r"current_inputs=([0-9a-f]+) latest_validation_inputs=([0-9a-f]+)",
+                                after_edit)
+         if identities is None:
+             self.fail("Current and validated input identities are absent from host evidence")
+         self.assertNotEqual(identities[1], identities[2])
++        self.assertIn("CURRENT_CANDIDATE_VALIDATION: UNVERIFIED", after_edit)
++        self.assertIn("outcome=FAILED input_relation=historical", after_edit)
++        self.assertIn("did not test the current candidate", after_edit)
++        self.assertNotIn("CANDIDATE_CHECKPOINT: NOT PASSED", after_edit)
+         self.assertIn("AssertionError", after_edit)
+         source = after_edit.split("CURRENT_SOURCE_OBSERVATION", 1)[1].split("END_SOURCE_OBSERVATION", 1)[0]
+         self.assertIn("return 2", source)
+         self.assertNotIn("return 0", source)
++        after_pass = self.host_text(self.prompt(session, 6))
++        self.assertIn("CURRENT_CANDIDATE_VALIDATION: PASSED", after_pass)
++        self.assertIn("outcome=PASSED input_relation=matching", after_pass)
++        self.assertNotIn("CANDIDATE_CHECKPOINT: PASS. Call final now", after_pass)
++
++    def test_host_applied_delta_excludes_assistant_hypotheses_but_raw_history_keeps_them(self):
++        hypothesis = "UNSUPPORTED_HYPOTHESIS: the first test must be broken. " * 60
++        events, session, _, _ = self.run_script([
++            patch("return 1", "return 0", hypothesis), validate(),
++            patch("return 0", "return 2"), validate(), final()])
++        self.assert_verified_repair(events)
++        host = self.host_text(self.prompt(session, 2))
++        delta = host.split("PREVIOUS_APPLIED_DELTA", 1)[1].split("CURRENT_SOURCE_OBSERVATION", 1)[0]
++        self.assertIn("tool=apply_patch call_id=1", delta)
++        self.assertIn('"old_text":"return 1"', delta)
++        self.assertIn('"new_text":"return 0"', delta)
++        self.assertNotIn("assistant_content", delta)
++        self.assertNotIn("UNSUPPORTED_HYPOTHESIS", host)
++        raw = json.loads((session / "context" / "final.json").read_text(encoding="utf-8"))
++        self.assertIn(hypothesis, json.dumps(raw))
++        self.assertTrue(any(hypothesis in item.get("assistant_content", "")
++                            for item in self.kind(events, "tool_call")))
++
++    def test_incomplete_check_keeps_prior_failure_separate_until_stable_repair(self):
++        failing = "def value():\n    return 0\n"
++        mutating = ("def value():\n    from pathlib import Path\n"
++                    "    Path('marker.txt').write_text('created during validation', encoding='utf-8')\n"
++                    "    return 2\n")
++        repaired = "def value():\n    return 2\n"
++        events, session, _, _ = self.run_script([
++            patch("return 1", "return 0"), validate(), patch(failing, mutating), validate(),
++            read(), patch(mutating, repaired), validate(), final()])
++        self.assert_verified_repair(events)
++        checkpoints = self.kind(events, "candidate_checkpoint")
++        self.assertTrue(checkpoints[0]["validated"])
++        self.assertFalse(checkpoints[0]["passed"])
++        self.assertFalse(checkpoints[1]["validated"])
++        self.assertFalse(checkpoints[1]["passed"])
++        host = self.host_text(self.prompt(session, 5))
++        self.assertIn("CURRENT_CANDIDATE_VALIDATION: UNVERIFIED", host)
++        self.assertIn("outcome=FAILED input_relation=historical", host)
++        self.assertIn("AssertionError: 0 != 2", host)
++        self.assertRegex(host, r"latest_validation_inputs=[0-9a-f]+ validation_id=1 ")
++        self.assertRegex(host, r"INCOMPLETE_VALIDATION_ATTEMPT input_hash=[0-9a-f]+ validation_id=2 ")
++        self.assertNotIn("CURRENT_CANDIDATE_VALIDATION: PASSED", host)
++        self.assertNotIn("CANDIDATE_CHECKPOINT: NOT PASSED", host)
++        self.assertTrue(checkpoints[2]["validated"])
++        self.assertTrue(checkpoints[2]["passed"])
++
++    def test_related_multi_file_edits_finish_after_older_history_is_omitted(self):
++        helper = self.root / "helper.py"
++        helper.write_text("def read_value():\n    return 0\n", encoding="utf-8")
++        integrated = "from helper import read_value\ndef value():\n    return read_value()\n"
++        history = [read(f"Inspection {index}. " + "Keep current evidence separate from hypotheses. " * 140)
++                   for index in range(4)]
++        events, session, metrics, _ = self.run_script([
++            patch(self.source, integrated), *history,
++            call("apply_patch", {"path": "helper.py", "old_text": "return 0", "new_text": "return 2"}),
++            validate(), final()], "--max-turns", "17")
++        self.assertEqual((self.root / "value.py").read_text(encoding="utf-8"), integrated)
++        self.assertIn("return 2", helper.read_text(encoding="utf-8"))
++        self.assertEqual(metrics["files_modified"], 2)
++        self.assertTrue(self.kind(events, "candidate_checkpoint")[-1]["passed"])
++        self.assertEqual(len(self.kind(events, "final")), 1)
++        self.assertTrue(any(item["omitted_segments"] > 0 for item in self.kind(events, "bounded_context")))
++        for turn in range(1, 9):
++            self.assert_complete_pairs(self.prompt(session, turn))
++        raw = json.loads((session / "context" / "final.json").read_text(encoding="utf-8"))
++        retained_actions = []
++        for segment in raw["segments"]:
++            try:
++                item = json.loads(segment["text"])
++            except json.JSONDecodeError:
++                continue
++            if isinstance(item, dict) and item.get("tool") == "apply_patch":
++                retained_actions.append(item)
++        self.assertTrue(any(item.get("args", {}).get("new_text") == integrated
++                            for item in retained_actions))
+ 
+     def test_user_clarification_remains_paired_and_mandatory_when_history_is_omitted(self):
+         task = "Repair value and preserve the existing tests."

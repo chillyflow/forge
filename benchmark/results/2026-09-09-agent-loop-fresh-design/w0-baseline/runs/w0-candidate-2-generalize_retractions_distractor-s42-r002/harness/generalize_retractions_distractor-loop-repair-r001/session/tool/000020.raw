@@ -1,0 +1,10 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Expected: {"cash": 0}
+What should happen:
+1. retract(r, p) - marks posting p as cancelled
+2. post(p, 7) - should be skipped since p is cancelled
+But this should result in {} not {"cash": 0}
+
+stderr:

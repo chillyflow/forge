@@ -1,0 +1,24 @@
+{
+  "id": "go_compiler_interface",
+  "suite": "campaign",
+  "language": "go",
+  "category": "compiler-failure",
+  "prompt": "The in-memory store must satisfy the Store interface and return records by string ID. The repository currently does not compile. Repair it and run go test -json ./... without modifying tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "protected_files": [
+    "store/store_test.go"
+  ],
+  "files": {
+    "go.mod": "module campaign.test/fixture\n\ngo 1.24\n",
+    "store/store.go": "package store\n\ntype Record struct { ID string; Value int }\ntype Store interface { Get(string) (Record,bool) }\ntype Memory struct { records map[string]Record }\nfunc New(records []Record) *Memory { m:=&Memory{records:map[string]Record{}}; for _,r:=range records { m.records[r.ID]=r }; return m }\nfunc (m *Memory) Get(id int) (Record,bool) { r,ok:=m.records[id]; return r,ok }\nvar _ Store = (*Memory)(nil)\n",
+    "store/store_test.go": "package store\n\nimport \"testing\"\nfunc TestMemory(t *testing.T) { var s Store=New([]Record{{ID:\"x\",Value:9}}); got,ok:=s.Get(\"x\"); if !ok || got.Value!=9 { t.Fatalf(\"got %v %v\",got,ok) } }\n"
+  },
+  "oracle_files": {
+    "store/store.go": "package store\n\ntype Record struct { ID string; Value int }\ntype Store interface { Get(string) (Record,bool) }\ntype Memory struct { records map[string]Record }\nfunc New(records []Record) *Memory { m:=&Memory{records:map[string]Record{}}; for _,r:=range records { m.records[r.ID]=r }; return m }\nfunc (m *Memory) Get(id string) (Record,bool) { r,ok:=m.records[id]; return r,ok }\nvar _ Store = (*Memory)(nil)\n"
+  }
+}

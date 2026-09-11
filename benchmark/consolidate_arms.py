@@ -22,6 +22,7 @@ import sys
 IDENTITY = ('forge_binary_sha256', 'model_sha256', 'fixture_preparation',
             'context_tokens', 'max_turns', 'gpu_layers', 'chat_template',
             'task_suite', 'output_reserve', 'temperature', 'seed',
+            'repetition_penalty', 'repetition_last_n',
             'repetitions', 'order_seed', 'randomized_order', 'lifecycle',
             'platform', 'go_version', 'gpu')
 PROMPT_PROTOCOLS = ('flattened', 'native')

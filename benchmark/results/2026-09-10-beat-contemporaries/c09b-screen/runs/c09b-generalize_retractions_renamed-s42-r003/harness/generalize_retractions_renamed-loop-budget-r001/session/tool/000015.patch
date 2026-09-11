@@ -1,0 +1,28 @@
+diff --git "a/debug_test.py" "b/debug_test.py"
+new file mode 100644
+--- /dev/null
++++ "b/debug_test.py"
+@@ -0,0 +1,22 @@
++#!/usr/bin/env python3
++
++from ledger import positions_for
++from test_ledger import post, retract
++
++def debug_positions_for(messages):
++    print("Processing messages:")
++    for i, msg in enumerate(messages):
++        print(f"  {i}: {msg}")
++    
++    result = positions_for(messages)
++    print(f"Result: {result}")
++    return result
++
++# Test the failing case
++p = post('p', 7)
++print("=== Test case that's failing ===")
++debug_positions_for([p, p, retract('r', 'p'), retract('s', 'p')])
++
++print("\n=== Other test cases ===")
++debug_positions_for([p, retract('r', 'p')])
++debug_positions_for([retract('r', 'p'), p])
+\ No newline at end of file

@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    import unittest; from service import balances; def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}; def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}; p = post('p', 7); r = retract('r', 'p'); print('Testing the exact test case:'); print('Events:', [r, p]); result = balances([r, p]); print('Result:', result); print('Expected: {"cash": 0}'); print('Test passes if result == expected:', result == {'cash': 0})
+                                                   ^^^
+SyntaxError: invalid syntax

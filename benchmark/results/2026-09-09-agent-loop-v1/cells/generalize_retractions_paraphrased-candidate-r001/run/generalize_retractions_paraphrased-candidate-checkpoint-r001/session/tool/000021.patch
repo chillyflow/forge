@@ -1,0 +1,66 @@
+diff --git "a/trace_test.py" "b/trace_test.py"
+new file mode 100644
+--- /dev/null
++++ "b/trace_test.py"
+@@ -0,0 +1,60 @@
++#!/usr/bin/env python3
++
++# Let me trace what should happen step by step
++
++def trace_balances(events):
++    seen, cancelled = set(), set()
++    postings, totals = {}, {}
++    print("Initial state:")
++    print(f"  seen: {seen}")
++    print(f"  cancelled: {cancelled}")
++    print(f"  postings: {postings}")
++    print(f"  totals: {totals}")
++    
++    for i, event in enumerate(events):
++        print(f"\nEvent {i}: {event}")
++        if event['id'] in seen:
++            print("  Already seen, skipping")
++            continue
++        seen.add(event['id'])
++        print(f"  Added to seen: {seen}")
++        if event['kind'] == 'post':
++            print(f"  Processing post: {event}")
++            # If this post was already cancelled, skip it
++            if event['id'] in cancelled:
++                print("  Post was cancelled, skipping")
++                continue
++            account, amount = event['account'], event['amount']
++            postings[event['id']] = (account, amount)
++            totals.setdefault(account, 0)
++            totals[account] += amount
++            print(f"  Added posting: {postings[event['id']]}")
++            print(f"  Updated totals: {totals}")
++        else:
++            target = event['target']
++            print(f"  Processing retract targeting: {target}")
++            if target in cancelled:
++                print("  Target already cancelled, skipping")
++                continue
++            cancelled.add(target)
++            print(f"  Added to cancelled: {cancelled}")
++            if target in postings:
++                account, amount = postings[target]
++                totals[account] -= amount
++                print(f"  Removed amount {amount} from {account}, totals: {totals}")
++            else:
++                print(f"  Target {target} not in postings")
++    return totals
++
++# Test case: [retract('r', 'p'), p] where p = post('p', 7)
++def post(i, amount): 
++    return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
++
++def retract(i, target): 
++    return {'id': i, 'kind': 'retract', 'target': target}
++
++p = post('p', 7)
++events = [retract('r', 'p'), p]
++print("=== Tracing [retract('r', 'p'), p] ===")
++result = trace_balances(events)
++print(f"\nFinal result: {result}")
+\ No newline at end of file

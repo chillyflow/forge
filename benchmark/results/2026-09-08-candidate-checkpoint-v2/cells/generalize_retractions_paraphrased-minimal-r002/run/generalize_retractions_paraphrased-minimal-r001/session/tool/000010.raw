@@ -1,0 +1,39 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+test_independent_postings (test_service.BehaviorChecks.test_independent_postings) ... FAIL
+test_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates) ... FAIL
+
+======================================================================
+FAIL: test_independent_postings (test_service.BehaviorChecks.test_independent_postings)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-f13ngwum\test_service.py", line 12, in test_independent_postings
+    self.assertEqual(balances([post('a', 7), post('b', -2), retract('r', 'a')]), {'cash': -2})
+AssertionError: {'cash': -9} != {'cash': -2}
+- {'cash': -9}
+?           ^
+
++ {'cash': -2}
+?           ^
+
+
+======================================================================
+FAIL: test_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-f13ngwum\test_service.py", line 10, in test_order_and_duplicates
+    self.assertEqual(balances(events), {'cash': 0})
+AssertionError: {'cash': -7} != {'cash': 0}
+- {'cash': -7}
+?          ^^
+
++ {'cash': 0}
+?          ^
+
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+FAILED (failures=2)

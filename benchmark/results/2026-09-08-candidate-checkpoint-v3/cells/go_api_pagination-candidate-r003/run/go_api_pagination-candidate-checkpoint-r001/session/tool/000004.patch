@@ -1,0 +1,71 @@
+diff --git "a/api/handler.go" "b/api/handler.go"
+--- "a/api/handler.go"
++++ "b/api/handler.go"
+@@ -1,29 +1,38 @@
+-package api
+-
+-import (
+-	"encoding/json"
+-	"net/http"
+-	"strconv"
+-)
+-
+-func ListHandler(values []string) http.HandlerFunc {
+-	return func(w http.ResponseWriter, r *http.Request) {
+-		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+-		size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+-		if page < 1 {
+-			page = 1
+-		}
+-		if size < 1 {
+-			size = 10
+-		}
+-		start := page * size
+-		if start > len(values) {
+-			start = len(values)
+-		}
+-		end := start + size
+-		if end > len(values) {
+-			end = len(values)
+-		}
+-		json.NewEncoder(w).Encode(values[start:end])
+-	}
+-}
++package api
++
++import (
++	"encoding/json"
++	"net/http"
++	"strconv"
++)
++
++func ListHandler(values []string) http.HandlerFunc {
++	return func(w http.ResponseWriter, r *http.Request) {
++		pageStr := r.URL.Query().Get("page")
++		sizeStr := r.URL.Query().Get("size")
++		
++		page, err := strconv.Atoi(pageStr)
++		if err != nil || page < 1 {
++			http.Error(w, "Invalid page", http.StatusBadRequest)
++			return
++		}
++		
++		size, err := strconv.Atoi(sizeStr)
++		if err != nil || size < 1 {
++			http.Error(w, "Invalid size", http.StatusBadRequest)
++			return
++		}
++		
++		// Calculate start and end indices for one-based pagination
++		start := (page - 1) * size
++		if start >= len(values) {
++			start = len(values)
++		}
++		end := start + size
++		if end > len(values) {
++			end = len(values)
++		}
++		
++		json.NewEncoder(w).Encode(values[start:end])
++	}
++}

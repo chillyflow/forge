@@ -1,0 +1,37 @@
+diff --git a/ledger.py b/ledger.py
+index 14a9172..7b8bd4e 100644
+--- a/ledger.py
++++ b/ledger.py
+@@ -1,22 +1,25 @@
+ def positions_for(messages):
+-    visited, voided = set(), set()
+     entries, positions = {}, {}
++    voided = set()
++    
+     for message in messages:
+-        if message['key'] in visited:
+-            continue
+-        visited.add(message['key'])
+         if message['kind'] == 'post':
++            # Only process the first post with this key (idempotent)
++            if message['key'] in entries:
++                continue
+             bucket, delta = message['bucket'], message['delta']
+             entries[message['key']] = (bucket, delta)
+             positions.setdefault(bucket, 0)
+-            if True:
+-                positions[bucket] += delta
+-        else:
++            positions[bucket] += delta
++        else:  # message['kind'] == 'retract'
+             reference = message['reference']
++            # A retraction cancels its referenced posting exactly once
+             if reference in voided:
+                 continue
+             voided.add(reference)
+             if reference in entries:
+                 bucket, delta = entries[reference]
+                 positions[bucket] -= delta
++                del entries[reference]
++    
+     return positions

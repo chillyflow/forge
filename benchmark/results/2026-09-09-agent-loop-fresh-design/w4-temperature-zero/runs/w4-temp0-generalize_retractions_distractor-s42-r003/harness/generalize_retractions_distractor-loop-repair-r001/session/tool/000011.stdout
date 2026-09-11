@@ -1,0 +1,9 @@
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Step by step:
+1. p (post 'p', 7) -> postings['p'] = ('cash', 7), totals['cash'] = 7
+2. p (post 'p', 7) -> duplicate, ignored
+3. retract('r', 'p') -> target 'p' in postings, totals['cash'] = 0
+4. retract('s', 'p') -> target 'p' in cancelled, ignored

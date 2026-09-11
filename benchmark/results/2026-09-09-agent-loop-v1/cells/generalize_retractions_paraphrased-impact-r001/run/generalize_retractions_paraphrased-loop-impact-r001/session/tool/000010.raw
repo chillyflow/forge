@@ -1,0 +1,66 @@
+file_sha256:0086f9923741b9dfb5eab3e033b2c97405a37c2d97f7584c5f4b6302ece4f1a3
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     for event in events:
+5:         if event['id'] in seen:
+6:             continue
+7:         seen.add(event['id'])
+8:         if event['kind'] == 'post':
+9:             account, amount = event['account'], event['amount']
+10:             postings[event['id']] = (account, amount)
+11:             totals.setdefault(account, 0)
+12:             totals[account] += amount
+13:         else:
+14:             target = event['target']
+15:             if target in cancelled:
+16:                 continue
+17:             cancelled.add(target)
+18:             if target in postings:
+19:                 account, amount = postings[target]
+20:                 totals[account] -= amount
+21:             # If the target post hasn't been processed yet, we still mark it as cancelled
+22:             # This ensures that when the post eventually comes, it won't be processed
+23:     # Process all events again to make sure cancelled posts are properly handled
+24:     # Actually, let's rewrite this approach more carefully
+25:     
+26:     # Better approach: collect all posts first, then process retracts, then apply posts
+27:     posts = {}
+28:     retracts = {}
+29:     
+30:     # First pass: collect all events
+31:     for event in events:
+32:         if event['id'] in seen:
+33:             continue
+34:         seen.add(event['id'])
+35:         if event['kind'] == 'post':
+36:             posts[event['id']] = event
+37:         else:
+38:             retracts[event['target']] = event
+39:     
+40:     # Second pass: process posts and retracts
+41:     totals = {}
+42:     processed_posts = set()
+43:     
+44:     for event in events:
+45:         if event['id'] in seen:
+46:             continue
+47:         seen.add(event['id'])
+48:         if event['kind'] == 'post':
+49:             # Check if this post is cancelled
+50:             if event['id'] in retracts:
+51:                 continue  # Skip cancelled posts
+52:             # Process the post
+53:             account, amount = event['account'], event['amount']
+54:             totals.setdefault(account, 0)
+55:             totals[account] += amount
+56:             processed_posts.add(event['id'])
+57:         else:
+58:             # Handle retract - mark the target as cancelled
+59:             target = event['target']
+60:             if target in posts:
+61:                 # If target post exists, we should not process it
+62:                 pass
+63:             # If target is not a known post, we ignore it (no account created)
+64:     
+65:     return totals

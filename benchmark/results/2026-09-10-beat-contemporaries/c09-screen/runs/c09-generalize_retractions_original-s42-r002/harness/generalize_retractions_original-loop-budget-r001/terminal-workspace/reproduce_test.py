@@ -1,0 +1,55 @@
+import sys
+sys.path.insert(0, '.')
+
+from service import balances
+
+def post(i, amount): 
+    return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
+
+def retract(i, target): 
+    return {'id': i, 'kind': 'retract', 'target': target}
+
+# Exact reproduction of the failing test case
+p = post('p', 7)
+events = [p, p, retract('r', 'p'), retract('s', 'p')]
+result = balances(events)
+print("Result:", result)
+print("Expected: {'cash': 0}")
+print("Test passed:", result == {'cash': 0})
+
+# Let's also trace what happens step by step
+print("\nStep-by-step trace:")
+seen = set()
+cancelled = set()
+postings = {}
+totals = {}
+print("Initial: seen={}, cancelled={}, postings={}, totals={}".format(seen, cancelled, postings, totals))
+
+for i, event in enumerate(events):
+    print(f"\nEvent {i}: {event}")
+    if event['id'] in seen:
+        print("  Skipped due to duplicate ID")
+        continue
+    seen.add(event['id'])
+    print("  Added to seen")
+    
+    if event['kind'] == 'post':
+        account, amount = event['account'], event['amount']
+        postings[event['id']] = (account, amount)
+        totals.setdefault(account, 0)
+        totals[account] += amount
+        print(f"  Posting: added {amount} to {account}, totals now {totals}")
+    else:
+        target = event['target']
+        if target in cancelled:
+            print("  Already cancelled, skipping")
+            continue
+        cancelled.add(target)
+        print(f"  Retraction for target {target}")
+        if target in postings:
+            account, amount = postings[target]
+            totals[account] -= amount
+            print(f"  Cancelled posting {target}: removed {amount} from {account}, totals now {totals}")
+        else:
+            print(f"  No posting found for target {target}")
+    print("  Current state: seen={}, cancelled={}, postings={}, totals={}".format(seen, cancelled, postings, totals))

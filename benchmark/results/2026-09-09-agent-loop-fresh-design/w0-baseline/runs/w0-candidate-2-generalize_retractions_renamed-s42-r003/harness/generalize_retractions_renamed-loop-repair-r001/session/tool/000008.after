@@ -1,0 +1,36 @@
+from ledger import positions_for
+
+def post(i, delta): 
+    return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}
+
+def retract(i, reference): 
+    return {'key': i, 'kind': 'retract', 'reference': reference}
+
+# Test the first case
+p = post('p', 7)
+result = positions_for([p, retract('r', 'p')])
+print("Test 1 result:", result)
+print("Expected: {'cash': 0}")
+
+# Test the second case
+result2 = positions_for([retract('r', 'p'), p])
+print("Test 2 result:", result2)
+print("Expected: {'cash': 0}")
+
+# Test the third case
+result3 = positions_for([p, p, retract('r', 'p'), retract('s', 'p')])
+print("Test 3 result:", result3)
+print("Expected: {'cash': 0}")
+
+# Test independent postings
+result4 = positions_for([post('a', 7), post('b', -2), retract('r', 'a')])
+print("Test 4 result:", result4)
+print("Expected: {'cash': -2}")
+
+result5 = positions_for([retract('r', 'missing')])
+print("Test 5 result:", result5)
+print("Expected: {}")
+
+result6 = positions_for([])
+print("Test 6 result:", result6)
+print("Expected: {}")

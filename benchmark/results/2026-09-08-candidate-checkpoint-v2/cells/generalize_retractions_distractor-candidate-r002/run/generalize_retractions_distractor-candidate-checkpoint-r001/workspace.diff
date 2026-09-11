@@ -1,0 +1,37 @@
+diff --git a/service.py b/service.py
+index b7bbbde..58b37e6 100644
+--- a/service.py
++++ b/service.py
+@@ -1,6 +1,8 @@
+ def balances(events):
+     seen, cancelled = set(), set()
+     postings, totals = {}, {}
++    pending_cancellations = set()
++    
+     for event in events:
+         if event['id'] in seen:
+             continue
+@@ -9,14 +11,19 @@ def balances(events):
+             account, amount = event['account'], event['amount']
+             postings[event['id']] = (account, amount)
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
++            totals[account] += amount
+         else:
+             target = event['target']
+             if target in cancelled:
+                 continue
+-            cancelled.add(target)
+-            if target in postings:
++            # If the posting hasn't arrived yet, mark it for cancellation
++            if target not in postings:
++                pending_cancellations.add(target)
++            else:
++                # Posting exists, cancel it immediately
++                cancelled.add(target)
+                 account, amount = postings[target]
+                 totals[account] -= amount
++                del postings[target]
++    # Handle any pending cancellations (they won't affect anything since postings don't exist)
+     return totals

@@ -1,0 +1,21 @@
+{
+  "id": "holdout_go_reservations",
+  "suite": "holdout-2026-09-02",
+  "language": "go",
+  "category": "atomic",
+  "prompt": "Reserve atomically assigns seats for every request or leaves the booking map unchanged. Existing bookings and duplicate seat requests must reject the entire batch; empty batches succeed. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module holdout\n\ngo 1.24\n",
+    "service.go": "package holdout\ntype Booking struct { Seat, Customer string }\nfunc Reserve(bookings map[string]string, batch []Booking) bool {\n    pending := make(map[string]string)\n    for _, b := range batch {\n        if b.Seat == \"\" || b.Customer == \"\" { return false }\n        if _, exists := bookings[b.Seat]; exists { return false }\n        // Reservations in this batch will be committed together.\n        pending[b.Seat] = b.Customer\n    }\n    for seat, customer := range pending { bookings[seat] = customer }\n    return true\n}\n",
+    "service_test.go": "package holdout\nimport (\"reflect\"; \"testing\")\nfunc TestReserve(t *testing.T) {\n    for _, batch := range [][]Booking{\n        {{\"B\", \"bob\"}, {\"B\", \"bea\"}},\n        {{\"B\", \"bob\"}, {\"A\", \"bea\"}},\n        {{\"B\", \"bob\"}, {\"C\", \"\"}},\n    } {\n        b := map[string]string{\"A\":\"ann\"}\n        if Reserve(b,batch) || !reflect.DeepEqual(b,map[string]string{\"A\":\"ann\"}) {\n            t.Fatalf(\"rejected reservation changed bookings: %v\",b)\n        }\n    }\n    b := map[string]string{\"A\":\"ann\"}\n    if !Reserve(b, []Booking{{\"B\",\"bob\"},{\"C\",\"cam\"}}) || len(b)!=3 { t.Fatal(b) }\n    if !Reserve(b,nil) || b[\"B\"]!=\"bob\" { t.Fatal(b) }\n}\n"
+  },
+  "oracle_files": {
+    "service.go": "package holdout\ntype Booking struct { Seat, Customer string }\nfunc Reserve(bookings map[string]string, batch []Booking) bool {\n    pending := make(map[string]string)\n    for _, b := range batch {\n        if b.Seat == \"\" || b.Customer == \"\" { return false }\n        if _, exists := bookings[b.Seat]; exists { return false }\n        if _, exists := pending[b.Seat]; exists { return false }\n        pending[b.Seat] = b.Customer\n    }\n    for seat, customer := range pending { bookings[seat] = customer }\n    return true\n}\n"
+  }
+}

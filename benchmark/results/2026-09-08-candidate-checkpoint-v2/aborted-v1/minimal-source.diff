@@ -1,0 +1,942 @@
+diff --git a/benchmark/REPAIR_CONTROL.md b/benchmark/REPAIR_CONTROL.md
+index 3940bcf..0a33df1 100644
+--- a/benchmark/REPAIR_CONTROL.md
++++ b/benchmark/REPAIR_CONTROL.md
+@@ -84,6 +84,9 @@ population does not establish a general latency advantage.
+ 
+ ## Follow-up experiments, one change at a time
+ 
++The first follow-up is the opt-in [candidate checkpoint experiment](CANDIDATE_CHECKPOINT.md),
++which compares the minimal control and its checkpoint intervention in one binary.
++
+ Choose follow-up work from the control results before changing recovery again.
+ The next candidate should test an earlier, bounded repair episode: after a
+ second failed candidate or ineffective replacement, provide current relevant
+diff --git a/benchmark/repair_control.py b/benchmark/repair_control.py
+index b8ca046..be05b9a 100644
+--- a/benchmark/repair_control.py
++++ b/benchmark/repair_control.py
+@@ -82,7 +82,13 @@ def exclusive_output(output, resume):
+                 fcntl.flock(lock, fcntl.LOCK_UN)
+ 
+ 
+-def make_schedule(task_ids, repetitions, seed):
++def arm_variants(args):
++    if getattr(args, 'experiment', 'repair-control') == 'candidate-checkpoint':
++        return {'candidate': 'candidate-checkpoint', 'minimal': 'minimal'}
++    return {arm: 'minimal' if arm == 'minimal' else 'optimized' for arm in ARMS}
++
++
++def make_schedule(task_ids, repetitions, seed, arm_names=ARMS):
+     """All arms see the same shuffled task/repetition sequence, in adjacent blocks."""
+     rng = random.Random(seed)
+     result = []
+@@ -90,7 +96,7 @@ def make_schedule(task_ids, repetitions, seed):
+         order = sorted(task_ids)
+         rng.shuffle(order)
+         for task in order:
+-            arms = list(ARMS)
++            arms = list(arm_names)
+             rng.shuffle(arms)
+             for arm in arms:
+                 result.append({'cell_id': f'{task}-{arm}-r{repetition:03d}',
+@@ -125,8 +131,10 @@ def source_identity(root, revisions):
+ 
+ 
+ def collect_identity(args, tasks):
+-    source, diff = source_identity(args.source_dir, {
+-        'checkpoint': args.checkpoint_revision, 'current': args.current_revision})
++    revisions = ({'candidate': 'HEAD', 'minimal': 'HEAD'}
++                 if getattr(args, 'experiment', 'repair-control') == 'candidate-checkpoint'
++                 else {'checkpoint': args.checkpoint_revision, 'current': args.current_revision})
++    source, diff = source_identity(args.source_dir, revisions)
+     identity = {'source': source,
+                 'model': {'path': str(args.model), 'bytes': args.model.stat().st_size,
+                           'sha256': digest(args.model)},
+@@ -138,27 +146,30 @@ def collect_identity(args, tasks):
+                             ('repair_control.py', 'run.py', 'common.py', 'preflight.py')},
+                 'runtimes': {arm: {'path': str(getattr(args, arm + '_forge')),
+                                   'bundle': runtime_bundle(getattr(args, arm + '_forge'))}
+-                             for arm in ARMS}}
++                             for arm in arm_variants(args)}}
+     return identity, diff
+ 
+ 
+ def make_protocol(args, tasks, identity):
++    variants = arm_variants(args)
++    candidate = 'candidate' in variants
+     settings = {key: getattr(args, key) for key in (
+         'gpu_layers', 'context', 'output_reserve', 'temperature', 'seed',
+         'max_turns', 'max_tokens', 'max_input', 'timeout', 'verification_timeout',
+         'repetitions', 'order_seed', 'gpu_index')}
+     settings.update(prompt_protocol='native', chat_template='embedded', lifecycle='cold',
+                     fixture_preparation=FIXTURE_PREPARATION)
+-    return {'schema_version': 1, 'experiment': 'repair-control-diagnostic',
++    return {'schema_version': 1, 'experiment': 'candidate-checkpoint-diagnostic' if candidate
++                                             else 'repair-control-diagnostic',
+             'identity': identity, 'settings': settings,
+-            'arms': {arm: {'variant': 'minimal' if arm == 'minimal' else 'optimized'}
+-                     for arm in ARMS},
++            'arms': {arm: {'variant': variant} for arm, variant in variants.items()},
+             'schedule': make_schedule([task['id'] for _, task in tasks],
+-                                      args.repetitions, args.order_seed),
++                                      args.repetitions, args.order_seed, tuple(variants)),
+             'source_association': 'Historical revision-to-runtime associations are supplied by '
+                                   'the operator; hashes freeze those declared identities. '
+                                   'Minimal records the current working tree, including untracked files.',
+-            'historical_confound': HISTORICAL_NOTE,
++            'historical_confound': ('Same-binary minimal versus opt-in candidate checkpoints; '
++                                    'no historical arm.' if candidate else HISTORICAL_NOTE),
+             'policy': 'All outcomes count; no retry, candidate selection, or promotion claim. '
+                       'Each cell has the same model settings and per-task limits. '
+                       'Harness/model hashing is outside recorded agent end-to-end time.'}
+@@ -231,7 +242,7 @@ def cell_command(args, cell, output):
+                '--forge', str(getattr(args, cell['arm'] + '_forge')),
+                '--model', str(args.model), '--task-dir', str(args.task_dir), '--suite', 'all',
+                '--tasks', cell['task'], '--variants',
+-               'minimal' if cell['arm'] == 'minimal' else 'optimized',
++               arm_variants(args)[cell['arm']],
+                '--output', str(output), '--prompt-protocol', 'native',
+                '--repetitions', '1', '--no-randomize']
+     for key in ('gpu_layers', 'context', 'output_reserve', 'temperature', 'seed',
+@@ -419,7 +430,7 @@ def summarize(protocol, outcomes):
+     actual = Counter(row['cell_id'] for row in outcomes)
+     rows = []
+     for task in sorted(protocol['identity']['tasks']):
+-        for arm in ARMS:
++        for arm in protocol['arms']:
+             group = [row for row in outcomes if row['task'] == task and row['arm'] == arm]
+             times = [row['record']['timing']['end_to_end_seconds'] for row in group
+                      if row.get('record', {}).get('timing', {}).get('end_to_end_seconds') is not None]
+@@ -438,7 +449,7 @@ def summarize(protocol, outcomes):
+                            'missing': sorted((expected - actual).elements()),
+                            'unexpected_or_duplicate': sorted((actual - expected).elements())},
+             'per_task': rows,
+-            'historical_confound': HISTORICAL_NOTE,
++            'historical_confound': protocol['historical_confound'],
+             'notes': 'Failures, crashes and interruptions remain in the scheduled denominator. '
+                      'Time summaries contain only available end-to-end measurements, across passes and failures. '
+                      'Warnings and context exhaustion are trace observations, not a repair-success measure. '
+@@ -451,7 +462,7 @@ def write_summary(args, protocol):
+     atomic_json(args.output / 'outcomes.json', outcomes)
+     report = summarize(protocol, outcomes)
+     atomic_json(args.output / 'summary.json', report)
+-    lines = ['# Repair control diagnostic', '', report['notes'], '', HISTORICAL_NOTE, '',
++    lines = ['# Repair control diagnostic', '', report['notes'], '', protocol['historical_confound'], '',
+              '| Task | Arm | Passes / scheduled | Observed | Median end-to-end seconds |',
+              '| --- | --- | ---: | ---: | ---: |']
+     for row in report['per_task']:
+@@ -466,10 +477,12 @@ def write_summary(args, protocol):
+ 
+ def parse_args(argv=None):
+     parser = argparse.ArgumentParser(description=__doc__)
+-    for arm in ARMS:
+-        parser.add_argument('--' + arm + '-forge', type=Path, required=True)
+-    parser.add_argument('--checkpoint-revision', required=True)
+-    parser.add_argument('--current-revision', required=True)
++    parser.add_argument('--experiment', choices=['repair-control', 'candidate-checkpoint'],
++                        default='repair-control')
++    for arm in (*ARMS, 'candidate'):
++        parser.add_argument('--' + arm + '-forge', type=Path)
++    parser.add_argument('--checkpoint-revision')
++    parser.add_argument('--current-revision')
+     parser.add_argument('--source-dir', type=Path, default=DIRECTORY.parent)
+     parser.add_argument('--model', type=Path, required=True)
+     parser.add_argument('--task-dir', type=Path, required=True)
+@@ -483,9 +496,15 @@ def parse_args(argv=None):
+         parser.add_argument('--' + name, type=int, default=default)
+     parser.add_argument('--temperature', type=float, default=0.0)
+     args = parser.parse_args(argv)
+-    for key in ('model', 'task_dir', 'source_dir', 'output', 'checkpoint_forge', 'current_forge', 'minimal_forge'):
++    if args.experiment == 'repair-control' and (not args.checkpoint_revision or not args.current_revision):
++        parser.error('repair-control requires checkpoint and current revisions')
++    runtime_keys = tuple(arm + '_forge' for arm in arm_variants(args))
++    for key in runtime_keys:
++        if getattr(args, key) is None:
++            parser.error('--' + key.replace('_', '-') + ' is required for this experiment')
++    for key in ('model', 'task_dir', 'source_dir', 'output', *runtime_keys):
+         setattr(args, key, getattr(args, key).resolve())
+-    for key in ('model', 'checkpoint_forge', 'current_forge', 'minimal_forge'):
++    for key in ('model', *runtime_keys):
+         if not getattr(args, key).is_file():
+             parser.error(key + ' must be an existing file')
+     if args.output.is_relative_to(args.task_dir) or args.task_dir.is_relative_to(args.output):
+@@ -505,6 +524,9 @@ def main(argv=None):
+         check_tools(tasks)
+         with exclusive_output(args.output, args.resume):
+             identity, diff = collect_identity(args, tasks)
++            if getattr(args, 'experiment', 'repair-control') == 'candidate-checkpoint' and (
++                    identity['runtimes']['candidate']['bundle'] != identity['runtimes']['minimal']['bundle']):
++                raise ValueError('Candidate checkpoints require identical runtime bundles in both arms')
+             stamps = frozen_stamps(identity)
+             protocol = make_protocol(args, tasks, identity)
+             if args.resume:
+diff --git a/benchmark/run.py b/benchmark/run.py
+index 2c20e6c..289a43c 100644
+--- a/benchmark/run.py
++++ b/benchmark/run.py
+@@ -25,6 +25,8 @@ from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, lo
+ VARIANTS = {
+     'optimized': {'flags': ['--thought-history']},
+     'minimal': {'flags': ['--minimal-agent', '--thought-history']},
++    'candidate-checkpoint': {'flags': ['--minimal-agent', '--thought-history',
++                                       '--candidate-checkpoint']},
+     'no-kv': {'flags': ['--no-kv-reuse']},
+     'no-semantic': {'flags': ['--no-semantic']},
+     'no-compaction': {'flags': ['--no-compaction']},
+diff --git a/include/forge/forge.h b/include/forge/forge.h
+index 5f53cfb..4622645 100644
+--- a/include/forge/forge.h
++++ b/include/forge/forge.h
+@@ -156,6 +156,10 @@ typedef struct {
+      * Retains all model prose as assistant content regardless of thought flags;
+      * does not nominate optional physical checkpoint cache anchors. */
+     bool minimal_agent;
++    /* Opt-in repair experiment on the minimal control. Requires native minimal
++     * mode, validation enabled and at least three actions. Reserves validation
++     * and final actions and accepts only a changed, host-validated workspace. */
++    bool candidate_checkpoint;
+     forge_policy_fn policy;
+     forge_cancel_fn cancelled;
+     void *userdata;
+diff --git a/src/cli/main.c b/src/cli/main.c
+index d4b2878..09c0968 100644
+--- a/src/cli/main.c
++++ b/src/cli/main.c
+@@ -44,7 +44,9 @@ static void usage(void) {
+          "  --output-reserve N   per-turn generation budget (default 2048)\n"
+          "  --max-turns N        hard agent turn limit (default 32)\n"
+          "  --minimal-agent      experimental basic native tool loop; no automatic validation\n"
+-         "                       full history; ignores semantic, compaction and thought-history settings\n"
++         "  --candidate-checkpoint  require changed, validated repairs in minimal mode\n"
++         "                       full history; ignores semantic, compaction and thought-history "
++         "settings\n"
+          "  --max-tokens N       total generated-token limit (default 32768)\n"
+          "  --max-input N        total prompt-token limit (default 262144)\n"
+          "  --timeout-ms N       command timeout (default 120000)\n"
+@@ -115,6 +117,7 @@ static int option_arity(const char *option) {
+                                         "--no-compaction",
+                                         "--no-thought",
+                                         "--minimal-agent",
++                                        "--candidate-checkpoint",
+                                         "--thought-decode-only",
+                                         "--thought-history",
+                                         "--thought-required",
+@@ -702,6 +705,10 @@ static int cli_main(int argc, char **argv, forge_config *config) {
+             ac.minimal_agent = true;
+             continue;
+         }
++        if (!strcmp(a, "--candidate-checkpoint")) {
++            ac.candidate_checkpoint = true;
++            continue;
++        }
+         if (!strcmp(a, "--no-thought")) {
+             ac.thought = false;
+             continue;
+@@ -902,6 +909,13 @@ static int cli_main(int argc, char **argv, forge_config *config) {
+         fg_error(&error, FORGE_ERR_ARGUMENT, "--minimal-agent requires --prompt-protocol native");
+         return failed(&error);
+     }
++    if (ac.candidate_checkpoint &&
++        (!ac.minimal_agent || ac.skip_validation || ac.limits.max_turns < 3)) {
++        fg_error(
++            &error, FORGE_ERR_ARGUMENT,
++            "--candidate-checkpoint requires --minimal-agent, validation and at least 3 turns");
++        return failed(&error);
++    }
+     if (forge_config_validate(config, &error) != FORGE_OK ||
+         forge_config_check_exec(config, ac.allow_exec, &error) != FORGE_OK)
+         return failed(&error);
+diff --git a/src/core/agent.c b/src/core/agent.c
+index 3eb77b7..99946da 100644
+--- a/src/core/agent.c
++++ b/src/core/agent.c
+@@ -152,6 +152,8 @@ forge_agent *forge_agent_create(const forge_agent_config *config, forge_error *e
+         config->limits.context_tokens > config->model->config.context_tokens ||
+         (unsigned)config->model->config.prompt_protocol > FORGE_PROMPT_NATIVE ||
+         (config->minimal_agent && config->model->config.prompt_protocol != FORGE_PROMPT_NATIVE) ||
++        (config->candidate_checkpoint &&
++         (!config->minimal_agent || config->skip_validation || config->limits.max_turns < 3)) ||
+         (config->model->config.prompt_protocol == FORGE_PROMPT_NATIVE && config->thought_routed) ||
+         (!config->thought && (config->thought_required || config->thought_routed)) ||
+         (!config->thought_routed && (config->thought_cue || config->thought_budget ||
+@@ -790,15 +792,16 @@ static char *minimal_action(forge_model *model, const char *response, forge_erro
+         return NULL;
+     if (fg_native_action_normalize(message, false, &action, e) == FORGE_OK) {
+         yyjson_doc *doc = yyjson_read(message, strlen(message), 0);
+-        const char *thought = doc ? fg_json_str(yyjson_doc_get_root(doc), "reasoning_content") : NULL;
++        const char *thought =
++            doc ? fg_json_str(yyjson_doc_get_root(doc), "reasoning_content") : NULL;
+         if (thought && *thought) {
+             /* Keep complete model prose as ordinary assistant history. Qwen's
+              * native template ignores reasoning_content in previous calls;
+              * retaining only that field would silently lose the preamble. */
+             char *quoted = fg_json_string(thought);
+             fg_buf full = {0};
+-            bool ok = quoted &&
+-                      fg_buf_printf(&full, "{\"assistant_content\":%s,%s", quoted, action + 1);
++            bool ok =
++                quoted && fg_buf_printf(&full, "{\"assistant_content\":%s,%s", quoted, action + 1);
+             free(quoted);
+             free(action);
+             action = ok ? fg_buf_take(&full) : NULL;
+@@ -842,21 +845,130 @@ static bool minimal_result(forge_agent *a, fg_tool_context *tools, const char *n
+     return ok;
+ }
+ 
++typedef struct {
++    fg_input_snapshot *initial, *assessed, *passed;
++    bool episode_active, assessed_passed;
++    size_t attempts;
++} candidate_checkpoint;
++
++static fg_input_snapshot *candidate_snapshot(forge_agent *a, uint64_t deadline, forge_error *e) {
++    return fg_input_snapshot_take(a->root, 100000, UINT64_C(2) * 1024 * 1024 * 1024,
++                                  a->config.cancelled, a->config.userdata, deadline, e);
++}
++
++/* A changed action signature or repository generation is not candidate evidence.
++ * Compare complete workspace inputs, including files the language index omits.
++ * Never infer test success from an arbitrary exit-zero run_command. */
++static char *candidate_validate(forge_agent *a, fg_tool_context *tools, candidate_checkpoint *cp,
++                                forge_error *e) {
++    fg_input_snapshot *before = candidate_snapshot(a, tools->deadline, e), *after = NULL;
++    if (!before)
++        return NULL;
++    bool changed = !fg_input_snapshot_equal(cp->initial, before);
++    bool novel = !fg_input_snapshot_equal(cp->assessed ? cp->assessed : cp->initial, before);
++    uint64_t input_hash = fg_input_snapshot_hash(before);
++    bool passed = changed && fg_input_snapshot_equal(cp->passed, before);
++    bool validated = false;
++    fg_validation_result result = {0};
++    forge_error check_error = {0};
++    forge_status status = FORGE_OK;
++    if (changed && (novel || cp->assessed_passed) && !passed) {
++        if (!tools->repo)
++            tools->repo = forge_repo_open(a->root, &check_error);
++        status = tools->repo
++                     ? fg_repo_index_until(tools->repo, NULL, 0, true, tools->deadline,
++                                           a->config.cancelled, a->config.userdata, &check_error)
++                     : (check_error.code ? check_error.code : FORGE_ERR_IO);
++        if (status == FORGE_OK) {
++            a->metrics.repo_full_scans++;
++            status = fg_validation_run(tools, NULL, 0, &a->metrics, &result, &check_error);
++        }
++        after = candidate_snapshot(a, tools->deadline, e);
++        if (!after)
++            goto fail;
++        bool stable = fg_input_snapshot_equal(before, after);
++        /* Failed tests assess a candidate too; policy denial, missing tests,
++         * incomplete evidence and changing inputs do not. */
++        yyjson_doc *report = result.json ? yyjson_read(result.json, strlen(result.json), 0) : NULL;
++        yyjson_val *report_root = report ? yyjson_doc_get_root(report) : NULL;
++        bool complete = yyjson_is_true(yyjson_obj_get(report_root, "evidence_complete"));
++        validated = stable && complete && result.commands > 0 &&
++                    (status == FORGE_OK || (status == FORGE_ERR_CONFLICT && result.failed_inputs));
++        yyjson_doc_free(report);
++        passed = validated && status == FORGE_OK && result.applicable && result.passed;
++        if (validated) {
++            if (novel)
++                cp->attempts++;
++            fg_input_snapshot_destroy(cp->assessed);
++            cp->assessed = before;
++            cp->assessed_passed = passed;
++            before = NULL;
++        }
++        if (status == FORGE_ERR_CANCELLED || status == FORGE_ERR_MEMORY || status == FORGE_ERR_IO) {
++            if (e)
++                *e = check_error;
++            goto fail;
++        }
++    }
++    cp->episode_active = !passed;
++    if (!passed || after) {
++        fg_input_snapshot_destroy(cp->passed);
++        cp->passed = passed ? after : NULL;
++        if (passed)
++            after = NULL;
++    }
++    char event[512];
++    snprintf(event, sizeof(event),
++             "{\"changed\":%s,\"novel\":%s,\"validated\":%s,\"passed\":%s,"
++             "\"episode_active\":%s,\"candidate_attempts\":%zu,\"commands\":%zu,"
++             "\"input_hash\":\"%016llx\",\"initial_hash\":\"%016llx\",\"validation_id\":%zu}",
++             changed ? "true" : "false", novel ? "true" : "false", validated ? "true" : "false",
++             passed ? "true" : "false", cp->episode_active ? "true" : "false", cp->attempts,
++             result.commands, (unsigned long long)input_hash,
++             (unsigned long long)fg_input_snapshot_hash(cp->initial), tools->validation_id);
++    if (!fg_session_emit(&a->session, "candidate_checkpoint", event, e))
++        goto fail;
++    fg_buf feedback = {0};
++    fg_buf_printf(
++        &feedback, "CANDIDATE_CHECKPOINT: %s\n%s\n",
++        passed ? "PASS. Call final now; the host verified this changed workspace."
++               : "NOT PASSED. The repair episode remains active.",
++        !changed ? "No net workspace change from the initial inputs; no candidate assessed."
++        : !novel && !passed && !result.summary ? "This candidate was already assessed. Change the "
++                                                 "implementation before validating again."
++        : result.summary ? result.summary
++        : passed         ? "The previously passing input snapshot is still current."
++                         : check_error.message);
++    fg_input_snapshot_destroy(before);
++    fg_input_snapshot_destroy(after);
++    fg_validation_result_free(&result);
++    return fg_buf_take(&feedback);
++fail:
++    fg_input_snapshot_destroy(before);
++    fg_input_snapshot_destroy(after);
++    fg_validation_result_free(&result);
++    return NULL;
++}
++
+ static forge_status minimal_run(forge_agent *a, const char *request, forge_event_fn cb, void *user,
+                                 forge_error *e) {
+     if (!fg_session_start(&a->session, a->root, cb, user, e))
+         return e ? e->code : FORGE_ERR_IO;
+     uint64_t start = fg_now_ms();
+     uint64_t deadline = a->config.limits.wall_timeout_ms > UINT64_MAX - start
+-                            ? UINT64_MAX : start + a->config.limits.wall_timeout_ms;
++                            ? UINT64_MAX
++                            : start + a->config.limits.wall_timeout_ms;
+     forge_status status = FORGE_OK;
+     bool finished = false;
+     char *modified[1000] = {0};
+     size_t modified_count = 0;
+-    forge_context *ctx = forge_context_create(a->config.limits.context_tokens,
+-                                             a->config.limits.output_reserve, fg_model_count,
+-                                             a->config.model);
+-    char *schema = fg_tool_minimal_native_schema();
++    candidate_checkpoint checkpoint = {0};
++    uint64_t tools_id = 0;
++    forge_context *ctx =
++        forge_context_create(a->config.limits.context_tokens, a->config.limits.output_reserve,
++                             fg_model_count, a->config.model);
++    char *schema = a->config.candidate_checkpoint ? fg_tool_candidate_schema(false)
++                                                  : fg_tool_minimal_native_schema();
+     fg_tool_context tools = {0};
+     tools.config = a->config;
+     tools.session = &a->session;
+@@ -874,16 +986,39 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
+         forge_context_set_prompt_protocol(ctx, FORGE_PROMPT_NATIVE) != FORGE_OK ||
+         forge_context_set_prompt_counter(ctx, fg_model_count_prompt) != FORGE_OK ||
+         !minimal_append(ctx, FORGE_SEG_SYSTEM, instructions, 0) ||
+-        !minimal_append(ctx, FORGE_SEG_TOOLS, schema, 0) ||
++        !(tools_id = forge_context_add(ctx, FORGE_SEG_TOOLS, schema, 100, true, 0, 0)) ||
++        forge_context_set_flags(ctx, tools_id, !a->config.candidate_checkpoint, true) != FORGE_OK ||
+         !minimal_append(ctx, FORGE_SEG_TASK, request, 0)) {
+         status = fg_error(e, FORGE_ERR_MEMORY, "Cannot initialize minimal agent transcript");
+         goto finish;
+     }
++    if (a->config.candidate_checkpoint) {
++        checkpoint.initial = candidate_snapshot(a, deadline, e);
++        const char *policy =
++            "CANDIDATE_CHECKPOINT policy: finish a repair across the relevant files, then call "
++            "validate_candidate. Reads, no-op edits, and changing tools do not close a failed "
++            "repair episode. Only a net changed candidate followed by host validation assesses "
++            "an attempt; only passing validation recovers it. Arbitrary commands are diagnostics, "
++            "not host validation. The penultimate action is reserved for validate_candidate and "
++            "the last for final. A passing candidate reserves the next action for final. "
++            "Early final also requires a changed, passing candidate. All original token and "
++            "wall-clock limits still apply.";
++        if (!checkpoint.initial || !minimal_append(ctx, FORGE_SEG_SYSTEM, policy, 0)) {
++            status = e && e->code ? e->code : FORGE_ERR_MEMORY;
++            goto finish;
++        }
++    }
+     if (!state(a, FORGE_AGENT_INIT, e) || !event_text(a, "request", request, e) ||
+-        !fg_session_emit(&a->session, "agent_mode",
+-                         "{\"name\":\"minimal\",\"version\":1,\"append_only\":true,"
+-                         "\"automatic_validation\":false,\"semantic_context\":false,"
+-                         "\"recovery\":false,\"corrective_prompts\":false}", e)) {
++        !fg_session_emit(
++            &a->session, "agent_mode",
++            a->config.candidate_checkpoint
++                ? "{\"name\":\"candidate-checkpoint\",\"version\":1,\"append_only\":true,"
++                  "\"automatic_validation\":true,\"semantic_context\":false,"
++                  "\"recovery\":true,\"corrective_prompts\":true}"
++                : "{\"name\":\"minimal\",\"version\":1,\"append_only\":true,"
++                  "\"automatic_validation\":false,\"semantic_context\":false,"
++                  "\"recovery\":false,\"corrective_prompts\":false}",
++            e)) {
+         status = FORGE_ERR_IO;
+         goto finish;
+     }
+@@ -891,13 +1026,50 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
+         a->metrics.turns = turn;
+         if ((a->config.cancelled && a->config.cancelled(a->config.userdata)) ||
+             fg_now_ms() >= deadline) {
+-            status = fg_error(e, FORGE_ERR_CANCELLED, "Run cancelled or wall-clock deadline reached");
++            status =
++                fg_error(e, FORGE_ERR_CANCELLED, "Run cancelled or wall-clock deadline reached");
+             break;
+         }
+         if (a->metrics.generated_tokens >= a->config.limits.max_generated_tokens) {
+             status = fg_error(e, FORGE_ERR_LIMIT, "Generated-token budget exhausted");
+             break;
+         }
++        bool final_only = false, validation_only = false;
++        if (a->config.candidate_checkpoint) {
++            if (checkpoint.passed) {
++                fg_input_snapshot *current = candidate_snapshot(a, deadline, e);
++                if (!current) {
++                    status = e && e->code ? e->code : FORGE_ERR_IO;
++                    break;
++                }
++                if (!fg_input_snapshot_equal(checkpoint.passed, current)) {
++                    fg_input_snapshot_destroy(checkpoint.passed);
++                    checkpoint.passed = NULL;
++                    checkpoint.episode_active = true;
++                }
++                fg_input_snapshot_destroy(current);
++            }
++            final_only = checkpoint.passed || turn == a->config.limits.max_turns;
++            validation_only = !final_only && turn + 1 == a->config.limits.max_turns;
++            char *next_schema = final_only ? fg_tool_native_final_schema()
++                                           : fg_tool_candidate_schema(validation_only);
++            status = next_schema ? forge_context_update(ctx, tools_id, next_schema, turn)
++                                 : FORGE_ERR_MEMORY;
++            free(next_schema);
++            char control[512];
++            snprintf(control, sizeof(control),
++                     "CANDIDATE_STATE: action=%zu remaining=%zu episode_active=%s "
++                     "assessed_candidates=%zu. %s",
++                     turn, a->config.limits.max_turns - turn + 1,
++                     checkpoint.episode_active ? "true" : "false", checkpoint.attempts,
++                     final_only        ? "Completion checkpoint: call final now."
++                     : validation_only ? "Validation checkpoint: call validate_candidate now."
++                                       : "Complete the repair, then validate_candidate and final.");
++            if (status != FORGE_OK || !minimal_append(ctx, FORGE_SEG_SYSTEM, control, 0)) {
++                status = fg_error(e, FORGE_ERR_MEMORY, "Cannot prepare candidate checkpoint");
++                break;
++            }
++        }
+         size_t tokens = 0, evicted = 0;
+         char *prompt = forge_context_plan(ctx, &tokens, &evicted, e);
+         if (!prompt) {
+@@ -907,7 +1079,8 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
+         if (evicted || a->metrics.prompt_tokens >= a->config.limits.max_input_tokens ||
+             tokens > a->config.limits.max_input_tokens - a->metrics.prompt_tokens) {
+             free(prompt);
+-            status = fg_error(e, FORGE_ERR_LIMIT, "Minimal transcript or input-token budget exhausted");
++            status =
++                fg_error(e, FORGE_ERR_LIMIT, "Minimal transcript or input-token budget exhausted");
+             break;
+         }
+         if (!save_context(a, ctx, prompt, turn, e) || !state(a, FORGE_AGENT_PREFILL, e) ||
+@@ -916,16 +1089,17 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
+             status = FORGE_ERR_IO;
+             break;
+         }
+-        size_t max_tokens = FG_MIN(a->config.limits.output_reserve,
+-                                  a->config.limits.max_generated_tokens - a->metrics.generated_tokens);
++        size_t max_tokens =
++            FG_MIN(a->config.limits.output_reserve,
++                   a->config.limits.max_generated_tokens - a->metrics.generated_tokens);
+         forge_metrics before = a->metrics;
+         token_stream stream = {a, {0}, e, false};
+         char *response = NULL;
+         /* Exactly one backend generation per action; the backend's native
+          * template, sampler and bounded forced opening are shared with Forge. */
+-        status = fg_model_generate(a->config.model, prompt, NULL, max_tokens, stream_token,
+-                                   &stream, &response, &a->metrics, a->config.cancelled,
+-                                   a->config.userdata, deadline, e);
++        status = fg_model_generate(a->config.model, prompt, NULL, max_tokens, stream_token, &stream,
++                                   &response, &a->metrics, a->config.cancelled, a->config.userdata,
++                                   deadline, e);
+         free(prompt);
+         fg_buf_clear(&stream.pending);
+         if (stream.failed)
+@@ -936,7 +1110,8 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
+         }
+         char inference[256];
+         snprintf(inference, sizeof(inference),
+-                 "{\"prompt_tokens\":%zu,\"cached_tokens\":%zu,\"generated_tokens\":%zu,\"simulated\":%s}",
++                 "{\"prompt_tokens\":%zu,\"cached_tokens\":%zu,\"generated_tokens\":%zu,"
++                 "\"simulated\":%s}",
+                  a->metrics.prompt_tokens - before.prompt_tokens,
+                  a->metrics.cached_tokens - before.cached_tokens,
+                  a->metrics.generated_tokens - before.generated_tokens,
+@@ -956,14 +1131,45 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
+         if ((a->config.cancelled && a->config.cancelled(a->config.userdata)) ||
+             fg_now_ms() >= deadline)
+             status = fg_error(e, FORGE_ERR_CANCELLED, "Run cancelled before action");
+-        else if (final) {
++        else if (a->config.candidate_checkpoint &&
++                 ((final_only && !final) ||
++                  (validation_only && (!name || strcmp(name, "validate_candidate"))))) {
++            /* Schema narrowing also has a dispatch gate: scripted/noncompliant
++             * responses cannot spend the reserved action on a command or edit. */
++            status = fg_error(e, FORGE_ERR_LIMIT, "Reserved checkpoint action was not respected");
++        } else if (final) {
++            char *feedback = a->config.candidate_checkpoint
++                                 ? candidate_validate(a, &tools, &checkpoint, e)
++                                 : fg_strdup("Completed.");
+             uint64_t id = minimal_append(ctx, FORGE_SEG_ACTION, action, 0);
+-            if (!id || !minimal_append(ctx, FORGE_SEG_RESULT, "Completed.", id))
+-                status = fg_error(e, FORGE_ERR_MEMORY, "Cannot retain final action");
+-            else if (!event_text(a, "final", final, e))
++            if (!feedback || !id || !minimal_append(ctx, FORGE_SEG_RESULT, feedback, id))
++                status = e && e->code ? e->code
++                                      : fg_error(e, FORGE_ERR_MEMORY, "Cannot retain final action");
++            else if (a->config.candidate_checkpoint && !checkpoint.passed) {
++                if (!event_text(a, "final_rejected", feedback, e))
++                    status = FORGE_ERR_IO;
++            } else if (!event_text(a, "final", final, e))
+                 status = FORGE_ERR_IO;
+             else
+                 finished = true;
++            free(feedback);
++        } else if (a->config.candidate_checkpoint && name && !strcmp(name, "validate_candidate")) {
++            tools.call_id = ++a->metrics.tool_calls;
++            tools.process_ran = false;
++            uint64_t check_start = fg_now_ms();
++            char *feedback = NULL;
++            if (state(a, FORGE_AGENT_TOOL_REQUEST, e) &&
++                fg_session_emit(&a->session, "tool_call", action, e) &&
++                state(a, FORGE_AGENT_TOOL_RUNNING, e))
++                feedback = candidate_validate(a, &tools, &checkpoint, e);
++            uint64_t id = feedback ? minimal_append(ctx, FORGE_SEG_ACTION, action, 0) : 0;
++            if (!feedback || !id || !minimal_append(ctx, FORGE_SEG_RESULT, feedback, id) ||
++                !minimal_result(a, &tools, name, feedback,
++                                checkpoint.passed ? FORGE_OK : FORGE_ERR_CONFLICT,
++                                (double)(fg_now_ms() - check_start), e) ||
++                !state(a, FORGE_AGENT_TOOL_RESULT, e))
++                status = e && e->code ? e->code : FORGE_ERR_IO;
++            free(feedback);
+         } else if (!name || (strcmp(name, "read_file") && strcmp(name, "apply_patch") &&
+                              strcmp(name, "run_command") && strcmp(name, "list_directory")))
+             status = fg_error(e, FORGE_ERR_UNSUPPORTED, "Tool is not available in minimal agent");
+@@ -978,12 +1184,15 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
+                 bool changed = false;
+                 uint64_t tool_start = fg_now_ms();
+                 char *raw = fg_tool_execute(&tools, name, args, &changed, &tool_error);
++                if (a->config.candidate_checkpoint && tools.process_ran &&
++                    (tools.process.exit_code || tools.process.cancelled || tools.process.timed_out))
++                    checkpoint.episode_active = true;
+                 double tool_ms = (double)(fg_now_ms() - tool_start);
+                 a->metrics.tool_ms += tool_ms;
+                 if (!raw) {
+                     fg_buf error = {0};
+-                    fg_buf_printf(&error, "TOOL_ERROR [%s]: %s", forge_status_string(tool_error.code),
+-                                  tool_error.message);
++                    fg_buf_printf(&error, "TOOL_ERROR [%s]: %s",
++                                  forge_status_string(tool_error.code), tool_error.message);
+                     raw = fg_buf_take(&error);
+                 }
+                 if (changed) {
+@@ -1026,7 +1235,8 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
+                         uint64_t id = minimal_append(ctx, FORGE_SEG_ACTION, action, 0);
+                         if (!id || !minimal_append(ctx, FORGE_SEG_RESULT, visible, id))
+                             status = fg_error(e, FORGE_ERR_MEMORY, "Cannot append tool exchange");
+-                        else if (!minimal_result(a, &tools, name, visible, tool_error.code, tool_ms, e) ||
++                        else if (!minimal_result(a, &tools, name, visible, tool_error.code, tool_ms,
++                                                 e) ||
+                                  !state(a, FORGE_AGENT_TOOL_RESULT, e))
+                             status = FORGE_ERR_IO;
+                         free(visible);
+@@ -1060,13 +1270,18 @@ finish:
+     }
+     a->metrics.duration_ms = (double)(fg_now_ms() - start);
+     if (!state(a, status == FORGE_OK ? FORGE_AGENT_DONE : FORGE_AGENT_ERROR,
+-               status == FORGE_OK ? e : NULL) && status == FORGE_OK)
++               status == FORGE_OK ? e : NULL) &&
++        status == FORGE_OK)
+         status = FORGE_ERR_IO;
+     if (!fg_session_finish(&a->session, &a->metrics, status, status == FORGE_OK ? e : NULL) &&
+         status == FORGE_OK)
+         status = FORGE_ERR_IO;
+     free(schema);
+     forge_context_destroy(ctx);
++    forge_repo_close(tools.repo);
++    fg_input_snapshot_destroy(checkpoint.initial);
++    fg_input_snapshot_destroy(checkpoint.assessed);
++    fg_input_snapshot_destroy(checkpoint.passed);
+     for (size_t i = 0; i < modified_count; i++)
+         free(modified[i]);
+     return status;
+diff --git a/src/internal.h b/src/internal.h
+index fcce61e..5422fbf 100644
+--- a/src/internal.h
++++ b/src/internal.h
+@@ -267,6 +267,7 @@ const fg_tool_def *fg_tools(size_t *);
+ char *fg_tool_schema(bool thought, bool required, bool routed);
+ char *fg_tool_native_schema(void);
+ char *fg_tool_minimal_native_schema(void);
++char *fg_tool_candidate_schema(bool validation_only);
+ char *fg_tool_native_final_schema(void);
+ char *fg_tool_grammar(bool thought, bool required, bool routed);
+ forge_status fg_native_action_normalize(const char *, bool include_thought, char **, forge_error *);
+diff --git a/src/tools/tools.c b/src/tools/tools.c
+index 599d406..3c12a4a 100644
+--- a/src/tools/tools.c
++++ b/src/tools/tools.c
+@@ -289,9 +289,31 @@ char *fg_tool_minimal_native_schema(void) {
+                                      "argv:strings", true) &&
+               native_schema_function(&out, "list_directory",
+                                      "List workspace files recursively, excluding hidden, build, "
+-                                     "vendor and dependency directories.", "", true) &&
++                                     "vendor and dependency directories.",
++                                     "", true) &&
+               native_schema_function(&out, "final", "Finish and report the result.",
+-                                     "answer:string", true) && fg_buf_puts(&out, "]");
++                                     "answer:string", true) &&
++              fg_buf_puts(&out, "]");
++    if (!ok) {
++        fg_buf_clear(&out);
++        return NULL;
++    }
++    return fg_buf_take(&out);
++}
++
++char *fg_tool_candidate_schema(bool validation_only) {
++    char *basic = validation_only ? fg_strdup("[") : fg_tool_minimal_native_schema();
++    if (!basic)
++        return NULL;
++    fg_buf out = {0};
++    bool ok = fg_buf_add(&out, basic, strlen(basic) - (validation_only ? 0 : 1)) &&
++              native_schema_function(&out, "validate_candidate",
++                                     "Assess the changed workspace with host Go/Python tests. "
++                                     "Use after completing a repair across files. A passing "
++                                     "candidate must be followed by final.",
++                                     "", !validation_only) &&
++              fg_buf_puts(&out, "]");
++    free(basic);
+     if (!ok) {
+         fg_buf_clear(&out);
+         return NULL;
+@@ -305,7 +327,7 @@ static bool native_known_tool(const char *name) {
+     for (size_t i = 0; i < count; i++)
+         if (!strcmp(name, tools[i].name))
+             return true;
+-    return !strcmp(name, "final") || !strcmp(name, "memory");
++    return !strcmp(name, "final") || !strcmp(name, "memory") || !strcmp(name, "validate_candidate");
+ }
+ 
+ forge_status fg_native_action_normalize(const char *message, bool include_thought, char **action,
+@@ -393,8 +415,12 @@ forge_status fg_native_action_normalize(const char *message, bool include_though
+         return fg_error(error, FORGE_ERR_PARSE,
+                         "Native tool arguments must encode one JSON object");
+     }
+-    if (strcmp(name, "final") && strcmp(name, "memory") &&
+-        !fg_tool_validate(name, arguments, error)) {
++    bool candidate = !strcmp(name, "validate_candidate");
++    if ((candidate && yyjson_obj_size(arguments) != 0) ||
++        (!candidate && strcmp(name, "final") && strcmp(name, "memory") &&
++         !fg_tool_validate(name, arguments, error))) {
++        if (candidate)
++            fg_error(error, FORGE_ERR_PARSE, "validate_candidate requires empty arguments");
+         yyjson_doc_free(arguments_document);
+         yyjson_doc_free(document);
+         return error && error->code ? error->code : FORGE_ERR_PARSE;
+@@ -1476,9 +1502,8 @@ static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
+         return NULL;
+     }
+     char *result = fg_process_render(&r);
+-    bool native_protocol =
+-        result && !c->config.minimal_agent && c->config.model &&
+-        c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
++    bool native_protocol = result && !c->config.minimal_agent && c->config.model &&
++                           c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
+     bool add_native_failure_guidance = native_protocol && r.exit_code != 0;
+     bool add_native_success_guidance =
+         native_protocol && r.exit_code == 0 && !r.timed_out && !r.cancelled && !r.truncated;
+diff --git a/tests/integration/test_minimal_agent.py b/tests/integration/test_minimal_agent.py
+index e27143d..3697707 100644
+--- a/tests/integration/test_minimal_agent.py
++++ b/tests/integration/test_minimal_agent.py
+@@ -36,17 +36,20 @@ class MinimalAgentTests(unittest.TestCase):
+     def tearDown(self):
+         self.temp.cleanup()
+ 
+-    def run_script(self, actions, *options, success=True, minimal=True, allow_write=True):
++    def run_script(self, actions, *options, success=True, minimal=True, allow_write=True,
++                   allow_exec=True):
+         script = self.root / "script.json"
+         script.write_text(json.dumps(actions), encoding="utf-8")
+         argv = [FORGE, "run", "Repair the workspace and run its tests.", "--script", str(script),
+                 "--workspace", str(self.root), "--no-config", "--json",
+-                "--allow-exec", "--prompt-protocol", "native", "--context", "65536",
++                "--prompt-protocol", "native", "--context", "65536",
+                 "--output-reserve", "4096"]
+         if minimal:
+             argv.append("--minimal-agent")
+         if allow_write:
+             argv.append("--allow-write")
++        if allow_exec:
++            argv.append("--allow-exec")
+         result = subprocess.run([*argv, *options], capture_output=True, encoding="utf-8", timeout=60)
+         self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+         events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
+@@ -193,6 +196,145 @@ class MinimalAgentTests(unittest.TestCase):
+         self.assertIn("memory", {tool["function"]["name"] for tool in first["tools"]})
+         self.assertIn("apply_hunk", {tool["function"]["name"] for tool in first["tools"]})
+ 
++    def candidate_fixture(self, two_files=False):
++        (self.root / "value.py").write_text("def value():\n    return 1\n")
++        (self.root / "test_value.py").write_text(
++            "import unittest\nfrom value import value\n"
++            + ("from other import other\n" if two_files else "")
++            + "class Tests(unittest.TestCase):\n"
++              "    def test_value(self):\n        self.assertEqual(value(), 2)\n"
++            + ("    def test_other(self):\n        self.assertEqual(other(), 3)\n"
++               if two_files else ""))
++        if two_files:
++            (self.root / "other.py").write_text("def other():\n    return 1\n")
++
++    @staticmethod
++    def checkpoints(events):
++        return [event["data"] for event in events if event["type"] == "candidate_checkpoint"]
++
++    def test_candidate_multifile_and_completion_reuse(self):
++        self.candidate_fixture(two_files=True)
++        events, session, metrics, _ = self.run_script([
++            patch("value.py", "return 1", "return 2"), read("other.py"),
++            patch("other.py", "return 1", "return 3"), call("validate_candidate"),
++            call("final", {"answer": "Both repairs passed host validation."}),
++        ], "--candidate-checkpoint")
++        checks = self.checkpoints(events)
++        self.assertTrue(checks[0]["validated"])
++        self.assertTrue(checks[0]["passed"])
++        self.assertEqual(checks[0]["candidate_attempts"], 1)
++        self.assertEqual(checks[1]["commands"], 0)
++        self.assertTrue(checks[1]["passed"])
++        last = json.loads((session / "context" / "0005.txt").read_text())
++        self.assertEqual([tool["function"]["name"] for tool in last["tools"]], ["final"])
++        self.assertGreater(metrics["validation_commands"], 0)
++
++    def test_candidate_episode_survives_reads_noops_and_failed_candidates(self):
++        self.candidate_fixture()
++        events, session, _, _ = self.run_script([
++            patch("value.py", "return 1", "return 3"), call("validate_candidate"),
++            read("value.py"), patch("value.py", "return 3", "return 3"),
++            call("validate_candidate"), patch("value.py", "return 3", "return 1"),
++            call("validate_candidate"), patch("value.py", "return 1", "return 2"),
++            call("validate_candidate"), call("final", {"answer": "Repaired and checked."}),
++        ], "--candidate-checkpoint")
++        checks = self.checkpoints(events)
++        self.assertEqual([x["candidate_attempts"] for x in checks], [1, 1, 1, 2, 2])
++        self.assertEqual([x["episode_active"] for x in checks], [True, True, True, False, False])
++        self.assertFalse(checks[1]["novel"])
++        self.assertFalse(checks[2]["changed"])
++        self.assertEqual(checks[1]["commands"], 0)
++        prompt = (session / "context" / "0005.txt").read_text()
++        self.assertIn("episode_active=true", prompt)
++
++    def test_candidate_reserves_validation_then_final(self):
++        self.candidate_fixture()
++        events, session, metrics, _ = self.run_script([
++            patch("value.py", "return 1", "return 2"), call("validate_candidate"),
++            call("final", {"answer": "Repaired."}),
++        ], "--candidate-checkpoint", "--max-turns", "3")
++        second = json.loads((session / "context" / "0002.txt").read_text())
++        self.assertEqual([tool["function"]["name"] for tool in second["tools"]], ["validate_candidate"])
++        self.assertEqual(metrics["turns"], 3)
++        self.assertTrue(self.checkpoints(events)[-1]["passed"])
++
++    def test_candidate_dispatch_enforces_reserved_action(self):
++        self.candidate_fixture()
++        events, _, metrics, result = self.run_script([
++            patch("value.py", "return 1", "return 2"),
++            call("run_command", {"argv": [sys.executable, "-c", "raise Exception('must not run')"]}),
++        ], "--candidate-checkpoint", "--max-turns", "3", success=False)
++        self.assertIn("Reserved checkpoint", result.stderr)
++        self.assertEqual(len(self.outputs(events)), 1)
++        self.assertEqual(metrics["turns"], 2)
++
++    def test_candidate_passing_tests_without_change_cannot_finish(self):
++        self.candidate_fixture()
++        (self.root / "value.py").write_text("def value():\n    return 2\n")
++        events, _, metrics, _ = self.run_script([
++            call("final", {"answer": "Done."}), call("validate_candidate"),
++            call("final", {"answer": "Done."}),
++        ], "--candidate-checkpoint", "--max-turns", "3", success=False)
++        self.assertEqual(metrics["validation_commands"], 0)
++        self.assertTrue(all(not x["changed"] for x in self.checkpoints(events)))
++        self.assertNotIn("final", [x["type"] for x in events])
++
++    def test_candidate_early_final_runs_host_validation(self):
++        self.candidate_fixture()
++        events, _, _, _ = self.run_script([
++            patch("value.py", "return 1", "return 2"),
++            call("final", {"answer": "Repair complete."}),
++        ], "--candidate-checkpoint")
++        self.assertTrue(self.checkpoints(events)[0]["validated"])
++        self.assertTrue(self.checkpoints(events)[0]["passed"])
++
++    def test_candidate_exit_zero_command_cannot_establish_pass(self):
++        self.candidate_fixture()
++        events, _, _, _ = self.run_script([
++            patch("value.py", "return 1", "return 3"),
++            call("run_command", {"argv": [sys.executable, "-c", "print('OK')"]}),
++            call("validate_candidate"), call("final", {"answer": "Tests passed."}),
++        ], "--candidate-checkpoint", "--max-turns", "4", success=False)
++        self.assertEqual(self.outputs(events)[1]["exit_code"], 0)
++        self.assertFalse(any(x["passed"] for x in self.checkpoints(events)))
++        self.assertNotIn("final", [x["type"] for x in events])
++
++    def test_candidate_without_tests_is_blocked(self):
++        (self.root / "value.py").write_text("def value():\n    return 1\n")
++        events, _, metrics, _ = self.run_script([
++            patch("value.py", "return 1", "return 2"), call("validate_candidate"),
++            call("final", {"answer": "Done."}),
++        ], "--candidate-checkpoint", "--max-turns", "3", success=False)
++        self.assertEqual(metrics["validation_commands"], 0)
++        self.assertTrue(all(x["candidate_attempts"] == 0 for x in self.checkpoints(events)))
++
++    def test_candidate_validation_obeys_process_denial(self):
++        self.candidate_fixture()
++        events, _, metrics, _ = self.run_script([
++            patch("value.py", "return 1", "return 2"), call("validate_candidate"),
++            call("final", {"answer": "Done."}),
++        ], "--candidate-checkpoint", "--max-turns", "3", allow_exec=False, success=False)
++        self.assertEqual(metrics["validation_commands"], 0)
++        self.assertFalse(any(x["passed"] for x in self.checkpoints(events)))
++
++    def test_candidate_validation_rejects_mutating_test(self):
++        self.candidate_fixture()
++        with (self.root / "test_value.py").open("a") as target:
++            target.write("        from pathlib import Path\n"
++                         "        Path('value.py').write_text('def value(): return 3\\n')\n")
++        events, _, _, _ = self.run_script([
++            patch("value.py", "return 1", "return 2"), call("validate_candidate"),
++            call("final", {"answer": "Done."}),
++        ], "--candidate-checkpoint", "--max-turns", "3", success=False)
++        self.assertFalse(self.checkpoints(events)[0]["passed"])
++        self.assertFalse(self.checkpoints(events)[0]["validated"])
++
++    def test_candidate_tool_arguments_are_strict(self):
++        events, _, _, _ = self.run_script([
++            call("validate_candidate", {"passed": True}),
++        ], "--candidate-checkpoint", success=False)
++        self.assertFalse(self.checkpoints(events))
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/tests/unit/test_repair_control.py b/tests/unit/test_repair_control.py
+index 2069296..b7e3819 100644
+--- a/tests/unit/test_repair_control.py
++++ b/tests/unit/test_repair_control.py
+@@ -19,6 +19,22 @@ SPEC.loader.exec_module(CONTROL)
+ 
+ 
+ class RepairControlTests(unittest.TestCase):
++    def test_candidate_protocol_is_two_arm_and_schedule_is_complete(self):
++        self.args.experiment = 'candidate-checkpoint'
++        self.args.candidate_forge = self.root / 'candidate.exe'
++        protocol = CONTROL.make_protocol(self.args, [(Path('a.json'), {'id': 'a'}),
++                                                     (Path('b.json'), {'id': 'b'})], self.identity)
++        self.assertEqual(protocol['arms'], {'candidate': {'variant': 'candidate-checkpoint'},
++                                           'minimal': {'variant': 'minimal'}})
++        self.assertEqual(len(protocol['schedule']), 12)
++        for arm in protocol['arms']:
++            self.assertEqual(sum(cell['arm'] == arm for cell in protocol['schedule']), 6)
++        self.assertIn('no historical arm', protocol['historical_confound'])
++        cell = protocol['schedule'][0] | {'arm': 'candidate'}
++        command = CONTROL.cell_command(self.args, cell, self.root)
++        self.assertEqual(command[command.index('--variants') + 1], 'candidate-checkpoint')
++        self.assertEqual(command[command.index('--forge') + 1], str(self.args.candidate_forge))
++
+     def setUp(self):
+         self.temporary = tempfile.TemporaryDirectory()
+         self.addCleanup(self.temporary.cleanup)

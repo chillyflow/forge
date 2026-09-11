@@ -1,0 +1,11 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Test setup:
+post function: <function post at 0x000001F8F0369A80>
+retract function: <function retract at 0x000001F8F0369D00>
+Test case 1:
+p = {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+retract("r", "p") = {'id': 'r', 'kind': 'retract', 'target': 'p'}
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+
+stderr:

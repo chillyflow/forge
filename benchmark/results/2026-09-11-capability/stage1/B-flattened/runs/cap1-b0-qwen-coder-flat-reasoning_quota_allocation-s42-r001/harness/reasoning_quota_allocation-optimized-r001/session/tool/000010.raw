@@ -1,0 +1,17 @@
+Patched repair.go.
+Recorded edit diff: tool/000010.patch
+Staged Go syntax validation passed before commit.
+Suggested targeted validation (requires command approval): compile/test affected Go packages: .; 0 reverse dependents; then vet and full module tests. Use the validation plan for exact argv and module working directories.
+
+POST_EDIT_VALIDATION:
+Automatic validation stopped at compile: Validation stage compile failed (exit_code=1)
+FAIL forgebench error: package failed
+FAIL forgebench [forgebench.test] error: build failed
+exit_code=1 timeout=false cancelled=false truncated=false
+.\repair.go:84:5: undefined: preferred
+.\repair.go:85:5: undefined: preferred
+FAIL	forgebench [build failed]
+# forgebench [forgebench.test]
+
+Go events: pass=0 fail=2
+

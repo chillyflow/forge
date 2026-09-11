@@ -1,0 +1,67 @@
+diff --git "a/ledger.py" "b/ledger.py"
+--- "a/ledger.py"
++++ "b/ledger.py"
+@@ -1,29 +1,34 @@
+-def positions_for(messages):
+-    visited, voided = set(), set()
+-    entries, positions = {}, {}
+-    for message in messages:
+-        if message['key'] in visited:
+-            continue
+-        visited.add(message['key'])
+-        if message['kind'] == 'post':
+-            bucket, delta = message['bucket'], message['delta']
+-            # If this posting is voided (retraction arrived first), skip it
+-            if message['key'] in voided:
+-                continue
+-            entries[message['key']] = (bucket, delta)
+-            positions.setdefault(bucket, 0)
+-            positions[bucket] += delta
+-        else:
+-            reference = message['reference']
+-            if reference in voided:
+-                continue
+-            voided.add(reference)
+-            if reference in entries:
+-                bucket, delta = entries[reference]
+-                positions[bucket] -= delta
+-            # Handle case where retraction arrives before posting - ensure bucket exists
+-            else:
+-                # This is a retraction for a non-existent posting, but we still need to ensure
+-                # the bucket exists in positions for the "zero entry" requirement
+-                positions.setdefault(reference, 0)
+-    return positions
++def positions_for(messages):
++    visited, voided = set(), set()
++    entries, positions = {}, {}
++    for message in messages:
++        if message['key'] in visited:
++            continue
++        visited.add(message['key'])
++        if message['kind'] == 'post':
++            bucket, delta = message['bucket'], message['delta']
++            # If this posting is voided (retraction arrived first), skip it
++            if message['key'] in voided:
++                continue
++            entries[message['key']] = (bucket, delta)
++            positions.setdefault(bucket, 0)
++            positions[bucket] += delta
++        else:
++            reference = message['reference']
++            if reference in voided:
++                continue
++            voided.add(reference)
++            if reference in entries:
++                bucket, delta = entries[reference]
++                positions[bucket] -= delta
++            # Handle case where retraction arrives before posting - ensure bucket exists
++            else:
++                # This is a retraction for a non-existent posting, but we still need to ensure
++                # the bucket exists in positions for the "zero entry" requirement
++                # We need to find the bucket for the reference, but since there's no posting,
++                # we can't know the bucket. However, looking at the test cases, it seems like
++                # we should ensure the bucket is initialized to 0.
++                # But actually, let's think differently - if a retraction arrives for a posting
++                # that doesn't exist, it should not affect positions at all.
++                pass
++    return positions

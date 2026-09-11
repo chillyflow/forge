@@ -1,0 +1,21 @@
+{
+  "id": "holdout_go_projection",
+  "suite": "holdout-2026-09-02",
+  "language": "go",
+  "category": "replay",
+  "prompt": "Project consumes versioned key updates in arrival order. Only a strictly newer revision may change a key; deletion must prevent older updates from resurrecting that key. Revisions are per key. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module holdout\n\ngo 1.24\n",
+    "service.go": "package holdout\ntype Event struct { Key string; Revision int; Value string; Deleted bool }\nfunc Project(events []Event) map[string]string {\n    values:=map[string]string{}\n    revisions:=map[string]int{}\n    for _,ev:=range events {\n        previous,seen:=revisions[ev.Key]\n        if seen && ev.Revision<=previous { continue }\n        revisions[ev.Key]=ev.Revision\n        if ev.Deleted { delete(values,ev.Key); delete(revisions,ev.Key) } else { values[ev.Key]=ev.Value }\n    }\n    return values\n}\n",
+    "service_test.go": "package holdout\nimport (\"reflect\"; \"testing\")\nfunc TestProject(t *testing.T) {\n    events:=[]Event{{\"x\",5,\"new\",false},{\"x\",6,\"\",true},{\"x\",4,\"stale\",false},\n        {\"y\",1,\"first\",false},{\"y\",1,\"duplicate\",false},{\"z\",0,\"zero\",false}}\n    got:=Project(events)\n    if !reflect.DeepEqual(got,map[string]string{\"y\":\"first\",\"z\":\"zero\"}) { t.Fatalf(\"projection %v\",got) }\n    events=append(events,Event{\"x\",7,\"reborn\",false})\n    if Project(events)[\"x\"]!=\"reborn\" { t.Fatal(\"new revision rejected\") }\n    if len(Project(nil))!=0 { t.Fatal(\"empty input\") }\n}\n"
+  },
+  "oracle_files": {
+    "service.go": "package holdout\ntype Event struct { Key string; Revision int; Value string; Deleted bool }\nfunc Project(events []Event) map[string]string {\n    values:=map[string]string{}\n    revisions:=map[string]int{}\n    for _,ev:=range events {\n        previous,seen:=revisions[ev.Key]\n        if seen && ev.Revision<=previous { continue }\n        revisions[ev.Key]=ev.Revision\n        if ev.Deleted { delete(values,ev.Key) } else { values[ev.Key]=ev.Value }\n    }\n    return values\n}\n"
+  }
+}

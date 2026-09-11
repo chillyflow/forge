@@ -1,0 +1,28 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+=== Manual trace ===
+p = {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+events = [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+
+Step 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  -> Added to seen
+  -> Posting: cash +7 = 7
+
+Step 2: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  -> Duplicate event, skipping
+
+Step 3: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  -> Added to seen
+  -> Retract target: p
+  -> Added target to cancelled
+  -> Retracted: cash -7 = 0
+
+Step 4: {'id': 's', 'kind': 'retract', 'target': 'p'}
+  -> Added to seen
+  -> Retract target: p
+  -> Target already cancelled, skipping
+
+Final totals: {'cash': 0}
+Actual result: {'cash': 0}
+
+stderr:

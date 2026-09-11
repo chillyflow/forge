@@ -1,0 +1,19 @@
+TOOL_ERROR [conflict]: stale file_sha256 for repair.go; current file_sha256 is 630a1a73c15b1c22cb7afec2f1d000f39d606ef8026b489b5ba70f2b0bb869e6. Current selected content follows; use this hash for a revised hunk.
+No edit performed. file_sha256:630a1a73c15b1c22cb7afec2f1d000f39d606ef8026b489b5ba70f2b0bb869e6
+file_line_count:34
+	maxInt := int(^uint(0) >> 1)
+	maxInt := int(^uint(0) >> 1)
+	for _, tr := range transfers {
+		from, fromOK := next[tr.From]
+		to, toOK := next[tr.To]
+		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+			return false
+		}
+		if tr.From == tr.To {
+			continue
+		}
+		if to > maxInt-tr.Amount {
+			return false
+		}
+		next[tr.From] = from - tr.Amount
+		next[tr.To] = to + tr.Amount

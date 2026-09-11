@@ -1,0 +1,13 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Test case [retract(r, p), p]:
+Expected: {"cash": 0}
+Actual result: {'cash': 7}
+
+This is the problem case - why does it expect cash=0 when the posting is cancelled?
+Let me trace what should happen:
+1. retract(r, p) - cancel posting p
+2. post(p, 7) - this posting should be skipped because it is cancelled
+So result should be {} not {"cash": 0}
+
+stderr:

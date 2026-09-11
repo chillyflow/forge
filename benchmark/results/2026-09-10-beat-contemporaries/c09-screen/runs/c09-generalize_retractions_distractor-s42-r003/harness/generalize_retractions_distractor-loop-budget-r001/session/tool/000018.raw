@@ -1,0 +1,18 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+=== Test case 1 ===
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+=== Test case 2 ===
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {}
+Expected: {'cash': 0}
+
+=== Test case 3 ===
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+stderr:

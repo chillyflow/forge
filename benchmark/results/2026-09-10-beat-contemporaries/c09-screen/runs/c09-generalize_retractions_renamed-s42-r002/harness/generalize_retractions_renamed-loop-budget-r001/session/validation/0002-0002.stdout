@@ -1,0 +1,34 @@
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Step by step:
+1. First p (post 'p', delta 7):
+   - visited.add('p')
+   - entries['p'] = ('cash', 7)
+   - positions['cash'] += 7 = 7
+   - positions = {'cash': 7}
+2. Second p (post 'p', delta 7):
+   - 'p' already in visited, so skip
+3. retract('r', 'p'):
+   - reference = 'p'
+   - 'p' not in voided, so add to voided
+   - 'p' in entries, so subtract 7 from positions['cash']
+   - positions['cash'] = 7 - 7 = 0
+   - positions = {'cash': 0}
+4. retract('s', 'p'):
+   - reference = 'p'
+   - 'p' already in voided, so skip
+Final result should be {'cash': 0}
+Input messages:
+  0: {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+  1: {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+  2: {'key': 'r', 'kind': 'retract', 'reference': 'p'}
+  3: {'key': 's', 'kind': 'retract', 'reference': 'p'}
+
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+=== Testing each case from the original test ===
+Case 1: {'cash': 0}
+Case 2: {'cash': 7}
+Case 3: {'cash': 0}

@@ -1,0 +1,82 @@
+diff --git "a/api/handler_test.go" "b/api/handler_test.go"
+--- "a/api/handler_test.go"
++++ "b/api/handler_test.go"
+@@ -1,26 +1,52 @@
+-package api
+-
+-import (
+-	"encoding/json"
+-	"net/http/httptest"
+-	"reflect"
+-	"testing"
+-)
+-
+-func TestPagination(t *testing.T) {
+-	h := ListHandler([]string{"a", "b", "c", "d", "e"})
+-	r := httptest.NewRequest("GET", "/?page=2&size=2", nil)
+-	w := httptest.NewRecorder()
+-	h(w, r)
+-	var got []string
+-	json.Unmarshal(w.Body.Bytes(), &got)
+-	if !reflect.DeepEqual(got, []string{"c", "d"}) {
+-		t.Fatalf("got %v", got)
+-	}
+-	bad := httptest.NewRequest("GET", "/?page=1&size=nope", nil)
+-	bw := httptest.NewRecorder()
+-	h(bw, bad)
+-	if bw.Code != 400 {
+-		t.Fatalf("bad status %d", bw.Code)
+-	}
+-}
++package api
++
++import (
++	"encoding/json"
++	"net/http/httptest"
++	"reflect"
++	"testing"
++)
++
++func TestPagination(t *testing.T) {
++	h := ListHandler([]string{"a", "b", "c", "d", "e"})
++	r := httptest.NewRequest("GET", "/?page=2&size=2", nil)
++	w := httptest.NewRecorder()
++	h(w, r)
++	var got []string
++	json.Unmarshal(w.Body.Bytes(), &got)
++	if !reflect.DeepEqual(got, []string{"c", "d"}) {
++		t.Fatalf("got %v", got)
++	}
++	bad := httptest.NewRequest("GET", "/?page=1&size=nope", nil)
++	bw := httptest.NewRecorder()
++	h(bw, bad)
++	if bw.Code != 400 {
++		t.Fatalf("bad status %d", bw.Code)
++	}
++	
++	// Test invalid page
++	invalidPage := httptest.NewRequest("GET", "/?page=invalid&size=2", nil)
++	bw2 := httptest.NewRecorder()
++	h(invalidPage, bw2)
++	if bw2.Code != 400 {
++		t.Fatalf("bad status %d", bw2.Code)
++	}
++	
++	// Test invalid size (zero)
++	invalidSize := httptest.NewRequest("GET", "/?page=1&size=0", nil)
++	bw3 := httptest.NewRecorder()
++	h(invalidSize, bw3)
++	if bw3.Code != 400 {
++		t.Fatalf("bad status %d", bw3.Code)
++	}
++	
++	// Test valid pagination with different page/size
++	r2 := httptest.NewRequest("GET", "/?page=1&size=3", nil)
++	w2 := httptest.NewRecorder()
++	h(w2, r2)
++	var got2 []string
++	json.Unmarshal(w2.Body.Bytes(), &got2)
++	if !reflect.DeepEqual(got2, []string{"a", "b", "c"}) {
++		t.Fatalf("got %v", got2)
++	}
++}

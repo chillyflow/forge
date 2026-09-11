@@ -1,0 +1,41 @@
+file_sha256:c462eac2fa63fc9849595da9082b6bbc3315696a8aab95c5325da78027445e89
+1: def positions_for(messages):
+2:     visited, voided = set(), set()
+3:     pending_retractions = {}
+4:     entries, positions = {}, {}
+5:     for message in messages:
+6:         if message['key'] in visited:
+7:             continue
+8:         visited.add(message['key'])
+9:         if message['kind'] == 'post':
+10:             bucket, delta = message['bucket'], message['delta']
+11:             reference = message['key']
+12:             
+13:             # Check if this posting should be voided by pending retractions
+14:             should_void = reference in pending_retractions
+15:             
+16:             # Apply any pending retractions for this posting
+17:             if should_void:
+18:                 for retract_key in pending_retractions[reference]:
+19:                     if retract_key not in voided:
+20:                         voided.add(retract_key)
+21:                         positions.setdefault(bucket, 0)
+22:                         positions[bucket] -= delta
+23:                 del pending_retractions[reference]
+24:             
+25:             # Only add the posting if it hasn't been voided
+26:             if not should_void:
+27:                 entries[reference] = (bucket, delta)
+28:                 positions.setdefault(bucket, 0)
+29:                 positions[bucket] += delta
+30:         else:
+31:             reference = message['reference']
+32:             if reference in voided:
+33:                 continue
+34:             voided.add(reference)
+35:             if reference in entries:
+36:                 bucket, delta = entries[reference]
+37:                 positions[bucket] -= delta
+38:                 del entries[reference]  # Remove the entry after voiding
+39:             else:
+40:                 # Store as pending retraction if the reference hasn't been seen yet

@@ -1,0 +1,18 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Let me trace the test cases step by step with debug info
+Case 1: [p, retract(r,p)] where p = post("p", 7)
+Expected: {"cash": 0}
+My result: {'cash': 0}
+
+Case 2: [retract(r,p), p] where p = post("p", 7)
+Expected: {"cash": 0}
+My result: {'cash': 7}
+
+Case 3: [p, p, retract(r,p), retract(s,p)] where p = post("p", 7)
+Expected: {"cash": 0}
+My result: {'cash': 7}
+
+I think I need to understand the semantics better...
+
+stderr:

@@ -1,0 +1,13 @@
+diff --git a/ledger.py b/ledger.py
+index 14a9172..a20c365 100644
+--- a/ledger.py
++++ b/ledger.py
+@@ -19,4 +19,8 @@ def positions_for(messages):
+             if reference in entries:
+                 bucket, delta = entries[reference]
+                 positions[bucket] -= delta
++            # Mark that the referenced posting has been voided to prevent multiple cancellations
++            # This is needed to handle the case where the retraction arrives before the posting
++            # but we still want to cancel it when it arrives
++    return positions
+     return positions

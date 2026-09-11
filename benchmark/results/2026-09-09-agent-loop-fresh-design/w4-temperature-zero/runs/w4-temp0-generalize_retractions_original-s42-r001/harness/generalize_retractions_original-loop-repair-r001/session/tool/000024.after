@@ -1,0 +1,29 @@
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            if event['id'] not in cancelled:
+                totals.setdefault(account, 0)
+                totals[account] += amount
+        else:
+            target = event['target']
+            if target in cancelled:
+                continue
+            if target in postings:
+                cancelled.add(target)
+                account, amount = postings[target]
+                totals[account] -= amount
+            else:
+                # If target is not in postings, mark it as cancelled (unmatched retraction)
+                cancelled.add(target)
+                # For unmatched retractions, we still need to ensure the account appears in totals
+                # We can't determine the account from the retraction, so we'll track it separately
+                # But actually, unmatched retractions have no balance effect, so we don't need to do anything
+                pass
+    return totals

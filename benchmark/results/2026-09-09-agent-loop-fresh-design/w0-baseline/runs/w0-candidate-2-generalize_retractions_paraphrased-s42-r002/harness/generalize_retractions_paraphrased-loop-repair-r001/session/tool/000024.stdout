@@ -1,0 +1,5 @@
+Let me manually trace through the exact expected behavior:
+Event 1: retract(r, p) - should ignore since p not yet posted
+Event 2: p = post(p, 7) - should post 7 to cash
+But test expects result to be 0, not 7
+This suggests the retract actually cancels the later posting somehow...

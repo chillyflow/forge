@@ -1,0 +1,23 @@
+file_sha256:1e4a5ec513b63d0ca844e3897dc49565e157a196e19eee37819581888a9b203b
+1: package repair
+2: 
+3: import (
+4: 	"reflect"
+5: 	"testing"
+6: )
+7: 
+8: func TestMatchRoute(t *testing.T) {
+9: 	routes := []Route{{"*", "/users/:id", "generic-user"}, {"GET", "/users/me", "self"}, {"GET", "/users/:id", "get-user"}, {"GET", "/files/*", "files"}}
+10: 	if name, p, ok := MatchRoute("GET", "/users/me", routes); !ok || name != "self" || len(p) != 0 {
+11: 		t.Fatalf("self: %s %v %v", name, p, ok)
+12: 	}
+13: 	if name, p, ok := MatchRoute("GET", "/users/42", routes); !ok || name != "get-user" || !reflect.DeepEqual(p, map[string]string{"id": "42"}) {
+14: 		t.Fatalf("user: %s %v %v", name, p, ok)
+15: 	}
+16: 	if name, p, ok := MatchRoute("GET", "/files/a/b.txt", routes); !ok || name != "files" || p["*"] != "a/b.txt" {
+17: 		t.Fatalf("files: %s %v %v", name, p, ok)
+18: 	}
+19: 	if _, _, ok := MatchRoute("GET", "/files", routes); ok {
+20: 		t.Fatal("empty wildcard matched")
+21: 	}
+22: }

@@ -1,0 +1,12 @@
+Current behavior:
+Case 1 [p, retract(r,p)]: {'cash': 0}
+Case 2 [retract(r,p), p]: {'cash': 7}
+Case 3 [p, p, retract(r,p), retract(s,p)]: {'cash': 7}
+
+What if I misunderstood how the idempotency works?
+Maybe posts with the same key are NOT processed twice?
+Let me think about this differently - maybe when we have two posts with same key,
+the second one overwrites the first one, and the retraction only affects the last one.
+
+Actually, let me look at this problem with a fresh perspective:
+What if the issue is that I need to track which posts have been processed already?

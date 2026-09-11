@@ -1,0 +1,15 @@
+Let me understand what the expected behavior should be by testing with a working case first
+Test case [p, r]:
+Posting: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+Retraction: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+Result: {'cash': 0}
+Expected: {"cash": 0}
+This makes sense - posting added, then retracted
+
+Test case [r, p]:
+Retraction: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+Posting: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+Result: {}
+Expected: {"cash": 0}
+This should also make sense - retraction before posting, so posting cancelled
+But the current code gives {} instead of {"cash": 0}

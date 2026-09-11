@@ -1,0 +1,12 @@
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Testing first case [p, retract('r', 'p')]:
+Result: {'cash': 0}
+
+Testing second case [retract('r', 'p'), p]:
+Result: {'cash': 7}
+
+Testing third case [p, p, retract('r', 'p'), retract('s', 'p')]:
+Result: {'cash': 0}

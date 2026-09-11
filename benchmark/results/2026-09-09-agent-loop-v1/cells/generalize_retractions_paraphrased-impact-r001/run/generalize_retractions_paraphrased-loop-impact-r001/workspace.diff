@@ -1,0 +1,43 @@
+diff --git a/service.py b/service.py
+index b7bbbde..78c4056 100644
+--- a/service.py
++++ b/service.py
+@@ -1,22 +1,22 @@
+ def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
++    # Track all posts by ID
++    posts = {}
++    # Track which posts have been cancelled
++    cancelled = set()
++    
++    # First pass: collect all posts and retracts
+     for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+         if event['kind'] == 'post':
++            posts[event['id']] = event
++        else:  # retract
++            cancelled.add(event['target'])
++    
++    # Second pass: process only non-cancelled posts
++    totals = {}
++    for event in events:
++        if event['kind'] == 'post' and event['id'] not in cancelled:
+             account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
+-        else:
+-            target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
++            totals[account] += amount
++    
+     return totals

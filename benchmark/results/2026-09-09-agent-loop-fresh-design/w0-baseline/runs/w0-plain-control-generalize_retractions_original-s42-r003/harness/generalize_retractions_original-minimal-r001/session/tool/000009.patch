@@ -1,0 +1,62 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,23 +1,35 @@
+-def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:
+-            target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-                # Remove the posting from postings dict to ensure it's only cancelled once
+-                del postings[target]
+-    return totals
++def balances(events):
++    seen, cancelled = set(), set()
++    postings, totals = {}, {}
++    # Store retractions that reference non-existent postings
++    pending_retractions = {}
++    
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            postings[event['id']] = (account, amount)
++            totals.setdefault(account, 0)
++            totals[account] += amount
++        else:
++            target = event['target']
++            if target in cancelled:
++                continue
++            # If the target posting hasn't arrived yet, store the retraction
++            if target not in postings:
++                if target not in pending_retractions:
++                    pending_retractions[target] = []
++                pending_retractions[target].append(event['id'])
++            else:
++                # The target posting exists, so cancel it
++                cancelled.add(target)
++                account, amount = postings[target]
++                totals[account] -= amount
++                # Remove the posting from postings dict to ensure it's only cancelled once
++                del postings[target]
++    
++    # Handle pending retractions that may reference postings that arrive later
++    # This is already handled above, but we need to make sure we don't double-cancel
++    return totals

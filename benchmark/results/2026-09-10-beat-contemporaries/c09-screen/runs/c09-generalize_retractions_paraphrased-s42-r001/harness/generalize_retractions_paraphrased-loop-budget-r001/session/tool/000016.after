@@ -1,0 +1,26 @@
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            if target in cancelled:
+                continue
+            cancelled.add(target)
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+    # After processing all events, remove any postings that were cancelled
+    for post_id in list(postings.keys()):
+        if post_id in cancelled:
+            account, amount = postings[post_id]
+            totals[account] -= amount
+    return totals

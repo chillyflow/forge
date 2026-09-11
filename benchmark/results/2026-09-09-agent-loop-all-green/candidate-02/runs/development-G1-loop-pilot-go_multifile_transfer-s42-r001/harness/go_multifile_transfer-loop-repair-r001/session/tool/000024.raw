@@ -1,0 +1,12 @@
+file_sha256:64e7c48cc87422cd13d5bb0c780d13684abf44c6506acb06a6c64b1a2f0faa50
+1: package ledger
+2: 
+3: type Ledger struct{ Balance int }
+4: 
+5: func (l *Ledger) debit(amount int) bool {
+6: 	if amount < 0 || l.Balance < amount {
+7: 		return false
+8: 	}
+9: 	l.Balance -= amount
+10: 	return true
+11: }

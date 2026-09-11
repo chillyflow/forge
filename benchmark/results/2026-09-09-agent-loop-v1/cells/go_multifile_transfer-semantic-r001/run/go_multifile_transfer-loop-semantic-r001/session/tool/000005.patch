@@ -1,0 +1,26 @@
+diff --git "a/ledger/transfer.go" "b/ledger/transfer.go"
+--- "a/ledger/transfer.go"
++++ "b/ledger/transfer.go"
+@@ -1,11 +1,11 @@
+-package ledger
+-
+-import "errors"
+-
+-func Transfer(from, to *Ledger, amount int) error {
+-	if !from.debit(amount) {
+-		return errors.New("insufficient funds")
+-	}
+-	from.Balance += amount
+-	return nil
+-}
++package ledger
++
++import "errors"
++
++func Transfer(from, to *Ledger, amount int) error {
++	if !from.debit(amount) {
++		return errors.New("insufficient funds")
++	}
++	to.Balance += amount
++	return nil
++}

@@ -1,0 +1,28 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+=== READING THE TEST CASES MORE CAREFULLY ===
+Test case 1: [p, retract(r,p)] where p = post("p", 7)
+Expected: {"cash": 0}
+
+Test case 2: [retract(r,p), p] where p = post("p", 7)
+Expected: {"cash": 0}
+
+Test case 3: [p, p, retract(r,p), retract(s,p)] where p = post("p", 7)
+Expected: {"cash": 0}
+
+THE KEY IS THAT ALL THREE CASES MUST RETURN 0
+This suggests there is a special rule about how retractions work
+Maybe retractions can cancel posts even if they come after them?
+No, that contradicts the problem statement
+
+Wait, let me trace case 3 again:
+1. post("p", 7) -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+2. post("p", 7) -> entries: {"p": ("cash", 7)}, positions: {"cash": 14}
+3. retract(r,p) -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+4. retract(s,p) -> entries: {}, positions: {"cash": 0}
+This gives 0, but my implementation gives 7
+So the issue is in step 2 - what happens when we have two posts with same key?
+Maybe the second one overwrites the first one?
+But then case 2 would give 0, and case 3 would give 0 too, which would be correct.
+
+stderr:

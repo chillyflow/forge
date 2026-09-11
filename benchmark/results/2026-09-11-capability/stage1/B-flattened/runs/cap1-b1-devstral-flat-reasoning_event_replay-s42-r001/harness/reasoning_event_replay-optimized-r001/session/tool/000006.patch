@@ -1,0 +1,93 @@
+diff --git "a/repair.go" "b/repair.go"
+--- "a/repair.go"
++++ "b/repair.go"
+@@ -1,44 +1,45 @@
+-package repair
+-
+-type Event struct {
+-	Seq           int
+-	ID, Kind, Key string
+-	Delta         int
+-}
+-
+-func ReplayEvents(events []Event) (map[string]int, bool) {
+-	state := map[string]int{}
+-	seen := map[string]Event{}
+-	expected := 1
+-	maxInt := int(^uint(0) >> 1)
+-	minInt := -maxInt - 1
+-	for _, event := range events {
+-		if event.ID == "" || event.Key == "" {
+-			return nil, false
+-		}
+-		if _, ok := seen[event.ID]; ok {
+-			continue
+-		}
+-		if event.Seq != expected {
+-			return nil, false
+-		}
+-		expected++
+-		seen[event.ID] = event
+-		switch event.Kind {
+-		case "Add":
+-			current := state[event.Key]
+-			if event.Delta > 0 && current > maxInt-event.Delta || event.Delta < 0 && current < minInt-event.Delta {
+-				return nil, false
+-			}
+-			state[event.Key] = current + event.Delta
+-		case "Delete":
+-			if event.Delta != 0 {
+-				return nil, false
+-			}
+-			delete(state, event.Key)
+-		default:
+-			return nil, false
+-		}
+-	}
+-	return state, true
+-}
++package repair
++
++type Event struct {
++	Seq           int
++	ID, Kind, Key string
++	Delta         int
++}
++
++func ReplayEvents(events []Event) (map[string]int, bool) {
++	state := map[string]int{}
++	seen := map[string]Event{}
++	expected := 1
++	maxInt := int(^uint(0) >> 1)
++	minInt := -maxInt - 1
++		if event.ID == "" || event.Key == "" {
++			return nil, false
++		}
++		if prev, ok := seen[event.ID]; ok {
++			if prev.Seq != event.Seq || prev.ID != event.ID || prev.Kind != event.Kind || prev.Key != event.Key || prev.Delta != event.Delta {
++				return nil, false
++			}
++			continue
++		}
++		if event.Seq != expected {
++			return nil, false
++		}
++		expected++
++		seen[event.ID] = event
++		case "Add":
++			current := state[event.Key]
++			if event.Delta > 0 && current > maxInt-event.Delta || event.Delta < 0 && current < minInt-event.Delta {
++				return nil, false
++			}
++			state[event.Key] = current + event.Delta
++		case "Delete":
++			if event.Delta != 0 {
++				return nil, false
++			}
++			delete(state, event.Key)
++		default:
++			return nil, false
++		}
++	}
++	return state, true
++}

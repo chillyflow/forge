@@ -1,0 +1,525 @@
+--- a/benchmark/common.py
++++ b/benchmark/common.py
+@@ -1,6 +1,7 @@
+ """Shared, dependency-free benchmark fixture and measurement utilities."""
+ import ctypes
+ from ctypes import wintypes
++from contextlib import nullcontext
+ import hashlib
+ import json
+ import os
+@@ -10,6 +11,7 @@
+ import re
+ import shutil
+ import subprocess
++import tempfile
+ import threading
+ import time
+ 
+@@ -445,9 +447,20 @@
+ 
+ def verify_task(root, task, output, env=None, timeout=120, gpu_index=0, extra_pids=()):
+     output = Path(output)
+-    with (output / 'verification.stdout').open('w', encoding='utf-8') as stdout, \
++    python_task = task.get('language') == 'python'
++    cache_scope = (tempfile.TemporaryDirectory(prefix='forge-python-verification-')
++                   if python_task else nullcontext(None))
++    with cache_scope as cache, \
++            (output / 'verification.stdout').open('w', encoding='utf-8') as stdout, \
+             (output / 'verification.stderr').open('w', encoding='utf-8') as stderr:
+-        result = run_monitored(task['verify'], cwd=root, env=env, stdout=stdout, stderr=stderr,
++        child_env = env
++        if python_task:
++            child_env = dict(os.environ if env is None else env)
++            child_env['PYTHONPYCACHEPREFIX'] = cache
++            child_env['PYTHONDONTWRITEBYTECODE'] = '1'
++        result = run_monitored(task['verify'], cwd=root, env=child_env, stdout=stdout, stderr=stderr,
+                                timeout=timeout, gpu_index=gpu_index, extra_pids=extra_pids)
+     result['passed'] = result['returncode'] == 0
++    result['python_cache_policy'] = ('fresh-external-prefix-no-write'
++                                     if python_task else 'not-applicable')
+     return result
+--- a/benchmark/run.py
++++ b/benchmark/run.py
+@@ -6,6 +6,7 @@
+ """
+ import argparse
+ import json
++import os
+ from pathlib import Path
+ import shutil
+ import subprocess
+@@ -85,6 +86,35 @@
+         'thought_cue': '', 'thought_budget': 'native-disabled'},
+ }
+ PROMPT_PROTOCOLS = ('flattened', 'native')
++
++
++def terminal_root_ignored(name, is_directory):
++    """Match the host input snapshot's root metadata directory exclusions."""
++    return is_directory and (name.casefold() if os.name == 'nt' else name) in ('.git', '.forge')
++
++
++def snapshot_terminal_inputs(root):
++    root = Path(root).resolve()
++    result = {}
++    for directory, directories, names in os.walk(root):
++        if Path(directory) == root:
++            directories[:] = [name for name in directories if not terminal_root_ignored(name, True)]
++        for name in names:
++            path = Path(directory) / name
++            result[path.relative_to(root).as_posix()] = digest(path)
++    return result
++
++
++def copy_terminal_inputs(root, destination):
++    root = Path(root).resolve()
++
++    def ignore(directory, names):
++        if Path(directory) != root:
++            return []
++        return [name for name in names if terminal_root_ignored(name, (root / name).is_dir())]
++
++    shutil.copytree(root, destination, ignore=ignore)
++
+ 
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+@@ -206,19 +236,13 @@
+                 if (session / 'metrics.json').exists():
+                     metrics = json.loads((session / 'metrics.json').read_text(encoding='utf-8'))
+             before_verification = snapshot_protected(root, task)
+-            before_verification_inputs = {
+-                str(path.relative_to(root)).replace('\\', '/'): digest(path)
+-                for path in root.rglob('*') if path.is_file() and
+-                not any(part in ('.git', '.forge', '__pycache__', '.pytest_cache')
+-                        for part in path.relative_to(root).parts)} if args.retain_terminal else None
++            before_verification_inputs = snapshot_terminal_inputs(root) if args.retain_terminal else None
++            if args.retain_terminal:
++                copy_terminal_inputs(root, output / 'pre-verification-workspace')
+             verification = verify_task(root, task, output, timeout=args.verification_timeout,
+                                        gpu_index=args.gpu_index)
+             write_json(output / 'verification.json', verification)
+-            after_verification_inputs = {
+-                str(path.relative_to(root)).replace('\\', '/'): digest(path)
+-                for path in root.rglob('*') if path.is_file() and
+-                not any(part in ('.git', '.forge', '__pycache__', '.pytest_cache')
+-                        for part in path.relative_to(root).parts)} if args.retain_terminal else None
++            after_verification_inputs = snapshot_terminal_inputs(root) if args.retain_terminal else None
+             unchanged = protected_unchanged(root, before_protected)
+             protect_protected(root, task, readonly=False)
+             startup_seconds = (metrics['load_ms'] / 1000.0) if 'load_ms' in metrics else None
+@@ -226,6 +250,8 @@
+                              if startup_seconds is not None else None)
+             end_to_end = process_result['wall_seconds'] + verification['wall_seconds']
+             passed = process_result['returncode'] == 0 and verification['passed'] and unchanged
++            if args.retain_terminal:
++                passed = passed and before_verification_inputs == after_verification_inputs
+             with (output / 'workspace-status.txt').open('w', encoding='utf-8') as status:
+                 subprocess.run(['git', '-C', str(root), 'status', '--short'], text=True,
+                                stdout=status, check=False)
+@@ -235,8 +261,7 @@
+             if not passed:
+                 shutil.copytree(root, output / 'failed-workspace', ignore=shutil.ignore_patterns('.git'))
+             if args.retain_terminal:
+-                shutil.copytree(root, output / 'terminal-workspace',
+-                                ignore=shutil.ignore_patterns('.git', '.forge', '__pycache__', '.pytest_cache'))
++                copy_terminal_inputs(root, output / 'terminal-workspace')
+                 write_json(output / 'verification-inputs.json', {
+                     'before': before_verification_inputs, 'after': after_verification_inputs,
+                     'protected_before': before_verification,
+@@ -261,6 +286,8 @@
+                       'verification_resource_usage': verification['resource_usage'], **fixture}
+             if args.retain_terminal:
+                 record.update(verification=verification, terminal_workspace='terminal-workspace',
++                              pre_verification_workspace='pre-verification-workspace',
++                              terminal_retention_policy='complete-except-git-forge',
+                               verification_inputs_unchanged=before_verification_inputs == after_verification_inputs,
+                               protected_before_verification=before_verification == before_protected)
+             records.append(record)
+--- a/src/repo/validation.c
++++ b/src/repo/validation.c
+@@ -656,17 +656,29 @@
+     return true;
+ }
+ 
++static const char vp_python_test_script[] =
++    "import sys,tempfile\n"
++    "with tempfile.TemporaryDirectory(prefix='forge-python-validation-') as cache:\n"
++    " sys.pycache_prefix=cache\n"
++    " sys.dont_write_bytecode=True\n"
++    " runner=sys.argv.pop(1)\n"
++    " sys.argv[0]=runner\n"
++    " if runner=='pytest':\n"
++    "  import pytest\n"
++    "  status=pytest.main(sys.argv[1:])\n"
++    " else:\n"
++    "  import unittest\n"
++    "  p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False)\n"
++    "  status=not p.result.wasSuccessful() or p.result.testsRun==0\n"
++    "sys.exit(status)\n";
++
+ static bool vp_python_file_commands(vp_graph *g, yyjson_mut_val *commands, char *const *files,
+                                     size_t file_count, bool use_pytest, const char *reason) {
+-    static const char unittest_script[] =
+-        "import sys,unittest;"
+-        "p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);"
+-        "sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)";
+-    const char *pytest_argv[] = {g->python_executable, "-B", "-m", "pytest", "-q", "-p",
+-                                 "no:cacheprovider"};
+-    const char *unittest_argv[] = {g->python_executable, "-B", "-c", unittest_script};
++    const char *pytest_argv[] = {g->python_executable, "-B", "-c", vp_python_test_script, "pytest",
++                                 "-q", "-p", "no:cacheprovider"};
++    const char *unittest_argv[] = {g->python_executable, "-B", "-c", vp_python_test_script, "unittest"};
+     const char *const *prefix = use_pytest ? pytest_argv : unittest_argv;
+-    size_t prefix_count = use_pytest ? 7 : 4;
++    size_t prefix_count = use_pytest ? 8 : 5;
+     vp_format_batch batch = {0};
+     for (size_t i = 0; i < file_count; i++) {
+         const char *file = files[i];
+@@ -696,9 +708,9 @@
+     if (!g->python_test_count && !g->python_pytest)
+         return true;
+     if (g->python_pytest) {
+-        const char *argv[] = {g->python_executable, "-B", "-m", "pytest", "-q", "-p",
+-                              "no:cacheprovider"};
+-        vp_command(g, commands, ".", argv, 7, false, "final_python_pytest_discovery");
++        const char *argv[] = {g->python_executable, "-B", "-c", vp_python_test_script, "pytest",
++                              "-q", "-p", "no:cacheprovider"};
++        vp_command(g, commands, ".", argv, 8, false, "final_python_pytest_discovery");
+     } else
+         vp_python_file_commands(g, commands, g->python_tests, g->python_test_count, false,
+                                 "final_python_unittest_files");
+@@ -924,8 +936,9 @@
+             "validation.");
+         vp_append_string(
+             g, limitations,
+-            "Python syntax checks compile source without importing code. Python runs use -B and "
+-            "pytest disables its cache provider, but project tests may still mutate inputs and "
++            "Python syntax checks compile source without importing code. Python tests use a "
++            "fresh external bytecode prefix with writes disabled, and pytest disables its cache "
++            "provider, but project tests may still mutate inputs and "
+             "must be rejected if the validation snapshot changes.");
+         vp_append_string(
+             g, limitations,
+--- a/tests/unit/test_benchmark.py
++++ b/tests/unit/test_benchmark.py
+@@ -3,9 +3,12 @@
+ import importlib.util
+ import io
+ import json
++import os
+ import pathlib
++import py_compile
+ import shutil
+ import subprocess
++import sys
+ import tempfile
+ import unittest
+ from unittest import mock
+@@ -38,6 +41,7 @@
+     'forge_benchmark_campaign', SOURCE.parent / 'campaign.py')
+ CAMPAIGN = importlib.util.module_from_spec(CAMPAIGN_SPEC)
+ CAMPAIGN_SPEC.loader.exec_module(CAMPAIGN)
++import common as COMMON
+ 
+ 
+ class FixtureTests(unittest.TestCase):
+@@ -534,5 +538,188 @@
+                              [(json.loads(event['data']), True)])
+ 
+ 
++class VerificationCacheTests(unittest.TestCase):
++    SOURCE = 'def value():\n    return 1\n'
++    TEST = ('import unittest\nfrom value import value\n'
++            'class ValueTests(unittest.TestCase):\n'
++            '    def test_value(self):\n        self.assertEqual(value(), 2)\n')
++
++    @classmethod
++    def task(cls):
++        return {'id': 'cache', 'language': 'python', 'prompt': 'Repair value; do not change tests.',
++                'files': {'value.py': cls.SOURCE, 'test_value.py': cls.TEST},
++                'protected_files': ['test_value.py'],
++                'verify': [sys.executable, '-m', 'unittest', 'discover', '-v']}
++
++    def verify(self, root, output, task, env=None):
++        output.mkdir()
++        # Verifier subprocesses are real; this unit test does not sample GPUs.
++        with mock.patch.object(COMMON, 'ResourceMonitor') as monitor:
++            monitor.return_value.stop.return_value = {}
++            result = COMMON.verify_task(root, task, output, env=env, timeout=15)
++        return result, (output / 'verification.stdout').read_text(encoding='utf-8'), \
++            (output / 'verification.stderr').read_text(encoding='utf-8')
++
++    def test_source_and_tests_override_timestamp_and_unchecked_bytecode(self):
++        for mode in (py_compile.PycInvalidationMode.TIMESTAMP,
++                     py_compile.PycInvalidationMode.UNCHECKED_HASH):
++            for target in ('value.py', 'test_value.py'):
++                for current_passes in (False, True):
++                    with self.subTest(mode=mode, target=target, current_passes=current_passes), \
++                            tempfile.TemporaryDirectory(prefix='forge-cache-test-') as temporary:
++                        base = pathlib.Path(temporary)
++                        root = base / 'input'
++                        root.mkdir()
++                        task = self.task()
++                        source = self.SOURCE.replace('return 1', 'return 2') if current_passes else self.SOURCE
++                        (root / 'value.py').write_text(source, encoding='utf-8', newline='\n')
++                        (root / 'test_value.py').write_text(self.TEST, encoding='utf-8', newline='\n')
++                        path = root / target
++                        current = path.read_bytes()
++                        if target == 'value.py':
++                            cached = self.SOURCE if current_passes else self.SOURCE.replace('return 1', 'return 2')
++                        else:
++                            cached = self.TEST.replace('value(), 2', 'value(), 1')
++                        path.write_text(cached, encoding='utf-8', newline='\n')
++                        stamp = path.stat()
++                        py_compile.compile(str(path), doraise=True, invalidation_mode=mode)
++                        path.write_bytes(current)
++                        os.utime(path, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
++                        before = BENCH.snapshot_terminal_inputs(root)
++                        result, _, stderr = self.verify(root, base / 'output', task)
++                        self.assertEqual(result['passed'], current_passes, stderr)
++                        self.assertRegex(stderr, r'Ran 1 test\b')
++                        self.assertEqual(result['python_cache_policy'], 'fresh-external-prefix-no-write')
++                        self.assertEqual(BENCH.snapshot_terminal_inputs(root), before)
++
++    def test_fresh_prefix_is_per_python_child_and_does_not_mutate_caller_env(self):
++        with tempfile.TemporaryDirectory(prefix='forge-cache-env-test-') as temporary:
++            root = pathlib.Path(temporary)
++            code = ('import json,os,sys;print(json.dumps([sys.pycache_prefix,'
++                    'sys.dont_write_bytecode,os.environ["FORGE_TEST_SENTINEL"]]))')
++            command = [sys.executable, '-c', code]
++            caller = {**os.environ, 'PYTHONPYCACHEPREFIX': str(root / 'old-cache'),
++                      'PYTHONDONTWRITEBYTECODE': '', 'FORGE_TEST_SENTINEL': 'preserved'}
++            original_caller, original_process = caller.copy(), os.environ.copy()
++            prefixes = []
++            for index in range(2):
++                result, stdout, _ = self.verify(root, root / f'python-{index}',
++                                                {'language': 'python', 'verify': command}, caller)
++                prefix, disabled, sentinel = json.loads(stdout)
++                self.assertTrue(result['passed'])
++                self.assertEqual(result['python_cache_policy'], 'fresh-external-prefix-no-write')
++                self.assertFalse(pathlib.Path(prefix).is_relative_to(root))
++                self.assertFalse(pathlib.Path(prefix).exists())
++                self.assertTrue(disabled)
++                self.assertEqual(sentinel, 'preserved')
++                prefixes.append(prefix)
++            self.assertNotEqual(*prefixes)
++            result, stdout, _ = self.verify(root, root / 'other', {'language': 'go', 'verify': command}, caller)
++            self.assertEqual(json.loads(stdout), [caller['PYTHONPYCACHEPREFIX'], False, 'preserved'])
++            self.assertEqual(result['python_cache_policy'], 'not-applicable')
++            self.assertEqual(caller, original_caller)
++            self.assertEqual(dict(os.environ), original_process)
++
++    def test_retention_excludes_only_root_metadata_with_host_case_rules(self):
++        with tempfile.TemporaryDirectory(prefix='forge-retention-test-') as temporary:
++            base = pathlib.Path(temporary)
++            root = base / 'input'
++            root.mkdir()
++            names = ('value.py', '.git/config', '.forge/state', '.GIT/upper', '.FORGE/upper',
++                     '__pycache__/value.pyc', '.pytest_cache/state',
++                     'nested/.git/config', 'nested/.forge/state')
++            for name in names:
++                path = root / name
++                path.parent.mkdir(parents=True, exist_ok=True)
++                path.write_bytes(name.encode())
++            before = BENCH.snapshot_terminal_inputs(root)
++            expected = {name for name in names if not name.startswith(('.git/', '.forge/'))}
++            if os.name == 'nt':
++                expected -= {'.GIT/upper', '.FORGE/upper'}
++            self.assertEqual(set(before), expected)
++            BENCH.copy_terminal_inputs(root, base / 'copy')
++            self.assertEqual(BENCH.snapshot_terminal_inputs(base / 'copy'), before)
++            self.assertFalse((base / 'copy/.git').exists())
++            self.assertFalse((base / 'copy/.forge').exists())
++
++    def test_terminal_copies_retain_bytecode_and_both_sides_of_verifier_mutation(self):
++        for mutate in (False, True):
++            with self.subTest(mutate=mutate), tempfile.TemporaryDirectory(prefix='forge-retention-run-') as temporary:
++                base = pathlib.Path(temporary)
++                forge, model = base / 'forge.exe', base / 'model.gguf'
++                forge.write_bytes(b'not executed')
++                model.write_bytes(b'not loaded')
++                task = self.task()
++                if mutate:
++                    task['verify'] = [sys.executable, '-c',
++                        "from pathlib import Path;Path('.pytest_cache/state').write_bytes(b'after')"]
++                seeded = {}
++
++                def fake_forge(command, **_kwargs):
++                    root = pathlib.Path(command[command.index('--workspace') + 1])
++                    source = root / 'value.py'
++                    source.write_text(self.SOURCE.replace('return 1', 'return 2'), encoding='utf-8')
++                    stamp = source.stat()
++                    py_compile.compile(str(source), doraise=True)
++                    source.write_text(self.SOURCE, encoding='utf-8')
++                    os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
++                    cache = root / '.pytest_cache/state'
++                    cache.parent.mkdir()
++                    cache.write_bytes(b'before')
++                    seeded.update(BENCH.snapshot_terminal_inputs(root))
++                    return {'returncode': 0, 'wall_seconds': .01, 'resource_usage': {}}
++
++                output = base / 'output'
++                argv = ['run.py', '--forge', str(forge), '--model', str(model), '--output', str(output),
++                        '--no-randomize', '--retain-terminal']
++                with mock.patch.multiple(BENCH, load_tasks=mock.Mock(return_value=[(base / 'task.json', task)]),
++                                         check_tools=mock.Mock(), initialize_git=mock.Mock(),
++                                         runtime_bundle=mock.Mock(return_value={'files': []}),
++                                         platform_metadata=mock.Mock(return_value={'platform': 'test'}),
++                                         run_monitored=fake_forge), \
++                        mock.patch.object(COMMON, 'ResourceMonitor') as monitor, \
++                        mock.patch.object(BENCH.subprocess, 'check_output', return_value='forge test'), \
++                        mock.patch.object(BENCH.subprocess, 'run'), \
++                        mock.patch.object(BENCH.sys, 'argv', argv), \
++                        contextlib.redirect_stdout(io.StringIO()):
++                    monitor.return_value.stop.return_value = {}
++                    returncode = BENCH.main()
++                case = output / 'cache-optimized-r001'
++                record = json.loads((case / 'result.json').read_text(encoding='utf-8'))
++                maps = json.loads((case / 'verification-inputs.json').read_text(encoding='utf-8'))
++                self.assertEqual(returncode, 1)
++                self.assertFalse(record['passed'])
++                self.assertEqual(record['verification']['passed'], mutate)
++                self.assertTrue(record['protected_files_unchanged'])
++                self.assertEqual(record['verification_inputs_unchanged'], not mutate)
++                self.assertEqual(record['terminal_retention_policy'], 'complete-except-git-forge')
++                self.assertEqual(record['pre_verification_workspace'], 'pre-verification-workspace')
++                self.assertEqual(record['verification']['python_cache_policy'], 'fresh-external-prefix-no-write')
++                self.assertEqual(maps['before'], seeded)
++                self.assertEqual(BENCH.snapshot_terminal_inputs(case / 'pre-verification-workspace'), maps['before'])
++                self.assertEqual(BENCH.snapshot_terminal_inputs(case / 'terminal-workspace'), maps['after'])
++                self.assertEqual((case / 'pre-verification-workspace/.pytest_cache/state').read_bytes(), b'before')
++                self.assertEqual((case / 'terminal-workspace/.pytest_cache/state').read_bytes(),
++                                 b'after' if mutate else b'before')
++
++    def test_retention_keeps_regular_root_metadata_files(self):
++        for names in (('.git', '.forge'), ('.GIT', '.FORGE')):
++            with self.subTest(names=names), tempfile.TemporaryDirectory(prefix='forge-retention-files-') as temporary:
++                base = pathlib.Path(temporary)
++                root = base / 'input'
++                root.mkdir()
++                for name in names:
++                    (root / name).write_bytes(b'regular metadata-named input file')
++                    self.assertFalse(BENCH.terminal_root_ignored(name, False))
++                    self.assertEqual(BENCH.terminal_root_ignored(name, True),
++                                     os.name == 'nt' or name in ('.git', '.forge'))
++                before = BENCH.snapshot_terminal_inputs(root)
++                self.assertEqual(set(before), set(names))
++                BENCH.copy_terminal_inputs(root, base / 'copy')
++                self.assertEqual(BENCH.snapshot_terminal_inputs(base / 'copy'), before)
++                for name in names:
++                    self.assertEqual((base / 'copy' / name).read_bytes(), (root / name).read_bytes())
++
++
+ if __name__ == '__main__':
+     unittest.main()
+--- a/tests/unit/test_validation.c
++++ b/tests/unit/test_validation.c
+@@ -161,6 +161,15 @@
+                                                              target)) return command;
+     return NULL;
+ }
++static void assert_fresh_python_runner(yyjson_val *argv, const char *runner) {
++    assert(array_has(argv, runner));
++    assert(array_has(argv, "-B"));
++    assert(array_has(argv, "-c"));
++    assert(!array_has(argv, "-m"));
++    assert(array_has_substring(argv, "TemporaryDirectory"));
++    assert(array_has_substring(argv, "sys.pycache_prefix="));
++    assert(array_has_substring(argv, "sys.dont_write_bytecode=True"));
++}
+ static void path_set(const char *value) {
+ #ifdef _WIN32
+     assert(_putenv_s("PATH", value) == 0);
+@@ -633,12 +642,14 @@
+     yyjson_val *targeted = command_for(root, "affected_tests", ".", "./tests/test_calc.py");
+     assert(targeted);
+     argv = yyjson_obj_get(targeted, "argv");
++    assert_fresh_python_runner(argv, "pytest");
+     assert(array_has(argv, "pytest"));
+     assert(array_has(argv, "no:cacheprovider"));
+     assert(array_has(argv, "-B"));
+     yyjson_val *broad = command_for(root, "broad_tests", ".", "pytest");
+     assert(broad);
+     argv = yyjson_obj_get(broad, "argv");
++    assert_fresh_python_runner(argv, "pytest");
+     assert(array_has(argv, "no:cacheprovider"));
+     assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 3);
+     yyjson_doc_free(doc);
+@@ -661,6 +672,7 @@
+     if (yyjson_get_bool(yyjson_obj_get(root, "verification_available"))) {
+         yyjson_val *targeted = command_for(root, "affected_tests", ".", "./tests/test_calc.py");
+         assert(targeted);
++        assert_fresh_python_runner(yyjson_obj_get(targeted, "argv"), "pytest");
+         assert(array_has(yyjson_obj_get(targeted, "argv"), "pytest"));
+         assert(command_for(root, "broad_tests", ".", "pytest"));
+     } else
+@@ -717,6 +729,7 @@
+     yyjson_val *targeted = command_for(root, "affected_tests", ".", "./tests/test_calc.py");
+     assert(targeted);
+     yyjson_val *argv = yyjson_obj_get(targeted, "argv");
++    assert_fresh_python_runner(argv, "unittest");
+     assert(array_has_substring(argv, "unittest.main"));
+     assert(array_has(argv, "-B"));
+     assert(array_has(argv, "-c"));
+@@ -725,6 +738,7 @@
+     yyjson_val *broad = command_for(root, "broad_tests", ".", "./tests/test_calc.py");
+     assert(broad);
+     assert(array_has_substring(yyjson_obj_get(broad, "argv"), "unittest.main"));
++    assert_fresh_python_runner(yyjson_obj_get(broad, "argv"), "unittest");
+     assert(array_has_substring(yyjson_obj_get(broad, "argv"), "testsRun==0"));
+     assert(!array_has(yyjson_obj_get(broad, "argv"), "discover"));
+     assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 3);
+--- a/tests/integration/test_loop_extensions.py
++++ b/tests/integration/test_loop_extensions.py
+@@ -75,6 +75,49 @@
+     @staticmethod
+     def kind(events, name):
+         return [event["data"] for event in events if event["type"] == name]
++
++    @staticmethod
++    def cached_code(path, content):
++        # Match the current source's timestamp and size without changing its bytes.
++        code = (
++            "import pathlib,os,py_compile,importlib.util,tempfile;"
++            f"p=pathlib.Path({path!r});"
++            "t=tempfile.NamedTemporaryFile(suffix='.py',delete=False);"
++            "q=pathlib.Path(t.name);t.close();"
++            f"q.write_bytes({content.encode('utf-8')!r});"
++            "s=p.stat();os.utime(q,ns=(s.st_atime_ns,s.st_mtime_ns));"
++            "py_compile.compile(str(q),cfile=importlib.util.cache_from_source(str(p)),"
++            "dfile=str(p),doraise=True,invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP);"
++            "q.unlink()")
++        return call("run_command", {"argv": [sys.executable, "-c", code]})
++
++    def assert_cached_success_rejected(self, path, content, *options):
++        _, events = self.run_script([
++            self.cached_code(path, content), validate(), final("Cached success must not be accepted.")],
++            "--max-turns", "3", *options, success=False)
++        self.assertEqual((self.root / "value.py").read_text(encoding="utf-8"), self.source)
++        self.assertFalse(self.kind(events, "final"))
++        checkpoints = self.kind(events, "candidate_checkpoint")
++        self.assertTrue(checkpoints)
++        self.assertFalse(any(item["passed"] for item in checkpoints))
++
++    def test_checkpoint_rejects_stale_passing_module_bytecode(self):
++        self.assert_cached_success_rejected("value.py", self.source.replace("return 1", "return 2"))
++
++    def test_bounded_checkpoint_rejects_stale_passing_test_bytecode(self):
++        self.assert_cached_success_rejected("test_value.py", self.tests.replace("value(), 2", "value(), 1"),
++                                            "--bounded-repair", "--context", "16384",
++                                            "--output-reserve", "2048")
++
++    def test_checkpoint_uses_passing_source_despite_stale_failing_bytecode(self):
++        _, events = self.run_script([
++            patch("return 1", "return 2"), self.cached_code("value.py", self.source),
++            validate(), final("Current source passes despite stale failing bytecode.")],
++            "--max-turns", "4")
++        self.assertEqual((self.root / "value.py").read_text(encoding="utf-8"),
++                         self.source.replace("return 1", "return 2"))
++        self.assertTrue(self.kind(events, "final"))
++        self.assertTrue(self.kind(events, "candidate_checkpoint")[-1]["passed"])
+ 
+     def test_second_candidate_starts_from_baseline_and_only_winner_survives(self):
+         _, events = self.run_script([

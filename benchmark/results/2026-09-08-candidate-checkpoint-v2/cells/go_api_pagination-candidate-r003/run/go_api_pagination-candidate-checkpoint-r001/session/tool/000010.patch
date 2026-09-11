@@ -1,0 +1,105 @@
+diff --git "a/api/handler_test.go" "b/api/handler_test.go"
+--- "a/api/handler_test.go"
++++ "b/api/handler_test.go"
+@@ -1,26 +1,75 @@
+-package api
+-
+-import (
+-	"encoding/json"
+-	"net/http/httptest"
+-	"reflect"
+-	"testing"
+-)
+-
+-func TestPagination(t *testing.T) {
+-	h := ListHandler([]string{"a", "b", "c", "d", "e"})
+-	r := httptest.NewRequest("GET", "/?page=2&size=2", nil)
+-	w := httptest.NewRecorder()
+-	h(w, r)
+-	var got []string
+-	json.Unmarshal(w.Body.Bytes(), &got)
+-	if !reflect.DeepEqual(got, []string{"c", "d"}) {
+-		t.Fatalf("got %v", got)
+-	}
+-	bad := httptest.NewRequest("GET", "/?page=1&size=nope", nil)
+-	bw := httptest.NewRecorder()
+-	h(bw, bad)
+-	if bw.Code != 400 {
+-		t.Fatalf("bad status %d", bw.Code)
+-	}
+-}
++package api
++
++import (
++	"encoding/json"
++	"net/http/httptest"
++	"reflect"
++	"testing"
++)
++
++func TestPagination(t *testing.T) {
++	h := ListHandler([]string{"a", "b", "c", "d", "e"})
++	r := httptest.NewRequest("GET", "/?page=2&size=2", nil)
++	w := httptest.NewRecorder()
++	h(w, r)
++	var got []string
++	json.Unmarshal(w.Body.Bytes(), &got)
++	if !reflect.DeepEqual(got, []string{"c", "d"}) {
++		t.Fatalf("got %v", got)
++	}
++	bad := httptest.NewRequest("GET", "/?page=1&size=nope", nil)
++	bw := httptest.NewRecorder()
++	h(bw, bad)
++	if bw.Code != 400 {
++		t.Fatalf("bad status %d", bw.Code)
++	}
++}
++
++func TestPaginationEdgeCases(t *testing.T) {
++	values := []string{"a", "b", "c", "d", "e", "f", "g"}
++	h := ListHandler(values)
++	
++	// Test valid pagination
++	r := httptest.NewRequest("GET", "/?page=1&size=3", nil)
++	w := httptest.NewRecorder()
++	h(w, r)
++	var got []string
++	json.Unmarshal(w.Body.Bytes(), &got)
++	if !reflect.DeepEqual(got, []string{"a", "b", "c"}) {
++		t.Fatalf("got %v, expected first 3 items", got)
++	}
++	
++	// Test second page
++	r = httptest.NewRequest("GET", "/?page=2&size=3", nil)
++	w = httptest.NewRecorder()
++	h(w, r)
++	var got2 []string
++	json.Unmarshal(w.Body.Bytes(), &got2)
++	if !reflect.DeepEqual(got2, []string{"d", "e", "f"}) {
++		t.Fatalf("got %v, expected second 3 items", got2)
++	}
++	
++	// Test invalid size parameter
++	r = httptest.NewRequest("GET", "/?page=1&size=0", nil)
++	w = httptest.NewRecorder()
++	h(w, r)
++	if w.Code != 400 {
++		t.Fatalf("expected 400 for size=0, got %d", w.Code)
++	}
++	
++	// Test invalid page parameter
++	r = httptest.NewRequest("GET", "/?page=0&size=2", nil)
++	w = httptest.NewRecorder()
++	h(w, r)
++	if w.Code != 400 {
++		t.Fatalf("expected 400 for page=0, got %d", w.Code)
++	}
++	
++	// Test invalid size string
++	r = httptest.NewRequest("GET", "/?page=1&size=invalid", nil)
++	w = httptest.NewRecorder()
++	h(w, r)
++	if w.Code != 400 {
++		t.Fatalf("expected 400 for invalid size, got %d", w.Code)
++	}
++}

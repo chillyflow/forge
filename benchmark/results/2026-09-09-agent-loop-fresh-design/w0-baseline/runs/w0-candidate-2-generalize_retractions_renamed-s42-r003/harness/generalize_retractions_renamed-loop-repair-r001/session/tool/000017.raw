@@ -1,0 +1,17 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+=== Test case that's failing ===
+p = {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+messages = [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}, {'key': 's', 'kind': 'retract', 'reference': 'p'}]
+Result: {'cash': 7}
+Expected: {'cash': 0}
+
+=== Test case that works ===
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+=== Test case that works ===
+Result: {}
+Expected: {'cash': 0}
+
+stderr:

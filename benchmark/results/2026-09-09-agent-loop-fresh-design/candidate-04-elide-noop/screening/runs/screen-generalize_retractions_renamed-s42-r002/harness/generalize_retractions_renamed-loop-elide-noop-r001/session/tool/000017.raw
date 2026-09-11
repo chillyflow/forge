@@ -1,0 +1,13 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Test case 1:
+Input: [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}]
+Result: {'cash': 0}
+Expected: {"cash": 0}
+
+Test case 2:
+Input: [{'key': 'r', 'kind': 'retract', 'reference': 'p'}, {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}]
+Result: {}
+Expected: {"cash": 0}
+
+stderr:

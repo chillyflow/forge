@@ -1,0 +1,25 @@
+diff --git a/service.py b/service.py
+index b7bbbde..cf2fb5a 100644
+--- a/service.py
++++ b/service.py
+@@ -8,15 +8,17 @@ def balances(events):
+         if event['kind'] == 'post':
+             account, amount = event['account'], event['amount']
+             postings[event['id']] = (account, amount)
++            # If this posting was already cancelled, don't apply it
++            if event['id'] in cancelled:
++                continue
+             totals.setdefault(account, 0)
+-            if True:
++            if True:  # This was in the original code
+                 totals[account] += amount
+         else:
+             target = event['target']
+-            if target in cancelled:
+-                continue
+             cancelled.add(target)
+             if target in postings:
+                 account, amount = postings[target]
+                 totals[account] -= amount
++            # If target is not in postings, we don't create an account (as per requirements)
+     return totals

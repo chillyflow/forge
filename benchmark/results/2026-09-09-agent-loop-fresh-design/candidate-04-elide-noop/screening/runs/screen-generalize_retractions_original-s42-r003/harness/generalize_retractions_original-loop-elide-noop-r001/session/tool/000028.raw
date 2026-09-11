@@ -1,0 +1,20 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Testing each case from the failing test:
+Case 1: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+  Result: {'cash': 0}
+  Expected: {'cash': 0}
+  Match: True
+
+Case 2: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+  Result: {'cash': 7}
+  Expected: {'cash': 0}
+  Match: False
+
+Case 3: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+  Result: {'cash': 0}
+  Expected: {'cash': 0}
+  Match: True
+
+
+stderr:

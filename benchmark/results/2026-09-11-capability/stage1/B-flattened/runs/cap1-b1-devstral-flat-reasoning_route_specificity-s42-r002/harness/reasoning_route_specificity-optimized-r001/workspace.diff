@@ -1,0 +1,35 @@
+diff --git a/repair.go b/repair.go
+index 26b0008..ba133b6 100644
+--- a/repair.go
++++ b/repair.go
+@@ -66,9 +66,29 @@ func MatchRoute(method, path string, routes []Route) (string, map[string]string,
+ 			exact = 1
+ 		}
+ 		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+-		if !found || candidate.literals > best.literals {
++		if !found {
+ 			best = candidate
+ 			found = true
++		} else {
++			// Prefer more literal segments
++			if candidate.literals > best.literals {
++				best = candidate
++			} else if candidate.literals == best.literals {
++				// Prefer exact method over wildcard
++				if candidate.methodExact > best.methodExact {
++					best = candidate
++				} else if candidate.methodExact == best.methodExact {
++					// Prefer fewer wildcards
++					if candidate.wildcards < best.wildcards {
++						best = candidate
++					} else if candidate.wildcards == best.wildcards {
++						// Prefer earlier declaration (lower index)
++						if candidate.index < best.index {
++							best = candidate
++						}
++					}
++				}
++			}
+ 		}
+ 	}
+ 	if !found {

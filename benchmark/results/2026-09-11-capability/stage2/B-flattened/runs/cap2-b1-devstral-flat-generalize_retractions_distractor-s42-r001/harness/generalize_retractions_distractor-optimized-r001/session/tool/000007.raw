@@ -1,0 +1,37 @@
+Patched service.py.
+Recorded edit diff: tool/000007.patch
+
+POST_EDIT_VALIDATION:
+Automatic validation stopped at broad_tests: Validation stage broad_tests failed (exit_code=1)
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+test_independent_postings (test_service.Retractions.test_independent_postings) ... FAIL
+test_order_and_duplicates (test_service.Retractions.test_order_and_duplicates) ... FAIL
+
+======================================================================
+FAIL: test_independent_postings (test_service.Retractions.test_independent_postings)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-xal_ke0j\test_service.py", line 12, in test_independent_postings
+    self.assertEqual(balances([post('a', 7), post('b', -2), retract('r', 'a')]), {'cash': -2})
+AssertionError: {} != {'cash': -2}
+- {}
++ {'cash': -2}
+
+======================================================================
+FAIL: test_order_and_duplicates (test_service.Retractions.test_order_and_duplicates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-xal_ke0j\test_service.py", line 10, in test_order_and_duplicates
+    self.assertEqual(balances(events), {'cash': 0})
+AssertionError: {} != {'cash': 0}
+- {}
++ {'cash': 0}
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+FAILED (failures=2)
+

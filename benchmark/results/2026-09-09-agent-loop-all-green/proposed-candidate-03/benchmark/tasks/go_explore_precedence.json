@@ -1,0 +1,26 @@
+{
+  "id": "go_explore_precedence",
+  "suite": "campaign",
+  "language": "go",
+  "category": "exploration",
+  "prompt": "Configuration resolution is wrong: explicit runtime overrides must win over file values, which must win over defaults. Locate the relevant implementation, repair precedence without changing the public API, and run go test -json ./... without modifying tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "protected_files": [
+    "config/merge_test.go"
+  ],
+  "files": {
+    "go.mod": "module campaign.test/fixture\n\ngo 1.24\n",
+    "config/types.go": "package config\n\ntype Values map[string]string\n",
+    "config/merge.go": "package config\n\nfunc Resolve(defaults,file,overrides Values) Values { out:=Values{}; for k,v:=range overrides { out[k]=v }; for k,v:=range file { out[k]=v }; for k,v:=range defaults { out[k]=v }; return out }\n",
+    "config/merge_test.go": "package config\n\nimport (\"reflect\"; \"testing\")\nfunc TestPrecedence(t *testing.T) { got:=Resolve(Values{\"host\":\"default\",\"port\":\"80\"},Values{\"host\":\"file\"},Values{\"host\":\"runtime\"}); want:=Values{\"host\":\"runtime\",\"port\":\"80\"}; if !reflect.DeepEqual(got,want) { t.Fatalf(\"got %v\",got) } }\n"
+  },
+  "oracle_files": {
+    "config/merge.go": "package config\n\nfunc Resolve(defaults,file,overrides Values) Values { out:=Values{}; for k,v:=range defaults { out[k]=v }; for k,v:=range file { out[k]=v }; for k,v:=range overrides { out[k]=v }; return out }\n"
+  },
+  "entry_files": []
+}

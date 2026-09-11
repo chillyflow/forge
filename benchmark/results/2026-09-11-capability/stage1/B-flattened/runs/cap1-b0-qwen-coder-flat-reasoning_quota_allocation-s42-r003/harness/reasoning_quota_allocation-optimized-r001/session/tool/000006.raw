@@ -1,0 +1,18 @@
+Patched repair.go.
+Recorded edit diff: tool/000006.patch
+Staged Go syntax validation passed before commit.
+Suggested targeted validation (requires command approval): compile/test affected Go packages: .; 0 reverse dependents; then vet and full module tests. Use the validation plan for exact argv and module working directories.
+
+POST_EDIT_VALIDATION:
+Automatic validation stopped at affected_tests: Validation stage affected_tests failed (exit_code=1)
+FAIL forgebench error: package failed
+FAIL forgebench TestAllocateQuota: error: test failed
+exit_code=1 timeout=false cancelled=false truncated=false
+    repair_test.go:19: tie=map[a:0 b:1] ok=true
+  --- FAIL: TestAllocateQuota (0.00s)
+FAIL
+FAIL	forgebench	0.175s
+=== RUN   TestAllocateQuota
+
+Go events: pass=0 fail=2
+

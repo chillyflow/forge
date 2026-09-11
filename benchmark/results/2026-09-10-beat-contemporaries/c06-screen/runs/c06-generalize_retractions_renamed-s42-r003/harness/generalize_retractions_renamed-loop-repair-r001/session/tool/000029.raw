@@ -1,0 +1,22 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Let me manually trace the third case step by step:
+1. post("p", 7)
+   entries: {"p": ("cash", 7)}
+   positions: {"cash": 7}
+2. post("p", 7)
+   entries: {"p": ("cash", 7)}
+   positions: {"cash": 14}
+3. retract("r", "p")
+   entries: {"p": ("cash", 7)}
+   positions: {"cash": 7}
+4. retract("s", "p")
+   entries: {}
+   positions: {"cash": 0}
+This gives 0, but my code returns 7
+
+The key is in step 2 - what happens when we post twice with same key?
+My current code allows both posts to be processed, but maybe it should only process the first one?
+That would make the second post a no-op due to idempotency.
+
+stderr:

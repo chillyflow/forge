@@ -1,0 +1,22 @@
+file_sha256:7342febc2d7407ba96484c1109e5a8f61aeec25df9b52c39c2888401d0bc3c7f
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     retraction_queue = {}  # Maps target IDs to list of retractions that reference them
+5:     
+6:     for event in events:
+7:         if event['id'] in seen:
+8:             continue
+9:         seen.add(event['id'])
+10:         if event['kind'] == 'post':
+11:             account, amount = event['account'], event['amount']
+12:             postings[event['id']] = (account, amount)
+13:             totals[account] = totals.get(account, 0) + amount
+14:             # Check if any retractions were waiting for this posting
+15:             if event['id'] in retraction_queue:
+16:                 for retraction in retraction_queue[event['id']]:
+17:                     cancelled.add(retraction['id'])
+18:                     totals[account] -= amount
+19:                 del retraction_queue[event['id']]
+20:         else:
+21:             target = event['target']

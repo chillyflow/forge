@@ -1,0 +1,27 @@
+repair.go:8 function_declaration func ApplyTransfers(balances map[string]int, transfers []Transfer) bool 
+func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+	next := make(map[string]int, len(balances))
+	for key, value := range balances {
+		next[key] = value
+	}
+	maxInt := int(^uint(0) >> 1)
+	for _, tr := range transfers {
+		from, fromOK := balances[tr.From]
+		to, toOK := balances[tr.To]
+		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+			return false
+		}
+		if tr.From == tr.To {
+			continue
+		}
+		if to > maxInt-tr.Amount {
+			return false
+		}
+		next[tr.From] = from - tr.Amount
+		next[tr.To] = to + tr.Amount
+	}
+	for key, value := range next {
+		balances[key] = value
+	}
+	return true
+}

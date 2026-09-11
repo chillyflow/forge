@@ -1,0 +1,12 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Expected behavior for [p, p, retract("r", "p"), retract("s", "p")]:
+  - Two postings of 7 each: +14
+  - One retraction of the first posting: -7
+  - One retraction of the same posting again: -0 (already cancelled)
+  - Net: 14 - 7 = 7
+But test expects 0, so maybe it means only one posting is counted?
+Let's check with the actual test:
+Test result: {'cash': 0}
+
+stderr:

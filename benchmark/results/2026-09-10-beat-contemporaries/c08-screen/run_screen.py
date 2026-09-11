@@ -1,0 +1,243 @@
+"""Candidate-08 command-dedup screen for the beat-contemporaries campaign.
+
+14 runs: four Python retraction manifests at three repetitions plus two Go
+manifests at one repetition, all on the FROZEN candidate-08 runtime with the
+loop-dedup policy (bounded repair + identical-command verdict reuse while no
+host-observed mutation intervened). Loop-pilot profile throughout.
+
+Preregistered bar: (a) no Go regression (2/2); (b) Python within noise of the
+candidate-06 lock-in comparator (2/12) — no success claim; (c) MECHANISM: at
+least one served reuse (command_verdict_reused event) in a majority of the
+Python runs, with every pass host-validated and independently verified (a
+reused verdict can never produce a pass on its own: validation always
+re-executes). No engagement closes the axis; engagement without harm promotes
+the flag to action-savings measurement on broader suites.
+
+This script lives under benchmark/results/ on purpose: benchmark/*.py is
+covered by the candidate identity observation and must not gain new files
+between freeze and gate.
+
+It writes nothing to any candidate directory and never touches outcomes.json.
+Records produced here are screening evidence, not scheduled gate runs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[4]
+HERE = Path(__file__).resolve().parent
+CANDIDATE = HERE.parent / 'candidate-08-command-dedup'
+
+FORGE = CANDIDATE / 'runtime' / 'forge.exe'
+MODEL = Path('C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf')
+TASK_DIR = ROOT / 'benchmark/results/2026-09-08-repair-control/tasks'
+RUN_PY = ROOT / 'benchmark/run.py'
+
+PYTHON_TASKS = [
+    'generalize_retractions_original',
+    'generalize_retractions_renamed',
+    'generalize_retractions_paraphrased',
+    'generalize_retractions_distractor',
+]
+GO_TASKS = [
+    'go_api_pagination',
+    'go_multifile_transfer',
+]
+
+VARIANT = 'loop-dedup'
+VARIANT_FLAGS = ['--minimal-agent', '--thought-history',
+                 '--candidate-checkpoint', '--bounded-repair',
+                 '--dedup-commands']
+
+# The loop-pilot profile, byte-for-byte as W0 used it.
+PROFILE_FLAGS = [
+    '--gpu-layers=-1',
+    '--context=16384',
+    '--output-reserve=2048',
+    '--temperature=0.6',
+    '--max-turns=32',
+    '--max-tokens=32768',
+    '--max-input=262144',
+    '--timeout=600',
+    '--verification-timeout=120',
+    '--order-seed=20260831',
+    '--gpu-index=0',
+    '--prompt-protocol=native',
+]
+SEED = 42
+PYTHON_REPS = 3
+
+
+def digest(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def schedule() -> list[dict]:
+    """Repetition-interleaved order, so wall-clock drift cannot be confounded."""
+    rows = []
+    index = 0
+    for repetition in range(1, PYTHON_REPS + 1):
+        for task in PYTHON_TASKS:
+            index += 1
+            rows.append({
+                'order_index': index,
+                'run_id': f'c08-{task}-s{SEED}-r{repetition:03d}',
+                'variant': VARIANT,
+                'variant_flags': VARIANT_FLAGS,
+                'task': task,
+                'seed': SEED,
+                'repetition': repetition,
+            })
+        if repetition == 1:
+            for task in GO_TASKS:
+                index += 1
+                rows.append({
+                    'order_index': index,
+                    'run_id': f'c08-{task}-s{SEED}-r001',
+                    'variant': VARIANT,
+                    'variant_flags': VARIANT_FLAGS,
+                    'task': task,
+                    'seed': SEED,
+                    'repetition': 1,
+                })
+    return rows
+
+
+def command_for(row: dict, output: Path) -> list[str]:
+    return [
+        sys.executable,
+        str(RUN_PY),
+        '--forge', str(FORGE),
+        '--model', str(MODEL),
+        '--task-dir', str(TASK_DIR),
+        '--tasks', row['task'],
+        '--suite', 'all',
+        '--variants', row['variant'],
+        '--retain-terminal',
+        '--output', str(output),
+        '--repetitions', '1',
+        '--no-randomize',
+        *PROFILE_FLAGS,
+        '--seed', str(row['seed']),
+    ]
+
+
+def write_protocol(rows: list[dict]) -> None:
+    target = HERE / 'protocol.json'
+    if target.exists():
+        return
+    protocol = {
+        'schema_version': 1,
+        'purpose': 'Candidate-08 command-dedup screen: frozen runtime, '
+                   'loop-dedup policy. Bar: no Go regression, Python '
+                   'within noise (no success claim), reuse engages on a '
+                   'majority of Python runs vs candidate-06 comparator.',
+        'candidate': 'candidate-06-lock-in',
+        'frozen_utc': dt.datetime.now(dt.timezone.utc).isoformat(),
+        'counts_toward_model_acceptance': False,
+        'is_scheduled_gate_evidence': False,
+        'forge': {'path': str(FORGE), 'sha256': digest(FORGE)},
+        'model': {'path': str(MODEL), 'sha256': digest(MODEL)},
+        'task_dir': str(TASK_DIR),
+        'manifest_sha256': {
+            task: digest(TASK_DIR / f'{task}.json')
+            for task in PYTHON_TASKS + GO_TASKS
+        },
+        'profile': {
+            'flags': PROFILE_FLAGS,
+            'seed': SEED,
+            'python_repetitions': PYTHON_REPS,
+        },
+        'variant': {'variant': VARIANT, 'flags': VARIANT_FLAGS},
+        'schedule': rows,
+    }
+    target.write_text(json.dumps(protocol, indent=2) + '\n', encoding='utf-8')
+    print(f'wrote {target}', flush=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--limit', type=int, default=0,
+                        help='execute at most N pending runs (0 = all)')
+    args = parser.parse_args()
+
+    for path in (FORGE, MODEL, TASK_DIR, RUN_PY):
+        if not path.exists():
+            print(f'missing required path: {path}', file=sys.stderr)
+            return 2
+
+    rows = schedule()
+    write_protocol(rows)
+
+    runs_dir = HERE / 'runs'
+    runs_dir.mkdir(parents=True, exist_ok=True)
+
+    executed = 0
+    for row in rows:
+        run_dir = runs_dir / row['run_id']
+        harness = run_dir / 'harness'
+        results = harness / 'results.json'
+        if results.exists():
+            print(f'[skip] {row["run_id"]} already complete', flush=True)
+            continue
+        if harness.exists():
+            print(f'[halt] {row["run_id"]} has a started-but-incomplete harness dir; '
+                  f'inspect {harness} and move it aside deliberately', flush=True)
+            return 3
+        if args.limit and executed >= args.limit:
+            print(f'[stop] limit {args.limit} reached', flush=True)
+            break
+
+        run_dir.mkdir(parents=True, exist_ok=True)
+        command = command_for(row, harness)
+        (run_dir / 'command.json').write_text(json.dumps(command, indent=2) + '\n',
+                                              encoding='utf-8')
+        started = dt.datetime.now(dt.timezone.utc).isoformat()
+        (run_dir / 'started.json').write_text(
+            json.dumps({**row, 'started_utc': started}, indent=2) + '\n', encoding='utf-8')
+
+        print(f'[run {row["order_index"]}/{len(rows)}] {row["run_id"]} '
+              f'started {started}', flush=True)
+        if args.dry_run:
+            executed += 1
+            continue
+
+        with (run_dir / 'harness.log').open('wb') as log:
+            completed = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT,
+                                       cwd=str(ROOT))
+        finished = dt.datetime.now(dt.timezone.utc).isoformat()
+
+        passed = None
+        if results.exists():
+            records = json.loads(results.read_text(encoding='utf-8'))
+            if isinstance(records, list) and records:
+                passed = bool(records[0].get('passed'))
+        (run_dir / 'attempt.json').write_text(json.dumps({
+            **row,
+            'started_utc': started,
+            'finished_utc': finished,
+            'returncode': completed.returncode,
+            'passed': passed,
+        }, indent=2) + '\n', encoding='utf-8')
+        print(f'[done] {row["run_id"]} rc={completed.returncode} passed={passed} '
+              f'finished {finished}', flush=True)
+        executed += 1
+
+    print(f'executed {executed} run(s)', flush=True)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

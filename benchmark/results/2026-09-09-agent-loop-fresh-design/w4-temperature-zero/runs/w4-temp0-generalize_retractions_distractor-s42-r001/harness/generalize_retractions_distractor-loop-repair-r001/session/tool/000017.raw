@@ -1,0 +1,13 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+p event: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+p id: p
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+--- Testing other cases ---
+Case 1 [p, retract]: {'cash': 0}
+Case 2 [retract, p]: {'cash': 7}
+
+stderr:

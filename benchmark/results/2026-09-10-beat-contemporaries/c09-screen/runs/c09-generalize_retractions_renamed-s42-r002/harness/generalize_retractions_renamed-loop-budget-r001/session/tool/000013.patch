@@ -1,0 +1,39 @@
+diff --git "a/debug_test.py" "b/debug_test.py"
+new file mode 100644
+--- /dev/null
++++ "b/debug_test.py"
+@@ -0,0 +1,33 @@
++from ledger import positions_for
++from test_ledger import post, retract
++
++# Test the failing case
++p = post('p', 7)
++messages = [p, p, retract('r', 'p'), retract('s', 'p')]
++result = positions_for(messages)
++print("Result:", result)
++print("Expected: {'cash': 0}")
++
++# Let's trace what should happen step by step
++print("\nStep by step:")
++print("1. First p (post 'p', delta 7):")
++print("   - visited.add('p')")
++print("   - entries['p'] = ('cash', 7)")
++print("   - positions['cash'] += 7 = 7")
++print("   - positions = {'cash': 7}")
++
++print("2. Second p (post 'p', delta 7):")
++print("   - 'p' already in visited, so skip")
++
++print("3. retract('r', 'p'):")
++print("   - reference = 'p'")
++print("   - 'p' not in voided, so add to voided")
++print("   - 'p' in entries, so subtract 7 from positions['cash']")
++print("   - positions['cash'] = 7 - 7 = 0")
++print("   - positions = {'cash': 0}")
++
++print("4. retract('s', 'p'):")
++print("   - reference = 'p'")
++print("   - 'p' already in voided, so skip")
++
++print("Final result should be {'cash': 0}")
+\ No newline at end of file

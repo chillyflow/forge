@@ -1,0 +1,21 @@
+
+---------- DEBUG.GO
+
+---------- REPAIR.GO
+		from, fromOK := balances[tr.From]
+		to, toOK := balances[tr.To]
+		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+		if tr.From == tr.To {
+		if to > maxInt-tr.Amount {
+		next[tr.From] = from - tr.Amount
+		next[tr.To] = to + tr.Amount
+
+---------- REPAIR_TEST.GO
+func TestApplyTransfers(t *testing.T) {
+	if !ApplyTransfers(b, []Transfer{{"a", "b", 7}, {"b", "c", 3}}) || !reflect.DeepEqual(b, map[string]int{"a": 3, "b": 4, "c": 5}) {
+		t.Fatalf("success=%v", b)
+		if ApplyTransfers(got, batch) || !reflect.DeepEqual(got, before) {
+			t.Fatalf("batch %v left %v", batch, got)
+	overflow := map[string]int{"a": 1, "b": math.MaxInt}
+		t.Fatalf("overflow=%v", overflow)
+		t.Fatalf("self transfer=%v", same)

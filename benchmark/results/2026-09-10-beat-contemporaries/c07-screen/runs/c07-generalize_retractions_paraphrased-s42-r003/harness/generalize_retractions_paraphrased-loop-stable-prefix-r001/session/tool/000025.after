@@ -1,0 +1,34 @@
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            # If this posting was already cancelled (referenced by a retract), skip it
+            if event['id'] in cancelled:
+                continue
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            if target in cancelled:
+                continue
+            cancelled.add(target)
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+            # If target is not in postings, we don't create an account (as per requirements)
+    # Ensure all accounts that were referenced in retracts are tracked with zero balance
+    # This handles the case where a post is cancelled but the account should still exist
+    for target in cancelled:
+        if target in postings:
+            continue
+        # For targets that were cancelled but never posted, we don't create accounts per requirements
+        # But we need to handle the case where a post gets cancelled and the account should exist
+        # Actually, let's think differently - if we have a retract that references a non-existent post
+        # and that post later comes, we need to track it properly
+    return totals

@@ -1,0 +1,8 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+  File "<string>", line 1
+    import unittest; from ledger import positions_for; def post(i, delta): return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}; def retract(i, reference): return {'key': i, 'kind': 'retract', 'reference': reference}; p = post('p', 7); r = retract('r', 'p'); print('Case 1 [p, r]:', positions_for([p, r])); print('Case 2 [r, p]:', positions_for([r, p])); print('Case 3 [p, p2, r, s]:', positions_for([p, post('p2', 3), r, retract('s', 'p')]))
+                                                       ^^^
+SyntaxError: invalid syntax

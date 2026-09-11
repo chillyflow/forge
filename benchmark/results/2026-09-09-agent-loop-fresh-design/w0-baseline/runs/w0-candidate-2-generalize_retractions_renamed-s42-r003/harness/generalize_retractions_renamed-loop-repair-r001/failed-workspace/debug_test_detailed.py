@@ -1,0 +1,34 @@
+from ledger import positions_for
+
+def post(i, delta): 
+    return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}
+
+def retract(i, reference): 
+    return {'key': i, 'kind': 'retract', 'reference': reference}
+
+# Let's trace the exact failing case
+print("=== Test case that's failing ===")
+p = post('p', 7)
+print("p =", p)
+messages = [p, p, retract('r', 'p'), retract('s', 'p')]
+print("messages =", messages)
+
+result = positions_for(messages)
+print("Result:", result)
+print("Expected: {'cash': 0}")
+print()
+
+# Let's also see what happens with just [p, retract('r', 'p')]
+print("=== Test case that works ===")
+messages2 = [p, retract('r', 'p')]
+result2 = positions_for(messages2)
+print("Result:", result2)
+print("Expected: {'cash': 0}")
+print()
+
+# Let's also see what happens with just [retract('r', 'p'), p]
+print("=== Test case that works ===")
+messages3 = [retract('r', 'p'), p]
+result3 = positions_for(messages3)
+print("Result:", result3)
+print("Expected: {'cash': 0}")

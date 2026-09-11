@@ -1,0 +1,22 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Processing events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Event 0: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Added p to seen
+  Posted: cash += 7, total = 7
+  Current totals: {'cash': 7}
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Skipping duplicate event p
+Event 2: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  Added r to seen
+  Retracting target: p
+  Added p to cancelled
+  Cancelled: cash -= 7, total = 0
+  Current totals: {'cash': 0}
+Event 3: {'id': 's', 'kind': 'retract', 'target': 'p'}
+  Added s to seen
+  Retracting target: p
+  Target p already cancelled, skipping
+Final result: {'cash': 0}
+
+stderr:

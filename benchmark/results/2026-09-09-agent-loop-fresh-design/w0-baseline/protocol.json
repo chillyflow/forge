@@ -1,0 +1,585 @@
+{
+  "schema_version": 1,
+  "purpose": "W0 baseline calibration: three arms on the four Python retraction manifests, three repetitions, unchanged candidate-2 runtime.",
+  "frozen_utc": "2026-09-10T00:41:47.409189+00:00",
+  "counts_toward_model_acceptance": false,
+  "is_scheduled_gate_evidence": false,
+  "forge": {
+    "path": "C:\\Users\\flowc\\dev\\forge\\benchmark\\results\\2026-09-09-agent-loop-all-green\\candidate-02\\runtime\\forge.exe",
+    "sha256": "fa3b099c442bba1c422959de98e42b88b4214948e0e0fe2d939617b01cd99de9"
+  },
+  "model": {
+    "path": "C:\\Users\\flowc\\models\\forge\\Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+    "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad"
+  },
+  "task_dir": "C:\\Users\\flowc\\dev\\forge\\benchmark\\results\\2026-09-08-repair-control\\tasks",
+  "manifest_sha256": {
+    "generalize_retractions_original": "8d909f5d803c950d0aa6c2acb7fd6e53ac13b55f348288f37dabde6103fc0472",
+    "generalize_retractions_renamed": "3e32c2aad5756a0e60823082e619b811aa3bc4e8389052923b86b289b9c91e2f",
+    "generalize_retractions_paraphrased": "27603cd6d23caf00e7afcfd8714dfbad577f25e407ef9bb901318c810878c0a0",
+    "generalize_retractions_distractor": "2bb193bae70032c96e5919787107dead6b8c81ef0aed2c5195678067517b9829"
+  },
+  "profile": {
+    "flags": [
+      "--gpu-layers=-1",
+      "--context=16384",
+      "--output-reserve=2048",
+      "--temperature=0.6",
+      "--max-turns=32",
+      "--max-tokens=32768",
+      "--max-input=262144",
+      "--timeout=600",
+      "--verification-timeout=120",
+      "--order-seed=20260831",
+      "--gpu-index=0",
+      "--prompt-protocol=native"
+    ],
+    "seed": 42,
+    "repetitions": 3,
+    "note": "run.py ignores --order-seed under --no-randomize; execution order is this protocol's arm-interleaved schedule and does NOT match G1's shuffled order. Recorded, not claimed identical."
+  },
+  "arms": [
+    {
+      "arm": "plain-control",
+      "variant": "minimal",
+      "flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ]
+    },
+    {
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ]
+    },
+    {
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ]
+    }
+  ],
+  "prespecified_instrumentation": [
+    "identical_replacement_count and apply_patch denominator",
+    "rejected_final_count",
+    "run_command_count and near_duplicate_reproduction_count",
+    "forced_actions, turns, forced_actions/turns",
+    "cumulative prompt_tokens",
+    "cached_tokens series per turn",
+    "action count and terminating reason (metrics.status)"
+  ],
+  "schedule": [
+    {
+      "order_index": 1,
+      "run_id": "w0-plain-control-generalize_retractions_original-s42-r001",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 2,
+      "run_id": "w0-checkpoint-only-generalize_retractions_original-s42-r001",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 3,
+      "run_id": "w0-candidate-2-generalize_retractions_original-s42-r001",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 4,
+      "run_id": "w0-plain-control-generalize_retractions_renamed-s42-r001",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 5,
+      "run_id": "w0-checkpoint-only-generalize_retractions_renamed-s42-r001",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 6,
+      "run_id": "w0-candidate-2-generalize_retractions_renamed-s42-r001",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 7,
+      "run_id": "w0-plain-control-generalize_retractions_paraphrased-s42-r001",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 8,
+      "run_id": "w0-checkpoint-only-generalize_retractions_paraphrased-s42-r001",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 9,
+      "run_id": "w0-candidate-2-generalize_retractions_paraphrased-s42-r001",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 10,
+      "run_id": "w0-plain-control-generalize_retractions_distractor-s42-r001",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 11,
+      "run_id": "w0-checkpoint-only-generalize_retractions_distractor-s42-r001",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 12,
+      "run_id": "w0-candidate-2-generalize_retractions_distractor-s42-r001",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 1
+    },
+    {
+      "order_index": 13,
+      "run_id": "w0-plain-control-generalize_retractions_original-s42-r002",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 14,
+      "run_id": "w0-checkpoint-only-generalize_retractions_original-s42-r002",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 15,
+      "run_id": "w0-candidate-2-generalize_retractions_original-s42-r002",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 16,
+      "run_id": "w0-plain-control-generalize_retractions_renamed-s42-r002",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 17,
+      "run_id": "w0-checkpoint-only-generalize_retractions_renamed-s42-r002",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 18,
+      "run_id": "w0-candidate-2-generalize_retractions_renamed-s42-r002",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 19,
+      "run_id": "w0-plain-control-generalize_retractions_paraphrased-s42-r002",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 20,
+      "run_id": "w0-checkpoint-only-generalize_retractions_paraphrased-s42-r002",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 21,
+      "run_id": "w0-candidate-2-generalize_retractions_paraphrased-s42-r002",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 22,
+      "run_id": "w0-plain-control-generalize_retractions_distractor-s42-r002",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 23,
+      "run_id": "w0-checkpoint-only-generalize_retractions_distractor-s42-r002",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 24,
+      "run_id": "w0-candidate-2-generalize_retractions_distractor-s42-r002",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 2
+    },
+    {
+      "order_index": 25,
+      "run_id": "w0-plain-control-generalize_retractions_original-s42-r003",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 26,
+      "run_id": "w0-checkpoint-only-generalize_retractions_original-s42-r003",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 27,
+      "run_id": "w0-candidate-2-generalize_retractions_original-s42-r003",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 28,
+      "run_id": "w0-plain-control-generalize_retractions_renamed-s42-r003",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 29,
+      "run_id": "w0-checkpoint-only-generalize_retractions_renamed-s42-r003",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 30,
+      "run_id": "w0-candidate-2-generalize_retractions_renamed-s42-r003",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 31,
+      "run_id": "w0-plain-control-generalize_retractions_paraphrased-s42-r003",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 32,
+      "run_id": "w0-checkpoint-only-generalize_retractions_paraphrased-s42-r003",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 33,
+      "run_id": "w0-candidate-2-generalize_retractions_paraphrased-s42-r003",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 34,
+      "run_id": "w0-plain-control-generalize_retractions_distractor-s42-r003",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 35,
+      "run_id": "w0-checkpoint-only-generalize_retractions_distractor-s42-r003",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 3
+    },
+    {
+      "order_index": 36,
+      "run_id": "w0-candidate-2-generalize_retractions_distractor-s42-r003",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 3
+    }
+  ]
+}

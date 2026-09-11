@@ -1,0 +1,9 @@
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Step by step:
+1. p (posting with amount 7): cash += 7 -> cash = 7
+2. p (posting with amount 7): cash += 7 -> cash = 14
+3. retract('r', 'p'): cancel first posting (cash -= 7) -> cash = 7
+4. retract('s', 'p'): cancel second posting (cash -= 7) -> cash = 0

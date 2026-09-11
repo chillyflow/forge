@@ -1,0 +1,13 @@
+Processing events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Event 0: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Added posting: cash + 7, total: 7
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Skipping duplicate ID p
+Event 2: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  Processing retraction targeting p
+  Cancelled posting: cash - 7, total: 0
+Event 3: {'id': 's', 'kind': 'retract', 'target': 'p'}
+  Processing retraction targeting p
+  Target p already cancelled, skipping
+Final totals: {'cash': 0}
+Result: {'cash': 0}

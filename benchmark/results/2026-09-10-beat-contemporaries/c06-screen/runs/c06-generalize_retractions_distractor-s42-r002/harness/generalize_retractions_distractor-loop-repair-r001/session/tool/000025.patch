@@ -1,0 +1,66 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,27 +1,35 @@
+-def balances(events):
+-    seen = set()
+-    cancelled = set()
+-    postings = {}
+-    totals = {}
+-    
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            # If this posting was already cancelled by a retraction, skip it
+-            if event['id'] in cancelled:
+-                continue
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:
+-            target = event['target']
+-            # Mark the target posting as cancelled
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-    return totals
++def balances(events):
++    seen = set()
++    cancelled = set()
++    postings = {}
++    totals = {}
++    
++    # Flatten the events if it's a list of lists
++    if events and isinstance(events[0], list):
++        # This is the case where events is a list of event lists
++        flattened_events = []
++        for event_list in events:
++            flattened_events.extend(event_list)
++        events = flattened_events
++    
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            # If this posting was already cancelled by a retraction, skip it
++            if event['id'] in cancelled:
++                continue
++            postings[event['id']] = (account, amount)
++            totals.setdefault(account, 0)
++            totals[account] += amount
++        else:
++            target = event['target']
++            # Mark the target posting as cancelled
++            cancelled.add(target)
++            if target in postings:
++                account, amount = postings[target]
++                totals[account] -= amount
++    return totals

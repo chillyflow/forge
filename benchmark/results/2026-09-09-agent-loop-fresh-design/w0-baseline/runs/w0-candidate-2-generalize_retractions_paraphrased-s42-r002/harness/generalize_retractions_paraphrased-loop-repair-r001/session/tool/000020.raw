@@ -1,0 +1,13 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Case 1: [p, retract(r, p)]
+Result: {'cash': 0}
+Expected: {"cash": 0}
+Match: True
+
+Case 2: [retract(r, p), p]
+Result: {'cash': 7}
+Expected: {"cash": 0}
+Match: False
+
+stderr:

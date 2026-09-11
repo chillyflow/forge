@@ -1,0 +1,15 @@
+Test 1: Order and duplicates
+p, retract('r', 'p'): {'cash': 0}
+retract('r', 'p'), p: {'cash': 0}
+p, p, retract('r', 'p'), retract('s', 'p'): {'cash': 0}
+
+Test 2: Independent postings
+post('a', 7), post('b', -2), retract('r', 'a'): {'cash': -2}
+
+Test 3: Unmatched retractions
+retract('r', 'missing'): {}
+
+Test 4: Empty events
+empty events: {}
+
+All tests completed successfully!

@@ -1,0 +1,7 @@
+Let me trace through the exact test case step by step:
+1. retract(r, p) - creates cancelled set with p, but no posting exists yet
+2. post(p, 7) - p is in cancelled, so it gets skipped
+3. Expected result: {"cash": 0}
+
+The key is: when a retraction references a posting that will arrive, we should track that account
+even if the posting never actually contributes to the balance.

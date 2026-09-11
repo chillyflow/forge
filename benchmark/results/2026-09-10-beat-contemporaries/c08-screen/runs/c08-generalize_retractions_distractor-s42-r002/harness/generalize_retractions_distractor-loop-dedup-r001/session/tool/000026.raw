@@ -1,0 +1,21 @@
+file_sha256:5fdeddd8ccc72259441cd1dcda8a23c8180799af4ab2dc665b685d3c8dcc6151
+1: def balances(events):
+2:     seen = set()
+3:     cancelled = set()
+4:     postings = {}
+5:     totals = {}
+6:     
+7:     for event in events:
+8:         if event['id'] in seen:
+9:             continue
+10:         seen.add(event['id'])
+11:         
+12:         if event['kind'] == 'post':
+13:             account, amount = event['account'], event['amount']
+14:             # If this posting has been cancelled by a retraction, skip it
+15:             if event['id'] in cancelled:
+16:                 # Even if cancelled, we still need to track the account for the final result
+17:                 totals.setdefault(account, 0)
+18:                 continue
+19:             postings[event['id']] = (account, amount)
+20:             totals.setdefault(account, 0)

@@ -1,0 +1,17 @@
+=== Test case that's failing ===
+Processing messages:
+  0: {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+  1: {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+  2: {'key': 'r', 'kind': 'retract', 'reference': 'p'}
+  3: {'key': 's', 'kind': 'retract', 'reference': 'p'}
+Result: {'cash': 0}
+
+=== Other test cases ===
+Processing messages:
+  0: {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+  1: {'key': 'r', 'kind': 'retract', 'reference': 'p'}
+Result: {'cash': 0}
+Processing messages:
+  0: {'key': 'r', 'kind': 'retract', 'reference': 'p'}
+  1: {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+Result: {'cash': 7}

@@ -1,0 +1,104 @@
+diff --git a/repair.go b/repair.go
+index 26b0008..84aafa2 100644
+--- a/repair.go
++++ b/repair.go
+@@ -16,23 +16,36 @@ func routeSegments(value string) []string {
+ 	}
+ 	return strings.Split(value, "/")
+ }
++
+ func MatchRoute(method, path string, routes []Route) (string, map[string]string, bool) {
+ 	actual := routeSegments(path)
+ 	var best routeMatch
+ 	found := false
++
+ 	for index, route := range routes {
++		// Check method match
+ 		if route.Method != "*" && route.Method != method {
+ 			continue
+ 		}
++
+ 		pattern := routeSegments(route.Pattern)
+ 		params := map[string]string{}
+ 		literals, wildcards := 0, 0
+ 		pi, ai := 0, 0
+ 		ok := true
+-		for pi < len(pattern) {
++
++		// Match pattern segments with path segments
++		for pi < len(pattern) && ai < len(actual) {
+ 			part := pattern[pi]
++
+ 			if part == "*" {
+-				if pi != len(pattern)-1 || ai >= len(actual) {
++				// Wildcard must be the last segment
++				if pi != len(pattern)-1 {
++					ok = false
++					break
++				}
++				// Wildcard must match non-empty suffix
++				if len(actual[ai:]) == 0 {
+ 					ok = false
+ 					break
+ 				}
+@@ -42,35 +55,52 @@ func MatchRoute(method, path string, routes []Route) (string, map[string]string,
+ 				pi++
+ 				break
+ 			}
+-			if ai >= len(actual) {
+-				ok = false
+-				break
+-			}
++
+ 			if strings.HasPrefix(part, ":") && len(part) > 1 {
++				// Parameter segment - capture the value
+ 				params[part[1:]] = actual[ai]
+ 				wildcards++
+ 			} else if part == actual[ai] {
++				// Literal segment match
+ 				literals++
+ 			} else {
++				// No match
+ 				ok = false
+ 				break
+ 			}
++
+ 			pi++
+ 			ai++
+ 		}
++
++		// Check if we consumed all pattern and path segments
+ 		if !ok || pi != len(pattern) || ai != len(actual) {
+ 			continue
+ 		}
+-		exact := 0
++
++		// Calculate match quality
++		methodExact := 0
+ 		if route.Method == method {
+-			exact = 1
++			methodExact = 1
+ 		}
+-		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+-		if !found || candidate.literals > best.literals {
++
++		candidate := routeMatch{route.Name, params, literals, methodExact, wildcards, index}
++
++		// Apply tie-breaking rules:
++		// 1. Prefer more literal segments
++		// 2. Prefer exact method over *
++		// 3. Prefer fewer wildcards
++		// 4. Preserve declaration order (index)
++		if !found ||
++			candidate.literals > best.literals ||
++			(candidate.literals == best.literals && candidate.methodExact > best.methodExact) ||
++			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards < best.wildcards) ||
++			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards == best.wildcards && candidate.index < best.index) {
+ 			best = candidate
+ 			found = true
+ 		}
+ 	}
++
+ 	if !found {
+ 		return "", nil, false
+ 	}

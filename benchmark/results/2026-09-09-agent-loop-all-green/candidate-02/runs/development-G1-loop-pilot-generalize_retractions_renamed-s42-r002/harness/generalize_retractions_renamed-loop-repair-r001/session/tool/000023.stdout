@@ -1,0 +1,19 @@
+Full test case:
+p = {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+r = {'key': 'r', 'kind': 'retract', 'reference': 'p'}
+Test case [retract, post]:
+Messages: [
+  {
+    "key": "r",
+    "kind": "retract",
+    "reference": "p"
+  },
+  {
+    "key": "p",
+    "kind": "post",
+    "bucket": "cash",
+    "delta": 7
+  }
+]
+Result: {'cash': 7}
+Expected: {"cash": 0}

@@ -1,0 +1,27 @@
+{
+  "id": "py_compiler_syntax",
+  "suite": "campaign",
+  "language": "python",
+  "category": "compiler-failure",
+  "prompt": "The expression module fails to import. Repair the syntax while preserving evaluate(expression), which must only support integer addition and reject other forms with ValueError. Run the unittest suite without modifying tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-v"
+  ],
+  "protected_files": [
+    "tests/test_evaluate.py"
+  ],
+  "files": {
+    "expr/__init__.py": "",
+    "expr/evaluate.py": "import ast\n\ndef evaluate(expression)\n    node = ast.parse(expression, mode=\"eval\").body\n    if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Add):\n        raise ValueError(\"unsupported\")\n    if not isinstance(node.left, ast.Constant) or not isinstance(node.right, ast.Constant):\n        raise ValueError(\"unsupported\")\n    return node.left.value + node.right.value\n",
+    "tests/test_evaluate.py": "import unittest\nfrom expr.evaluate import evaluate\n\nclass EvaluateTests(unittest.TestCase):\n    def test_addition_only(self):\n        self.assertEqual(evaluate(\"2 + 5\"), 7)\n        with self.assertRaises(ValueError): evaluate(\"2 * 5\")\n        with self.assertRaises(ValueError): evaluate(\"'a' + 'b'\")\n"
+  },
+  "oracle_files": {
+    "expr/evaluate.py": "import ast\n\ndef evaluate(expression):\n    node = ast.parse(expression, mode=\"eval\").body\n    if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Add):\n        raise ValueError(\"unsupported\")\n    if not all(isinstance(value, ast.Constant) and isinstance(value.value, int)\n               for value in (node.left, node.right)):\n        raise ValueError(\"unsupported\")\n    return node.left.value + node.right.value\n"
+  }
+}

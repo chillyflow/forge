@@ -1,0 +1,29 @@
+def balances(events):
+    seen = set()
+    postings, totals = {}, {}
+    cancelled = {}  # Track how many times each posting has been cancelled
+    
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            # Check if this posting has already been cancelled
+            if target in cancelled:
+                cancelled[target] += 1
+                # If already cancelled twice, ignore this retraction
+                if cancelled[target] > 1:
+                    continue
+            else:
+                cancelled[target] = 1
+            
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+    return totals

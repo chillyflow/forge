@@ -1,0 +1,34 @@
+diff --git "a/test_fix.py" "b/test_fix.py"
+new file mode 100644
+--- /dev/null
++++ "b/test_fix.py"
+@@ -0,0 +1,28 @@
++from service import balances
++
++def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
++def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}
++
++# Test the examples from the test file
++print("Test 1: Order and duplicates")
++p = post('p', 7)
++result = balances([p, retract('r', 'p')])
++print(f"p, retract('r', 'p'): {result}")
++result = balances([retract('r', 'p'), p])
++print(f"retract('r', 'p'), p: {result}")
++result = balances([p, p, retract('r', 'p'), retract('s', 'p')])
++print(f"p, p, retract('r', 'p'), retract('s', 'p'): {result}")
++
++print("\nTest 2: Independent postings")
++result = balances([post('a', 7), post('b', -2), retract('r', 'a')])
++print(f"post('a', 7), post('b', -2), retract('r', 'a'): {result}")
++
++print("\nTest 3: Unmatched retractions")
++result = balances([retract('r', 'missing')])
++print(f"retract('r', 'missing'): {result}")
++
++print("\nTest 4: Empty events")
++result = balances([])
++print(f"empty events: {result}")
++
++print("\nAll tests completed successfully!")
+\ No newline at end of file

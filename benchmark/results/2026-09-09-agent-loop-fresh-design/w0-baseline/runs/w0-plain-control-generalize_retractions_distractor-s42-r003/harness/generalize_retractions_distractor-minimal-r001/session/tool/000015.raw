@@ -1,0 +1,19 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {'cash': 7}
+Expected: {'cash': 0}
+
+Detailed trace:
+1. Process retract('r', 'p'):
+   - event id 'r' not seen, so process
+   - event kind is 'retract'
+   - target is 'p'
+   - 'p' not in cancelled, so add to cancelled
+   - 'p' not in postings, so no effect on totals
+2. Process post('p', 7):
+   - event id 'p' not seen, so process
+   - event kind is 'post'
+   - target 'p' is in cancelled set, so skip adding to totals
+
+stderr:

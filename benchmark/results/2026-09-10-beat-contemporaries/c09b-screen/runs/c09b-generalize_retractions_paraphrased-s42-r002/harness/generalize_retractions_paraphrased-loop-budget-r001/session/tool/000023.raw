@@ -1,0 +1,19 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Input events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Processing step by step:
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  seen before: set()
+  Processing post event...
+  After post: seen= {'p'} postings= {'p': ('cash', 7)} totals= {'cash': 7}
+Event 2: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  seen before: {'p'}
+  Processing retract event...
+  cancelled after add: {'p'}
+  Checking if p in postings: True
+  totals before retract: {'cash': 7}
+  Subtracting from totals...
+  totals after retract: {'cash': 0}
+Final result should be: {'cash': 0}
+
+stderr:

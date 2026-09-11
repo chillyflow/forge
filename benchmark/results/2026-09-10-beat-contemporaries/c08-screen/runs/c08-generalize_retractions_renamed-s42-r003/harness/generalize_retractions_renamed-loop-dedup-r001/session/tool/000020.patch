@@ -1,0 +1,58 @@
+diff --git "a/ledger.py" "b/ledger.py"
+--- "a/ledger.py"
++++ "b/ledger.py"
+@@ -1,26 +1,28 @@
+-def positions_for(messages):
+-    entries, positions = {}, {}
+-    voided = set()
+-    processed = set()
+-    
+-    for message in messages:
+-        if message['key'] in processed:
+-            continue
+-        processed.add(message['key'])
+-        
+-        if message['kind'] == 'post':
+-            bucket, delta = message['bucket'], message['delta']
+-            entries[message['key']] = (bucket, delta)
+-            positions.setdefault(bucket, 0)
+-            positions[bucket] += delta
+-        else:  # message['kind'] == 'retract'
+-            reference = message['reference']
+-            if reference in voided:
+-                continue
+-            voided.add(reference)
+-            if reference in entries:
+-                bucket, delta = entries[reference]
+-                positions[bucket] -= delta
+-                del entries[reference]
+-    
+-    return positions
++def positions_for(messages):
++    entries, positions = {}, {}
++    voided = set()
++    processed = set()
++    
++    for message in messages:
++        if message['key'] in processed:
++            continue
++        processed.add(message['key'])
++        
++        if message['kind'] == 'post':
++            bucket, delta = message['bucket'], message['delta']
++            entries[message['key']] = (bucket, delta)
++            positions.setdefault(bucket, 0)
++            positions[bucket] += delta
++        else:  # message['kind'] == 'retract'
++            reference = message['reference']
++            # Check if this retraction has already been used to cancel a post
++            if reference in voided:
++                continue
++            # Mark that this reference has been used for cancellation
++            voided.add(reference)
++            if reference in entries:
++                bucket, delta = entries[reference]
++                positions[bucket] -= delta
++                del entries[reference]
++    
++    return positions

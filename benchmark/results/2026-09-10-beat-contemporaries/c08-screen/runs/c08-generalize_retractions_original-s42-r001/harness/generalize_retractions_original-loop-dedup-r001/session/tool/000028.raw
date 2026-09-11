@@ -1,0 +1,15 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Manual trace:
+Before processing: seen=set(), cancelled=set(), postings={}, totals={}
+Process p:
+  seen.add(p)
+  postings[p] = (cash, 7)
+  totals[cash] += 7
+Process r:
+  cancelled.add(p)
+  p in postings? Yes
+  totals[cash] -= 7
+Final result should be: {"cash": 0}
+
+stderr:

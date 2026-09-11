@@ -1,0 +1,13 @@
+diff --git a/repair.go b/repair.go
+index 9659f9d..c131b59 100644
+--- a/repair.go
++++ b/repair.go
+@@ -25,7 +25,7 @@ func OrderBuild(tasks []string, deps map[string][]string) ([]string, bool) {
+ 				return nil, false
+ 			}
+ 			seen[requirement] = true
+-			indegree[task]++
++			indegree[requirement]++
+ 			next[requirement] = append(next[requirement], task)
+ 		}
+ 	}

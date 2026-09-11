@@ -1,0 +1,805 @@
+{
+  "schema_version": 1,
+  "run_count": 36,
+  "expected_run_count": 36,
+  "complete": true,
+  "arms": {
+    "plain-control": {
+      "passed": 0,
+      "total": 12,
+      "rate": 0.0,
+      "clopper_pearson_95": [
+        0.0,
+        0.2646
+      ],
+      "manifests_with_at_least_one_pass": 0,
+      "per_manifest": {
+        "generalize_retractions_original": {
+          "passed": 0,
+          "total": 3
+        },
+        "generalize_retractions_renamed": {
+          "passed": 0,
+          "total": 3
+        },
+        "generalize_retractions_paraphrased": {
+          "passed": 0,
+          "total": 3
+        },
+        "generalize_retractions_distractor": {
+          "passed": 0,
+          "total": 3
+        }
+      }
+    },
+    "checkpoint-only": {
+      "passed": 1,
+      "total": 12,
+      "rate": 0.0833,
+      "clopper_pearson_95": [
+        0.0021,
+        0.3848
+      ],
+      "manifests_with_at_least_one_pass": 1,
+      "per_manifest": {
+        "generalize_retractions_original": {
+          "passed": 0,
+          "total": 3
+        },
+        "generalize_retractions_renamed": {
+          "passed": 0,
+          "total": 3
+        },
+        "generalize_retractions_paraphrased": {
+          "passed": 1,
+          "total": 3
+        },
+        "generalize_retractions_distractor": {
+          "passed": 0,
+          "total": 3
+        }
+      }
+    },
+    "candidate-2": {
+      "passed": 4,
+      "total": 12,
+      "rate": 0.3333,
+      "clopper_pearson_95": [
+        0.0992,
+        0.6511
+      ],
+      "manifests_with_at_least_one_pass": 3,
+      "per_manifest": {
+        "generalize_retractions_original": {
+          "passed": 2,
+          "total": 3
+        },
+        "generalize_retractions_renamed": {
+          "passed": 1,
+          "total": 3
+        },
+        "generalize_retractions_paraphrased": {
+          "passed": 0,
+          "total": 3
+        },
+        "generalize_retractions_distractor": {
+          "passed": 1,
+          "total": 3
+        }
+      }
+    }
+  },
+  "comparisons_against_plain_control": {
+    "checkpoint-only": {
+      "arm_rate": 0.0833,
+      "control_rate": 0.0,
+      "fisher_two_sided_p": 1.0,
+      "verdict": "equal to the plain control (not separated at this sample size)"
+    },
+    "candidate-2": {
+      "arm_rate": 0.3333,
+      "control_rate": 0.0,
+      "fisher_two_sided_p": 0.093168,
+      "verdict": "equal to the plain control (not separated at this sample size)"
+    }
+  },
+  "instrumentation_by_arm": {
+    "plain-control": {
+      "identical_replacement_count": 18,
+      "apply_patch_total": 67,
+      "identical_replacement_rate": 0.2687,
+      "rejected_final_count": 0,
+      "run_command_count": 125,
+      "run_command_repeat_count": 31,
+      "terminating_reasons": {
+        "limit": 5,
+        "ok": 7
+      },
+      "mean_forced_opener_rate": 0.1199,
+      "runs_hitting_action_wall": 4
+    },
+    "checkpoint-only": {
+      "identical_replacement_count": 19,
+      "apply_patch_total": 75,
+      "identical_replacement_rate": 0.2533,
+      "rejected_final_count": 10,
+      "run_command_count": 138,
+      "run_command_repeat_count": 20,
+      "terminating_reasons": {
+        "limit": 11,
+        "ok": 1
+      },
+      "mean_forced_opener_rate": 0.1848,
+      "runs_hitting_action_wall": 4
+    },
+    "candidate-2": {
+      "identical_replacement_count": 33,
+      "apply_patch_total": 82,
+      "identical_replacement_rate": 0.4024,
+      "rejected_final_count": 14,
+      "run_command_count": 161,
+      "run_command_repeat_count": 17,
+      "terminating_reasons": {
+        "limit": 8,
+        "ok": 4
+      },
+      "mean_forced_opener_rate": 0.3984,
+      "runs_hitting_action_wall": 8
+    }
+  },
+  "caveats": [
+    "Outcomes cluster by manifest; the pooled 12-run interval is optimistic and the effective sample size is nearer 4 than 12.",
+    "Execution order is this batch's arm-interleaved schedule, not G1's shuffled order; run.py ignores --order-seed under --no-randomize.",
+    "This is a baseline/screening measurement. It is not scheduled gate evidence and must never be pooled with gate outcomes."
+  ],
+  "runs": [
+    {
+      "order_index": 12,
+      "run_id": "w0-candidate-2-generalize_retractions_distractor-s42-r001",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T01:12:57.009094+00:00",
+      "finished_utc": "2026-09-10T01:16:40.138083+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 24,
+      "run_id": "w0-candidate-2-generalize_retractions_distractor-s42-r002",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:45:19.275441+00:00",
+      "finished_utc": "2026-09-10T01:49:01.404821+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 36,
+      "run_id": "w0-candidate-2-generalize_retractions_distractor-s42-r003",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T02:18:27.690825+00:00",
+      "finished_utc": "2026-09-10T02:20:36.394145+00:00",
+      "returncode": 0,
+      "passed": true
+    },
+    {
+      "order_index": 3,
+      "run_id": "w0-candidate-2-generalize_retractions_original-s42-r001",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T00:46:22.848820+00:00",
+      "finished_utc": "2026-09-10T00:49:59.386122+00:00",
+      "returncode": 0,
+      "passed": true
+    },
+    {
+      "order_index": 15,
+      "run_id": "w0-candidate-2-generalize_retractions_original-s42-r002",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:20:19.027479+00:00",
+      "finished_utc": "2026-09-10T01:24:27.343301+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 27,
+      "run_id": "w0-candidate-2-generalize_retractions_original-s42-r003",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T01:53:05.911914+00:00",
+      "finished_utc": "2026-09-10T01:55:41.413220+00:00",
+      "returncode": 0,
+      "passed": true
+    },
+    {
+      "order_index": 9,
+      "run_id": "w0-candidate-2-generalize_retractions_paraphrased-s42-r001",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T01:04:10.940140+00:00",
+      "finished_utc": "2026-09-10T01:08:13.175518+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 21,
+      "run_id": "w0-candidate-2-generalize_retractions_paraphrased-s42-r002",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:35:32.609136+00:00",
+      "finished_utc": "2026-09-10T01:39:21.508217+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 33,
+      "run_id": "w0-candidate-2-generalize_retractions_paraphrased-s42-r003",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T02:08:52.714485+00:00",
+      "finished_utc": "2026-09-10T02:12:39.343524+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 6,
+      "run_id": "w0-candidate-2-generalize_retractions_renamed-s42-r001",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T00:55:53.884481+00:00",
+      "finished_utc": "2026-09-10T01:00:54.811867+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 18,
+      "run_id": "w0-candidate-2-generalize_retractions_renamed-s42-r002",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:31:01.958617+00:00",
+      "finished_utc": "2026-09-10T01:33:07.972885+00:00",
+      "returncode": 0,
+      "passed": true
+    },
+    {
+      "order_index": 30,
+      "run_id": "w0-candidate-2-generalize_retractions_renamed-s42-r003",
+      "arm": "candidate-2",
+      "variant": "loop-repair",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T02:01:18.504681+00:00",
+      "finished_utc": "2026-09-10T02:05:21.366823+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 11,
+      "run_id": "w0-checkpoint-only-generalize_retractions_distractor-s42-r001",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T01:10:10.235448+00:00",
+      "finished_utc": "2026-09-10T01:12:57.009094+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 23,
+      "run_id": "w0-checkpoint-only-generalize_retractions_distractor-s42-r002",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:42:27.727867+00:00",
+      "finished_utc": "2026-09-10T01:45:19.273133+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 35,
+      "run_id": "w0-checkpoint-only-generalize_retractions_distractor-s42-r003",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T02:15:41.777327+00:00",
+      "finished_utc": "2026-09-10T02:18:27.687216+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 2,
+      "run_id": "w0-checkpoint-only-generalize_retractions_original-s42-r001",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T00:44:04.057608+00:00",
+      "finished_utc": "2026-09-10T00:46:22.847135+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 14,
+      "run_id": "w0-checkpoint-only-generalize_retractions_original-s42-r002",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:17:52.502024+00:00",
+      "finished_utc": "2026-09-10T01:20:19.025473+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 26,
+      "run_id": "w0-checkpoint-only-generalize_retractions_original-s42-r003",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T01:50:36.343476+00:00",
+      "finished_utc": "2026-09-10T01:53:05.911914+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 8,
+      "run_id": "w0-checkpoint-only-generalize_retractions_paraphrased-s42-r001",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T01:01:53.673543+00:00",
+      "finished_utc": "2026-09-10T01:04:10.936128+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 20,
+      "run_id": "w0-checkpoint-only-generalize_retractions_paraphrased-s42-r002",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:34:09.202851+00:00",
+      "finished_utc": "2026-09-10T01:35:32.603045+00:00",
+      "returncode": 0,
+      "passed": true
+    },
+    {
+      "order_index": 32,
+      "run_id": "w0-checkpoint-only-generalize_retractions_paraphrased-s42-r003",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T02:06:20.584172+00:00",
+      "finished_utc": "2026-09-10T02:08:52.709774+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 5,
+      "run_id": "w0-checkpoint-only-generalize_retractions_renamed-s42-r001",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T00:52:35.255506+00:00",
+      "finished_utc": "2026-09-10T00:55:53.871997+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 17,
+      "run_id": "w0-checkpoint-only-generalize_retractions_renamed-s42-r002",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:27:52.329484+00:00",
+      "finished_utc": "2026-09-10T01:31:01.958617+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 29,
+      "run_id": "w0-checkpoint-only-generalize_retractions_renamed-s42-r003",
+      "arm": "checkpoint-only",
+      "variant": "candidate-checkpoint",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T01:58:00.648462+00:00",
+      "finished_utc": "2026-09-10T02:01:18.499451+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 10,
+      "run_id": "w0-plain-control-generalize_retractions_distractor-s42-r001",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T01:08:13.180705+00:00",
+      "finished_utc": "2026-09-10T01:10:10.228248+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 22,
+      "run_id": "w0-plain-control-generalize_retractions_distractor-s42-r002",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:39:21.511967+00:00",
+      "finished_utc": "2026-09-10T01:42:27.712052+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 34,
+      "run_id": "w0-plain-control-generalize_retractions_distractor-s42-r003",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_distractor",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T02:12:39.343524+00:00",
+      "finished_utc": "2026-09-10T02:15:41.761613+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 1,
+      "run_id": "w0-plain-control-generalize_retractions_original-s42-r001",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T00:42:13.307850+00:00",
+      "finished_utc": "2026-09-10T00:44:04.057608+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 13,
+      "run_id": "w0-plain-control-generalize_retractions_original-s42-r002",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:16:40.142090+00:00",
+      "finished_utc": "2026-09-10T01:17:52.502024+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 25,
+      "run_id": "w0-plain-control-generalize_retractions_original-s42-r003",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_original",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T01:49:01.420559+00:00",
+      "finished_utc": "2026-09-10T01:50:36.339561+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 7,
+      "run_id": "w0-plain-control-generalize_retractions_paraphrased-s42-r001",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T01:00:54.815236+00:00",
+      "finished_utc": "2026-09-10T01:01:53.670926+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 19,
+      "run_id": "w0-plain-control-generalize_retractions_paraphrased-s42-r002",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:33:07.975938+00:00",
+      "finished_utc": "2026-09-10T01:34:09.187133+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 31,
+      "run_id": "w0-plain-control-generalize_retractions_paraphrased-s42-r003",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_paraphrased",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T02:05:21.371093+00:00",
+      "finished_utc": "2026-09-10T02:06:20.568288+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 4,
+      "run_id": "w0-plain-control-generalize_retractions_renamed-s42-r001",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 1,
+      "started_utc": "2026-09-10T00:49:59.401827+00:00",
+      "finished_utc": "2026-09-10T00:52:35.249037+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 16,
+      "run_id": "w0-plain-control-generalize_retractions_renamed-s42-r002",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 2,
+      "started_utc": "2026-09-10T01:24:27.348518+00:00",
+      "finished_utc": "2026-09-10T01:27:52.320754+00:00",
+      "returncode": 1,
+      "passed": false
+    },
+    {
+      "order_index": 28,
+      "run_id": "w0-plain-control-generalize_retractions_renamed-s42-r003",
+      "arm": "plain-control",
+      "variant": "minimal",
+      "variant_flags": [
+        "--minimal-agent",
+        "--thought-history"
+      ],
+      "task": "generalize_retractions_renamed",
+      "seed": 42,
+      "repetition": 3,
+      "started_utc": "2026-09-10T01:55:41.415225+00:00",
+      "finished_utc": "2026-09-10T01:58:00.645633+00:00",
+      "returncode": 1,
+      "passed": false
+    }
+  ]
+}

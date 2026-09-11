@@ -1,0 +1,26 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Case 1: [p, retract(r,p)]
+  post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+  retract r,p -> entries: {}, positions: {"cash": 0}
+  Result: 0
+
+Case 2: [retract(r,p), p]
+  retract r,p -> entries: {}, positions: {}, unmatched retraction
+  post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+  Result: 7
+
+Case 3: [p, p, retract(r,p), retract(s,p)]
+  post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+  post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 14}
+  retract r,p -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+  retract s,p -> entries: {}, positions: {"cash": 0}
+  Result: 0
+
+But the test says ALL should be 0!
+
+Wait - maybe the problem is in the interpretation of idempotency
+What if when we have two posts with same key, the second one overwrites the first?
+But that would still not give 0 for case 2. Let me re-read the problem.
+
+stderr:

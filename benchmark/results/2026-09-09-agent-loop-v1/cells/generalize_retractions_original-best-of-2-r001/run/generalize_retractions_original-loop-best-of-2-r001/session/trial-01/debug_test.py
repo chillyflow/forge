@@ -1,0 +1,13 @@
+import sys
+sys.path.insert(0, '.')
+from service import balances
+
+def post(i, amount): 
+    return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
+
+def retract(i, target): 
+    return {'id': i, 'kind': 'retract', 'target': target}
+
+p = post('p', 7)
+result = balances([p, retract('r', 'p')])
+print('Result:', result)

@@ -1,0 +1,33 @@
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    print(f"Processing events: {events}")
+    for i, event in enumerate(events):
+        print(f"Event {i}: {event}")
+        if event['id'] in seen:
+            print(f"  Skipping duplicate event {event['id']}")
+            continue
+        seen.add(event['id'])
+        print(f"  Added {event['id']} to seen")
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+            print(f"  Posted {amount} to {account}, totals now: {totals}")
+        else:
+            target = event['target']
+            print(f"  Processing retraction for target {target}")
+            if target in cancelled:
+                print(f"  Target {target} already cancelled, skipping")
+                continue
+            cancelled.add(target)
+            print(f"  Added {target} to cancelled")
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+                print(f"  Retracted {amount} from {account}, totals now: {totals}")
+            else:
+                print(f"  No posting found for target {target}")
+    print(f"Final totals: {totals}")
+    return totals

@@ -1,0 +1,11 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Messages: [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Reverse order messages: [{'key': 'r', 'kind': 'retract', 'reference': 'p'}, {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}]
+Result: {'cash': 7}
+Expected: {'cash': 0}
+
+stderr:

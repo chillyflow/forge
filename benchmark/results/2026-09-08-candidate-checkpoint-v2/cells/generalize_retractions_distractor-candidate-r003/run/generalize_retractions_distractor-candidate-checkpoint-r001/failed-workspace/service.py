@@ -1,0 +1,26 @@
+def balances(events):
+    seen = set()
+    postings = {}
+    totals = {}
+    pending_cancellations = set()
+    
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            if target in pending_cancellations:
+                continue
+            pending_cancellations.add(target)
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+                del postings[target]
+    return totals

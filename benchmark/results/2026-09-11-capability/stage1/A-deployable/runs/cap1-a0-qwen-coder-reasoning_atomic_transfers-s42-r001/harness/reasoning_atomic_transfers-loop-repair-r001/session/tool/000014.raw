@@ -1,0 +1,36 @@
+file_sha256:c586f1d8c3975515f9447817f744911af5f5211126c9ba24c7a80b90701cc131
+1: package repair
+2: 
+3: import "math"
+4: 
+5: type Transfer struct {
+6: 	From, To string
+7: 	Amount   int
+8: }
+9: 
+10: func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+11: 	// Create a copy of balances to work with
+12: 	next := make(map[string]int, len(balances))
+13: 	for key, value := range balances {
+14: 		next[key] = value
+15: 	}
+16: 	
+17: 	// Check all transfers first for validity
+18: 	for _, tr := range transfers {
+19: 		// Check if accounts exist
+20: 		fromBalance, fromExists := next[tr.From]
+21: 		toBalance, toExists := next[tr.To]
+22: 		
+23: 		// Reject if accounts don't exist, amount is negative, or insufficient funds
+24: 		if !fromExists || !toExists || tr.Amount < 0 || fromBalance < tr.Amount {
+25: 			return false
+26: 		}
+27: 		
+28: 		// Check for integer overflow in destination account
+29: 		if toBalance > math.MaxInt32-tr.Amount {
+30: 			return false
+31: 		}
+32: 	}
+33: 	
+34: 	// Apply all transfers if all are valid
+35: 	for _, tr := range transfers {

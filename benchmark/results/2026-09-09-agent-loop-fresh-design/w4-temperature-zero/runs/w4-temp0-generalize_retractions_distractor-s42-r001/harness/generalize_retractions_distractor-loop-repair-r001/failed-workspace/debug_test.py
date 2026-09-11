@@ -1,0 +1,22 @@
+def post(i, amount): 
+    return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
+
+def retract(i, target): 
+    return {'id': i, 'kind': 'retract', 'target': target}
+
+# Test the exact failing case
+p = post('p', 7)
+print("p event:", p)
+
+# Create the exact events list from the test
+events = [p, p, retract('r', 'p'), retract('s', 'p')]
+print("Events:", events)
+
+# Let's manually trace what should happen:
+print("\nManual trace:")
+print("1. First p (id='p', amount=7): posting -> balance=7")
+print("2. Second p (id='p', amount=7): posting -> balance=14") 
+print("3. retract('r', 'p'): retracts posting with id='p' -> should cancel first posting (amount=7) -> balance=7")
+print("4. retract('s', 'p'): retracts posting with id='p' -> already cancelled -> balance=7")
+
+print("\nBut the test expects balance=0, so I must be misunderstanding something.")

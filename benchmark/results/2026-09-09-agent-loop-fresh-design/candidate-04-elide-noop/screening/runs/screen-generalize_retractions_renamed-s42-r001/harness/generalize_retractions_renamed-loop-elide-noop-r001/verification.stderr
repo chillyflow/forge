@@ -1,0 +1,31 @@
+test_independent_postings (test_ledger.JournalCases.test_independent_postings) ... ERROR
+test_order_and_duplicates (test_ledger.JournalCases.test_order_and_duplicates) ... ERROR
+
+======================================================================
+ERROR: test_independent_postings (test_ledger.JournalCases.test_independent_postings)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-6xtr5kz0\test_ledger.py", line 13, in test_independent_postings
+    self.assertEqual(positions_for([retract('r', 'missing')]), {})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-6xtr5kz0\ledger.py", line 31, in positions_for
+    involved_buckets.add(message['bucket'])
+                         ~~~~~~~^^^^^^^^^^
+KeyError: 'bucket'
+
+======================================================================
+ERROR: test_order_and_duplicates (test_ledger.JournalCases.test_order_and_duplicates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-6xtr5kz0\test_ledger.py", line 10, in test_order_and_duplicates
+    self.assertEqual(positions_for(messages), {'cash': 0})
+                     ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-6xtr5kz0\ledger.py", line 31, in positions_for
+    involved_buckets.add(message['bucket'])
+                         ~~~~~~~^^^^^^^^^^
+KeyError: 'bucket'
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+FAILED (errors=2)

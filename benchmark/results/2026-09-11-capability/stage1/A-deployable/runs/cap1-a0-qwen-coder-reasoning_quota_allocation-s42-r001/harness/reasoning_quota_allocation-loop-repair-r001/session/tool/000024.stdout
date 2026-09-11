@@ -1,0 +1,36 @@
+
+---------- DEBUG_TEST.GO
+func TestDebug(t *testing.T) {
+		t.Fatalf("Allocation failed")
+	t.Logf("Got: %v", got)
+		t.Fatalf("Expected %v, got %v", expected, got)
+
+---------- REPAIR.GO
+		if request.ID == "" || request.Min < 0 || request.Max < request.Min || request.Weight <= 0 {
+		if _, exists := out[request.ID]; exists {
+		if minTotal > int(^uint(0)>>1)-request.Min || maxTotal > int(^uint(0)>>1)-request.Max {
+		minTotal += request.Min
+		maxTotal += request.Max
+		out[request.ID] = request.Min
+		if out[request.ID] < request.Max {
+			weightTotal += int64(request.Weight)
+		numerator := int64(left) * int64(request.Weight)
+		room := request.Max - out[request.ID]
+		shares = append(shares, quotaShare{i, whole, remainder, request.ID})
+		out[share.id] += share.whole
+		used += share.whole
+		sort.SliceStable(shares, func(i, j int) bool {
+			if shares[i].remainder == shares[j].remainder {
+				return shares[i].id < shares[j].id
+			return shares[i].remainder > shares[j].remainder
+			out[share.id]++
+
+---------- REPAIR_TEST.GO
+func TestAllocateQuota(t *testing.T) {
+	if got, ok := AllocateQuota(10, requests); !ok || !reflect.DeepEqual(got, map[string]int{"a": 3, "b": 5, "c": 2}) {
+		t.Fatalf("weighted=%v ok=%v", got, ok)
+	if got, ok := AllocateQuota(5, capped); !ok || !reflect.DeepEqual(got, map[string]int{"a": 1, "b": 4}) {
+		t.Fatalf("capped=%v ok=%v", got, ok)
+		t.Fatalf("tie=%v ok=%v", got, ok)
+			t.Fatalf("accepted %v: %v", bad, got)
+		t.Fatal("infeasible capacity accepted")

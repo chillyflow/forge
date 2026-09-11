@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+
+# Direct copy of the current ledger.py implementation
+def positions_for(messages):
+    visited, voided = set(), set()
+    entries, positions = {}, {}
+    for message in messages:
+        if message['key'] in visited:
+            continue
+        visited.add(message['key'])
+        if message['kind'] == 'post':
+            bucket, delta = message['bucket'], message['delta']
+            entries[message['key']] = (bucket, delta)
+            positions.setdefault(bucket, 0)
+            positions[bucket] += delta
+        else:
+            reference = message['reference']
+            if reference in voided:
+                continue
+            voided.add(reference)
+            if reference in entries:
+                bucket, delta = entries[reference]
+                positions[bucket] -= delta
+    return positions
+
+# Test the exact failing case
+def post(i, delta): return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}
+def retract(i, reference): return {'key': i, 'kind': 'retract', 'reference': reference}
+
+p = post('p', 7)
+messages = [p, p, retract('r', 'p'), retract('s', 'p')]
+print("Messages:", messages)
+result = positions_for(messages)
+print("Result:", result)
+print("Expected: {'cash': 0}")

@@ -1,0 +1,11 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Testing with manual tracing
+Initial: seen= set() cancelled= set() postings= {} totals= {}
+Event 1: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+After event 1: seen= {'r'} cancelled= {'p'}
+Event 2: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+event2["id"] in seen: False
+event2["id"] in cancelled: True
+
+stderr:

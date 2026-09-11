@@ -1,0 +1,31 @@
+Input: [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Input: [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Case 1: [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}]
+  Result: {'cash': 0}
+  Expected: {'cash': 0}
+
+Case 2: [{'key': 'r', 'kind': 'retract', 'reference': 'p'}, {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}]
+  Result: {}
+  Expected: {'cash': 0}
+
+Case 3: [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}, {'key': 's', 'kind': 'retract', 'reference': 'p'}]
+  Result: {'cash': 0}
+  Expected: {'cash': 0}
+
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Step-by-step trace:
+1. Process post 'p':
+   - entries['p'] = ('cash', 7)
+   - positions['cash'] = 0 + 7 = 7
+2. Process retract 'r' referencing 'p':
+   - voided.add('p')
+   - entries['p'] exists, so:
+   - bucket, delta = entries['p'] = ('cash', 7)
+   - positions['cash'] = 7 - 7 = 0
+3. Final result: {'cash': 0}

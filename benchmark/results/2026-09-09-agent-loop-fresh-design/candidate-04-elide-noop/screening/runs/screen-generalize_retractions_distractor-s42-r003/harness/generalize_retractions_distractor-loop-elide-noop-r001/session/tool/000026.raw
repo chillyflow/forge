@@ -1,0 +1,10 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Test case [retract, post]:
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {}
+Expected: {"cash": 0}
+The account cash should appear with value 0 even though no postings were processed
+This means we need to track which accounts have been involved in any operations
+
+stderr:

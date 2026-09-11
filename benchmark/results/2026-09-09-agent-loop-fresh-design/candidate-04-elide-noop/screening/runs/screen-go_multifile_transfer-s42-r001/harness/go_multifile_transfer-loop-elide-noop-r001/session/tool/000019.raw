@@ -1,0 +1,15 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+package ledger
+
+import "errors"
+
+func Transfer(from, to *Ledger, amount int) error {
+	if !from.debit(amount) {
+		return errors.New("insufficient funds")
+	}
+	from.Balance += amount
+	return nil
+}
+
+stderr:

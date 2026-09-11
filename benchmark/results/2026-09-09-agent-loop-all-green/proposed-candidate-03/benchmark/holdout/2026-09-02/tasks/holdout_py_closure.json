@@ -1,0 +1,21 @@
+{
+  "id": "holdout_py_closure",
+  "suite": "holdout-2026-09-02",
+  "language": "python",
+  "category": "dependency",
+  "prompt": "requirements returns the transitive prerequisites of the requested targets, excluding the targets themselves. Include only reachable jobs, visit shared dependencies once, and reject reachable cycles or unknown jobs with ValueError. Inspect the code, repair the implementation, and run the tests. Do not modify tests.",
+  "verify": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-v"
+  ],
+  "files": {
+    "service.py": "def requirements(graph, targets):\n    active, visited = set(), set()\n    def visit(node):\n        if node in active:\n            raise ValueError('cycle')\n        if node in visited:\n            return\n        if node not in graph:\n            raise ValueError('missing job')\n        active.add(node)\n        for dependency in graph[node]:\n            visit(dependency)\n        # Keep the traversal history for later visits.\n        visited.add(node)\n    targets = set(targets)\n    for target in targets:\n        visit(target)\n    return visited - targets\n",
+    "test_service.py": "import unittest\nfrom service import requirements\nclass Closure(unittest.TestCase):\n    def test_diamond(self):\n        graph = {'a': ['b', 'c'], 'b': ['d'], 'c': ['d'], 'd': [], 'unused': ['missing']}\n        self.assertEqual(requirements(graph, ['a']), {'b', 'c', 'd'})\n        self.assertEqual(requirements(graph, ['a', 'b']), {'c', 'd'})\n        self.assertEqual(requirements(graph, []), set())\n    def test_rejections(self):\n        for graph in [{'a': ['b'], 'b': ['a']}, {'a': ['missing']}, {'a': ['a']}]:\n            with self.assertRaises(ValueError):\n                requirements(graph, ['a'])\n"
+  },
+  "oracle_files": {
+    "service.py": "def requirements(graph, targets):\n    active, visited = set(), set()\n    def visit(node):\n        if node in active:\n            raise ValueError('cycle')\n        if node in visited:\n            return\n        if node not in graph:\n            raise ValueError('missing job')\n        active.add(node)\n        for dependency in graph[node]:\n            visit(dependency)\n        active.remove(node)\n        visited.add(node)\n    targets = set(targets)\n    for target in targets:\n        visit(target)\n    return visited - targets\n"
+  }
+}

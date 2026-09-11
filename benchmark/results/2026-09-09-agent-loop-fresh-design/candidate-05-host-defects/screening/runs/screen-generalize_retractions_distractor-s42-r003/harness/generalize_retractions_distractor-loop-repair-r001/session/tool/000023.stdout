@@ -1,0 +1,20 @@
+Let me manually trace the logic again
+We have events: [retract("r", "p"), post("p", 7)]
+1. Retraction event:
+   - event["id"] = "r"
+   - event["target"] = "p"
+   - cancelled.add("p") -> cancelled = {"p"}
+   - postings = {}
+   - totals = {}
+2. Posting event:
+   - event["id"] = "p"
+   - event["kind"] = "post"
+   - Check if event["id"] in cancelled ("p" in {"p"}) -> True
+   - So posting is skipped
+   - postings = {}
+   - totals = {}
+   - Result: {}
+
+But the test expects: {"cash": 0}
+This means the posting should have been processed, not skipped!
+The issue must be in my understanding of what "cancelled" means

@@ -1,0 +1,15 @@
+Input: [{'key': 'r', 'kind': 'retract', 'reference': 'p'}, {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}]
+Result: {}
+Expected: {'cash': 0}
+Match: False
+
+Manual trace:
+1. Process retract('r', 'p'):
+   - 'p' not in entries
+   - Add 'p' to voided set
+   - positions unchanged: {}
+2. Process post('p', 7):
+   - 'p' in voided set
+   - Skip processing this posting
+   - positions unchanged: {}
+But expected result is {'cash': 0}

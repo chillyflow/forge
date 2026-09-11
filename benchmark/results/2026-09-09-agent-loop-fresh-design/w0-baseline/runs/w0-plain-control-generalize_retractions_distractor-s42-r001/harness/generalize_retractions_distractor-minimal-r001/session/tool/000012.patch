@@ -1,0 +1,55 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,26 +1,25 @@
+-def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:
+-            target = event['target']
+-            # A retraction cancels its referenced posting exactly once
+-            # If target posting hasn't arrived yet, we mark it as cancelled
+-            # If target posting has arrived, we subtract its amount from total
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-            # If target posting hasn't arrived yet, we simply mark it as cancelled
+-            # When the posting arrives, it will be ignored due to the cancelled flag
+-    return totals
++def balances(events):
++    seen, cancelled = set(), set()
++    postings, totals = {}, {}
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            # If this posting has been cancelled, don't process it
++            if event['id'] in cancelled:
++                continue
++            postings[event['id']] = (account, amount)
++            totals.setdefault(account, 0)
++            totals[account] += amount
++        else:
++            target = event['target']
++            # A retraction cancels its referenced posting exactly once
++            if target in cancelled:
++                continue
++            cancelled.add(target)
++            if target in postings:
++                account, amount = postings[target]
++                totals[account] -= amount
++    return totals

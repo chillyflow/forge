@@ -1,0 +1,6 @@
+Debug:
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {}
+Expected: {"cash": 0}
+Issue: No account entry created because no posting was actually processed
+Need to track that account was referenced even when cancelled

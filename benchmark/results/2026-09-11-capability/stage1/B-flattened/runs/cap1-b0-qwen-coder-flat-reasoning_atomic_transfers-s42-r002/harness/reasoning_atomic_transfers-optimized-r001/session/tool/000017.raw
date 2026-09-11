@@ -1,0 +1,36 @@
+file_sha256:4e1f87ce296447814ce7262603a732fdc89d074908da92c5ffae48d8293c6ae0
+1: package repair
+2: 
+3: type Transfer struct {
+4: 	From, To string
+5: 	Amount   int
+6: }
+7: 
+8: func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+9: 	next := make(map[string]int, len(balances))
+10: 	for key, value := range balances {
+11: 		next[key] = value
+12: 	}
+13: maxInt := int(^uint(0) >> 1)
+14: 	for _, tr := range transfers {
+15: 		from, fromOK := balances[tr.From]
+16: 		to, toOK := balances[tr.To]
+17: 		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+18: 			return false
+19: 		}
+20: 		if tr.From == tr.To {
+21: 			continue
+22: 		}
+23: 		if to > maxInt-tr.Amount {
+24: 			return false
+25: 		}
+26: 		if from < tr.Amount {
+27: 			return false
+28: 		}
+29: 		next[tr.From] = from - tr.Amount
+30: 		next[tr.To] = to + tr.Amount
+31: 	}
+32: 	for key, value := range next {
+33: 		balances[key] = value
+34: 	}
+35: 	return true

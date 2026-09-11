@@ -1,0 +1,20 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Let me trace this manually
+Events: [retract(r,p), post(p,7)]
+Step 1: retract(r,p)
+  cancelled = set()
+  cancelled.add("p") -> cancelled = {"p"}
+  postings = {}
+  totals = {}
+Step 2: post(p,7)
+  postings["p"] = ("cash", 7)
+  totals["cash"] += 7 -> totals = {"cash": 7}
+  if "p" in postings:
+    account, amount = postings["p"]
+    totals[account] -= amount
+    totals["cash"] -= 7 -> totals = {"cash": 0}
+So result should be {"cash": 0}
+But I get: {'cash': 7}
+
+stderr:

@@ -1,0 +1,528 @@
+{
+  "mode": "demonstrate",
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "cases": {
+    "child_environment": {
+      "command": [
+        "C:\\Users\\flowc\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "-c",
+        "import json,os,sys;print(json.dumps(dict(prefix=sys.pycache_prefix,disabled=sys.dont_write_bytecode,sentinel=os.environ[\"CACHE_AUDIT_SENTINEL\"])))"
+      ],
+      "returncode": 0,
+      "timed_out": false,
+      "wall_seconds": 0.09299999999348074,
+      "resource_usage": {
+        "audit_monitor": "disabled; no GPU or process sampling"
+      },
+      "passed": true,
+      "stdout": "{\"prefix\": \"C:\\\\Users\\\\flowc\\\\AppData\\\\Local\\\\Temp\\\\forge-cache-env-audit-uddg1jv4\\\\input\\\\old-cache\", \"disabled\": false, \"sentinel\": \"preserved\"}\n",
+      "stderr": "",
+      "child": {
+        "prefix": "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-env-audit-uddg1jv4\\input\\old-cache",
+        "disabled": false,
+        "sentinel": "preserved"
+      }
+    },
+    "host": {
+      "command": [
+        "C:\\Users\\flowc\\dev\\forge\\benchmark\\results\\2026-09-09-agent-loop-all-green\\candidate-02\\runtime\\forge.exe",
+        "run",
+        "Repair value without changing tests; validate and finish.",
+        "--workspace",
+        "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-host-audit-xcwp820_\\input",
+        "--script",
+        "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-host-audit-xcwp820_\\script.json",
+        "--no-config",
+        "--json",
+        "--minimal-agent",
+        "--candidate-checkpoint",
+        "--bounded-repair",
+        "--allow-write",
+        "--allow-exec",
+        "--context",
+        "16384",
+        "--output-reserve",
+        "2048",
+        "--max-turns",
+        "4",
+        "--wall-ms",
+        "30000"
+      ],
+      "script": [
+        {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "run_command",
+                "arguments": "{\"argv\": [\"C:\\\\Users\\\\flowc\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\", \"-c\", \"import pathlib,os,py_compile,importlib.util,tempfile;p=pathlib.Path('value.py');t=tempfile.NamedTemporaryFile(suffix='.py',delete=False);q=pathlib.Path(t.name);t.close();q.write_bytes(p.read_bytes().replace(b'return 1',b'return 2'));s=p.stat();os.utime(q,ns=(s.st_atime_ns,s.st_mtime_ns));py_compile.compile(str(q),cfile=importlib.util.cache_from_source(str(p)),dfile=str(p),doraise=True,invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP);q.unlink()\"]}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "validate_candidate",
+                "arguments": "{}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "final",
+                "arguments": "{\"answer\": \"Current workspace validated.\"}"
+              }
+            }
+          ]
+        }
+      ],
+      "forge_sha256": "fa3b099c442bba1c422959de98e42b88b4214948e0e0fe2d939617b01cd99de9",
+      "returncode": 0,
+      "stdout": "{\"schema_version\":1,\"type\":\"state\",\"sequence\":1,\"elapsed_ms\":0,\"data\":{\"state\":0}}\n{\"schema_version\":1,\"type\":\"request\",\"sequence\":2,\"elapsed_ms\":0,\"data\":\"Repair value without changing tests; validate and finish.\"}\n{\"schema_version\":1,\"type\":\"agent_mode\",\"sequence\":3,\"elapsed_ms\":0,\"data\":{\"name\":\"bounded-repair\",\"version\":1,\"append_only\":false,\"automatic_validation\":true,\"raw_history_retained\":true,\"recovery\":true,\"corrective_prompts\":true}}\n{\"schema_version\":1,\"type\":\"bounded_context\",\"sequence\":4,\"elapsed_ms\":0,\"data\":{\"rendered_tokens\":969,\"input_budget\":14336,\"omitted_segments\":0,\"segments\":[{\"kind\":0,\"bytes\":1020,\"estimated_tokens\":287,\"count\":2},{\"kind\":1,\"bytes\":1988,\"estimated_tokens\":513,\"count\":1},{\"kind\":2,\"bytes\":0,\"estimated_tokens\":0,\"count\":0},{\"kind\":3,\"bytes\":57,\"estimated_tokens\":31,\"count\":1},{\"kind\":4,\"bytes\":607,\"estimated_tokens\":168,\"count\":1},{\"kind\":5,\"bytes\":0,\"estimated_tokens\":0,\"count\":0},{\"kind\":6,\"bytes\":0,\"estimated_tokens\":0,\"count\":0},{\"kind\":7,\"bytes\":0,\"estimated_tokens\":0,\"count\":0}]}}\n{\"schema_version\":1,\"type\":\"context_plan\",\"sequence\":5,\"elapsed_ms\":0,\"data\":{\"turn\":1,\"artifact\":\"context/0001.json\",\"hash\":1478910172284133664,\"evicted_segments\":0}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":6,\"elapsed_ms\":0,\"data\":{\"state\":1}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":7,\"elapsed_ms\":0,\"data\":{\"state\":2}}\n{\"schema_version\":1,\"type\":\"token\",\"sequence\":8,\"elapsed_ms\":0,\"data\":\"{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":\\\"\\\",\\\"tool_calls\\\":[{\\\"type\\\":\\\"function\\\",\\\"function\\\":{\\\"name\\\":\\\"run_command\\\",\\\"arguments\\\":\\\"{\\\\\\\"argv\\\\\\\": [\\\\\\\"C:\\\\\\\\\\\\\\\\Users\\\\\\\\\\\\\\\\flowc\\\\\\\\\\\\\\\\AppData\\\\\\\\\\\\\\\\Local\\\\\\\\\\\\\\\\Programs\\\\\\\\\\\\\\\\Python\\\\\\\\\\\\\\\\Python311\\\\\\\\\\\\\\\\python.exe\\\\\\\", \\\\\\\"-c\\\\\\\", \\\\\\\"import pathlib,os,py_compile,importlib.util,tempfile;p=pathlib.Path('value.py');t=tempfile.NamedTemporaryFile(suffix='.py',delete=False);q=pathlib.Path(t.name);t.close();q.write_bytes(p.read_bytes().replace(b'return 1',b'return 2'));s=p.stat();os.utime(q,ns=(s.st_atime_ns,s.st_mtime_ns));py_compile.compile(str(q),cfile=importlib.util.cache_from_source(str(p)),dfile=str(p),doraise=True,invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP);q.unlink()\\\\\\\"]}\\\"}}]}\"}\n{\"schema_version\":1,\"type\":\"inference\",\"sequence\":9,\"elapsed_ms\":0,\"data\":{\"prompt_tokens\":969,\"cached_tokens\":0,\"generated_tokens\":174,\"simulated\":true}}\n{\"schema_version\":1,\"type\":\"model_output\",\"sequence\":10,\"elapsed_ms\":0,\"data\":\"{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":\\\"\\\",\\\"tool_calls\\\":[{\\\"type\\\":\\\"function\\\",\\\"function\\\":{\\\"name\\\":\\\"run_command\\\",\\\"arguments\\\":\\\"{\\\\\\\"argv\\\\\\\": [\\\\\\\"C:\\\\\\\\\\\\\\\\Users\\\\\\\\\\\\\\\\flowc\\\\\\\\\\\\\\\\AppData\\\\\\\\\\\\\\\\Local\\\\\\\\\\\\\\\\Programs\\\\\\\\\\\\\\\\Python\\\\\\\\\\\\\\\\Python311\\\\\\\\\\\\\\\\python.exe\\\\\\\", \\\\\\\"-c\\\\\\\", \\\\\\\"import pathlib,os,py_compile,importlib.util,tempfile;p=pathlib.Path('value.py');t=tempfile.NamedTemporaryFile(suffix='.py',delete=False);q=pathlib.Path(t.name);t.close();q.write_bytes(p.read_bytes().replace(b'return 1',b'return 2'));s=p.stat();os.utime(q,ns=(s.st_atime_ns,s.st_mtime_ns));py_compile.compile(str(q),cfile=importlib.util.cache_from_source(str(p)),dfile=str(p),doraise=True,invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP);q.unlink()\\\\\\\"]}\\\"}}]}\"}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":11,\"elapsed_ms\":0,\"data\":{\"state\":3}}\n{\"schema_version\":1,\"type\":\"tool_call\",\"sequence\":12,\"elapsed_ms\":0,\"data\":{\"tool\":\"run_command\",\"args\":{\"argv\":[\"C:\\\\Users\\\\flowc\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\",\"-c\",\"import pathlib,os,py_compile,importlib.util,tempfile;p=pathlib.Path('value.py');t=tempfile.NamedTemporaryFile(suffix='.py',delete=False);q=pathlib.Path(t.name);t.close();q.write_bytes(p.read_bytes().replace(b'return 1',b'return 2'));s=p.stat();os.utime(q,ns=(s.st_atime_ns,s.st_mtime_ns));py_compile.compile(str(q),cfile=importlib.util.cache_from_source(str(p)),dfile=str(p),doraise=True,invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP);q.unlink()\"]}}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":13,\"elapsed_ms\":0,\"data\":{\"state\":4}}\n{\"schema_version\":1,\"type\":\"tool_result\",\"sequence\":14,\"elapsed_ms\":62,\"data\":{\"id\":1,\"name\":\"run_command\",\"output\":\"exit_code=0 timeout=false cancelled=false truncated=false\\nstdout:\\n\\nstderr:\\n\",\"status\":\"ok\",\"duration_ms\":62.0,\"exit_code\":0,\"timeout\":false,\"cancelled\":false,\"truncated\":false,\"stdout_bytes\":0,\"stderr_bytes\":0}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":15,\"elapsed_ms\":62,\"data\":{\"state\":5}}\n{\"schema_version\":1,\"type\":\"bounded_context\",\"sequence\":16,\"elapsed_ms\":62,\"data\":{\"rendered_tokens\":1183,\"input_budget\":14336,\"omitted_segments\":0,\"segments\":[{\"kind\":0,\"bytes\":1020,\"estimated_tokens\":287,\"count\":2},{\"kind\":1,\"bytes\":1988,\"estimated_tokens\":513,\"count\":1},{\"kind\":2,\"bytes\":0,\"estimated_tokens\":0,\"count\":0},{\"kind\":3,\"bytes\":57,\"estimated_tokens\":31,\"count\":1},{\"kind\":4,\"bytes\":607,\"estimated_tokens\":168,\"count\":1},{\"kind\":5,\"bytes\":0,\"estimated_tokens\":0,\"count\":0},{\"kind\":6,\"bytes\":582,\"estimated_tokens\":162,\"count\":1},{\"kind\":7,\"bytes\":75,\"estimated_tokens\":35,\"count\":1}]}}\n{\"schema_version\":1,\"type\":\"context_plan\",\"sequence\":17,\"elapsed_ms\":62,\"data\":{\"turn\":2,\"artifact\":\"context/0002.json\",\"hash\":1885396336319545234,\"evicted_segments\":0}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":18,\"elapsed_ms\":62,\"data\":{\"state\":1}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":19,\"elapsed_ms\":62,\"data\":{\"state\":2}}\n{\"schema_version\":1,\"type\":\"token\",\"sequence\":20,\"elapsed_ms\":62,\"data\":\"{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":\\\"\\\",\\\"tool_calls\\\":[{\\\"type\\\":\\\"function\\\",\\\"function\\\":{\\\"name\\\":\\\"validate_candidate\\\",\\\"arguments\\\":\\\"{}\\\"}}]}\"}\n{\"schema_version\":1,\"type\":\"inference\",\"sequence\":21,\"elapsed_ms\":62,\"data\":{\"prompt_tokens\":1183,\"cached_tokens\":809,\"generated_tokens\":32,\"simulated\":true}}\n{\"schema_version\":1,\"type\":\"model_output\",\"sequence\":22,\"elapsed_ms\":62,\"data\":\"{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":\\\"\\\",\\\"tool_calls\\\":[{\\\"type\\\":\\\"function\\\",\\\"function\\\":{\\\"name\\\":\\\"validate_candidate\\\",\\\"arguments\\\":\\\"{}\\\"}}]}\"}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":23,\"elapsed_ms\":62,\"data\":{\"state\":3}}\n{\"schema_version\":1,\"type\":\"tool_call\",\"sequence\":24,\"elapsed_ms\":62,\"data\":{\"tool\":\"validate_candidate\",\"args\":{}}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":25,\"elapsed_ms\":62,\"data\":{\"state\":4}}\n{\"schema_version\":1,\"type\":\"validation_plan\",\"sequence\":26,\"elapsed_ms\":125,\"data\":{\"schema_version\":2,\"generation\":1,\"language\":\"python\",\"status\":\"planned\",\"verification_status\":\"planned\",\"graph_kind\":\"none\",\"sound\":false,\"applicable\":true,\"verification_available\":true,\"broad_verification_required\":true,\"changed_paths\":[],\"languages\":[\"python\"],\"missing_tools\":[],\"modules\":[],\"packages\":[],\"edges\":[],\"affected_packages\":[],\"reverse_dependents\":[],\"fallback_reasons\":[],\"limitations\":[\"Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.\",\"pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.\",\"Python syntax checks compile source without importing code. Python runs use -B and pytest disables its cache provider, but project tests may still mutate inputs and must be rejected if the validation snapshot changes.\",\"Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration.\"],\"python\":{\"applicable\":true,\"executable_available\":true,\"executable\":\"python\",\"selection_kind\":\"changed_files_and_filename_related_tests\",\"syntax_scope\":\"all_indexed\",\"source_file_count\":2,\"syntax_file_count\":2,\"test_file_count\":1,\"targeted_test_count\":0,\"syntax_scheduled\":true,\"tests_applicable\":true,\"tests_scheduled\":true,\"test_runner\":\"unittest\",\"bytecode_writes_disabled\":true,\"pytest_cache_disabled\":false,\"targeted_test_files\":[]},\"stages\":[{\"name\":\"format\",\"requires_previous_success\":false,\"commands\":[]},{\"name\":\"compile\",\"requires_previous_success\":true,\"commands\":[{\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])\",\"./test_value.py\",\"./value.py\"],\"require_empty_stdout\":false,\"reason\":\"indexed_python_files_for_unknown_changes\"}]},{\"name\":\"affected_tests\",\"requires_previous_success\":true,\"commands\":[]},{\"name\":\"dependent_tests\",\"requires_previous_success\":true,\"commands\":[]},{\"name\":\"vet\",\"requires_previous_success\":true,\"commands\":[]},{\"name\":\"broad_tests\",\"requires_previous_success\":true,\"commands\":[{\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)\",\"./test_value.py\"],\"require_empty_stdout\":false,\"reason\":\"final_python_unittest_files\"}]}],\"command_count\":2}}\n{\"schema_version\":1,\"type\":\"validation_command_start\",\"sequence\":27,\"elapsed_ms\":125,\"data\":{\"id\":1,\"stage\":\"compile\",\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])\",\"./test_value.py\",\"./value.py\"],\"require_empty_stdout\":false,\"started\":false}}\n{\"schema_version\":1,\"type\":\"validation_command\",\"sequence\":28,\"elapsed_ms\":171,\"data\":{\"id\":1,\"stage\":\"compile\",\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])\",\"./test_value.py\",\"./value.py\"],\"require_empty_stdout\":false,\"started\":true,\"exit_code\":0,\"timeout\":false,\"cancelled\":false,\"truncated\":false,\"duration_ms\":46.0,\"stdout_bytes\":0,\"stderr_bytes\":0,\"stdout_artifact\":\"validation/0001-0001.stdout\",\"stderr_artifact\":\"validation/0001-0001.stderr\",\"status\":\"ok\"}}\n{\"schema_version\":1,\"type\":\"validation_command_start\",\"sequence\":29,\"elapsed_ms\":171,\"data\":{\"id\":2,\"stage\":\"broad_tests\",\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)\",\"./test_value.py\"],\"require_empty_stdout\":false,\"started\":false}}\n{\"schema_version\":1,\"type\":\"validation_command\",\"sequence\":30,\"elapsed_ms\":250,\"data\":{\"id\":2,\"stage\":\"broad_tests\",\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)\",\"./test_value.py\"],\"require_empty_stdout\":false,\"started\":true,\"exit_code\":0,\"timeout\":false,\"cancelled\":false,\"truncated\":false,\"duration_ms\":79.0,\"stdout_bytes\":0,\"stderr_bytes\":156,\"stdout_artifact\":\"validation/0001-0002.stdout\",\"stderr_artifact\":\"validation/0001-0002.stderr\",\"status\":\"ok\"}}\n{\"schema_version\":1,\"type\":\"validation_result\",\"sequence\":31,\"elapsed_ms\":281,\"data\":{\"schema_version\":1,\"attempt\":1,\"generation\":1,\"applicable\":true,\"session\":\"C:\\\\Users\\\\flowc\\\\AppData\\\\Local\\\\Temp\\\\forge-cache-host-audit-xcwp820_\\\\input/.forge/sessions/e9f6c1afc4701005c131bfa5b2865d29\",\"plan\":{\"schema_version\":2,\"generation\":1,\"language\":\"python\",\"status\":\"planned\",\"verification_status\":\"planned\",\"graph_kind\":\"none\",\"sound\":false,\"applicable\":true,\"verification_available\":true,\"broad_verification_required\":true,\"changed_paths\":[],\"languages\":[\"python\"],\"missing_tools\":[],\"modules\":[],\"packages\":[],\"edges\":[],\"affected_packages\":[],\"reverse_dependents\":[],\"fallback_reasons\":[],\"limitations\":[\"Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.\",\"pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.\",\"Python syntax checks compile source without importing code. Python runs use -B and pytest disables its cache provider, but project tests may still mutate inputs and must be rejected if the validation snapshot changes.\",\"Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration.\"],\"python\":{\"applicable\":true,\"executable_available\":true,\"executable\":\"python\",\"selection_kind\":\"changed_files_and_filename_related_tests\",\"syntax_scope\":\"all_indexed\",\"source_file_count\":2,\"syntax_file_count\":2,\"test_file_count\":1,\"targeted_test_count\":0,\"syntax_scheduled\":true,\"tests_applicable\":true,\"tests_scheduled\":true,\"test_runner\":\"unittest\",\"bytecode_writes_disabled\":true,\"pytest_cache_disabled\":false,\"targeted_test_files\":[]},\"stages\":[{\"name\":\"format\",\"requires_previous_success\":false,\"commands\":[]},{\"name\":\"compile\",\"requires_previous_success\":true,\"commands\":[{\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])\",\"./test_value.py\",\"./value.py\"],\"require_empty_stdout\":false,\"reason\":\"indexed_python_files_for_unknown_changes\"}]},{\"name\":\"affected_tests\",\"requires_previous_success\":true,\"commands\":[]},{\"name\":\"dependent_tests\",\"requires_previous_success\":true,\"commands\":[]},{\"name\":\"vet\",\"requires_previous_success\":true,\"commands\":[]},{\"name\":\"broad_tests\",\"requires_previous_success\":true,\"commands\":[{\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)\",\"./test_value.py\"],\"require_empty_stdout\":false,\"reason\":\"final_python_unittest_files\"}]}],\"command_count\":2},\"commands\":[{\"id\":1,\"stage\":\"compile\",\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])\",\"./test_value.py\",\"./value.py\"],\"require_empty_stdout\":false,\"started\":true,\"exit_code\":0,\"timeout\":false,\"cancelled\":false,\"truncated\":false,\"duration_ms\":46.0,\"stdout_bytes\":0,\"stderr_bytes\":0,\"stdout_artifact\":\"validation/0001-0001.stdout\",\"stderr_artifact\":\"validation/0001-0001.stderr\",\"status\":\"ok\"},{\"id\":2,\"stage\":\"broad_tests\",\"cwd\":\".\",\"argv\":[\"python\",\"-B\",\"-c\",\"import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)\",\"./test_value.py\"],\"require_empty_stdout\":false,\"started\":true,\"exit_code\":0,\"timeout\":false,\"cancelled\":false,\"truncated\":false,\"duration_ms\":79.0,\"stdout_bytes\":0,\"stderr_bytes\":156,\"stdout_artifact\":\"validation/0001-0002.stdout\",\"stderr_artifact\":\"validation/0001-0002.stderr\",\"status\":\"ok\"}],\"generation_after\":1,\"commands_attempted\":2,\"commands_run\":2,\"stages_passed\":2,\"inputs_changed\":false,\"inputs_checked\":true,\"input_max_files\":100000,\"input_max_bytes\":2147483648,\"input_hash_before\":\"cd7a3475ab1c09b9\",\"input_hash_after\":\"cd7a3475ab1c09b9\",\"snapshot_ms\":0.0,\"duration_ms\":156.0,\"passed\":true,\"checks_passed\":true,\"evidence_complete\":true,\"status\":\"ok\",\"summary\":\"Automatic staged validation passed: 2 commands across 2 stages, repository generation=1.\"}}\n{\"schema_version\":1,\"type\":\"candidate_checkpoint\",\"sequence\":32,\"elapsed_ms\":281,\"data\":{\"changed\":true,\"novel\":true,\"validated\":true,\"passed\":true,\"episode_active\":false,\"candidate_attempts\":1,\"commands\":2,\"input_hash\":\"cd7a3475ab1c09b9\",\"initial_hash\":\"e9e02dafce4f9de2\",\"validation_id\":1}}\n{\"schema_version\":1,\"type\":\"tool_result\",\"sequence\":33,\"elapsed_ms\":281,\"data\":{\"id\":2,\"name\":\"validate_candidate\",\"output\":\"CANDIDATE_CHECKPOINT: PASS. Call final now; the host verified this changed workspace.\\nAutomatic staged validation passed: 2 commands across 2 stages, repository generation=1.\\n\",\"status\":\"ok\",\"duration_ms\":219.0}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":34,\"elapsed_ms\":281,\"data\":{\"state\":5}}\n{\"schema_version\":1,\"type\":\"bounded_context\",\"sequence\":35,\"elapsed_ms\":281,\"data\":{\"rendered_tokens\":937,\"input_budget\":14336,\"omitted_segments\":0,\"segments\":[{\"kind\":0,\"bytes\":1020,\"estimated_tokens\":287,\"count\":2},{\"kind\":1,\"bytes\":418,\"estimated_tokens\":121,\"count\":1},{\"kind\":2,\"bytes\":0,\"estimated_tokens\":0,\"count\":0},{\"kind\":3,\"bytes\":57,\"estimated_tokens\":31,\"count\":1},{\"kind\":4,\"bytes\":799,\"estimated_tokens\":216,\"count\":1},{\"kind\":5,\"bytes\":0,\"estimated_tokens\":0,\"count\":0},{\"kind\":6,\"bytes\":621,\"estimated_tokens\":188,\"count\":2},{\"kind\":7,\"bytes\":250,\"estimated_tokens\":95,\"count\":2}]}}\n{\"schema_version\":1,\"type\":\"context_plan\",\"sequence\":36,\"elapsed_ms\":281,\"data\":{\"turn\":3,\"artifact\":\"context/0003.json\",\"hash\":13228469583571010822,\"evicted_segments\":0}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":37,\"elapsed_ms\":281,\"data\":{\"state\":1}}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":38,\"elapsed_ms\":281,\"data\":{\"state\":2}}\n{\"schema_version\":1,\"type\":\"token\",\"sequence\":39,\"elapsed_ms\":281,\"data\":\"{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":\\\"\\\",\\\"tool_calls\\\":[{\\\"type\\\":\\\"function\\\",\\\"function\\\":{\\\"name\\\":\\\"final\\\",\\\"arguments\\\":\\\"{\\\\\\\"answer\\\\\\\": \\\\\\\"Current workspace validated.\\\\\\\"}\\\"}}]}\"}\n{\"schema_version\":1,\"type\":\"inference\",\"sequence\":40,\"elapsed_ms\":281,\"data\":{\"prompt_tokens\":937,\"cached_tokens\":19,\"generated_tokens\":40,\"simulated\":true}}\n{\"schema_version\":1,\"type\":\"model_output\",\"sequence\":41,\"elapsed_ms\":281,\"data\":\"{\\\"role\\\":\\\"assistant\\\",\\\"content\\\":\\\"\\\",\\\"tool_calls\\\":[{\\\"type\\\":\\\"function\\\",\\\"function\\\":{\\\"name\\\":\\\"final\\\",\\\"arguments\\\":\\\"{\\\\\\\"answer\\\\\\\": \\\\\\\"Current workspace validated.\\\\\\\"}\\\"}}]}\"}\n{\"schema_version\":1,\"type\":\"candidate_checkpoint\",\"sequence\":42,\"elapsed_ms\":281,\"data\":{\"changed\":true,\"novel\":false,\"validated\":false,\"passed\":true,\"episode_active\":false,\"candidate_attempts\":1,\"commands\":0,\"input_hash\":\"cd7a3475ab1c09b9\",\"initial_hash\":\"e9e02dafce4f9de2\",\"validation_id\":1}}\n{\"schema_version\":1,\"type\":\"final\",\"sequence\":43,\"elapsed_ms\":281,\"data\":\"Current workspace validated.\"}\n{\"schema_version\":1,\"type\":\"state\",\"sequence\":44,\"elapsed_ms\":281,\"data\":{\"state\":7}}\n{\"schema_version\":1,\"type\":\"done\",\"sequence\":45,\"elapsed_ms\":281,\"data\":{\"schema_version\":1,\"status\":\"ok\",\"simulated\":true,\"prompt_tokens\":3089,\"generated_tokens\":246,\"cached_tokens\":828,\"prefill_tokens\":2261,\"turns\":3,\"tool_calls\":2,\"raw_tool_bytes\":75,\"visible_tool_bytes\":75,\"files_modified\":0,\"context_evictions\":0,\"loop_warnings\":0,\"grammar_fast_tokens\":0,\"grammar_fallback_tokens\":0,\"think_tokens\":0,\"forced_actions\":0,\"action_stops\":0,\"action_select_tokens\":0,\"action_argument_tokens\":0,\"patch_tokens\":0,\"final_tokens\":0,\"memory_tokens\":0,\"forced_action_progress_tokens\":0,\"raw_tool_tokens\":19,\"visible_tool_tokens\":19,\"files_opened\":0,\"validation_commands\":2,\"validation_failures\":0,\"generation_arena_peak_bytes\":0,\"repo_full_scans\":1,\"repo_delta_scans\":0,\"filesystem_events\":0,\"watch_reopens\":0,\"stale_generations\":0,\"index_cold_parses\":0,\"index_incremental_parses\":0,\"index_cache_hits\":0,\"index_cache_evictions\":0,\"peak_index_source_bytes\":0,\"peak_index_nodes\":0,\"checkpoint_lookups\":0,\"checkpoint_hits\":0,\"checkpoint_misses\":0,\"checkpoint_captures\":0,\"checkpoint_evictions\":0,\"checkpoint_restored_tokens\":0,\"checkpoint_reused_tokens\":0,\"checkpoint_additional_tokens\":0,\"checkpoint_peak_bytes\":0,\"load_ms\":0.0,\"prefill_ms\":0.0,\"decode_ms\":0.0,\"sampling_ms\":0.0,\"duration_ms\":281.0,\"tool_ms\":62.0,\"validation_ms\":156.0,\"index_ms\":0.0,\"checkpoint_probe_ms\":0.0,\"checkpoint_capture_ms\":0.0,\"checkpoint_restore_ms\":0.0}}\n",
+      "stderr": "Session: C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-host-audit-xcwp820_\\input/.forge/sessions/e9f6c1afc4701005c131bfa5b2865d29\nSIMULATED turns=3 prompt=3089 generated=246 cached=828 elapsed=281ms\n",
+      "checkpoints": [
+        {
+          "changed": true,
+          "novel": true,
+          "validated": true,
+          "passed": true,
+          "episode_active": false,
+          "candidate_attempts": 1,
+          "commands": 2,
+          "input_hash": "cd7a3475ab1c09b9",
+          "initial_hash": "e9e02dafce4f9de2",
+          "validation_id": 1
+        },
+        {
+          "changed": true,
+          "novel": false,
+          "validated": false,
+          "passed": true,
+          "episode_active": false,
+          "candidate_attempts": 1,
+          "commands": 0,
+          "input_hash": "cd7a3475ab1c09b9",
+          "initial_hash": "e9e02dafce4f9de2",
+          "validation_id": 1
+        }
+      ],
+      "metrics": {
+        "schema_version": 1,
+        "status": "ok",
+        "simulated": true,
+        "prompt_tokens": 3089,
+        "generated_tokens": 246,
+        "cached_tokens": 828,
+        "prefill_tokens": 2261,
+        "turns": 3,
+        "tool_calls": 2,
+        "raw_tool_bytes": 75,
+        "visible_tool_bytes": 75,
+        "files_modified": 0,
+        "context_evictions": 0,
+        "loop_warnings": 0,
+        "grammar_fast_tokens": 0,
+        "grammar_fallback_tokens": 0,
+        "think_tokens": 0,
+        "forced_actions": 0,
+        "action_stops": 0,
+        "action_select_tokens": 0,
+        "action_argument_tokens": 0,
+        "patch_tokens": 0,
+        "final_tokens": 0,
+        "memory_tokens": 0,
+        "forced_action_progress_tokens": 0,
+        "raw_tool_tokens": 19,
+        "visible_tool_tokens": 19,
+        "files_opened": 0,
+        "validation_commands": 2,
+        "validation_failures": 0,
+        "generation_arena_peak_bytes": 0,
+        "repo_full_scans": 1,
+        "repo_delta_scans": 0,
+        "filesystem_events": 0,
+        "watch_reopens": 0,
+        "stale_generations": 0,
+        "index_cold_parses": 0,
+        "index_incremental_parses": 0,
+        "index_cache_hits": 0,
+        "index_cache_evictions": 0,
+        "peak_index_source_bytes": 0,
+        "peak_index_nodes": 0,
+        "checkpoint_lookups": 0,
+        "checkpoint_hits": 0,
+        "checkpoint_misses": 0,
+        "checkpoint_captures": 0,
+        "checkpoint_evictions": 0,
+        "checkpoint_restored_tokens": 0,
+        "checkpoint_reused_tokens": 0,
+        "checkpoint_additional_tokens": 0,
+        "checkpoint_peak_bytes": 0,
+        "load_ms": 0.0,
+        "prefill_ms": 0.0,
+        "decode_ms": 0.0,
+        "sampling_ms": 0.0,
+        "duration_ms": 281.0,
+        "tool_ms": 62.0,
+        "validation_ms": 156.0,
+        "index_ms": 0.0,
+        "checkpoint_probe_ms": 0.0,
+        "checkpoint_capture_ms": 0.0,
+        "checkpoint_restore_ms": 0.0
+      },
+      "source_before": {
+        "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+        "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+      },
+      "source_after": {
+        "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+        "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+      },
+      "fresh_source": {
+        "returncode": 1,
+        "timed_out": false,
+        "wall_seconds": 0.17199999999138527,
+        "resource_usage": {
+          "audit_monitor": "disabled; no GPU or process sampling"
+        },
+        "passed": false,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... FAIL\n\n======================================================================\nFAIL: test_value (test_value.ValueTests.test_value)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-host-audit-xcwp820_\\input\\test_value.py\", line 5, in test_value\n    self.assertEqual(value(), 2)\nAssertionError: 1 != 2\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (failures=1)\n"
+      }
+    },
+    "independent_timestamp": {
+      "command": [
+        "C:\\Users\\flowc\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-v"
+      ],
+      "inputs_before": {
+        "__pycache__/value.cpython-311.pyc": "1f0e29bdbecb0d4c83c0197c033b31d265ecfc3fe11e42e95c6b667b78bc5d68",
+        "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+        "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+      },
+      "cache": "__pycache__/value.cpython-311.pyc",
+      "ordinary": {
+        "returncode": 0,
+        "timed_out": false,
+        "wall_seconds": 0.07800000000861473,
+        "resource_usage": {
+          "audit_monitor": "disabled; no GPU or process sampling"
+        },
+        "passed": true,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+      },
+      "fresh_external_prefix": {
+        "returncode": 1,
+        "timed_out": false,
+        "wall_seconds": 0.17199999999138527,
+        "resource_usage": {
+          "audit_monitor": "disabled; no GPU or process sampling"
+        },
+        "passed": false,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... FAIL\n\n======================================================================\nFAIL: test_value (test_value.ValueTests.test_value)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-audit-6_lk79ww\\input\\test_value.py\", line 5, in test_value\n    self.assertEqual(value(), 2)\nAssertionError: 1 != 2\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (failures=1)\n"
+      },
+      "B_only": {
+        "returncode": 0,
+        "stderr": "test_value (test_value.ValueTests.test_value) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+      }
+    },
+    "independent_unchecked_hash": {
+      "command": [
+        "C:\\Users\\flowc\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-v"
+      ],
+      "inputs_before": {
+        "__pycache__/value.cpython-311.pyc": "00cc91cfa8d52e772acbbb4e36dc158edc08fc1893f07ec728fb1568a59f8c37",
+        "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+        "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+      },
+      "cache": "__pycache__/value.cpython-311.pyc",
+      "ordinary": {
+        "returncode": 0,
+        "timed_out": false,
+        "wall_seconds": 0.09300000000803266,
+        "resource_usage": {
+          "audit_monitor": "disabled; no GPU or process sampling"
+        },
+        "passed": true,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+      },
+      "fresh_external_prefix": {
+        "returncode": 1,
+        "timed_out": false,
+        "wall_seconds": 0.15699999999196734,
+        "resource_usage": {
+          "audit_monitor": "disabled; no GPU or process sampling"
+        },
+        "passed": false,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... FAIL\n\n======================================================================\nFAIL: test_value (test_value.ValueTests.test_value)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-audit-yoz1nmuz\\input\\test_value.py\", line 5, in test_value\n    self.assertEqual(value(), 2)\nAssertionError: 1 != 2\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (failures=1)\n"
+      },
+      "B_only": {
+        "returncode": 0,
+        "stderr": "test_value (test_value.ValueTests.test_value) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+      }
+    },
+    "non_python_environment": {
+      "returncode": 0,
+      "timed_out": false,
+      "wall_seconds": 0.03199999999196734,
+      "resource_usage": {
+        "audit_monitor": "disabled; no GPU or process sampling"
+      },
+      "passed": true,
+      "stdout": "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-other-audit-f37t_0zt\\caller-cache\nunchanged\n",
+      "stderr": ""
+    },
+    "proposed_wrapper_unittest_False": {
+      "command": [
+        "C:\\Users\\flowc\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "-B",
+        "-c",
+        "import sys,tempfile\nwith tempfile.TemporaryDirectory(prefix='forge-python-validation-') as cache:\n    sys.pycache_prefix=cache\n    sys.dont_write_bytecode=True\n    runner=sys.argv.pop(1)\n    sys.argv[0]=runner\n    if runner=='pytest':\n        import pytest\n        status=pytest.main(sys.argv[1:])\n    else:\n        import unittest\n        p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False)\n        status=not p.result.wasSuccessful() or p.result.testsRun==0\nsys.exit(status)\n",
+        "unittest",
+        "./test_value.py"
+      ],
+      "stale_cache_current_failure": {
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... FAIL\n\n======================================================================\nFAIL: test_value (test_value.ValueTests.test_value)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-wrapper-audit-e9pqmmhv\\test_value.py\", line 5, in test_value\n    self.assertEqual(value(), 2)\nAssertionError: 1 != 2\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (failures=1)\n"
+      },
+      "current_source_pass": {
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+      }
+    },
+    "proposed_wrapper_unittest_True": {
+      "command": [
+        "C:\\Users\\flowc\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+        "-B",
+        "-c",
+        "import sys,tempfile\nwith tempfile.TemporaryDirectory(prefix='forge-python-validation-') as cache:\n    sys.pycache_prefix=cache\n    sys.dont_write_bytecode=True\n    runner=sys.argv.pop(1)\n    sys.argv[0]=runner\n    if runner=='pytest':\n        import pytest\n        status=pytest.main(sys.argv[1:])\n    else:\n        import unittest\n        p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False)\n        status=not p.result.wasSuccessful() or p.result.testsRun==0\nsys.exit(status)\n",
+        "unittest",
+        "./test_value.py",
+        "./test_other.py"
+      ],
+      "stale_cache_current_failure": {
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... FAIL\ntest_other (test_other.Other.test_other) ... ok\n\n======================================================================\nFAIL: test_value (test_value.ValueTests.test_value)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-wrapper-audit-no2cmhv1\\test_value.py\", line 5, in test_value\n    self.assertEqual(value(), 2)\nAssertionError: 1 != 2\n\n----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nFAILED (failures=1)\n"
+      },
+      "current_source_pass": {
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "test_value (test_value.ValueTests.test_value) ... ok\ntest_other (test_other.Other.test_other) ... ok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nOK\n"
+      }
+    },
+    "proposed_wrapper_pytest": {
+      "skipped": "pytest is not installed in audit Python"
+    },
+    "terminal_retention_mutation_True": {
+      "command": [
+        "run.py",
+        "--forge",
+        "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-harness-audit-ch8hy0gg\\fake-forge.exe",
+        "--model",
+        "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-harness-audit-ch8hy0gg\\fake.gguf",
+        "--output",
+        "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-harness-audit-ch8hy0gg\\output",
+        "--no-randomize",
+        "--retain-terminal"
+      ],
+      "seeded": {
+        ".pytest_cache/audit": "1d2f6ade84cf125bfb17924c9bb47e4c042367e60faa85925df6562883d22977",
+        "nested/.forge/audit": "1d2f6ade84cf125bfb17924c9bb47e4c042367e60faa85925df6562883d22977",
+        "nested/.git/audit": "1d2f6ade84cf125bfb17924c9bb47e4c042367e60faa85925df6562883d22977",
+        "__pycache__/value.cpython-311.pyc": "dc9378958ae0e6b1b5d4cbe5236c71c459992eed79772b765fae1f20e36204b8"
+      },
+      "input_maps": {
+        "before": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+          "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+        },
+        "after": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+          "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+        },
+        "protected_before": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9"
+        },
+        "protected_after": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9"
+        }
+      },
+      "terminal": {
+        "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+        "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+      },
+      "result": {
+        "schema_version": 2,
+        "run_id": "cache_audit-optimized-r001",
+        "task": "cache_audit",
+        "variant": "optimized",
+        "repetition": 1,
+        "order_index": 1,
+        "prompt_protocol": "native",
+        "order_seed": 20260831,
+        "returncode": 0,
+        "wall_seconds": 0.05700000000593718,
+        "timing": {
+          "lifecycle": "cold",
+          "startup_seconds": null,
+          "agent_seconds": null,
+          "agent_process_seconds": 0.01,
+          "verification_seconds": 0.04700000000593718,
+          "end_to_end_seconds": 0.05700000000593718
+        },
+        "passed": true,
+        "protected_files_unchanged": true,
+        "protected_files": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9"
+        },
+        "suite": "smoke",
+        "language": "python",
+        "category": "repair",
+        "thought_cue": null,
+        "thought_budget": null,
+        "metrics": {},
+        "resource_usage": {},
+        "verification_resource_usage": {
+          "audit_monitor": "disabled; no GPU or process sampling"
+        },
+        "fixture_preparation": "utf8-lf-language-format-v2",
+        "fixture_sha256": "091744fd0e1341ce8e55964939e7740743fd206bf1ed0fb89e7e191181ec52b1",
+        "fixture_files": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+          "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+        },
+        "verification": {
+          "returncode": 0,
+          "timed_out": false,
+          "wall_seconds": 0.04700000000593718,
+          "resource_usage": {
+            "audit_monitor": "disabled; no GPU or process sampling"
+          },
+          "passed": true
+        },
+        "terminal_workspace": "terminal-workspace",
+        "verification_inputs_unchanged": true,
+        "protected_before_verification": true
+      }
+    },
+    "terminal_retention_mutation_False": {
+      "command": [
+        "run.py",
+        "--forge",
+        "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-harness-audit-hufot_d5\\fake-forge.exe",
+        "--model",
+        "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-harness-audit-hufot_d5\\fake.gguf",
+        "--output",
+        "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-cache-harness-audit-hufot_d5\\output",
+        "--no-randomize",
+        "--retain-terminal"
+      ],
+      "seeded": {
+        ".pytest_cache/audit": "1d2f6ade84cf125bfb17924c9bb47e4c042367e60faa85925df6562883d22977",
+        "nested/.forge/audit": "1d2f6ade84cf125bfb17924c9bb47e4c042367e60faa85925df6562883d22977",
+        "nested/.git/audit": "1d2f6ade84cf125bfb17924c9bb47e4c042367e60faa85925df6562883d22977",
+        "__pycache__/value.cpython-311.pyc": "109e21ac7c38910cac4d3e33e51ab19af18d5ad51478e0896b5aada1cfaf7b4a"
+      },
+      "input_maps": {
+        "before": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+          "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+        },
+        "after": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+          "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+        },
+        "protected_before": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9"
+        },
+        "protected_after": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9"
+        }
+      },
+      "terminal": {
+        "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+        "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+      },
+      "result": {
+        "schema_version": 2,
+        "run_id": "cache_audit-optimized-r001",
+        "task": "cache_audit",
+        "variant": "optimized",
+        "repetition": 1,
+        "order_index": 1,
+        "prompt_protocol": "native",
+        "order_seed": 20260831,
+        "returncode": 0,
+        "wall_seconds": 0.10299999999348074,
+        "timing": {
+          "lifecycle": "cold",
+          "startup_seconds": null,
+          "agent_seconds": null,
+          "agent_process_seconds": 0.01,
+          "verification_seconds": 0.09299999999348074,
+          "end_to_end_seconds": 0.10299999999348074
+        },
+        "passed": true,
+        "protected_files_unchanged": true,
+        "protected_files": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9"
+        },
+        "suite": "smoke",
+        "language": "python",
+        "category": "repair",
+        "thought_cue": null,
+        "thought_budget": null,
+        "metrics": {},
+        "resource_usage": {},
+        "verification_resource_usage": {
+          "audit_monitor": "disabled; no GPU or process sampling"
+        },
+        "fixture_preparation": "utf8-lf-language-format-v2",
+        "fixture_sha256": "091744fd0e1341ce8e55964939e7740743fd206bf1ed0fb89e7e191181ec52b1",
+        "fixture_files": {
+          "test_value.py": "129becb4c4ac5b1d96ba06ace88add27d2789647878e2ff67ad3978071f72ee9",
+          "value.py": "5d080563b57287276f589c2b2714ef499269efe7405a288b3c1474f5a92bf271"
+        },
+        "verification": {
+          "returncode": 0,
+          "timed_out": false,
+          "wall_seconds": 0.09299999999348074,
+          "resource_usage": {
+            "audit_monitor": "disabled; no GPU or process sampling"
+          },
+          "passed": true
+        },
+        "terminal_workspace": "terminal-workspace",
+        "verification_inputs_unchanged": true,
+        "protected_before_verification": true
+      }
+    }
+  }
+}

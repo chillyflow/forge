@@ -1,0 +1,14 @@
+Let me trace what happens step by step:
+1. retract("r", "p")
+   - reference = "p"
+   - "p" not in entries yet
+   - Current code: voided.add("p"), but no cancellation
+2. p
+   - creates post with key "p" and delta 7
+   - entries["p"] = ("cash", 7)
+   - positions["cash"] += 7
+
+So final result is 7, but should be 0
+
+The fix should be: when retraction references non-existent post,
+we need to track that this retraction will cancel that post when it arrives

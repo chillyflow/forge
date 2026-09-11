@@ -1,0 +1,20 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Let me trace this step by step manually:
+Case 1: [p, retract(r,p)] where p is post("p", 7)
+  1. p event: creates posting, adds 7 to cash
+  2. retract(r,p): cancels posting p, subtracts 7 from cash
+  3. Result: cash=0
+
+Case 2: [retract(r,p), p] where p is post("p", 7)
+  1. retract(r,p): tries to cancel p, but p does not exist yet, so no effect
+  2. p event: creates posting, adds 7 to cash
+  3. Result: cash=7
+
+But test expects both to be 0...
+
+Wait, maybe there is a different interpretation:
+What if when we cancel a posting that never happened, we still create the account?
+But that contradicts: "Unknown references create no accounts"
+
+stderr:

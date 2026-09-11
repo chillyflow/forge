@@ -1,0 +1,9 @@
+Test case analysis:
+Events: [post("p", 7), post("p", 7), retract("r", "p"), retract("s", "p")]
+Expected: {"cash": 0}
+What should happen:
+1. First post("p", 7) - balance = 7
+2. Second post("p", 7) - balance = 14
+3. retract("r", "p") - cancels one posting, balance = 7
+4. retract("s", "p") - cancels the other posting, balance = 0
+But the problem is: how to handle duplicate IDs?

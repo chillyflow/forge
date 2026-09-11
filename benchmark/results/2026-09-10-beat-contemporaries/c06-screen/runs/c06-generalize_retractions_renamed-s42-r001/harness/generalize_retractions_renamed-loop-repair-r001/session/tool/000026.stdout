@@ -1,0 +1,7 @@
+Working case [p, retract(r,p)]:
+Result: {'cash': 0}
+This works because post comes first, then retraction cancels it
+Now what should happen in [retract(r,p), p]:
+Retraction comes first, references post p which does not exist yet
+Then post p arrives with delta 7
+The retraction should cancel that post, so result should be 0

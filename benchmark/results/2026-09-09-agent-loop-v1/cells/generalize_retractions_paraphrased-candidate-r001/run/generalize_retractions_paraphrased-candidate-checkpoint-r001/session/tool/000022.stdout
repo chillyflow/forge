@@ -1,0 +1,19 @@
+=== Tracing [retract('r', 'p'), p] ===
+Initial state:
+  seen: set()
+  cancelled: set()
+  postings: {}
+  totals: {}
+
+Event 0: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  Added to seen: {'r'}
+  Processing retract targeting: p
+  Added to cancelled: {'p'}
+  Target p not in postings
+
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Added to seen: {'p', 'r'}
+  Processing post: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Post was cancelled, skipping
+
+Final result: {}

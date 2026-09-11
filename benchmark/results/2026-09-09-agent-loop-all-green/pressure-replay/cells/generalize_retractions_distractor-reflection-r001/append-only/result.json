@@ -1,0 +1,297 @@
+{
+  "source_cell_id": "generalize_retractions_distractor-reflection-r001",
+  "policy": "append-only",
+  "arm": "reflection",
+  "original_stop_action": 29,
+  "archived_action_count": 28,
+  "exact_archived_prefix_actions_replayed": 6,
+  "all_archived_actions_replayed_exactly": false,
+  "executed_native_actions": 6,
+  "after_original_stop": [],
+  "reached_next_action_after_original_prefix": false,
+  "returncode": 1,
+  "timed_out": false,
+  "wall_seconds": 0.23399999999674037,
+  "metrics": {
+    "schema_version": 1,
+    "status": "limit",
+    "simulated": true,
+    "prompt_tokens": 9044,
+    "generated_tokens": 837,
+    "cached_tokens": 6446,
+    "prefill_tokens": 2598,
+    "turns": 7,
+    "tool_calls": 6,
+    "raw_tool_bytes": 2104,
+    "visible_tool_bytes": 2104,
+    "files_modified": 1,
+    "context_evictions": 0,
+    "loop_warnings": 0,
+    "grammar_fast_tokens": 0,
+    "grammar_fallback_tokens": 0,
+    "think_tokens": 0,
+    "forced_actions": 0,
+    "action_stops": 0,
+    "action_select_tokens": 0,
+    "action_argument_tokens": 0,
+    "patch_tokens": 0,
+    "final_tokens": 0,
+    "memory_tokens": 0,
+    "forced_action_progress_tokens": 0,
+    "raw_tool_tokens": 528,
+    "visible_tool_tokens": 528,
+    "files_opened": 3,
+    "validation_commands": 2,
+    "validation_failures": 1,
+    "generation_arena_peak_bytes": 0,
+    "repo_full_scans": 1,
+    "repo_delta_scans": 0,
+    "filesystem_events": 0,
+    "watch_reopens": 0,
+    "stale_generations": 0,
+    "index_cold_parses": 0,
+    "index_incremental_parses": 0,
+    "index_cache_hits": 0,
+    "index_cache_evictions": 0,
+    "peak_index_source_bytes": 0,
+    "peak_index_nodes": 0,
+    "checkpoint_lookups": 0,
+    "checkpoint_hits": 0,
+    "checkpoint_misses": 0,
+    "checkpoint_captures": 0,
+    "checkpoint_evictions": 0,
+    "checkpoint_restored_tokens": 0,
+    "checkpoint_reused_tokens": 0,
+    "checkpoint_additional_tokens": 0,
+    "checkpoint_peak_bytes": 0,
+    "load_ms": 0.0,
+    "prefill_ms": 0.0,
+    "decode_ms": 0.0,
+    "sampling_ms": 0.0,
+    "duration_ms": 219.0,
+    "tool_ms": 0.0,
+    "validation_ms": 156.0,
+    "index_ms": 0.0,
+    "checkpoint_probe_ms": 0.0,
+    "checkpoint_capture_ms": 0.0,
+    "checkpoint_restore_ms": 0.0
+  },
+  "fixture": {
+    "fixture_preparation": "utf8-lf-language-format-v2",
+    "fixture_sha256": "81e55124a16662d5f21ac8918048587c8845c8f8b1049f9ad01da96d2c78b777",
+    "fixture_files": {
+      "legacy.py": "cebb0b95a4d796c3b03dbd5e30c129d71a213cfb55bc86f9737523b506c95bae",
+      "service.py": "0bfc7661de632302ebd1d82277db844a4ed9e25ba30c45cba4275725ec24470e",
+      "test_service.py": "f14484d479119112e8476fc2f4cb0f9b658007fad57e1057ad6ca326cd2f75ce"
+    }
+  },
+  "protected_files_unchanged": true,
+  "terminal_source_sha256": {
+    "legacy.py": "cebb0b95a4d796c3b03dbd5e30c129d71a213cfb55bc86f9737523b506c95bae",
+    "service.py": "6f227677483f3af9111dc409281bd494253032fbc461cbe2a57d823c26df96da",
+    "test_service.py": "f14484d479119112e8476fc2f4cb0f9b658007fad57e1057ad6ca326cd2f75ce",
+    "__pycache__/service.cpython-311.pyc": "e1a6217ededb15fc19b60db66b10c4ee3aec7894b876f8f0403633bf5996a361",
+    "__pycache__/test_service.cpython-311.pyc": "13bc041f151cc9c95b6af523a892b495423a70980409e355a243fb78b246de27"
+  },
+  "terminal_verification": {
+    "argv": [
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-v"
+    ],
+    "returncode": 1,
+    "timed_out": false,
+    "passed": false
+  },
+  "latest_host_validation": {
+    "schema_version": 1,
+    "attempt": 1,
+    "generation": 1,
+    "applicable": true,
+    "session": "C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-yfqo6mx1\\workspace/.forge/sessions/118f641c7952ecaf85c97a95662580ae",
+    "plan": {
+      "schema_version": 2,
+      "generation": 1,
+      "language": "python",
+      "status": "planned",
+      "verification_status": "planned",
+      "graph_kind": "none",
+      "sound": false,
+      "applicable": true,
+      "verification_available": true,
+      "broad_verification_required": true,
+      "changed_paths": [],
+      "languages": [
+        "python"
+      ],
+      "missing_tools": [],
+      "modules": [],
+      "packages": [],
+      "edges": [],
+      "affected_packages": [],
+      "reverse_dependents": [],
+      "fallback_reasons": [],
+      "limitations": [
+        "Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.",
+        "pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.",
+        "Python syntax checks compile source without importing code. Python runs use -B and pytest disables its cache provider, but project tests may still mutate inputs and must be rejected if the validation snapshot changes.",
+        "Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration."
+      ],
+      "python": {
+        "applicable": true,
+        "executable_available": true,
+        "executable": "python",
+        "selection_kind": "changed_files_and_filename_related_tests",
+        "syntax_scope": "all_indexed",
+        "source_file_count": 3,
+        "syntax_file_count": 3,
+        "test_file_count": 1,
+        "targeted_test_count": 0,
+        "syntax_scheduled": true,
+        "tests_applicable": true,
+        "tests_scheduled": true,
+        "test_runner": "unittest",
+        "bytecode_writes_disabled": true,
+        "pytest_cache_disabled": false,
+        "targeted_test_files": []
+      },
+      "stages": [
+        {
+          "name": "format",
+          "requires_previous_success": false,
+          "commands": []
+        },
+        {
+          "name": "compile",
+          "requires_previous_success": true,
+          "commands": [
+            {
+              "cwd": ".",
+              "argv": [
+                "python",
+                "-B",
+                "-c",
+                "import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])",
+                "./legacy.py",
+                "./service.py",
+                "./test_service.py"
+              ],
+              "require_empty_stdout": false,
+              "reason": "indexed_python_files_for_unknown_changes"
+            }
+          ]
+        },
+        {
+          "name": "affected_tests",
+          "requires_previous_success": true,
+          "commands": []
+        },
+        {
+          "name": "dependent_tests",
+          "requires_previous_success": true,
+          "commands": []
+        },
+        {
+          "name": "vet",
+          "requires_previous_success": true,
+          "commands": []
+        },
+        {
+          "name": "broad_tests",
+          "requires_previous_success": true,
+          "commands": [
+            {
+              "cwd": ".",
+              "argv": [
+                "python",
+                "-B",
+                "-c",
+                "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+                "./test_service.py"
+              ],
+              "require_empty_stdout": false,
+              "reason": "final_python_unittest_files"
+            }
+          ]
+        }
+      ],
+      "command_count": 2
+    },
+    "commands": [
+      {
+        "id": 1,
+        "stage": "compile",
+        "cwd": ".",
+        "argv": [
+          "python",
+          "-B",
+          "-c",
+          "import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])",
+          "./legacy.py",
+          "./service.py",
+          "./test_service.py"
+        ],
+        "require_empty_stdout": false,
+        "started": true,
+        "exit_code": 0,
+        "timeout": false,
+        "cancelled": false,
+        "truncated": false,
+        "duration_ms": 47.0,
+        "stdout_bytes": 0,
+        "stderr_bytes": 0,
+        "stdout_artifact": "validation/0001-0001.stdout",
+        "stderr_artifact": "validation/0001-0001.stderr",
+        "status": "ok"
+      },
+      {
+        "id": 2,
+        "stage": "broad_tests",
+        "cwd": ".",
+        "argv": [
+          "python",
+          "-B",
+          "-c",
+          "import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)",
+          "./test_service.py"
+        ],
+        "require_empty_stdout": false,
+        "started": true,
+        "exit_code": 1,
+        "timeout": false,
+        "cancelled": false,
+        "truncated": false,
+        "duration_ms": 62.0,
+        "stdout_bytes": 0,
+        "stderr_bytes": 863,
+        "stdout_artifact": "validation/0001-0002.stdout",
+        "stderr_artifact": "validation/0001-0002.stderr",
+        "status": "conflict"
+      }
+    ],
+    "generation_after": 1,
+    "commands_attempted": 2,
+    "commands_run": 2,
+    "stages_passed": 1,
+    "inputs_changed": false,
+    "inputs_checked": true,
+    "input_max_files": 100000,
+    "input_max_bytes": 2147483648,
+    "input_hash_before": "562483d4a5f5ca5d",
+    "input_hash_after": "562483d4a5f5ca5d",
+    "snapshot_ms": 0.0,
+    "duration_ms": 156.0,
+    "passed": false,
+    "checks_passed": false,
+    "evidence_complete": true,
+    "status": "conflict",
+    "summary": "Automatic validation stopped at broad_tests: Validation stage broad_tests failed (exit_code=1)\nexit_code=1 timeout=false cancelled=false truncated=false\nstdout:\n\nstderr:\ntest_independent_postings (test_service.Retractions.test_independent_postings) ... ok\r\ntest_order_and_duplicates (test_service.Retractions.test_order_and_duplicates) ... FAIL\r\n\r\n======================================================================\r\nFAIL: test_order_and_duplicates (test_service.Retractions.test_order_and_duplicates)\r\n----------------------------------------------------------------------\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-yfqo6mx1\\workspace\\test_service.py\", line 10, in test_order_and_duplicates\r\n    self.assertEqual(balances(events), {'cash': 0})\r\nAssertionError: {'cash': 7} != {'cash': 0}\r\n- {'cash': 7}\r\n?          ^\r\n\r\n+ {'cash': 0}\r\n?          ^\r\n\r\n\r\n----------------------------------------------------------------------\r\nRan 2 tests in 0.000s\r\n\r\nFAILED (failures=1)\r\n"
+  },
+  "context_omissions_observed": false,
+  "stderr": "Session: C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-pressure-replay-yfqo6mx1\\workspace/.forge/sessions/118f641c7952ecaf85c97a95662580ae\nSIMULATED turns=7 prompt=9044 generated=837 cached=6446 elapsed=219ms\nforge: limit: Scripted response exceeds output reserve\n",
+  "session": "C:\\Users\\flowc\\dev\\forge\\benchmark\\results\\2026-09-09-agent-loop-all-green\\pressure-replay\\cells\\generalize_retractions_distractor-reflection-r001\\append-only\\terminal-workspace\\.forge\\sessions\\118f641c7952ecaf85c97a95662580ae",
+  "simulated": true,
+  "counts_toward_model_acceptance": false
+}

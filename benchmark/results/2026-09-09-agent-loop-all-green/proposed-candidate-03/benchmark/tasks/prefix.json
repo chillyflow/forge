@@ -1,0 +1,15 @@
+{
+  "id": "prefix",
+  "prompt": "TrimPrefix removes exactly one leading prefix; otherwise leave the string unchanged. Inspect the source, fix the bug, and run go test -json ./... to verify. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module forgebench\n\ngo 1.24\n",
+    "repair.go": "package repair\n\nimport \"strings\"\nfunc TrimPrefix(s,prefix string) string { return strings.ReplaceAll(s,prefix,\"\") }\n",
+    "repair_test.go": "package repair\n\nimport \"testing\"\nfunc TestRepair(t *testing.T) { if TrimPrefix(\"abab\",\"ab\")!=\"ab\" || TrimPrefix(\"zab\",\"ab\")!=\"zab\" || TrimPrefix(\"abc\",\"\")!=\"abc\" { t.Fatal(\"prefix semantics failed\") } }\n"
+  }
+}

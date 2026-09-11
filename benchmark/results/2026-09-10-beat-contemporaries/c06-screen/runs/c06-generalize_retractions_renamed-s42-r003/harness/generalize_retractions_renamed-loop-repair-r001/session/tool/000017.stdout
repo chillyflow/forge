@@ -1,0 +1,14 @@
+Case 1 [p, retract(r,p)]:
+  post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+  retract r,p -> entries: {}, positions: {"cash": 0}
+  Result:  {'cash': 0}
+Case 2 [retract(r,p), p]:
+  retract r,p -> entries: {}, positions: {} (unmatched retraction)
+  post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+  Result:  {'cash': 7}
+Case 3 [p, p, retract(r,p), retract(s,p)]:
+  post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+  post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 14}
+  retract r,p -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+  retract s,p -> entries: {}, positions: {"cash": 0}
+  Result:  {'cash': 7}

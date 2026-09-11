@@ -1,0 +1,55 @@
+file_sha256:2d03ce5b0f4cd091473e03c47617b8b2f65ddd0491b9cf6cb540d1b34722d451
+1: package repair
+2: 
+3: type Transfer struct {
+4: 	From, To string
+5: 	Amount   int
+6: }
+7: 
+8: func ApplyTransfers(balances map[string]int, transfers []Transfer) bool {
+9: 	next := make(map[string]int, len(balances))
+10: 	for key, value := range balances {
+11: 		next[key] = value
+12: 	}
+13: 	maxInt := int(^uint(0) >> 1)
+14: 	for _, tr := range transfers {
+15: 		from, fromOK := next[tr.From]
+16: 		to, toOK := next[tr.To]
+17: 		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+18: 			return false
+19: 		}
+20: 		if tr.From == tr.To {
+21: 			continue
+22: 		}
+23: 		if to > maxInt-tr.Amount {
+24: 			return false
+25: 		}
+26: 		next[tr.From] = from - tr.Amount
+27: 		next[tr.From] = from - tr.Amount
+28: 		next[tr.To] = to + tr.Amount
+29: 	}
+30: 	for key, value := range next {
+31: 		balances[key] = value
+32: 	}
+33: 	return true
+34: 	return true
+35: 	for _, tr := range transfers {
+36: 		from, fromOK := next[tr.From]
+37: 		to, toOK := next[tr.To]
+38: 		if !fromOK || !toOK || tr.Amount < 0 || from < tr.Amount {
+39: 			return false
+40: 		}
+41: 		if tr.From == tr.To {
+42: 			continue
+43: 		}
+44: 		if to > maxInt-tr.Amount {
+45: 			return false
+46: 		}
+47: 		next[tr.From] = from - tr.Amount
+48: 		next[tr.To] = to + tr.Amount
+49: 	}
+50: 	for key, value := range next {
+51: 		balances[key] = value
+52: 	}
+53: 	return true
+54: }

@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+
+# Replicate the exact test case to debug
+def post(i, delta): return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}
+def retract(i, reference): return {'key': i, 'kind': 'retract', 'reference': reference}
+
+def positions_for(messages):
+    visited, voided = set(), set()
+    entries, positions = {}, {}
+    for message in messages:
+        if message['key'] in visited:
+            continue
+        visited.add(message['key'])
+        if message['kind'] == 'post':
+            bucket, delta = message['bucket'], message['delta']
+            entries[message['key']] = (bucket, delta)
+            positions.setdefault(bucket, 0)
+            positions[bucket] += delta
+        else:
+            reference = message['reference']
+            if reference in voided:
+                continue
+            voided.add(reference)
+            if reference in entries:
+                bucket, delta = entries[reference]
+                positions[bucket] -= delta
+    return positions
+
+# Test case from failing unit test
+p = post('p', 7)
+messages = [p, retract('r', 'p')]
+result = positions_for(messages)
+print(f"Result: {result}")
+print(f"Expected: {{'cash': 0}}")
+
+# Let's trace through step by step
+print("\nStep-by-step trace:")
+print("1. Process post 'p':")
+print("   - entries['p'] = ('cash', 7)")
+print("   - positions['cash'] = 0 + 7 = 7")
+print("2. Process retract 'r' referencing 'p':")
+print("   - voided.add('p')")
+print("   - entries['p'] exists, so:")
+print("   - bucket, delta = entries['p'] = ('cash', 7)")
+print("   - positions['cash'] = 7 - 7 = 0")
+print("3. Final result: {'cash': 0}")

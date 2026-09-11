@@ -443,11 +443,37 @@ def run_monitored(command, *, cwd=None, env=None, stdout=None, stderr=None, time
             'timed_out': timed_out, 'wall_seconds': elapsed, 'resource_usage': usage}
 
 
-def verify_task(root, task, output, env=None, timeout=120, gpu_index=0, extra_pids=()):
+def verification_environment(env=None, cache_prefix=None):
+    """Isolate the verifier's bytecode cache from the workspace.
+
+    Both variables are required and neither substitutes for the other.
+    PYTHONDONTWRITEBYTECODE governs writing and has no effect on loading;
+    PYTHONPYCACHEPREFIX governs where bytecode is read from. Redirecting alone
+    is not safe, because the prefix would then accumulate workspace bytecode
+    whose timestamp invalidation compares only mtime and size - an edit of
+    identical length within the mtime resolution goes undetected.
+
+    Together they are safe by construction: the prefix is never written, so
+    every lookup misses and compiles from source, and the workspace
+    __pycache__ that the agent's own commands wrote is never consulted. A
+    non-Python verifier ignores both variables.
+    """
+    result = dict(os.environ if env is None else env)
+    if cache_prefix:
+        result['PYTHONPYCACHEPREFIX'] = str(cache_prefix)
+        result['PYTHONDONTWRITEBYTECODE'] = '1'
+    return result
+
+
+def verify_task(root, task, output, env=None, timeout=120, gpu_index=0, extra_pids=(),
+                cache_prefix=None):
     output = Path(output)
+    environment = verification_environment(env, cache_prefix)
     with (output / 'verification.stdout').open('w', encoding='utf-8') as stdout, \
             (output / 'verification.stderr').open('w', encoding='utf-8') as stderr:
-        result = run_monitored(task['verify'], cwd=root, env=env, stdout=stdout, stderr=stderr,
-                               timeout=timeout, gpu_index=gpu_index, extra_pids=extra_pids)
+        result = run_monitored(task['verify'], cwd=root, env=environment, stdout=stdout,
+                               stderr=stderr, timeout=timeout, gpu_index=gpu_index,
+                               extra_pids=extra_pids)
     result['passed'] = result['returncode'] == 0
+    result['bytecode_cache_prefix'] = str(cache_prefix) if cache_prefix else None
     return result

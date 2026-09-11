@@ -1,0 +1,58 @@
+diff --git a/repair.go b/repair.go
+index 6fe9102..392f152 100644
+--- a/repair.go
++++ b/repair.go
+@@ -1,14 +1,18 @@
+ package repair
+ 
+-import "sort"
++import (
++	"sort"
++)
+ 
+ type Request struct {
+ 	ID               string
+ 	Min, Max, Weight int
+ }
++
+ type quotaShare struct {
+ 	index, whole int
+ 	remainder    int64
++	id           string
+ }
+ 
+ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+@@ -57,27 +61,27 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 			if whole > room {
+ 				whole = room
+ 			}
+-			shares = append(shares, quotaShare{i, whole, numerator % weightTotal})
++			shares = append(shares, quotaShare{i, whole, numerator % weightTotal, request.ID})
+ 			used += whole
+ 		}
+ 		for _, share := range shares {
+-			out[requests[share.index].ID] += share.whole
++			out[share.id] += share.whole
+ 		}
+ 		left -= used
+ 		if left == 0 {
+ 			break
+ 		}
++		// Sort by remainder descending, then by ID ascending for tie-breaking
+ 		sort.SliceStable(shares, func(i, j int) bool {
+ 			if shares[i].remainder == shares[j].remainder {
+-				return shares[i].index < shares[j].index
++				return shares[i].id < shares[j].id
+ 			}
+ 			return shares[i].remainder > shares[j].remainder
+ 		})
+ 		progressed := false
+ 		for _, share := range shares {
+-			id := requests[share.index].ID
+-			if left > 0 && out[id] < requests[share.index].Max {
+-				out[id]++
++			if left > 0 && out[share.id] < requests[share.index].Max {
++				out[share.id]++
+ 				left--
+ 				progressed = true
+ 			}

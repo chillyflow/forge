@@ -1,0 +1,30 @@
+# Direct test of the exact failing case
+import sys
+sys.path.insert(0, '.')
+
+from ledger import positions_for
+from test_ledger import post, retract
+
+# Recreate the exact test case
+p = post('p', 7)
+messages = [p, p, retract('r', 'p'), retract('s', 'p')]
+
+print("Input messages:")
+for i, msg in enumerate(messages):
+    print(f"  {i}: {msg}")
+
+result = positions_for(messages)
+print(f"\nResult: {result}")
+print(f"Expected: {{'cash': 0}}")
+
+# Let's also test each individual case from the test
+print("\n=== Testing each case from the original test ===")
+test_cases = [
+    [p, retract('r', 'p')],
+    [retract('r', 'p'), p],
+    [p, p, retract('r', 'p'), retract('s', 'p')]
+]
+
+for i, case in enumerate(test_cases):
+    result = positions_for(case)
+    print(f"Case {i+1}: {result}")

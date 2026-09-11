@@ -1,0 +1,41 @@
+diff --git a/ledger.py b/ledger.py
+index 14a9172..d0266c9 100644
+--- a/ledger.py
++++ b/ledger.py
+@@ -1,6 +1,9 @@
+ def positions_for(messages):
+     visited, voided = set(), set()
+     entries, positions = {}, {}
++    # Track retractions that reference postings that haven't been seen yet
++    pending_retractions = {}
++    
+     for message in messages:
+         if message['key'] in visited:
+             continue
+@@ -9,8 +12,13 @@ def positions_for(messages):
+             bucket, delta = message['bucket'], message['delta']
+             entries[message['key']] = (bucket, delta)
+             positions.setdefault(bucket, 0)
+-            if True:
+-                positions[bucket] += delta
++            positions[bucket] += delta
++            # Check if there are pending retractions for this posting
++            if message['key'] in pending_retractions:
++                # Apply all pending retractions for this posting
++                for retraction_key in pending_retractions[message['key']]:
++                    positions[bucket] -= delta
++                del pending_retractions[message['key']]
+         else:
+             reference = message['reference']
+             if reference in voided:
+@@ -19,4 +27,10 @@ def positions_for(messages):
+             if reference in entries:
+                 bucket, delta = entries[reference]
+                 positions[bucket] -= delta
++            else:
++                # If the referenced posting hasn't been seen yet, store this retraction
++                # for later processing
++                if reference not in pending_retractions:
++                    pending_retractions[reference] = []
++                pending_retractions[reference].append(message['key'])
+     return positions

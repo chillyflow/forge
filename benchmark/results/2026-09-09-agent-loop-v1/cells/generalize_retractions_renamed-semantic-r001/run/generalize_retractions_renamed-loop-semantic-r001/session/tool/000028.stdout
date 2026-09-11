@@ -1,0 +1,11 @@
+Case 2: {'cash': 7}
+Expected case 2 to be 0, but we get 7
+The test might expect that retraction of non-existent post has no effect, but that should not prevent subsequent post from being added
+Wait... maybe I should re-read the problem statement entirely
+The problem says: "Unmatched retractions have no balance effect"
+So a retraction referencing a non-existent post should have no effect
+And it also says: "A retraction cancels its referenced posting exactly once"
+So if a retraction references a posting that exists, it cancels it once
+If a retraction references a posting that does not exist, it has no effect
+But the test expects all cases to return 0
+So I think the test may be wrong, or I am misunderstanding the semantics

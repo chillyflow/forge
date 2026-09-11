@@ -1,0 +1,15 @@
+{
+  "id": "clamp",
+  "prompt": "Clamp must restrict x to the inclusive [lo, hi] interval. Inspect the source, fix the bug, and run go test -json ./... to verify. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module forgebench\n\ngo 1.24\n",
+    "repair.go": "package repair\n\nfunc Clamp(x, lo, hi int) int { if x < lo { return hi }; if x > hi { return lo }; return x }\n",
+    "repair_test.go": "package repair\n\nimport \"testing\"\nfunc TestRepair(t *testing.T) { for _, c := range [][4]int{{-1,0,10,0},{11,0,10,10},{5,0,10,5},{0,0,10,0}} { if got:=Clamp(c[0],c[1],c[2]); got!=c[3] { t.Fatalf(\"%v: got %d\",c,got) } } }\n"
+  }
+}

@@ -1,0 +1,29 @@
+from service import balances
+
+def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
+def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}
+
+# Debug the failing test case
+p = post('p', 7)
+events = [retract('r', 'p'), p]
+print(f"Events: {events}")
+result = balances(events)
+print(f"Result: {result}")
+print(f"Expected: {{'cash': 0}}")
+
+# Let's also test the other cases from the test
+print("\n--- Other test cases ---")
+events2 = [p, retract('r', 'p')]
+print(f"Events2: {events2}")
+result2 = balances(events2)
+print(f"Result2: {result2}")
+
+events3 = [retract('r', 'p'), p]
+print(f"Events3: {events3}")
+result3 = balances(events3)
+print(f"Result3: {result3}")
+
+events4 = [p, p, retract('r', 'p'), retract('s', 'p')]
+print(f"Events4: {events4}")
+result4 = balances(events4)
+print(f"Result4: {result4}")

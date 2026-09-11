@@ -1,0 +1,59 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,21 +1,34 @@
+-def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:
+-            target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-    return totals
++def balances(events):
++    seen, cancelled = set(), set()
++    postings, totals = {}, {}
++    # First pass: collect all postings and cancellations
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            postings[event['id']] = (account, amount)
++        else:
++            target = event['target']
++            cancelled.add(target)
++    
++    # Second pass: apply the logic, checking if postings are cancelled
++    seen = set()  # Reset seen for second pass
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            # Only process if not cancelled
++            if event['id'] not in cancelled:
++                totals.setdefault(account, 0)
++                totals[account] += amount
++        else:
++            target = event['target']
++            # If target is cancelled, we already processed it in the first pass
++            # We just need to ensure it doesn't affect totals if it was already processed
++            pass
++    
++    return totals

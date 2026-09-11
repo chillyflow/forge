@@ -1,0 +1,11 @@
+file_sha256:751b8f143e1c4ffe8a02107c637ee886d92f0c3d15135a19d0065238435679b1
+30: 		}
+31: 		
+32: 		end := start + size
+33: 		if end > len(values) {
+34: 			end = len(values)
+35: 		}
+36: 		
+37: 		json.NewEncoder(w).Encode(values[start:end])
+38: 	}
+39: }

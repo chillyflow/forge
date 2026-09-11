@@ -1,0 +1,9 @@
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {'cash': 7}
+Expected: {"cash": 0}
+
+But wait - let me check the test more carefully...
+The issue may be that we should allow retractions to cancel postings even if they come first
+But in the actual test, it says this case should be [p, retract(r, p)] and [retract(r, p), p]
+Wait - let me check what the exact failing test is again.
+Actually let me re-read the problem more carefully.

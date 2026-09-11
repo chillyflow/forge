@@ -1,0 +1,27 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Tests run: 1
+Failures: 1
+Errors: 0
+
+stderr:
+test_order_and_duplicates (test_service.Retractions.test_order_and_duplicates) ... FAIL
+
+======================================================================
+FAIL: test_order_and_duplicates (test_service.Retractions.test_order_and_duplicates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-ocl8p9cq\test_service.py", line 10, in test_order_and_duplicates
+    self.assertEqual(balances(events), {'cash': 0})
+AssertionError: {'cash': 7} != {'cash': 0}
+- {'cash': 7}
+?          ^
+
++ {'cash': 0}
+?          ^
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (failures=1)

@@ -1,0 +1,8 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+  File "<string>", line 1
+    import sys; sys.path.insert(0, '.'); from service import balances; import traceback; print('=== EXACT TRACE OF FAILING CASE ==='); events = [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]; print('Events:', events); try: result = balances(events); print('Result:', result); print('Expected: {"cash": 0}'); print('Match:', result == {'cash': 0}); except Exception as e: print('Exception:', e); traceback.print_exc()
+                                                                                                                                                                                                                                                                                        ^^^
+SyntaxError: invalid syntax

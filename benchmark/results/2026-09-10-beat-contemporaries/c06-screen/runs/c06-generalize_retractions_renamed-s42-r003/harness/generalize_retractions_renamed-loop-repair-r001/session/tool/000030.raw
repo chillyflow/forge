@@ -1,0 +1,13 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Testing case 2 with debug:
+retract(r,p) - reference p does not exist, so unmatched retraction
+post(p,7) - create post with key p, delta 7
+Result: {'cash': 7}
+Expected: {"cash": 0}
+
+The issue might be that I misunderstood the problem completely.
+Maybe there is a special case where unmatched retractions result in zero balance?
+No, that would break the test expectations. Let me trace the problem statement again.
+
+stderr:

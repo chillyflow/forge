@@ -1,0 +1,52 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,24 +1,24 @@
+-def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:
+-            target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-                del postings[target]
+-            # If target is not in postings, it means the credit was already cancelled
+-            # or the reference was unknown - in either case, no action needed
+-    return totals
++def balances(events):
++    seen, cancelled = set(), set()
++    postings, totals = {}, {}
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            postings[event['id']] = (account, amount)
++            totals.setdefault(account, 0)
++            totals[account] += amount
++        else:
++            target = event['target']
++            if target in cancelled:
++                continue
++            cancelled.add(target)
++            if target in postings:
++                account, amount = postings[target]
++                totals[account] -= amount
++                del postings[target]
++            # If target is not in postings, it means the reference was unknown
++            # In that case, no account should be created, and no action is needed
++    return totals

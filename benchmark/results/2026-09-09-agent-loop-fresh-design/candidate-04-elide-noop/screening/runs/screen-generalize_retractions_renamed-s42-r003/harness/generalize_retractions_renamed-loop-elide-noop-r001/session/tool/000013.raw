@@ -1,0 +1,21 @@
+file_sha256:9681d169ecf57da971d2c76fcd99919969f0e75d359694155455d567adef62c0
+1: def positions_for(messages):
+2:     entries, positions = {}, {}
+3:     voided = set()
+4:     
+5:     for message in messages:
+6:         if message['kind'] == 'post':
+7:             # Only process the first post with this key
+8:             if message['key'] in entries:
+9:                 continue
+10:             bucket, delta = message['bucket'], message['delta']
+11:             entries[message['key']] = (bucket, delta)
+12:             positions.setdefault(bucket, 0)
+13:             positions[bucket] += delta
+14:         else:  # message['kind'] == 'retract'
+15:             reference = message['reference']
+16:             if reference in voided:
+17:                 continue
+18:             voided.add(reference)
+19:             if reference in entries:
+20:                 bucket, delta = entries[reference]

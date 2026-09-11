@@ -1,0 +1,12 @@
+file_sha256:47b9d15248117480ccb45cef92a82be68cb41db1c01b31527673154e8c28c01e
+65: 		if route.Method == method {
+66: 			exact = 1
+67: 		}
+68: 		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+69: 		candidate = routeMatch{route.Name, params, literals, exact, wildcards, index}
+70: 		if !found || candidate.literals > best.literals || (candidate.literals == best.literals && candidate.methodExact > best.methodExact) || (candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards < best.wildcards) || (candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards == best.wildcards && candidate.index < best.index) {
+71: 			best = candidate
+72: 			found = true
+73: 		}
+74: 	}
+75: 	if !found {

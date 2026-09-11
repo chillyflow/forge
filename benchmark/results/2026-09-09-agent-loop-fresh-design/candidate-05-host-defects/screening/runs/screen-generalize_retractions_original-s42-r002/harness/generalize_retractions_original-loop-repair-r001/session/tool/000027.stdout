@@ -1,0 +1,5 @@
+p = {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+r = {'id': 'r', 'kind': 'retract', 'target': 'p'}
+events = [r, p]
+Expected: {"cash": 0}
+Actual: {'cash': 7}

@@ -1,0 +1,16 @@
+package main
+
+import (
+	"fmt"
+	"forgebench/repair"
+)
+
+func main() {
+	// Test the specific failing case
+	requests := []repair.Request{{"b", 0, 2, 1}, {"a", 0, 2, 1}}
+	result, ok := repair.AllocateQuota(1, requests)
+	fmt.Printf("Result: %v, OK: %v\n", result, ok)
+	
+	// Expected: a should get 1 (smaller ID)
+	// But we're getting: b gets 1
+}

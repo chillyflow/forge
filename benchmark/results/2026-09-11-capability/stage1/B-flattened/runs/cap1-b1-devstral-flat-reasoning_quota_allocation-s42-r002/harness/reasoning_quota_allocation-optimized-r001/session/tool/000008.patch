@@ -1,0 +1,184 @@
+diff --git "a/repair.go" "b/repair.go"
+--- "a/repair.go"
++++ "b/repair.go"
+@@ -1,90 +1,90 @@
+-package repair
+-
+-import "sort"
+-
+-type Request struct {
+-	ID               string
+-	Min, Max, Weight int
+-}
+-type quotaShare struct {
+-	index, whole int
+-	remainder    int64
+-}
+-
+-func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+-	if capacity < 0 {
+-		return nil, false
+-	}
+-	out := map[string]int{}
+-	minTotal, maxTotal := 0, 0
+-	for _, request := range requests {
+-		if request.ID == "" || request.Min < 0 || request.Max < request.Min || request.Weight <= 0 {
+-			return nil, false
+-		}
+-		if _, exists := out[request.ID]; exists {
+-			return nil, false
+-		}
+-		if minTotal > int(^uint(0)>>1)-request.Min || maxTotal > int(^uint(0)>>1)-request.Max {
+-			return nil, false
+-		}
+-		minTotal += request.Min
+-		maxTotal += request.Max
+-		out[request.ID] = request.Min
+-	}
+-	if capacity < minTotal || capacity > maxTotal {
+-		return nil, false
+-	}
+-	left := capacity - minTotal
+-	for left > 0 {
+-		weightTotal := int64(0)
+-		active := []int{}
+-		for i, request := range requests {
+-			if out[request.ID] < request.Max {
+-				weightTotal += int64(request.Weight)
+-				active = append(active, i)
+-			}
+-		}
+-		if weightTotal <= 0 {
+-			return nil, false
+-		}
+-		shares := make([]quotaShare, 0, len(active))
+-		used := 0
+-		for _, i := range active {
+-			request := requests[i]
+-			numerator := int64(left) * int64(request.Weight)
+-			whole := int(numerator / weightTotal)
+-			room := request.Max - out[request.ID]
+-			if whole > room {
+-				whole = room
+-			}
+-			shares = append(shares, quotaShare{i, whole, numerator % weightTotal})
+-			used += whole
+-		}
+-		for _, share := range shares {
+-			out[requests[share.index].ID] += share.whole
+-		}
+-		left -= used
+-		if left == 0 {
+-			break
+-		}
+-		sort.SliceStable(shares, func(i, j int) bool {
+-			if shares[i].remainder == shares[j].remainder {
+-				return shares[i].index < shares[j].index
+-			}
+-			return shares[i].remainder > shares[j].remainder
+-		})
+-		progressed := false
+-		for _, share := range shares {
+-			id := requests[share.index].ID
+-			if left > 0 && out[id] < requests[share.index].Max {
+-				out[id]++
+-				left--
+-				progressed = true
+-			}
+-		}
+-		if !progressed {
+-			return nil, false
+-		}
+-	}
+-	return out, true
+-}
++package repair
++
++import "sort"
++
++type Request struct {
++	ID               string
++	Min, Max, Weight int
++}
++type quotaShare struct {
++	index, whole int
++	remainder    int64
++}
++
++func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
++	if capacity < 0 {
++		return nil, false
++	}
++	out := map[string]int{}
++	minTotal, maxTotal := 0, 0
++	for _, request := range requests {
++		if request.ID == "" || request.Min < 0 || request.Max < request.Min || request.Weight <= 0 {
++			return nil, false
++		}
++		if _, exists := out[request.ID]; exists {
++			return nil, false
++		}
++		if minTotal > int(^uint(0)>>1)-request.Min || maxTotal > int(^uint(0)>>1)-request.Max {
++			return nil, false
++		}
++		minTotal += request.Min
++		maxTotal += request.Max
++		out[request.ID] = request.Min
++	}
++	if capacity < minTotal || capacity > maxTotal {
++		return nil, false
++	}
++	left := capacity - minTotal
++	for left > 0 {
++		weightTotal := int64(0)
++		active := []int{}
++		for i, request := range requests {
++			if out[request.ID] < request.Max {
++				weightTotal += int64(request.Weight)
++				active = append(active, i)
++			}
++		}
++		if weightTotal <= 0 {
++			return nil, false
++		}
++		shares := make([]quotaShare, 0, len(active))
++		used := 0
++		for _, i := range active {
++			request := requests[i]
++			numerator := int64(left) * int64(request.Weight)
++			whole := int(numerator / weightTotal)
++			room := request.Max - out[request.ID]
++			if whole > room {
++				whole = room
++			}
++			shares = append(shares, quotaShare{i, whole, numerator % weightTotal})
++			used += whole
++		}
++		for _, share := range shares {
++			out[requests[share.index].ID] += share.whole
++		}
++		left -= used
++		if left == 0 {
++			break
++		}
++		sort.SliceStable(shares, func(i, j int) bool {
++			if shares[i].remainder == shares[j].remainder {
++				return shares[i].index > shares[j].index
++			}
++			return shares[i].remainder > shares[j].remainder
++		})
++		progressed := false
++		for _, share := range shares {
++			id := requests[share.index].ID
++			if left > 0 && out[id] < requests[share.index].Max {
++				out[id]++
++				left--
++				progressed = true
++			}
++		}
++		if !progressed {
++			return nil, false
++		}
++	}
++	return out, true
++}

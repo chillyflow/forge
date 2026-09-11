@@ -1,0 +1,15 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Test 1 - Messages: [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Test 2 - Messages: [{'key': 'r', 'kind': 'retract', 'reference': 'p'}, {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}]
+Result: {'cash': 7}
+Expected: {'cash': 0}
+
+Test 3 - Messages: [{'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}, {'key': 'r', 'kind': 'retract', 'reference': 'p'}, {'key': 's', 'kind': 'retract', 'reference': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+stderr:

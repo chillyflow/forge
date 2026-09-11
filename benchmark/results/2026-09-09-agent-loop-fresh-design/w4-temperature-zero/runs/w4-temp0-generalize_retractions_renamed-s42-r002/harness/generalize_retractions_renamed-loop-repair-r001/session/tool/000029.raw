@@ -1,0 +1,9 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Debug trace:
+p = {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+r = {'key': 'r', 'kind': 'retract', 'reference': 'p'}
+positions_for([p, r]): {'cash': 0}
+positions_for([r, p]): {}
+
+stderr:

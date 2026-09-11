@@ -1,0 +1,43 @@
+diff --git a/service.py b/service.py
+index b7bbbde..8d47aa2 100644
+--- a/service.py
++++ b/service.py
+@@ -1,22 +1,32 @@
+ def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
++    seen = set()
++    cancelled = set()
++    postings = {}
++    totals = {}
++    
+     for event in events:
++        # Skip duplicate events
+         if event['id'] in seen:
+             continue
+         seen.add(event['id'])
++        
+         if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
++            account = event['account']
++            amount = event['amount']
+             postings[event['id']] = (account, amount)
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
++            totals[account] += amount
+         else:
+             target = event['target']
++            # Skip if this retraction has already been processed
+             if target in cancelled:
+                 continue
+-            cancelled.add(target)
++            # If we have the posting, cancel it
+             if target in postings:
+                 account, amount = postings[target]
+                 totals[account] -= amount
++                cancelled.add(target)
++            else:
++                # If posting hasn't arrived yet, mark retraction as cancelled
++                cancelled.add(target)
+     return totals

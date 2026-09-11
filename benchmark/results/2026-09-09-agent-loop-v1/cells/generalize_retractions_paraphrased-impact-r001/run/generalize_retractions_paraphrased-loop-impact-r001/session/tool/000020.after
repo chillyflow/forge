@@ -1,0 +1,20 @@
+def balances(events):
+    # Collect all posts and retracts
+    posts = {}
+    cancelled = set()
+    
+    for event in events:
+        if event['kind'] == 'post':
+            posts[event['id']] = event
+        else:  # retract
+            cancelled.add(event['target'])
+    
+    # Process only non-cancelled posts
+    totals = {}
+    for event in events:
+        if event['kind'] == 'post' and event['id'] not in cancelled:
+            account, amount = event['account'], event['amount']
+            totals.setdefault(account, 0)
+            totals[account] += amount
+    
+    return totals

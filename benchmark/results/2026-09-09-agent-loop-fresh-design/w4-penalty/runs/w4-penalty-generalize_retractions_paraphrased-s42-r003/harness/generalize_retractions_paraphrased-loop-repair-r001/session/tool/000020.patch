@@ -1,0 +1,67 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,37 +1,26 @@
+-def balances(events):
+-    # Track all events that have been processed to ensure each is processed once
+-    seen = set()
+-    # Track which postings have been cancelled
+-    cancelled = set()
+-    # Track postings by their ID: {id: (account, amount)}
+-    postings = {}
+-    # Track final account balances
+-    totals = {}
+-    
+-    for event in events:
+-        # Process each globally unique message once
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        
+-        if event['kind'] == 'post':
+-            # Record this posting
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            # Add to total for this account
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:
+-            # This is a retract (void notice) event
+-            target = event['target']
+-            # If already cancelled, skip
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            # If the target posting exists, cancel it
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-            # If target doesn't exist, this is a void notice for non-existent credit - no effect
+-    
+-    return totals
++def balances(events):
++    seen = set()
++    cancelled = set()
++    postings = {}
++    totals = {}
++    
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            postings[event['id']] = (account, amount)
++            totals.setdefault(account, 0)
++            totals[account] += amount
++        else:
++            target = event['target']
++            if target in cancelled:
++                continue
++            cancelled.add(target)
++            if target in postings:
++                account, amount = postings[target]
++                totals[account] -= amount
++    
++    return totals

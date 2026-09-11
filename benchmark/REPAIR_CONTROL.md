@@ -84,6 +84,9 @@ population does not establish a general latency advantage.
 
 ## Follow-up experiments, one change at a time
 
+The first follow-up is the opt-in [candidate checkpoint experiment](CANDIDATE_CHECKPOINT.md),
+which compares the minimal control and its checkpoint intervention in one binary.
+
 Choose follow-up work from the control results before changing recovery again.
 The next candidate should test an earlier, bounded repair episode: after a
 second failed candidate or ineffective replacement, provide current relevant

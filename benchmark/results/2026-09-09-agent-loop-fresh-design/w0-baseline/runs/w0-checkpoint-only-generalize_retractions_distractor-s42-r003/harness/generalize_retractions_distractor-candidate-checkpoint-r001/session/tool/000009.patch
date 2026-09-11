@@ -1,0 +1,64 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,21 +1,39 @@
+-def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals[account] = totals.get(account, 0) + amount
+-        else:
+-            target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-            # If target posting doesn't exist, the retraction is unmatched and has no effect
+-    return totals
++def balances(events):
++    seen, cancelled = set(), set()
++    postings, totals = {}, {}
++    # First pass: collect all postings and their cancellation status
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            postings[event['id']] = (account, amount)
++        else:
++            target = event['target']
++            if target in cancelled:
++                continue
++            cancelled.add(target)
++    
++    # Second pass: apply postings and cancellations
++    seen = set()  # Reset seen for second pass
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            # If this posting was cancelled by a previous retraction, skip it
++            if event['id'] in cancelled:
++                continue
++            postings[event['id']] = (account, amount)
++            totals[account] = totals.get(account, 0) + amount
++        else:
++            target = event['target']
++            if target in cancelled:
++                continue
++            cancelled.add(target)
++            if target in postings:
++                account, amount = postings[target]
++                totals[account] -= amount
++    return totals

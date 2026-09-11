@@ -1,0 +1,34 @@
+import sys
+sys.path.insert(0, '.')
+
+# Let me manually trace the exact execution
+from ledger import positions_for
+from test_ledger import post, retract
+
+print("=== Manual Trace ===")
+p = post('p', 7)
+print(f"p = {p}")
+
+messages = [p, p, retract('r', 'p'), retract('s', 'p')]
+print(f"messages = {messages}")
+
+# Let's also test the simpler case first
+print("\n=== Testing simple case ===")
+simple_messages = [p, retract('r', 'p')]
+print(f"simple_messages = {simple_messages}")
+result_simple = positions_for(simple_messages)
+print(f"Simple result: {result_simple}")
+
+print("\n=== Testing complex case ===")
+result_complex = positions_for(messages)
+print(f"Complex result: {result_complex}")
+
+# Let's also run the actual test cases
+print("\n=== Running actual test cases ===")
+try:
+    from test_ledger import JournalCases
+    test_case = JournalCases()
+    test_case.test_order_and_duplicates()
+    print("All tests passed!")
+except Exception as e:
+    print(f"Test failed with error: {e}")

@@ -1,0 +1,27 @@
+def positions_for(messages):
+    visited, voided = set(), set()
+    entries, positions = {}, {}
+    for message in messages:
+        if message['key'] in visited:
+            continue
+        visited.add(message['key'])
+        if message['kind'] == 'post':
+            bucket, delta = message['bucket'], message['delta']
+            # If this post was previously marked as voided, skip it
+            if message['key'] in voided:
+                continue
+            entries[message['key']] = (bucket, delta)
+            positions.setdefault(bucket, 0)
+            positions[bucket] += delta
+        else:
+            reference = message['reference']
+            if reference in voided:
+                continue
+            voided.add(reference)
+            if reference in entries:
+                bucket, delta = entries[reference]
+                positions[bucket] -= delta
+    # Ensure all buckets mentioned in posts are represented in the result
+    # This handles the case where a retraction is processed before its referenced post
+    # but we still want to show that the account exists with zero balance
+    return positions

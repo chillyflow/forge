@@ -1,0 +1,12 @@
+file_sha256:a3347bc5724dac98f942edc2841c1d318ddace167c39006d39a8dd2c6d95479a
+1: package ledger
+2: 
+3: import "errors"
+4: 
+5: func Transfer(from, to *Ledger, amount int) error {
+6: 	if !from.debit(amount) {
+7: 		return errors.New("insufficient funds")
+8: 	}
+9: 	from.Balance += amount
+10: 	return nil
+11: }

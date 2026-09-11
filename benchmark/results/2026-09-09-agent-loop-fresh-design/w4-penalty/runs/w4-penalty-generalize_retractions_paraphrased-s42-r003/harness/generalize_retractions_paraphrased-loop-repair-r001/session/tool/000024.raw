@@ -1,0 +1,29 @@
+file_sha256:98c51219e16770005470e09d02a30cea94e6cc8e1307c38de2e004649eca2521
+1: def balances(events):
+2:     seen = set()
+3:     cancelled = set()
+4:     postings = {}
+5:     totals = {}
+6:     
+7:     for event in events:
+8:         # Process each globally unique message once
+9:         if event['id'] in seen:
+10:             continue
+11:         seen.add(event['id'])
+12:         
+13:         if event['kind'] == 'post':
+14:             account, amount = event['account'], event['amount']
+15:             postings[event['id']] = (account, amount)
+16:             totals.setdefault(account, 0)
+17:             totals[account] += amount
+18:         else:
+19:             target = event['target']
+20:             # A void notice neutralizes its referenced credit
+21:             if target in cancelled:
+22:                 continue
+23:             cancelled.add(target)
+24:             if target in postings:
+25:                 account, amount = postings[target]
+26:                 totals[account] -= amount
+27:     
+28:     return totals

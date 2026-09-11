@@ -1,0 +1,26 @@
+file_sha256:4549ed0022ea20a6e9376031e6c276b45e4a781464ca0fe88ec70f1688ef25e3
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     for event in events:
+5:         if event['id'] in seen:
+6:             continue
+7:         seen.add(event['id'])
+8:         if event['kind'] == 'post':
+9:             account, amount = event['account'], event['amount']
+10:             postings[event['id']] = (account, amount)
+11:             totals.setdefault(account, 0)
+12:             totals[account] += amount
+13:         else:
+14:             target = event['target']
+15:             if target in cancelled:
+16:                 continue
+17:             cancelled.add(target)
+18:             if target in postings:
+19:                 account, amount = postings[target]
+20:                 totals[account] -= amount
+21:                 # Remove the posting from postings dict to prevent double cancellation
+22:                 del postings[target]
+23:             # If the target posting doesn't exist yet, we still mark it as cancelled
+24:             # to prevent future postings with that ID from affecting the balance
+25:     return totals

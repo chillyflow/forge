@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+
+# Let's recreate the exact test case that's failing
+from service import balances
+
+def post(i, amount): 
+    return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
+
+def retract(i, target): 
+    return {'id': i, 'kind': 'retract', 'target': target}
+
+# This is exactly what the failing test case does:
+p = post('p', 7)
+events = [retract('r', 'p'), p]
+
+print("Debugging the failing test case:")
+print("Events:", events)
+print("Expected result: {'cash': 0}")
+print()
+
+result = balances(events)
+print("Actual result:", result)
+
+# Let's manually trace what should happen:
+print("\nManual trace:")
+print("1. Process retract('r', 'p'):")
+print("   - event['id'] = 'r', not in seen")
+print("   - seen.add('r')")
+print("   - event['kind'] = 'retract'")
+print("   - target = 'p'")
+print("   - 'p' not in cancelled -> cancelled.add('p')")
+print("   - 'p' not in postings -> no change to totals")
+print("   - totals = {} (no change)")
+print()
+print("2. Process post('p', 7):")
+print("   - event['id'] = 'p', not in seen")
+print("   - seen.add('p')")
+print("   - event['kind'] = 'post'")
+print("   - account = 'cash', amount = 7")
+print("   - postings['p'] = ('cash', 7)")
+print("   - totals.setdefault('cash', 0) -> totals['cash'] = 0")
+print("   - totals['cash'] += 7 -> totals['cash'] = 7")
+print("   - totals = {'cash': 7}")
+print()
+print("But the expected result is {'cash': 0}!")
+
+# Let's also check what happens in the other cases
+print("\n--- Checking other cases ---")
+
+# Case 1: [p, retract('r', 'p')]
+events1 = [p, retract('r', 'p')]
+print("Case 1 [p, retract('r', 'p')]:", balances(events1))
+
+# Case 3: [p, p, retract('r', 'p'), retract('s', 'p')]
+events3 = [p, p, retract('r', 'p'), retract('s', 'p')]
+print("Case 3 [p, p, retract('r', 'p'), retract('s', 'p')]:", balances(events3))

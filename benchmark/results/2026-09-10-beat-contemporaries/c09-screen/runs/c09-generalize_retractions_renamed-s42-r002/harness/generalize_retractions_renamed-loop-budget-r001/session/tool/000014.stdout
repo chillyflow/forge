@@ -1,0 +1,21 @@
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Step by step:
+1. First p (post 'p', delta 7):
+   - visited.add('p')
+   - entries['p'] = ('cash', 7)
+   - positions['cash'] += 7 = 7
+   - positions = {'cash': 7}
+2. Second p (post 'p', delta 7):
+   - 'p' already in visited, so skip
+3. retract('r', 'p'):
+   - reference = 'p'
+   - 'p' not in voided, so add to voided
+   - 'p' in entries, so subtract 7 from positions['cash']
+   - positions['cash'] = 7 - 7 = 0
+   - positions = {'cash': 0}
+4. retract('s', 'p'):
+   - reference = 'p'
+   - 'p' already in voided, so skip
+Final result should be {'cash': 0}

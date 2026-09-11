@@ -1,0 +1,8 @@
+Let me see the exact test case that is failing:
+Test case: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Actual result: {}
+Expected result: {"cash": 0}
+
+Let me also test the working case:
+Case [p, r] result: {'cash': 0}
+This works because the posting is processed first, then retracted

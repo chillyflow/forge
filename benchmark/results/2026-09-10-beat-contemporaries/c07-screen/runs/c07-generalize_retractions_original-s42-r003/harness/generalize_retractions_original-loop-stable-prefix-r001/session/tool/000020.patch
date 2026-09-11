@@ -1,0 +1,54 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,23 +1,27 @@
+-def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:
+-            target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-                # Mark this posting as cancelled to prevent double cancellation
+-                del postings[target]
+-    return totals
++def balances(events):
++    seen, cancelled = set(), set()
++    postings, totals = {}, {}
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            # If this posting was already marked for cancellation, ignore it
++            if event['id'] in cancelled:
++                continue
++            postings[event['id']] = (account, amount)
++            totals.setdefault(account, 0)
++            totals[account] += amount
++        else:
++            target = event['target']
++            # If the target posting hasn't arrived yet, mark it as cancelled
++            if target not in postings:
++                cancelled.add(target)
++            else:
++                # If the target posting has arrived, cancel it
++                account, amount = postings[target]
++                totals[account] -= amount
++                # Remove the posting to prevent double cancellation
++                del postings[target]
++    return totals

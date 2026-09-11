@@ -1,0 +1,235 @@
+--- a/tests/unit/test_verification.c
++++ b/tests/unit/test_verification.c
+@@ -425,6 +425,224 @@
+     assert(!fg_validation_diagnostic_hash(NULL, &a));
+ }
+ 
++typedef struct {
++    fixture *fixture;
++    forge_agent *agent;
++    size_t complete_passes, reads, finals;
++    bool mutated, historical_prompt_checked, final_prompt_checked;
++    char first_pass_inputs[17], second_pass_inputs[17];
++} pass_mutation_observation;
++
++static void check_pass_mutation_prompt(pass_mutation_observation *observation, size_t turn) {
++    const char *session = forge_agent_session(observation->agent);
++    char artifact[64];
++    snprintf(artifact, sizeof(artifact), "context/%04zu.json", turn);
++    yyjson_doc *context = read_json(session, artifact);
++    yyjson_val *segments = yyjson_obj_get(yyjson_doc_get_root(context), "segments");
++    assert(yyjson_is_arr(segments));
++    const char *control = NULL;
++    size_t i, count;
++    yyjson_val *segment;
++    yyjson_arr_foreach(segments, i, count, segment) {
++        const char *text = fg_json_str(segment, "text");
++        if (yyjson_get_uint(yyjson_obj_get(segment, "kind")) == FORGE_SEG_MEMORY &&
++            json_boolean(segment, "selected") && text && strstr(text, "HOST_OBSERVATIONS:")) {
++            assert(!control);
++            control = text;
++        }
++    }
++    assert(control && observation->mutated);
++    const char *identity = strstr(control, "HOST_OBSERVATIONS:");
++    char current[17] = {0}, recorded[17] = {0};
++    size_t validation_id = 0;
++    assert(sscanf(identity, "HOST_OBSERVATIONS: current_inputs=%16[0123456789abcdef] "
++                            "latest_validation_inputs=%16[0123456789abcdef] validation_id=%zu",
++                  current, recorded, &validation_id) == 3);
++    assert(strlen(current) == 16 && strlen(recorded) == 16);
++    /* Only the mandatory host record is checked for obsolete guidance. Raw
++     * historical tool replies remain intact and can still quote the old PASS. */
++    assert(!strstr(control, "CANDIDATE_CHECKPOINT: PASS. Call final now"));
++    if (turn == 3) {
++        assert(observation->complete_passes == 1 && validation_id == 1);
++        assert(!strcmp(recorded, observation->first_pass_inputs));
++        assert(strcmp(current, recorded));
++        assert(strstr(control, "CURRENT_CANDIDATE_VALIDATION: UNVERIFIED."));
++        assert(strstr(control, "outcome=PASSED input_relation=historical"));
++        assert(strstr(control, "it did not test the current candidate"));
++        assert(!strstr(control, "CURRENT_CANDIDATE_VALIDATION: PASSED."));
++        assert(!strstr(control, "Completion checkpoint: call final now."));
++        observation->historical_prompt_checked = true;
++    } else {
++        assert(turn == 5 && observation->historical_prompt_checked);
++        assert(observation->complete_passes == 2 && validation_id == 2);
++        assert(!strcmp(current, recorded));
++        assert(!strcmp(recorded, observation->second_pass_inputs));
++        assert(strcmp(recorded, observation->first_pass_inputs));
++        assert(strstr(control, "CURRENT_CANDIDATE_VALIDATION: PASSED."));
++        assert(strstr(control, "outcome=PASSED input_relation=matching"));
++        assert(strstr(control, "Completion checkpoint: call final now."));
++        observation->final_prompt_checked = true;
++    }
++    yyjson_doc_free(context);
++
++    /* Check the actual native prompt schema, not only the context inventory. */
++    snprintf(artifact, sizeof(artifact), "context/%04zu.txt", turn);
++    yyjson_doc *prompt = read_json(session, artifact);
++    yyjson_val *schema = yyjson_obj_get(yyjson_doc_get_root(prompt), "tools");
++    const char *ordinary[] = {"read_file", "apply_patch", "run_command", "list_directory",
++                              "final", "validate_candidate"};
++    assert(yyjson_is_arr(schema));
++    assert(yyjson_arr_size(schema) == (turn == 3 ? sizeof(ordinary) / sizeof(*ordinary) : 1));
++    yyjson_val *tool;
++    yyjson_arr_foreach(schema, i, count, tool) {
++        const char *name = fg_json_str(yyjson_obj_get(tool, "function"), "name");
++        assert(name && !strcmp(name, turn == 3 ? ordinary[i] : "final"));
++    }
++    yyjson_doc_free(prompt);
++}
++
++static void pass_mutation_event(const forge_event *event, void *userdata) {
++    pass_mutation_observation *observation = userdata;
++    yyjson_doc *doc = yyjson_read(event->json, strlen(event->json), 0);
++    assert(doc);
++    yyjson_val *data = yyjson_obj_get(yyjson_doc_get_root(doc), "data");
++    if (!strcmp(event->type, "candidate_checkpoint")) {
++        assert(json_boolean(data, "passed"));
++        if (json_boolean(data, "validated")) {
++            const char *inputs = fg_json_str(data, "input_hash");
++            assert(inputs && strlen(inputs) == 16);
++            observation->complete_passes++;
++            if (observation->complete_passes == 1) {
++                assert(!observation->mutated);
++                strcpy(observation->first_pass_inputs, inputs);
++                /* fg_session_emit calls synchronously, after candidate_validate
++                 * has saved the passing snapshot. This unindexed edit therefore
++                 * happens after PASS and before the next prompt, without sleeps,
++                 * process races, or a dependency on watcher notification delivery. */
++                write_file(observation->fixture->root, "fixture.txt", "external fixture\n");
++                observation->mutated = true;
++            } else {
++                assert(observation->complete_passes == 2);
++                assert(observation->historical_prompt_checked && observation->reads == 1);
++                strcpy(observation->second_pass_inputs, inputs);
++                assert(strcmp(inputs, observation->first_pass_inputs));
++            }
++        } else {
++            /* Final rechecks the matching passing snapshot without rerunning tools. */
++            assert(observation->final_prompt_checked && observation->complete_passes == 2);
++            assert(yyjson_get_uint(yyjson_obj_get(data, "commands")) == 0);
++        }
++    } else if (!strcmp(event->type, "context_plan")) {
++        size_t turn = (size_t)yyjson_get_uint(yyjson_obj_get(data, "turn"));
++        if (turn == 3 || turn == 5)
++            check_pass_mutation_prompt(observation, turn);
++    } else if (!strcmp(event->type, "tool_result")) {
++        const char *name = fg_json_str(data, "name"), *status = fg_json_str(data, "status");
++        assert(name && status && !strcmp(status, "ok"));
++        if (!strcmp(name, "read_file")) {
++            const char *output = fg_json_str(data, "output");
++            assert(observation->historical_prompt_checked);
++            assert(output && strstr(output, "external fixture"));
++            observation->reads++;
++        }
++    } else if (!strcmp(event->type, "final_rejected")) {
++        assert(!"Unexpected final rejection after the new inputs passed");
++    } else if (!strcmp(event->type, "final")) {
++        assert(observation->mutated && observation->historical_prompt_checked &&
++               observation->final_prompt_checked && observation->complete_passes == 2);
++        assert(yyjson_is_str(data) && !strcmp(yyjson_get_str(data), "Revalidated changed inputs."));
++        observation->finals++;
++    }
++    yyjson_doc_free(doc);
++}
++
++static void append_native_call(fg_buf *script, const char *name, const char *arguments, bool comma) {
++    char *encoded = fg_json_string(arguments);
++    assert(encoded);
++    assert(fg_buf_printf(script, "%s{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":["
++                                "{\"type\":\"function\",\"function\":{\"name\":\"%s\","
++                                "\"arguments\":%s}}]}",
++                         comma ? "," : "", name, encoded));
++    free(encoded);
++}
++
++static bool remove_agent_session_file(const char *relative, void *userdata) {
++    const char *session = userdata;
++    char path[FG_PATH_MAX];
++    assert(relative && *relative && !strstr(relative, ".."));
++    assert(fg_path_join(path, session, relative));
++    size_t length = strlen(session);
++    assert(!strncmp(path, session, length) && (path[length] == '/' || path[length] == '\\'));
++    return remove(path) == 0;
++}
++
++static void test_pass_invalidated_before_next_prompt(void) {
++    fixture f;
++    fixture_start(&f, NORMAL);
++    char script_path[FG_PATH_MAX];
++    assert(fg_path_join(script_path, f.base, "pass-mutation-actions.json"));
++    fg_buf script = {0};
++    assert(fg_buf_puts(&script, "["));
++    append_native_call(&script, "apply_patch", "{\"path\":\"main.go\","
++                       "\"old_text\":\"return 1\",\"new_text\":\"return 2\"}", false);
++    append_native_call(&script, "validate_candidate", "{}", true);
++    append_native_call(&script, "read_file", "{\"path\":\"fixture.txt\",\"start\":1,\"end\":1}", true);
++    append_native_call(&script, "validate_candidate", "{}", true);
++    append_native_call(&script, "final", "{\"answer\":\"Revalidated changed inputs.\"}", true);
++    assert(fg_buf_puts(&script, "]"));
++    assert(!script.failed && fg_write_file(script_path, script.data, script.len, &f.error));
++    fg_buf_clear(&script);
++    forge_model_config mc = forge_default_model_config();
++    mc.prompt_protocol = FORGE_PROMPT_NATIVE;
++    mc.script_path = script_path;
++    forge_model *model = forge_model_load(&mc, &f.error);
++    assert(model);
++    forge_agent_config ac = {0};
++    ac.workspace = f.root;
++    ac.model = model;
++    ac.limits = forge_default_limits();
++    ac.limits.max_turns = 8;
++    ac.limits.command_timeout_ms = 5000;
++    ac.limits.wall_timeout_ms = 30000;
++    ac.allow_write = ac.allow_exec = true;
++    ac.minimal_agent = ac.candidate_checkpoint = ac.bounded_repair = true;
++    forge_agent *agent = forge_agent_create(&ac, &f.error);
++    assert(agent);
++    pass_mutation_observation observation = {0};
++    observation.fixture = &f;
++    observation.agent = agent;
++    forge_status status = forge_agent_run(agent, "Update Value, validate, and finish.",
++                                          pass_mutation_event, &observation, &f.error);
++    if (status != FORGE_OK)
++        fprintf(stderr, "PASS then external mutation: %s\n", f.error.message);
++    assert(status == FORGE_OK && observation.complete_passes == 2 && observation.reads == 1 &&
++           observation.finals == 1 && observation.historical_prompt_checked &&
++           observation.final_prompt_checked);
++    const forge_metrics *metrics = forge_agent_metrics(agent);
++    assert(metrics->simulated && metrics->turns == 5 && metrics->tool_calls == 4);
++    assert(metrics->validation_commands > 0 && metrics->validation_failures == 0);
++
++    char session[FG_PATH_MAX], sessions[FG_PATH_MAX];
++    assert(fg_path_join(sessions, f.tools.root, ".forge/sessions"));
++    const char *agent_session = forge_agent_session(agent);
++    size_t length = strlen(sessions);
++    assert(agent_session && strlen(agent_session) < sizeof(session));
++    assert(!strncmp(agent_session, sessions, length) &&
++           (agent_session[length] == '/' || agent_session[length] == '\\'));
++    strcpy(session, agent_session);
++    forge_agent_destroy(agent);
++    forge_model_destroy(model);
++    /* The additional agent session is a verified child of this fixture. Remove
++     * its files, then its known directories, before the usual fixture cleanup. */
++    assert(fg_walk(session, "", remove_agent_session_file, session, &f.error));
++    delete_directory(session, "context");
++    delete_directory(session, "tool");
++    delete_directory(session, "validation");
++    assert(remove_directory(session) == 0);
++    delete_if_present(f.base, "pass-mutation-actions.json");
++    fixture_finish(&f);
++}
++
+ static int helper(int argc, char **argv) {
+     FILE *marker = fopen(".forge/probe-runs", "ab");
+     if (!marker)
+@@ -471,6 +689,7 @@
+     test_persistence_failure("validation/latest.json");
+     test_success_and_input_mutation();
+     test_semantic_diagnostic_identity();
++    test_pass_invalidated_before_next_prompt();
+     set_path(original_path);
+     free(original_path);
+     puts("verification orchestration tests passed");

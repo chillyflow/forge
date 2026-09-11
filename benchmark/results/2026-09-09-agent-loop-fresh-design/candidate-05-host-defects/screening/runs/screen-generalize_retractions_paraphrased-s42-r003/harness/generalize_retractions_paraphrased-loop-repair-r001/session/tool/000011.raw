@@ -1,0 +1,16 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Step by step:
+1. Post event: id='p', account='cash', amount=7
+   - postings['p'] = ('cash', 7)
+   - totals['cash'] = 0 + 7 = 7
+2. Retract event: id='r', target='p'
+   - target 'p' in postings: True
+   - account='cash', amount=7
+   - totals['cash'] = 7 - 7 = 0
+
+stderr:

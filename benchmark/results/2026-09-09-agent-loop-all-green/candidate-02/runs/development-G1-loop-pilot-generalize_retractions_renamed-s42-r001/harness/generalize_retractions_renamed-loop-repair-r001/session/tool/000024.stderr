@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    import sys; sys.path.insert(0, '.'); from ledger import positions_for; print('Testing exact case...'); def post(i, delta): return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}; def retract(i, reference): return {'key': i, 'kind': 'retract', 'reference': reference}; result = positions_for([post('p', 7), retract('r', 'p')]); print('Result:', result)
+                                                                                                           ^^^
+SyntaxError: invalid syntax

@@ -1,0 +1,24 @@
+Let me trace through the logic step by step
+1. retract(r, p)
+   seen = set()
+   cancelled = set()
+   postings = {}
+   totals = {}
+   event["id"] = "r"
+   event["kind"] = "retract"
+   target = "p"
+   "p" not in cancelled, so add it
+   cancelled = {"p"}
+   "p" not in postings, so no balance change
+   Result after first event: seen={"r"}, cancelled={"p"}, postings={}, totals={}
+
+2. post(p, 7)
+   event["id"] = "p"
+   "p" not in seen, so continue
+   seen.add("p")
+   event["kind"] = "post"
+   account = "cash", amount = 7
+   "p" not in cancelled, so process
+   postings["p"] = ("cash", 7)
+   totals["cash"] = 7
+   Result after second event: seen={"r","p"}, cancelled={"p"}, postings={"p": ("cash", 7)}, totals={"cash": 7}

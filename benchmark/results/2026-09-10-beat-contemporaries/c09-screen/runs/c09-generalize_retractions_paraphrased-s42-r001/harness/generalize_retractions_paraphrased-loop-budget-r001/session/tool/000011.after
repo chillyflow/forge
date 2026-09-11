@@ -1,0 +1,33 @@
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    
+    # First pass: collect all postings and track cancelled posts
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+        else:
+            target = event['target']
+            if target in cancelled:
+                continue
+            cancelled.add(target)
+    
+    # Second pass: process balances, skipping cancelled posts
+    seen.clear()
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            # Skip if this post was cancelled
+            if event['id'] in cancelled:
+                continue
+            account, amount = postings[event['id']]
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        # retract events are already processed in first pass, so we skip them here
+    return totals

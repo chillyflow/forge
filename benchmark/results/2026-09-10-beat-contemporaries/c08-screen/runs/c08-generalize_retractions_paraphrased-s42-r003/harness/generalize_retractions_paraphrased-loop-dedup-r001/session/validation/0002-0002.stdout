@@ -1,0 +1,25 @@
+Input events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Match: True
+
+Testing all cases from test_order_and_duplicates:
+Case 1: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+  Result: {'cash': 0}
+  Expected: {'cash': 0}
+  Match: True
+Case 2: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+  Result: {'cash': 7}
+  Expected: {'cash': 0}
+  Match: False
+Case 3: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+  Result: {'cash': 0}
+  Expected: {'cash': 0}
+  Match: True
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+Testing the exact case from test:
+Result: {'cash': 0}
+Expected: {'cash': 0}
+Match: True

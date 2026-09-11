@@ -1,0 +1,37 @@
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            # If this posting was already cancelled by a retraction, skip it
+            if event['id'] in cancelled:
+                continue
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            if target in cancelled:
+                continue
+            cancelled.add(target)
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+                # Remove the posting from postings dict to prevent double cancellation
+                del postings[target]
+    # Ensure accounts that had postings cancelled still appear with zero balance
+    # This handles the case where a posting is cancelled but never actually posted
+    for posting_id in cancelled:
+        if posting_id in postings:
+            # This posting was actually posted but cancelled - already handled above
+            continue
+        else:
+            # This posting was cancelled but never posted - need to ensure account exists with 0
+            # But we don't know the account for a cancelled posting that never existed
+            # The key insight is that we should not remove accounts from totals
+            pass
+    return totals

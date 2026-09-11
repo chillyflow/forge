@@ -1,0 +1,7 @@
+Let me think about this more systematically
+If we have two posts with same key "p", and two retractions with same reference "p":
+The problem says "Event IDs are globally idempotent"
+This means that if we see a message with key "p" twice, we should only process it once
+But in this case, they are different keys ("p" and "p" are the same key for the post, but the retraction keys are "r" and "s")
+So the key issue is: when we have duplicate posts, which one gets retracted?
+Let me trace what should happen with case 3 again...

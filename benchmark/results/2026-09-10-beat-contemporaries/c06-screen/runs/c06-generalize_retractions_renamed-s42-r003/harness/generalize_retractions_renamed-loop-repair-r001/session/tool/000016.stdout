@@ -1,0 +1,10 @@
+Testing with manual tracing
+Case 1 [p, retract(r,p)]: post then retract -> should be 0
+Case 2 [retract(r,p), p]: retract then post -> should be 0 according to test
+Case 3 [p, p, retract(r,p), retract(s,p)]: two posts, then two retractions -> should be 0
+
+Let me think about what the test is actually saying...
+The test seems to expect all three cases to result in 0
+This means there must be some special logic I am missing.
+Perhaps it is about how duplicate keys are handled
+Let me also check if there are more test cases

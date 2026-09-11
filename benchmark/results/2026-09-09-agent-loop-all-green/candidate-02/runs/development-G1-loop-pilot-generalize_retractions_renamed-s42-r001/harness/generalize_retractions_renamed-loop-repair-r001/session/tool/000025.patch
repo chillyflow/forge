@@ -1,0 +1,29 @@
+diff --git "a/simple_test.py" "b/simple_test.py"
+new file mode 100644
+--- /dev/null
++++ "b/simple_test.py"
+@@ -0,0 +1,23 @@
++#!/usr/bin/env python3
++
++# Let's test the exact case that's failing
++from ledger import positions_for
++
++def post(i, delta): 
++    return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}
++
++def retract(i, reference): 
++    return {'key': i, 'kind': 'retract', 'reference': reference}
++
++# This is the exact failing test case from test_ledger.py
++p = post('p', 7)
++result = positions_for([p, retract('r', 'p')])
++print(f"Result for [p, retract('r', 'p')]: {result}")
++print(f"Expected: {{'cash': 0}}")
++
++# Let's also test the other cases
++result2 = positions_for([retract('r', 'p'), p])
++print(f"Result for [retract('r', 'p'), p]: {result2}")
++
++result3 = positions_for([p, p, retract('r', 'p'), retract('s', 'p')])
++print(f"Result for [p, p, retract('r', 'p'), retract('s', 'p')]: {result3}")
+\ No newline at end of file

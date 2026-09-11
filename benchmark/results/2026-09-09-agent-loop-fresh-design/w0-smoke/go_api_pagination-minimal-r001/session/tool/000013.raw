@@ -1,0 +1,31 @@
+file_sha256:2eb1d57e336a1b6c137a03d98449fa539b3ee3d28bead3af46441dc3a41a548b
+1: package api
+2: 
+3: import (
+4: 	"encoding/json"
+5: 	"net/http"
+6: 	"strconv"
+7: )
+8: 
+9: func ListHandler(values []string) http.HandlerFunc {
+10: 	return func(w http.ResponseWriter, r *http.Request) {
+11: 		pageStr := r.URL.Query().Get("page")
+12: 		sizeStr := r.URL.Query().Get("size")
+13: 		
+14: 		page, err := strconv.Atoi(pageStr)
+15: 		if err != nil || page < 1 {
+16: 			w.WriteHeader(http.StatusBadRequest)
+17: 			return
+18: 		}
+19: 		
+20: 		size, err := strconv.Atoi(sizeStr)
+21: 		if err != nil || size < 1 {
+22: 			w.WriteHeader(http.StatusBadRequest)
+23: 			return
+24: 		}
+25: 		
+26: 		start := (page - 1) * size
+27: 		if start >= len(values) {
+28: 			start = len(values)
+29: 		}
+30: 		end := start + size

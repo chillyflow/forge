@@ -1,0 +1,15 @@
+{
+  "id": "last_index",
+  "prompt": "LastIndex returns the last matching index, or -1 when absent. Inspect the source, fix the bug, and run go test -json ./... to verify. Do not modify tests.",
+  "verify": [
+    "go",
+    "test",
+    "-json",
+    "./..."
+  ],
+  "files": {
+    "go.mod": "module forgebench\n\ngo 1.24\n",
+    "repair.go": "package repair\n\nfunc LastIndex(xs []int, target int) int { for i,v:=range xs { if v==target { return i } }; return -1 }\n",
+    "repair_test.go": "package repair\n\nimport \"testing\"\nfunc TestRepair(t *testing.T) { if LastIndex([]int{2,1,2},2)!=2 || LastIndex(nil,0)!=-1 || LastIndex([]int{3},4)!=-1 { t.Fatal(\"last occurrence failed\") } }\n"
+  }
+}

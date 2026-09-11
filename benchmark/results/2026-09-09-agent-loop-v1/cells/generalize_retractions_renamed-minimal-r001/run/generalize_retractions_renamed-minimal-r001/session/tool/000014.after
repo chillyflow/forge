@@ -1,0 +1,35 @@
+def positions_for(messages):
+    visited = set()
+    voided = set()
+    entries = {}
+    positions = {}
+    
+    for message in messages:
+        # Skip if we've already processed this message
+        if message['key'] in visited:
+            continue
+        visited.add(message['key'])
+        
+        if message['kind'] == 'post':
+            # If this posting was already voided by a retraction, skip it
+            if message['key'] in voided:
+                continue
+                
+            bucket, delta = message['bucket'], message['delta']
+            entries[message['key']] = (bucket, delta)
+            positions.setdefault(bucket, 0)
+            positions[bucket] += delta
+        else:
+            reference = message['reference']
+            # If we've already voided this reference, skip
+            if reference in voided:
+                continue
+            voided.add(reference)
+            # If we have the entry being retracted, process the retraction
+            if reference in entries:
+                bucket, delta = entries[reference]
+                positions[bucket] -= delta
+                del entries[reference]
+            # If reference is not in entries, the retraction is for a non-existent posting
+            # which should be ignored (no balance effect)
+    return positions

@@ -1,0 +1,15 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Case 3 trace:
+1. post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+2. post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 14}
+3. retract r,p -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+4. retract s,p -> entries: {}, positions: {"cash": 0}
+Expected: 0, Got: {'cash': 7}
+
+Case 2 trace:
+1. retract r,p -> entries: {}, positions: {}
+2. post p,7 -> entries: {"p": ("cash", 7)}, positions: {"cash": 7}
+Expected: 0, Got: {'cash': 7}
+
+stderr:

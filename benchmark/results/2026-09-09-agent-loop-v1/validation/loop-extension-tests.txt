@@ -1,0 +1,36 @@
+.F......F...
+======================================================================
+FAIL: test_candidate_budget_is_shared_not_multiplied (__main__.LoopExtensionTests.test_candidate_budget_is_shared_not_multiplied)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\dev\forge\tests\integration\test_loop_extensions.py", line 135, in test_candidate_budget_is_shared_not_multiplied
+    self.assertTrue("budget" in result.stderr.lower() or "turn" in result.stderr.lower())
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_second_candidate_starts_from_baseline_and_only_winner_survives (__main__.LoopExtensionTests.test_second_candidate_starts_from_baseline_and_only_winner_survives)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\dev\forge\tests\integration\test_loop_extensions.py", line 92, in test_second_candidate_starts_from_baseline_and_only_winner_survives
+    self.assertEqual(self.kind(events, "final"), ["Selected repaired candidate."])
+AssertionError: Lists differ: [{'schema_version': 1, 'type': 'final', 's[68 chars]e.'}] != ['Selected repaired candidate.']
+
+First differing element 0:
+{'schema_version': 1, 'type': 'final', 's[67 chars]te.'}
+'Selected repaired candidate.'
+
+- [{'data': 'Selected repaired candidate.',
+?  ---------                              ^
+
++ ['Selected repaired candidate.']
+?                                ^
+
+-   'elapsed_ms': 203,
+-   'schema_version': 1,
+-   'sequence': 42,
+-   'type': 'final'}]
+
+----------------------------------------------------------------------
+Ran 12 tests in 5.730s
+
+FAILED (failures=2)

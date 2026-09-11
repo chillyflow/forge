@@ -1,0 +1,8 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+p: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+r: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+balances([p, r]): {'cash': 0}
+balances([r, p]): {}
+
+stderr:

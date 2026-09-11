@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "purpose": "Capability stage: two declared arm groups on one frozen binary. Group A is the deployable minimal-native loop; Group B is the ordinary flattened agent, the only configuration in which Devstral runs at this revision.",
+  "frozen_utc": "2026-09-11T17:25:26.875651+00:00",
+  "counts_toward_model_acceptance": false,
+  "is_scheduled_gate_evidence": false,
+  "devstral_native_incompatibility": "Devstral mistral3 template enforces strict user/assistant alternation; the minimal loop appends a control user-message after tool results, which raises in the template and surfaces as an input-limit error. Recorded finding, not a capability result.",
+  "bars": {
+    "G-Model": "within a group: clear at >=4/6 manifests each with >=1 pass AND >=6/18 total; no protected-file violations; else that group axis closes",
+    "G-Retract": "cleared arm reaches >=4/12 with >=2 manifests"
+  },
+  "forge": {
+    "path": "C:\\Users\\flowc\\dev\\forge\\benchmark\\results\\2026-09-10-beat-contemporaries\\candidate-09-budget-guidance\\runtime\\forge.exe",
+    "sha256": "9960ad04741e14f845f500089782fccf6fbf2a5728938db89762be44e6d50d0b"
+  },
+  "models": {
+    "a0-qwen-coder": {
+      "path": "C:\\Users\\flowc\\models\\forge\\Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad"
+    },
+    "a1-qwen-thinking": {
+      "path": "C:\\Users\\flowc\\models\\forge\\Qwen3-30B-A3B-Thinking-2507-Q4_K_M.gguf",
+      "sha256": "b7380c816fca5a03b746be3d42773fb9a1c4b3bb4b3a1f3d9c2aeb10a720cba6"
+    },
+    "b0-qwen-coder-flat": {
+      "path": "C:\\Users\\flowc\\models\\forge\\Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad"
+    },
+    "b1-devstral-flat": {
+      "path": "C:\\Users\\flowc\\models\\forge\\Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
+      "sha256": "d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496"
+    }
+  },
+  "arms": {
+    "a0-qwen-coder": {
+      "variant": "loop-repair",
+      "protocol": "native",
+      "output_reserve": 4096,
+      "group": "A-deployable"
+    },
+    "a1-qwen-thinking": {
+      "variant": "loop-repair-thinking",
+      "protocol": "native",
+      "output_reserve": 4096,
+      "group": "A-deployable"
+    },
+    "b0-qwen-coder-flat": {
+      "variant": "optimized",
+      "protocol": "flattened",
+      "output_reserve": 2048,
+      "group": "B-flattened"
+    },
+    "b1-devstral-flat": {
+      "variant": "optimized",
+      "protocol": "flattened",
+      "output_reserve": 2048,
+      "group": "B-flattened"
+    }
+  },
+  "profile": {
+    "flags": [
+      "--gpu-layers=-1",
+      "--context=16384",
+      "--temperature=0.6",
+      "--max-turns=32",
+      "--max-tokens=32768",
+      "--max-input=262144",
+      "--timeout=600",
+      "--verification-timeout=120",
+      "--order-seed=20260831",
+      "--gpu-index=0"
+    ],
+    "seed": 42
+  },
+  "stage1": {
+    "task_dir": "C:\\Users\\flowc\\dev\\forge\\benchmark\\tasks",
+    "suite": "reasoning-gated",
+    "tasks": [
+      "reasoning_atomic_transfers",
+      "reasoning_dependency_order",
+      "reasoning_event_replay",
+      "reasoning_interval_union",
+      "reasoning_quota_allocation",
+      "reasoning_route_specificity"
+    ],
+    "repetitions": 3,
+    "manifest_sha256": {
+      "reasoning_atomic_transfers": "435cce8aab3cb9d5bfa09fd1e70cf8a362963dc5f46d30a1e39a25fb9061e3be",
+      "reasoning_dependency_order": "9774306369a534a5d16438ddc0f0c8d2358d9b52e41c0ae0afc2c3734e5b4f3e",
+      "reasoning_event_replay": "086a19b56e861c7ee44fc810be5c6aa540d82e7f2f9a1108a07b55ec43f56d60",
+      "reasoning_interval_union": "b810b1aa10251bb40f2787342a6e4a3a410679600e969a57ba145ce030cf0eac",
+      "reasoning_quota_allocation": "0d4e9a203bfe00734a88be734af6cabd937da077e968c4e4d9d913ff0254727f",
+      "reasoning_route_specificity": "eb27d2325491ba2831dcf10ba4d61b0b826ff039f03b47b77f782a20aa518fbb"
+    }
+  },
+  "stage2": {
+    "task_dir": "C:\\Users\\flowc\\dev\\forge\\benchmark\\results\\2026-09-08-repair-control\\tasks",
+    "suite": "all",
+    "tasks": [
+      "generalize_retractions_original",
+      "generalize_retractions_renamed",
+      "generalize_retractions_paraphrased",
+      "generalize_retractions_distractor"
+    ],
+    "repetitions": 3,
+    "manifest_sha256": {
+      "generalize_retractions_original": "8d909f5d803c950d0aa6c2acb7fd6e53ac13b55f348288f37dabde6103fc0472",
+      "generalize_retractions_renamed": "3e32c2aad5756a0e60823082e619b811aa3bc4e8389052923b86b289b9c91e2f",
+      "generalize_retractions_paraphrased": "27603cd6d23caf00e7afcfd8714dfbad577f25e407ef9bb901318c810878c0a0",
+      "generalize_retractions_distractor": "2bb193bae70032c96e5919787107dead6b8c81ef0aed2c5195678067517b9829"
+    }
+  }
+}

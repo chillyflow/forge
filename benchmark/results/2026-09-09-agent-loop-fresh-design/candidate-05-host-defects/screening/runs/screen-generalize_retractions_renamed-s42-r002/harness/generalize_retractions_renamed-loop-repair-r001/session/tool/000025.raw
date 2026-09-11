@@ -1,0 +1,9 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+What is the bucket for post p?
+p = {'key': 'p', 'kind': 'post', 'bucket': 'cash', 'delta': 7}
+retract r for p = {'key': 'r', 'kind': 'retract', 'reference': 'p'}
+Case 1 [p, retract(r,p)]: {'cash': 0}
+Case 2 [retract(r,p), p]: {}
+
+stderr:

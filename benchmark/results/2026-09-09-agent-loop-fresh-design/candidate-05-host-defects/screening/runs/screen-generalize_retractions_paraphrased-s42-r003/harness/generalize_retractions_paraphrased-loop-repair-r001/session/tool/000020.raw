@@ -1,0 +1,35 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Debugging the failing test case:
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Expected result: {'cash': 0}
+
+Actual result: {'cash': 7}
+
+Manual trace:
+1. Process retract('r', 'p'):
+   - event['id'] = 'r', not in seen
+   - seen.add('r')
+   - event['kind'] = 'retract'
+   - target = 'p'
+   - 'p' not in cancelled -> cancelled.add('p')
+   - 'p' not in postings -> no change to totals
+   - totals = {} (no change)
+
+2. Process post('p', 7):
+   - event['id'] = 'p', not in seen
+   - seen.add('p')
+   - event['kind'] = 'post'
+   - account = 'cash', amount = 7
+   - postings['p'] = ('cash', 7)
+   - totals.setdefault('cash', 0) -> totals['cash'] = 0
+   - totals['cash'] += 7 -> totals['cash'] = 7
+   - totals = {'cash': 7}
+
+But the expected result is {'cash': 0}!
+
+--- Checking other cases ---
+Case 1 [p, retract('r', 'p')]: {'cash': 0}
+Case 3 [p, p, retract('r', 'p'), retract('s', 'p')]: {'cash': 0}
+
+stderr:

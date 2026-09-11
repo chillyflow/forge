@@ -1,0 +1,457 @@
+--- a/benchmark/agent_loop_acceptance.py
++++ b/benchmark/agent_loop_acceptance.py
+@@ -9,10 +9,26 @@
+ import datetime
+ import hashlib
+ import json
++import os
+ from pathlib import Path
+ import random
+ import re
+ import zipfile
++
++VERIFICATION_POLICY = {
++    'python_cache_policy': 'fresh-external-prefix-no-write',
++    'other_cache_policy': 'not-applicable',
++    'terminal_retention_policy': 'complete-except-git-forge',
++    'input_inventory': 'all-files-except-root-git-forge-directories',
++    'retain_before_verification': True,
++}
++
++
++def configuration_digest(profiles, policies, verification_policy=None):
++    value = {'profiles': profiles, 'profile_policies': policies}
++    if verification_policy is not None:
++        value['verification_policy'] = verification_policy
++    return json_digest(value)
+ 
+ 
+ class EvidenceError(ValueError):
+@@ -145,6 +161,9 @@
+     require(isinstance(candidate.get('candidate_id'), str) and candidate['candidate_id'],
+             'missing candidate identity')
+     timestamp(candidate.get('frozen_utc'))
++    verification_policy = candidate.get('verification_policy')
++    if candidate.get('schema_version') == 2 or verification_policy is not None:
++        require(verification_policy == VERIFICATION_POLICY, 'missing or unsupported frozen verification policy')
+     identity = candidate['identity']
+     for name in ('source_sha256', 'runtime_sha256', 'model_sha256', 'configuration_sha256'):
+         require(re.fullmatch('[0-9a-f]{64}', identity.get(name, '')) is not None,
+@@ -160,8 +179,8 @@
+         if profile['temperature'] == 0:
+             require(policy['candidate_count'] == 1,
+                     'zero-temperature preservation requires the single-candidate path')
+-    require(identity['configuration_sha256'] == json_digest({
+-        'profiles': contract['profiles'], 'profile_policies': policies}),
++    require(identity['configuration_sha256'] == configuration_digest(
++        contract['profiles'], policies, verification_policy),
+         'configuration identity mismatch')
+     source = read_json(read_artifact(root, candidate['source_manifest']))
+     source_files = check_archive(root, candidate['source_archive'], candidate['source_inventory'])
+@@ -192,6 +211,59 @@
+     started, finished = timestamp(record.get('started_utc')), timestamp(record.get('finished_utc'))
+     require(timestamp(candidate['frozen_utc']) <= started <= finished,
+             'execution precedes candidate freeze or has invalid timing')
++
++
++def archived_snapshot(archive_files, prefix):
++    return {name[len(prefix):]: entry['sha256'] for name, entry in archive_files.items()
++            if name.startswith(prefix)}
++
++
++def validate_verification_policy(candidate, row, fixture, record, paths, archive_files, terminal_files):
++    """Bind new-candidate metadata to full cache-inclusive archived input bytes."""
++    policy = candidate['verification_policy']
++    require(policy == VERIFICATION_POLICY and record.get('verification_policy') == policy,
++            'run differs from frozen verification policy')
++    validation = read_json(paths['validation'])
++    harness = read_json(paths['harness_result'])
++    inputs = read_json(paths['verification_inputs'])
++    before = read_json(paths['pre_verification']).get('files')
++    preflight = read_json(paths['preflight'])
++    expected_cache = policy['python_cache_policy'] if fixture['verify'][0] == 'python' else policy['other_cache_policy']
++    require(validation.get('python_cache_policy') == expected_cache ==
++            harness.get('verification', {}).get('python_cache_policy'),
++            'missing or mismatched fresh-source verifier policy')
++    require(all(preflight.get('verification', {}).get(label, {}).get('python_cache_policy') == expected_cache
++                for label in ('baseline', 'oracle')), 'preflight lacks fresh-source verifier policy')
++    require(validation.get('terminal_retention_policy') == policy['terminal_retention_policy'] ==
++            harness.get('terminal_retention_policy') and
++            harness.get('pre_verification_workspace') == 'pre-verification-workspace' and
++            harness.get('terminal_workspace') == 'terminal-workspace',
++            'missing full before/after workspace retention policy')
++    require(isinstance(before, dict) and inputs.get('before') == before and
++            inputs.get('after') == terminal_files, 'full verifier input maps differ from retained snapshots')
++    require(archived_snapshot(archive_files, 'pre-verification/') == before and
++            archived_snapshot(archive_files, 'terminal/') == terminal_files,
++            'full before/after snapshot membership differs from archive')
++    variant = candidate['profile_policies'][row['profile']]['variant']
++    raw_prefix = 'raw/harness/' + row['task'] + '-' + variant + '-r001/'
++    require(archived_snapshot(archive_files, raw_prefix + 'pre-verification-workspace/') == before and
++            archived_snapshot(archive_files, raw_prefix + 'terminal-workspace/') == terminal_files,
++            'raw retained before/after bytes differ from verifier inventory')
++    for files in (before, terminal_files):
++        require(set(fixture['fixture_files']) <= set(files), 'verification snapshot omits fixture inputs')
++        require(all(files.get(name) == value for name, value in fixture['protected_files'].items()),
++                'protected pre/post-verification input changed')
++        for name in files:
++            parts = name.split('/')
++            first = parts[0].casefold() if os.name == 'nt' else parts[0]
++            require(name and '\\' not in name and not name.startswith('/') and ':' not in name and
++                    '..' not in parts and not (len(parts) > 1 and first in ('.git', '.forge')),
++                    'invalid retained input path')
++    unchanged = before == terminal_files
++    require(harness.get('verification_inputs_unchanged') is unchanged and
++            validation.get('verification_inputs_unchanged') is unchanged,
++            'verifier mutation flag differs from full input maps')
++    return unchanged
+ 
+ 
+ def test_count(language, output):
+@@ -230,6 +302,8 @@
+     evidence = record.get('evidence', {})
+     required = ('execution', 'command', 'preflight', 'prompts', 'outputs', 'journal',
+                 'validation', 'terminal', 'metrics', 'verification_stdout', 'verification_stderr')
++    if candidate.get('verification_policy') is not None:
++        required += ('verification_inputs', 'pre_verification', 'harness_result')
+     paths = {}
+     for role in required:
+         require(role in evidence, 'missing ' + role + ' evidence')
+@@ -241,6 +315,9 @@
+     for field in ('run_id', 'execution_id', 'candidate_id', 'candidate_sha256',
+                   'identity_before', 'identity_after', 'started_utc', 'finished_utc'):
+         require(execution.get(field) == record[field], 'archived execution binding mismatch')
++    if candidate.get('verification_policy') is not None:
++        require(execution.get('verification_policy') == candidate['verification_policy'],
++                'archived execution verification policy mismatch')
+     require(read_json(paths['command']).get('settings') == record['settings'],
+             'record settings differ from executed command')
+     preflight = read_json(paths['preflight'])
+@@ -276,6 +353,9 @@
+             validation.get('terminal_sha256') == json_digest(files),
+             'verification command or terminal input identity mismatch')
+     terminal_passed = validation.get('returncode') == 0 and validation.get('complete') is True
++    if candidate.get('verification_policy') is not None:
++        terminal_passed = validate_verification_policy(candidate, row, fixture, record, paths,
++                            archive_files, files) and terminal_passed
+     if terminal_passed:
+         output = paths['verification_stdout'].read_text(encoding='utf-8') + '\n' + \
+                  paths['verification_stderr'].read_text(encoding='utf-8')
+@@ -399,6 +479,7 @@
+             errors.append('confirmation freeze: ' + str(exc))
+     return {'schema_version': 1, 'contract_sha256': contract['contract_sha256'],
+             'candidate_id': candidate.get('candidate_id') if candidate else None,
++            'verification_policy': candidate.get('verification_policy', 'legacy-unspecified') if candidate else None,
+             'accepted': not errors and all(g['accepted'] for g in gate_reports.values()),
+             'gates': gate_reports, 'populations': contract['denominators'],
+             'terminal_passing_without_completion': terminal_only, 'errors': errors,
+--- a/benchmark/agent_loop_campaign.py
++++ b/benchmark/agent_loop_campaign.py
+@@ -19,7 +19,7 @@
+ import zipfile
+ 
+ import agent_loop_acceptance as acceptance
+-from common import materialize, runtime_bundle
++from common import materialize, runtime_bundle, verify_task
+ from repair_control import source_identity
+ from run import VARIANTS
+ 
+@@ -123,6 +123,7 @@
+             shutil.copy2(executable, retained)
+         g0_files[executable.name] = reference(retained)
+     candidate = {
++        'schema_version': 2, 'verification_policy': copy.deepcopy(acceptance.VERIFICATION_POLICY),
+         'candidate_id': args.candidate_id, 'contract_sha256': contract['contract_sha256'],
+         'frozen_utc': now(), 'source_root': str(root), 'model_path': str(args.model.resolve()),
+         'runtime_directory': str(runtime_dir), 'source_manifest': reference(output / 'source.json'),
+@@ -131,8 +132,8 @@
+         'g0_binaries': probe_binaries,
+         'g0_runtime': {'directory': str(g0_directory), 'files': g0_files},
+         'identity': {'source_sha256': source['files_sha256'], 'runtime_sha256': runtime['sha256'],
+-                     'model_sha256': model_hash, 'configuration_sha256': acceptance.json_digest({
+-                         'profiles': contract['profiles'], 'profile_policies': policies})}}
++                     'model_sha256': model_hash, 'configuration_sha256': acceptance.configuration_digest(
++                         contract['profiles'], policies, acceptance.VERIFICATION_POLICY)}}
+     candidate['candidate_sha256'] = acceptance.json_digest(candidate)
+     write(output / 'candidate.json', candidate)
+     write(output / 'outcomes.json', [])
+@@ -311,17 +312,21 @@
+             if label == 'baseline':
+                 acceptance.require(prepared['fixture_sha256'] == fixture['fixture_sha256'],
+                                    'fixture materialization differs from preregistration')
+-            result = subprocess.run(task['verify'], cwd=tmp, env=environment(root),
+-                                    capture_output=True, text=True, timeout=timeout, check=False)
+-            (target / (label + '.stdout')).write_text(result.stdout, encoding='utf-8')
+-            (target / (label + '.stderr')).write_text(result.stderr, encoding='utf-8')
++            (target / label).mkdir()
++            result = verify_task(Path(tmp), prepared_task, target / label,
++                                 env=environment(root), timeout=timeout)
++            for stream in ('stdout', 'stderr'):
++                shutil.copyfile(target / label / ('verification.' + stream), target / (label + '.' + stream))
+             results[label] = result
+     count = acceptance.test_count(task.get('language', 'go'),
+-                                  results['oracle'].stdout + '\n' + results['oracle'].stderr)
++                                  (target / 'oracle.stdout').read_text(encoding='utf-8') + '\n' +
++                                  (target / 'oracle.stderr').read_text(encoding='utf-8'))
+     summary = {'fixture_sha256': fixture['fixture_sha256'],
+-               'baseline_failed': results['baseline'].returncode != 0,
+-               'oracle_passed': results['oracle'].returncode == 0,
+-               'oracle_test_count': count, 'command': task['verify']}
++               'baseline_failed': results['baseline']['returncode'] != 0,
++               'oracle_passed': results['oracle']['returncode'] == 0,
++               'oracle_test_count': count, 'command': task['verify'],
++               'verification': {label: {'returncode': result['returncode'],
++                   'python_cache_policy': result.get('python_cache_policy')} for label, result in results.items()}}
+     acceptance.require(summary['baseline_failed'] and summary['oracle_passed'] and count > 0,
+                        'fixture preflight failed; no model attempt launched')
+     write(target / 'preflight.json', summary)
+@@ -350,6 +355,8 @@
+     fixture, profile = contract['fixtures'][row['manifest']], contract['profiles'][row['profile']]
+     record.update(schedule=row, fixture_sha256=fixture['fixture_sha256'],
+                   manifest_sha256=fixture['manifest_sha256'], settings={**profile, 'seed': row['seed']})
++    if candidate.get('verification_policy') is not None:
++        record['verification_policy'] = candidate['verification_policy']
+     variant = candidate['profile_policies'][row['profile']]['variant']
+     output = target / 'harness' / f'{row["task"]}-{variant}-r001'
+     harness = acceptance.read_json(output / 'result.json')
+@@ -407,6 +414,22 @@
+                              'terminal_sha256': acceptance.json_digest(files), 'test_count': count}}
+     evidence = {}
+     archive_paths = {'terminal/' + name: terminal_root / name for name in files}
++    if candidate.get('verification_policy') is not None:
++        pre_root = output / 'pre-verification-workspace'
++        acceptance.require(pre_root.is_dir(), 'missing pre-verification workspace')
++        before_files = {}
++        for path in pre_root.rglob('*'):
++            acceptance.require(not path.is_symlink(), 'symlink in retained verification workspace')
++            if path.is_file():
++                before_files[path.relative_to(pre_root).as_posix()] = acceptance.file_digest(path)
++        for path in terminal_root.rglob('*'):
++            acceptance.require(not path.is_symlink(), 'symlink in retained terminal workspace')
++        values['pre_verification'] = {'files': before_files}
++        values['validation'].update(
++            python_cache_policy=verification.get('python_cache_policy'),
++            terminal_retention_policy=harness.get('terminal_retention_policy'),
++            verification_inputs_unchanged=harness.get('verification_inputs_unchanged'))
++        archive_paths.update({'pre-verification/' + name: pre_root / name for name in before_files})
+     for role, value in values.items():
+         path = target / 'envelope' / (role + '.json')
+         write(path, value)
+@@ -414,6 +437,8 @@
+         archive_paths[evidence[role]['member']] = path
+     roles = {'outputs': output / 'stdout.jsonl', 'verification_stdout': output / 'verification.stdout',
+              'verification_stderr': output / 'verification.stderr', 'journal': output / 'session/events.jsonl'}
++    if candidate.get('verification_policy') is not None:
++        roles.update(verification_inputs=output / 'verification-inputs.json', harness_result=output / 'result.json')
+     # The manifest enumerates every raw prompt; actual files are retained below.
+     prompts = sorted((output / 'session/context').glob('*.txt'))
+     prompt_manifest = target / 'envelope/prompts.json'
+@@ -427,9 +452,9 @@
+     for path in target.rglob('*'):
+         if path.is_file() and path.name not in ('evidence.zip', 'evidence-inventory.json', 'outcome.json'):
+             archive_paths['raw/' + path.relative_to(target).as_posix()] = path
+-    for path in preflight_path.parent.iterdir():
++    for path in preflight_path.parent.rglob('*'):
+         if path.is_file():
+-            archive_paths['preflight/' + path.name] = path
++            archive_paths['preflight/' + path.relative_to(preflight_path.parent).as_posix()] = path
+     record['evidence'] = evidence
+     record['archive'], record['inventory'] = archive_files(target, archive_paths, 'evidence')
+     return record
+--- a/tests/unit/test_agent_loop_acceptance.py
++++ b/tests/unit/test_agent_loop_acceptance.py
+@@ -131,6 +131,13 @@
+ 
+     def seal_record(self, prefix='run'):
+         contents = {'terminal/' + name: data for name, data in self.terminal_contents.items()}
++        if hasattr(self, 'before_contents'):
++            contents.update({'pre-verification/' + name: data for name, data in self.before_contents.items()})
++            raw = 'raw/harness/' + self.row['task'] + '-loop-repair-r001/'
++            contents.update({raw + 'pre-verification-workspace/' + name: data
++                             for name, data in self.before_contents.items()})
++            contents.update({raw + 'terminal-workspace/' + name: data
++                             for name, data in self.terminal_contents.items()})
+         evidence = {}
+         for role, content in self.payloads.items():
+             reference = self.artifact(prefix + '/' + role, content)
+@@ -143,6 +150,180 @@
+     def validate_record(self):
+         return acceptance.validate_coding_record(self.contract, self.candidate, self.row,
+                                                  self.record, self.root)
++
++    def enable_fresh_policy(self):
++        self.candidate.update(schema_version=2, verification_policy=copy.deepcopy(acceptance.VERIFICATION_POLICY))
++        self.candidate['identity']['configuration_sha256'] = acceptance.configuration_digest(
++            self.contract['profiles'], self.candidate['profile_policies'], self.candidate['verification_policy'])
++        self.seal_candidate()
++        self.record.update(candidate_sha256=self.candidate['candidate_sha256'],
++            verification_policy=self.candidate['verification_policy'],
++            identity_before=copy.deepcopy(self.candidate['identity']),
++            identity_after=copy.deepcopy(self.candidate['identity']))
++        self.payloads['execution'].update({key: self.record[key] for key in
++            ('candidate_sha256', 'verification_policy', 'identity_before', 'identity_after')})
++        self.terminal_contents['__pycache__/cached.pyc'] = b'synthetic retained bytecode'
++        self.terminal_contents['nested/.forge/input'] = b'nested source input'
++        self.terminal_contents['.git'] = b'root regular gitfile input'
++        self.before_contents = copy.deepcopy(self.terminal_contents)
++        files = {name: self.digest(value) for name, value in self.terminal_contents.items()}
++        self.payloads['terminal']['files'] = files
++        self.payloads['pre_verification'] = {'files': copy.deepcopy(files)}
++        self.payloads['verification_inputs'] = {'before': copy.deepcopy(files), 'after': copy.deepcopy(files)}
++        self.payloads['validation'].update(terminal_sha256=acceptance.json_digest(files),
++            python_cache_policy='fresh-external-prefix-no-write',
++            terminal_retention_policy='complete-except-git-forge', verification_inputs_unchanged=True)
++        self.payloads['preflight']['verification'] = {label: {
++            'python_cache_policy': 'fresh-external-prefix-no-write'} for label in ('baseline', 'oracle')}
++        self.payloads['harness_result'] = {
++            'terminal_workspace': 'terminal-workspace', 'pre_verification_workspace': 'pre-verification-workspace',
++            'terminal_retention_policy': 'complete-except-git-forge', 'verification_inputs_unchanged': True,
++            'verification': {'python_cache_policy': 'fresh-external-prefix-no-write'}}
++        self.seal_record()
++
++    def test_new_policy_retains_cache_and_nested_inputs_without_changing_legacy(self):
++        self.assertTrue(self.validate_record()['passed'])
++        self.enable_fresh_policy()
++        acceptance.validate_candidate(self.contract, self.candidate, self.root)
++        self.assertTrue(self.validate_record()['passed'])
++
++    def test_new_candidate_requires_policy_and_configuration_binding(self):
++        self.candidate['schema_version'] = 2
++        self.seal_candidate()
++        with self.assertRaisesRegex(acceptance.EvidenceError, 'verification policy'):
++            acceptance.validate_candidate(self.contract, self.candidate, self.root)
++        self.enable_fresh_policy()
++        self.candidate['identity']['configuration_sha256'] = acceptance.configuration_digest(
++            self.contract['profiles'], self.candidate['profile_policies'])
++        self.seal_candidate()
++        with self.assertRaisesRegex(acceptance.EvidenceError, 'configuration identity'):
++            acceptance.validate_candidate(self.contract, self.candidate, self.root)
++
++    def test_missing_or_mismatched_freshness_metadata_rejected(self):
++        self.enable_fresh_policy()
++        for metadata in (None, 'not-applicable', 'no-write-only'):
++            with self.subTest(policy=metadata):
++                self.payloads['harness_result']['verification']['python_cache_policy'] = metadata
++                self.seal_record()
++                with self.assertRaisesRegex(acceptance.EvidenceError, 'fresh-source verifier'):
++                    self.validate_record()
++
++    def test_new_policy_requires_preflight_freshness(self):
++        self.enable_fresh_policy()
++        self.payloads['preflight']['verification'].pop('oracle')
++        self.seal_record()
++        with self.assertRaisesRegex(acceptance.EvidenceError, 'preflight lacks'):
++            self.validate_record()
++
++    def test_omitted_cache_from_maps_rejected_even_with_rehashed_envelopes(self):
++        self.enable_fresh_policy()
++        name = '__pycache__/cached.pyc'
++        self.payloads['pre_verification']['files'].pop(name)
++        self.payloads['verification_inputs']['before'].pop(name)
++        self.seal_record()
++        with self.assertRaisesRegex(acceptance.EvidenceError, 'snapshot membership'):
++            self.validate_record()
++
++    def test_omitted_before_snapshot_and_changed_retention_rejected(self):
++        self.enable_fresh_policy()
++        self.record['evidence'].pop('pre_verification')
++        with self.assertRaisesRegex(acceptance.EvidenceError, 'missing pre_verification'):
++            self.validate_record()
++        self.payloads['harness_result']['terminal_retention_policy'] = 'omit-caches'
++        self.seal_record()
++        with self.assertRaisesRegex(acceptance.EvidenceError, 'retention policy'):
++            self.validate_record()
++
++    def test_verifier_mutation_is_retained_but_never_passes(self):
++        self.enable_fresh_policy()
++        name = '__pycache__/cached.pyc'
++        self.terminal_contents[name] = b'changed by verifier'
++        self.payloads['terminal']['files'][name] = self.digest(self.terminal_contents[name])
++        self.payloads['verification_inputs']['after'] = copy.deepcopy(self.payloads['terminal']['files'])
++        self.payloads['validation'].update(verification_inputs_unchanged=False, complete=False,
++            terminal_sha256=acceptance.json_digest(self.payloads['terminal']['files']))
++        self.payloads['harness_result']['verification_inputs_unchanged'] = False
++        self.seal_record()
++        self.assertFalse(self.validate_record()['passed'])
++        self.payloads['validation']['verification_inputs_unchanged'] = True
++        self.seal_record()
++        with self.assertRaisesRegex(acceptance.EvidenceError, 'mutation flag'):
++            self.validate_record()
++
++    def test_freeze_declares_new_verification_policy_without_model_execution(self):
++        root = self.root / 'synthetic-source'
++        source = root / 'src/example.c'
++        source.parent.mkdir(parents=True)
++        source.write_bytes(b'synthetic source')
++        forge = root / 'build-gpu/Release/forge.exe'
++        forge.parent.mkdir(parents=True)
++        forge.write_bytes(b'synthetic binary')
++        model = root / 'model.gguf'
++        model.write_bytes(b'synthetic model')
++        contract = copy.deepcopy(self.contract)
++        contract['g0_checks'] = []
++        contract_path = root / 'contract.json'
++        campaign.write(contract_path, contract)
++        source_files = {'src/example.c': self.entry(source.read_bytes())}
++        identity = {'files': source_files, 'files_sha256': acceptance.json_digest(source_files)}
++        runtime_files = {'forge.exe': self.entry(forge.read_bytes())}
++        runtime = {'files': runtime_files, 'sha256': acceptance.json_digest(runtime_files)}
++        output = root / 'candidate'
++        args = SimpleNamespace(root=root, output=output, contract=contract_path, forge=forge,
++                               model=model, candidate_id='synthetic-freeze')
++        with mock.patch.object(campaign.acceptance, 'validate_contract'), \
++                mock.patch.object(campaign, 'source_identity', return_value=(identity, b'')), \
++                mock.patch.object(campaign, 'runtime_bundle', return_value=runtime), \
++                mock.patch.object(campaign, 'make_report'), \
++                mock.patch.object(campaign, 'run_process') as process, mock.patch('builtins.print'):
++            campaign.freeze(args)
++        process.assert_not_called()
++        candidate = acceptance.read_json(output / 'candidate.json')
++        self.assertEqual(candidate['schema_version'], 2)
++        self.assertEqual(candidate['verification_policy'], acceptance.VERIFICATION_POLICY)
++        acceptance.validate_candidate(contract, candidate, root)
++
++    def test_packager_keeps_full_cache_snapshots_and_actual_policy(self):
++        self.enable_fresh_policy()
++        target = self.root / 'new-adapter-run'
++        output = target / 'harness' / f'{self.row["task"]}-loop-repair-r001'
++        for name in ('terminal-workspace', 'pre-verification-workspace'):
++            for relative, content in self.terminal_contents.items():
++                path = output / name / relative
++                path.parent.mkdir(parents=True, exist_ok=True)
++                path.write_bytes(content)
++        harness = {**self.payloads['harness_result'], 'returncode': 0,
++                   'protected_files_unchanged': True, 'protected_before_verification': True,
++                   'verification': {'returncode': 0, 'python_cache_policy': 'fresh-external-prefix-no-write'},
++                   'language': 'python', 'timing': {'agent_seconds': 10., 'verification_seconds': .2},
++                   'metrics': {**self.payloads['metrics'], 'status': 'ok'}}
++        campaign.write(output / 'result.json', harness)
++        campaign.write(output / 'verification-inputs.json', self.payloads['verification_inputs'])
++        observed = {key: self.profile[key] for key in ('output_reserve', 'max_turns', 'max_tokens',
++                    'max_input', 'temperature', 'prompt_protocol', 'lifecycle', 'gpu_index', 'order_seed')}
++        observed.update(context_tokens=self.profile['context'], gpu_layers=str(self.profile['gpu_layers']),
++                        chat_template=self.profile['chat_template'], seed=self.row['seed'],
++                        forge_runtime_bundle={'sha256': self.candidate['identity']['runtime_sha256']},
++                        model_sha256=self.candidate['identity']['model_sha256'])
++        campaign.write(target / 'harness/environment.json', observed)
++        campaign.write(target / 'command.json', ['synthetic harness'])
++        campaign.write(output / 'command.json', ['synthetic Forge'])
++        campaign.write(output / 'stdout.jsonl', {'synthetic': True})
++        campaign.write(output / 'session/events.jsonl', {'synthetic': True})
++        prompt = output / 'session/context/0001.txt'
++        prompt.parent.mkdir()
++        prompt.write_text('synthetic prompt')
++        (output / 'verification.stdout').write_text('')
++        (output / 'verification.stderr').write_text(self.payloads['verification_stderr'])
++        preflight = self.root / 'new-preflight/preflight.json'
++        campaign.write(preflight, self.payloads['preflight'])
++        with mock.patch.object(campaign, 'observe', return_value=self.candidate['identity']):
++            record = campaign.package_run(self.root, target, self.row, self.contract, self.candidate,
++                self.candidate['identity'], self.record['started_utc'], self.record['finished_utc'], preflight)
++        self.assertTrue(acceptance.validate_coding_record(
++            self.contract, self.candidate, self.row, record, self.root)['passed'])
++        validation = acceptance.read_json(acceptance.read_artifact(self.root, record['evidence']['validation']))
++        self.assertEqual(validation['python_cache_policy'], 'fresh-external-prefix-no-write')
+ 
+     def test_frozen_schedule_and_denominators(self):
+         contract = acceptance.read_json(CONTRACT)

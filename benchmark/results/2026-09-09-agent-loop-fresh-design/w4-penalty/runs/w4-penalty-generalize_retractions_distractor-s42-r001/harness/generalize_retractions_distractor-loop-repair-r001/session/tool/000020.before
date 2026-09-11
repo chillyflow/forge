@@ -1,0 +1,25 @@
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            # Only process retraction if there's a corresponding posting
+            if target in postings:
+                # If this posting has already been cancelled, ignore the retraction
+                if target in cancelled:
+                    continue
+                # Mark the posting as cancelled and subtract its amount from the balance
+                cancelled.add(target)
+                account, amount = postings[target]
+                totals[account] -= amount
+            # If the posting doesn't exist (retraction before posting), no balance effect
+    return totals

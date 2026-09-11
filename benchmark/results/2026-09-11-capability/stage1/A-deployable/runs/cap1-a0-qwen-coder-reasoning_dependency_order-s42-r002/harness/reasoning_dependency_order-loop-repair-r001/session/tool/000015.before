@@ -1,0 +1,17 @@
+package main
+
+import (
+	"fmt"
+	"repair"
+)
+
+func main() {
+	tasks := []string{"package", "compile", "generate", "lint"}
+	deps := map[string][]string{"package": {"compile"}, "compile": {"generate"}}
+	result, ok := repair.OrderBuild(tasks, deps)
+	fmt.Printf("Result: %v, OK: %v\n", result, ok)
+	
+	// Expected: ["generate", "compile", "lint", "package"]
+	// This is because generate has no deps, compile depends on generate, 
+	// package depends on compile, lint has no deps
+}

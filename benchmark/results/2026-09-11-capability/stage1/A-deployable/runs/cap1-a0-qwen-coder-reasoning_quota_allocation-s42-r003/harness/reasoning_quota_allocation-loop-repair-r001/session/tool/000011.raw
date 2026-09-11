@@ -1,0 +1,12 @@
+file_sha256:1a91e8b1333f29531635944ee06f339110e8c0a8b2adfcdf11fc6b2980759330
+15: 		t.Fatalf("capped=%v ok=%v", got, ok)
+16: 	}
+17: 	tied := []Request{{"b", 0, 2, 1}, {"a", 0, 2, 1}}
+18: 	if got, ok := AllocateQuota(1, tied); !ok || got["a"] != 1 {
+19: 		t.Fatalf("tie=%v ok=%v", got, ok)
+20: 	}
+21: 	for _, bad := range [][]Request{{{"x", 2, 1, 1}}, {{"x", 0, 1, 0}}, {{"x", 0, 1, 1}, {"x", 0, 1, 1}}} {
+22: 		if got, ok := AllocateQuota(1, bad); ok || got != nil {
+23: 			t.Fatalf("accepted %v: %v", bad, got)
+24: 		}
+25: 	}

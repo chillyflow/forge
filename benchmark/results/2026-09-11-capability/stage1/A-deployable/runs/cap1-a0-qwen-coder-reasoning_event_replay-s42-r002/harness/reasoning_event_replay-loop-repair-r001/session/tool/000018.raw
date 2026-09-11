@@ -1,0 +1,41 @@
+file_sha256:ec7555cdb625b7fd41bbc9e1aa4a51857c77a4186d7299c5289e41bdaa5c102e
+1: package repair
+2: 
+3: type Event struct {
+4: 	Seq           int
+5: 	ID, Kind, Key string
+6: 	Delta         int
+7: }
+8: 
+9: func ReplayEvents(events []Event) (map[string]int, bool) {
+10: 	state := map[string]int{}
+11: 	seen := map[string]Event{}
+12: 	expected := 1
+13: 	maxInt := int(^uint(0) >> 1)
+14: 	minInt := -maxInt - 1
+15: 	for _, event := range events {
+16: 		if event.ID == "" || event.Key == "" {
+17: 			return nil, false
+18: 		}
+19: 		if event.Seq != expected {
+20: 			return nil, false
+21: 		}
+22: 		expected++
+23: 		// Check for duplicate event IDs with matching payloads
+24: 		if existing, ok := seen[event.ID]; ok {
+25: 			if existing != event {
+26: 				return nil, false
+27: 			}
+28: 			continue
+29: 		}
+30: 		seen[event.ID] = event
+31: 		switch event.Kind {
+32: 		case "Add":
+33: 			current := state[event.Key]
+34: 			if event.Delta > 0 && current > maxInt-event.Delta || event.Delta < 0 && current < minInt-event.Delta {
+35: 				return nil, false
+36: 			}
+37: 			state[event.Key] = current + event.Delta
+38: 		case "Delete":
+39: 			if event.Delta != 0 {
+40: 				return nil, false

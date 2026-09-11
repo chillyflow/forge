@@ -1,0 +1,24 @@
+diff --git a/service.py b/service.py
+index b7bbbde..838233c 100644
+--- a/service.py
++++ b/service.py
+@@ -6,11 +6,17 @@ def balances(events):
+             continue
+         seen.add(event['id'])
+         if event['kind'] == 'post':
++            # If this post was cancelled by a previous retract, skip it
++            if event['id'] in cancelled:
++                # Even if cancelled, ensure account exists in totals with zero balance
++                account = event['account']
++                if account not in totals:
++                    totals[account] = 0
++                continue
+             account, amount = event['account'], event['amount']
+             postings[event['id']] = (account, amount)
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
++            totals[account] += amount
+         else:
+             target = event['target']
+             if target in cancelled:

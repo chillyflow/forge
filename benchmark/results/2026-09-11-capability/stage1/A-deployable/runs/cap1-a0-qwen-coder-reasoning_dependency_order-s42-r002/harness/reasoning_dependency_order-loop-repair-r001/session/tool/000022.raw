@@ -1,0 +1,21 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+
+---------- DEBUG_TEST.GO
+
+---------- REPAIR.GO
+	sort.Strings(ready)
+
+---------- REPAIR_TEST.GO
+func TestOrderBuild(t *testing.T) {
+	if got, ok := OrderBuild(tasks, deps); !ok || !reflect.DeepEqual(got, []string{"generate", "compile", "lint", "package"}) {
+		t.Fatalf("order=%v ok=%v", got, ok)
+		t.Fatal("unknown dependency accepted")
+		t.Fatal("cycle accepted")
+
+stderr:
+File not found - -NAME
+File not found - -NOT
+File not found - -PATH
+Access denied - .FORGE
+Access denied - .GIT

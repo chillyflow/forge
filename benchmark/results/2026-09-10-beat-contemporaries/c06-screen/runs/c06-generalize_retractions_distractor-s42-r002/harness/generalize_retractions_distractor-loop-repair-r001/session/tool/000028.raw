@@ -1,0 +1,10 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+p: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+r: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+Test case input: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Direct result: {'cash': 0}
+Test case input as nested: [[{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]]
+Nested result: {'cash': 0}
+
+stderr:

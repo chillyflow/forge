@@ -1,0 +1,53 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,21 +1,28 @@
+-def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:
+-            target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-    return totals
++def balances(events):
++    # First pass: collect all cancellations
++    cancelled = set()
++    for event in events:
++        if event['kind'] == 'retract':
++            cancelled.add(event['target'])
++    
++    # Second pass: process postings and apply cancellations
++    seen = set()
++    postings = {}
++    totals = {}
++    
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            # Only process if not cancelled
++            if event['id'] not in cancelled:
++                postings[event['id']] = (account, amount)
++                totals.setdefault(account, 0)
++                totals[account] += amount
++        # For retractions, they don't contribute to totals directly
++        # They just mark postings as cancelled
++    
++    return totals

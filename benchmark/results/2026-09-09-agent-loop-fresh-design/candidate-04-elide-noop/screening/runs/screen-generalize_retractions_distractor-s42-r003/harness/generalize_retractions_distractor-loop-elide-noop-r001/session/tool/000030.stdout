@@ -1,0 +1,7 @@
+Manual trace:
+1. retract(r, p): cancelled = {"p"}
+2. post(p, 7): account = "cash", amount = 7
+3. Check if p in cancelled: True
+4. So we skip the posting
+5. involved_accounts should have "cash" but it was never added because we skipped
+Result: {'cash': 0}

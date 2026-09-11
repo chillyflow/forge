@@ -1,0 +1,44 @@
+{"schema_version":1,"type":"state","sequence":1,"elapsed_ms":0,"data":{"state":0}}
+{"schema_version":1,"type":"request","sequence":2,"elapsed_ms":0,"data":"UnionIntervals must normalize reversed inclusive intervals, sort them, and merge both overlaps and adjacency without mutating the input. Inspect the implementation, repair it, and run go test -json ./... without modifying tests."}
+{"schema_version":1,"type":"agent_mode","sequence":3,"elapsed_ms":0,"data":{"name":"bounded-repair","version":1,"append_only":false,"automatic_validation":true,"raw_history_retained":true,"recovery":false,"corrective_prompts":false}}
+{"schema_version":1,"type":"bounded_context","sequence":4,"elapsed_ms":15,"data":{"rendered_tokens":1038,"input_budget":8192,"omitted_segments":0,"segments":[{"kind":0,"bytes":1021,"estimated_tokens":1353,"count":2},{"kind":1,"bytes":1988,"estimated_tokens":1067,"count":1},{"kind":2,"bytes":0,"estimated_tokens":0,"count":0},{"kind":3,"bytes":228,"estimated_tokens":616,"count":1},{"kind":4,"bytes":608,"estimated_tokens":728,"count":1},{"kind":5,"bytes":0,"estimated_tokens":0,"count":0},{"kind":6,"bytes":0,"estimated_tokens":0,"count":0},{"kind":7,"bytes":0,"estimated_tokens":0,"count":0}]}}
+{"schema_version":1,"type":"context_plan","sequence":5,"elapsed_ms":15,"data":{"turn":1,"artifact":"context/0001.json","hash":3476775233531445982,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":6,"elapsed_ms":15,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":7,"elapsed_ms":15,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":8,"elapsed_ms":578,"data":"I"}
+{"schema_version":1,"type":"token","sequence":9,"elapsed_ms":609,"data":"'ll"}
+{"schema_version":1,"type":"token","sequence":10,"elapsed_ms":640,"data":" start"}
+{"schema_version":1,"type":"token","sequence":11,"elapsed_ms":656,"data":" by"}
+{"schema_version":1,"type":"token","sequence":12,"elapsed_ms":687,"data":" exploring"}
+{"schema_version":1,"type":"token","sequence":13,"elapsed_ms":703,"data":" the"}
+{"schema_version":1,"type":"token","sequence":14,"elapsed_ms":734,"data":" repository"}
+{"schema_version":1,"type":"token","sequence":15,"elapsed_ms":765,"data":" structure"}
+{"schema_version":1,"type":"token","sequence":16,"elapsed_ms":781,"data":" to"}
+{"schema_version":1,"type":"token","sequence":17,"elapsed_ms":812,"data":" understand"}
+{"schema_version":1,"type":"token","sequence":18,"elapsed_ms":828,"data":" the"}
+{"schema_version":1,"type":"token","sequence":19,"elapsed_ms":859,"data":" code"}
+{"schema_version":1,"type":"token","sequence":20,"elapsed_ms":875,"data":"base"}
+{"schema_version":1,"type":"token","sequence":21,"elapsed_ms":906,"data":" and"}
+{"schema_version":1,"type":"token","sequence":22,"elapsed_ms":937,"data":" locate"}
+{"schema_version":1,"type":"token","sequence":23,"elapsed_ms":953,"data":" the"}
+{"schema_version":1,"type":"token","sequence":24,"elapsed_ms":984,"data":" `"}
+{"schema_version":1,"type":"token","sequence":25,"elapsed_ms":1000,"data":"Union"}
+{"schema_version":1,"type":"token","sequence":26,"elapsed_ms":1031,"data":"Interval"}
+{"schema_version":1,"type":"token","sequence":27,"elapsed_ms":1046,"data":"s"}
+{"schema_version":1,"type":"token","sequence":28,"elapsed_ms":1078,"data":"`"}
+{"schema_version":1,"type":"token","sequence":29,"elapsed_ms":1109,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":30,"elapsed_ms":1125,"data":"."}
+{"schema_version":1,"type":"token","sequence":31,"elapsed_ms":1156,"data":"[TOOL_CALLS]"}
+{"schema_version":1,"type":"token","sequence":32,"elapsed_ms":1187,"data":"list"}
+{"schema_version":1,"type":"token","sequence":33,"elapsed_ms":1234,"data":"_directory"}
+{"schema_version":1,"type":"token","sequence":34,"elapsed_ms":1265,"data":"[ARGS]"}
+{"schema_version":1,"type":"token","sequence":35,"elapsed_ms":1296,"data":"{}"}
+{"schema_version":1,"type":"inference","sequence":36,"elapsed_ms":1328,"data":{"prompt_tokens":1038,"cached_tokens":0,"generated_tokens":28,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":37,"elapsed_ms":1328,"data":"I'll start by exploring the repository structure to understand the codebase and locate the `UnionIntervals` implementation.[TOOL_CALLS]list_directory[ARGS]{}"}
+{"schema_version":1,"type":"state","sequence":38,"elapsed_ms":1328,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":39,"elapsed_ms":1328,"data":{"assistant_content":"I'll start by exploring the repository structure to understand the codebase and locate the `UnionIntervals` implementation.","tool":"list_directory","args":{}}}
+{"schema_version":1,"type":"state","sequence":40,"elapsed_ms":1328,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":41,"elapsed_ms":1343,"data":{"id":1,"name":"list_directory","output":"go.mod\nrepair.go\nrepair_test.go\n","status":"ok","duration_ms":0.0}}
+{"schema_version":1,"type":"state","sequence":42,"elapsed_ms":1343,"data":{"state":5}}
+{"schema_version":1,"type":"state","sequence":43,"elapsed_ms":1343,"data":{"state":8}}
+{"schema_version":1,"type":"error","sequence":44,"elapsed_ms":1343,"data":{"schema_version":1,"status":"limit","simulated":false,"prompt_tokens":1038,"generated_tokens":28,"cached_tokens":0,"prefill_tokens":1038,"turns":2,"tool_calls":1,"raw_tool_bytes":32,"visible_tool_bytes":32,"files_modified":0,"context_evictions":0,"loop_warnings":0,"grammar_fast_tokens":0,"grammar_fallback_tokens":29,"think_tokens":23,"forced_actions":0,"action_stops":0,"action_select_tokens":0,"action_argument_tokens":0,"patch_tokens":0,"final_tokens":0,"memory_tokens":0,"forced_action_progress_tokens":0,"raw_tool_tokens":567,"visible_tool_tokens":567,"files_opened":0,"validation_commands":0,"validation_failures":0,"generation_arena_peak_bytes":0,"repo_full_scans":0,"repo_delta_scans":0,"filesystem_events":0,"watch_reopens":0,"stale_generations":0,"index_cold_parses":0,"index_incremental_parses":0,"index_cache_hits":0,"index_cache_evictions":0,"peak_index_source_bytes":0,"peak_index_nodes":0,"checkpoint_lookups":0,"checkpoint_hits":0,"checkpoint_misses":0,"checkpoint_captures":0,"checkpoint_evictions":0,"checkpoint_restored_tokens":0,"checkpoint_reused_tokens":0,"checkpoint_additional_tokens":0,"checkpoint_peak_bytes":0,"load_ms":6313.0,"prefill_ms":547.0,"decode_ms":750.0,"sampling_ms":62.0,"duration_ms":1343.0,"tool_ms":0.0,"validation_ms":0.0,"index_ms":0.0,"checkpoint_probe_ms":0.0,"checkpoint_capture_ms":0.0,"checkpoint_restore_ms":0.0}}

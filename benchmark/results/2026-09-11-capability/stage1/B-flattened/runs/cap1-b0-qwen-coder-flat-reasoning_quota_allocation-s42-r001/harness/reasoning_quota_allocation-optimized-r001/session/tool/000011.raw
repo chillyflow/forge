@@ -1,0 +1,94 @@
+file_sha256:6b96b2fb6f8e935f4fd8bc24c030b95cc82746037dd85fe5dd3f359909942fcb
+1: package repair
+2: 
+3: import "sort"
+4: 
+5: type Request struct {
+6: 	ID               string
+7: 	Min, Max, Weight int
+8: }
+9: type quotaShare struct {
+10: 	index, whole int
+11: 	remainder    int64
+12: }
+13: 
+14: func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+15: 	if capacity < 0 {
+16: 		return nil, false
+17: 	}
+18: 	out := map[string]int{}
+19: 	minTotal, maxTotal := 0, 0
+20: 	for _, request := range requests {
+21: 		if request.ID == "" || request.Min < 0 || request.Max < request.Min || request.Weight <= 0 {
+22: 			return nil, false
+23: 		}
+24: 		if _, exists := out[request.ID]; exists {
+25: 			return nil, false
+26: 		}
+27: 		if minTotal > int(^uint(0)>>1)-request.Min || maxTotal > int(^uint(0)>>1)-request.Max {
+28: 			return nil, false
+29: 		}
+30: 		minTotal += request.Min
+31: 		maxTotal += request.Max
+32: 		out[request.ID] = request.Min
+33: 	}
+34: 	if capacity < minTotal || capacity > maxTotal {
+35: 		return nil, false
+36: 	}
+37: 
+38: 	left := capacity - minTotal
+39: 	for left > 0 {
+40: 		weightTotal := int64(0)
+41: 		active := []int{}
+42: 		for i, request := range requests {
+43: 			if out[request.ID] < request.Max {
+44: 				weightTotal += int64(request.Weight)
+45: 				active = append(active, i)
+46: 			}
+47: 		}
+48: 		if weightTotal <= 0 {
+49: 			break
+50: 		}
+51: 		shares := make([]quotaShare, 0, len(active))
+52: 		used := 0
+53: 		for _, i := range active {
+54: 			request := requests[i]
+55: 			numerator := int64(left) * int64(request.Weight)
+56: 			whole := int(numerator / weightTotal)
+57: 			room := request.Max - out[request.ID]
+58: 			if whole > room {
+59: 				whole = room
+60: 			}
+61: 			shares = append(shares, quotaShare{i, whole, numerator % weightTotal})
+62: 			used += whole
+63: 		}
+64: 		for _, share := range shares {
+65: 			out[requests[share.index].ID] += share.whole
+66: 		}
+67: 		left -= used
+68: 		if left == 0 {
+69: 			break
+70: 		}
+71: 		// Handle rounding leftovers by largest fractional remainder with ID tie-break
+72: 		sort.SliceStable(shares, func(i, j int) bool {
+73: 			if shares[i].remainder == shares[j].remainder {
+74: 				return shares[i].index < shares[j].index
+75: 			}
+76: 			return shares[i].remainder > shares[j].remainder
+77: 		})
+78: 		progressed := false
+79: 		for _, share := range shares {
+80: 			id := requests[share.index].ID
+81: 			if left > 0 && out[id] < requests[share.index].Max {
+82: 				out[id]++
+83: 				left--
+84: 				preferred = true
+85: 				preferred = true
+86: 			}
+87: 		}
+88: 		if !progressed {
+89: 			break
+90: 		}
+91: 	}
+92: 	return out, true
+93: }

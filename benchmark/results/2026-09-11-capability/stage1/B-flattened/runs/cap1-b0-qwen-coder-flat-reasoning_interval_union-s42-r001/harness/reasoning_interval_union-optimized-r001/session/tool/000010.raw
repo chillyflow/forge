@@ -1,0 +1,33 @@
+file_sha256:0a5b0efbb638007063325c7f9b42fcaf1750122442c339b5e511bbc214c1f1d2
+1: package repair
+2: 
+3: import "sort"
+4: 
+5: type Interval struct{ Lo, Hi int }
+6: 
+7: func UnionIntervals(in []Interval) []Interval {
+8: 	if in == nil {
+9: 		return nil
+10: 	}
+11: 	out := append([]Interval{}, in...)
+12: 	for i := range out {
+13: 		if out[i].Lo > out[i].Hi {
+14: 			out[i].Lo, out[i].Hi = out[i].Hi, out[i].Lo
+15: 		}
+16: 	}
+17: 	sort.Slice(out, func(i, j int) bool {
+18: 		if out[i].Lo == out[j].Lo {
+19: 			return out[i].Hi < out[j].Hi
+20: 		}
+21: 		return out[i].Lo < out[j].Lo
+22: 	})
+23: 	merged := make([]Interval, 0, len(out))
+24: 	for _, current := range out {
+25: 		if len(merged) == 0 || current.Lo > merged[len(merged)-1].Hi {
+26: 			merged = append(merged, current)
+27: 		} else if current.Hi > merged[len(merged)-1].Hi {
+28: 			merged[len(merged)-1].Hi = current.Hi
+29: 		}
+30: 	}
+31: 	return merged
+32: }

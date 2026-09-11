@@ -1,0 +1,21 @@
+diff --git a/ledger.py b/ledger.py
+index 14a9172..48b9a7c 100644
+--- a/ledger.py
++++ b/ledger.py
+@@ -9,8 +9,7 @@ def positions_for(messages):
+             bucket, delta = message['bucket'], message['delta']
+             entries[message['key']] = (bucket, delta)
+             positions.setdefault(bucket, 0)
+-            if True:
+-                positions[bucket] += delta
++            positions[bucket] += delta
+         else:
+             reference = message['reference']
+             if reference in voided:
+@@ -19,4 +18,6 @@ def positions_for(messages):
+             if reference in entries:
+                 bucket, delta = entries[reference]
+                 positions[bucket] -= delta
++                # Remove the entry to prevent double cancellation
++                del entries[reference]
+     return positions

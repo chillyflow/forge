@@ -1,0 +1,17 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+p object id: 3259876057600
+p object: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+--- Test 1 ---
+Result 1: {'cash': 0}
+Expected: {'cash': 0}
+
+--- Test 2 ---
+Result 2: {'cash': 7}
+Expected: {'cash': 0}
+
+stderr:

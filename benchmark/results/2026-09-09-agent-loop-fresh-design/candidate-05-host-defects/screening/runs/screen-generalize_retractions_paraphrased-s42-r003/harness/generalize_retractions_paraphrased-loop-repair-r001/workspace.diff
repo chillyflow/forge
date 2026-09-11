@@ -1,0 +1,26 @@
+diff --git a/service.py b/service.py
+index b7bbbde..50d03aa 100644
+--- a/service.py
++++ b/service.py
+@@ -7,10 +7,12 @@ def balances(events):
+         seen.add(event['id'])
+         if event['kind'] == 'post':
+             account, amount = event['account'], event['amount']
++            # If this posting was already cancelled, skip it
++            if event['id'] in cancelled:
++                continue
+             postings[event['id']] = (account, amount)
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
++            totals[account] += amount
+         else:
+             target = event['target']
+             if target in cancelled:
+@@ -19,4 +21,6 @@ def balances(events):
+             if target in postings:
+                 account, amount = postings[target]
+                 totals[account] -= amount
++            # If target is not in postings, we don't create an account (as per requirements)
++            # This is handled naturally by the logic - no account is created if target doesn't exist
+     return totals

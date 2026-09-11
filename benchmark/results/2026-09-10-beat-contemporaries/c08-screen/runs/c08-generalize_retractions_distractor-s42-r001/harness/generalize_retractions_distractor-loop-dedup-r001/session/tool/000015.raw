@@ -1,0 +1,24 @@
+file_sha256:419be44969143f533499add270e577bca916003a2ff87c7429ee8aacd73ea7e9
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     for event in events:
+5:         if event['id'] in seen:
+6:             continue
+7:         seen.add(event['id'])
+8:         if event['kind'] == 'post':
+9:             account, amount = event['account'], event['amount']
+10:             postings[event['id']] = (account, amount)
+11:             # Only add to total if this posting hasn't been cancelled by a retraction
+12:             if event['id'] not in cancelled:
+13:                 totals.setdefault(account, 0)
+14:                 totals[account] += amount
+15:         else:
+16:             target = event['target']
+17:             # Mark the target posting as cancelled
+18:             cancelled.add(target)
+19:             # If the posting has already arrived, subtract its amount from the total
+20:             if target in postings:
+21:                 account, amount = postings[target]
+22:                 totals[account] -= amount
+23:     return totals

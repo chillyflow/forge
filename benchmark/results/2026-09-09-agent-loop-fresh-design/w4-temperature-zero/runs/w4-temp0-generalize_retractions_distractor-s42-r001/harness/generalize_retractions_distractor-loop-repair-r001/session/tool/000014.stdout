@@ -1,0 +1,10 @@
+p event: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+
+Manual trace:
+1. First p (id='p', amount=7): posting -> balance=7
+2. Second p (id='p', amount=7): posting -> balance=14
+3. retract('r', 'p'): retracts posting with id='p' -> should cancel first posting (amount=7) -> balance=7
+4. retract('s', 'p'): retracts posting with id='p' -> already cancelled -> balance=7
+
+But the test expects balance=0, so I must be misunderstanding something.

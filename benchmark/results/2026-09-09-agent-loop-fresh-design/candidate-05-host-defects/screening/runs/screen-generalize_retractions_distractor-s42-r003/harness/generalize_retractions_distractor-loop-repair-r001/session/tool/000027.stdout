@@ -1,0 +1,9 @@
+Testing the exact failing case step by step:
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Actual result: {}
+Expected result: {"cash": 0}
+
+The key insight is: if we have a posting that gets cancelled,
+the account should still appear in the result with a zero balance.
+But the current implementation only adds entries when there are actual transactions.
+I think the fix is to ensure that accounts are tracked properly even when they cancel out.

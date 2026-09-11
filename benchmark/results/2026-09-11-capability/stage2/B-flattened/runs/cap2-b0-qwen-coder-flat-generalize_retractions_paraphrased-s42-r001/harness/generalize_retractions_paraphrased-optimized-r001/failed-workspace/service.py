@@ -1,0 +1,31 @@
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            if target in cancelled:
+                continue
+            cancelled.add(target)
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+            elif target in totals:
+                # Handle case where target is a known account but not yet posted
+                # This ensures that a retract of a non-posted event doesn't create an account
+                pass
+            else:
+                # If target is not in postings or totals, do nothing
+                pass
+    return totals
+                # If target is not in postings or totals, do nothing
+                pass
+    return totals

@@ -1,0 +1,7 @@
+Original: {'cash': -7}
+What should happen:
+1. p(7): postings["p"]=(cash,7), totals[cash]=7
+2. p(7) duplicate: skip
+3. retract(r,p): cancel p, totals[cash]=0
+4. retract(s,p): p already cancelled, no effect, totals[cash]=0
+Result: {"cash": 0}

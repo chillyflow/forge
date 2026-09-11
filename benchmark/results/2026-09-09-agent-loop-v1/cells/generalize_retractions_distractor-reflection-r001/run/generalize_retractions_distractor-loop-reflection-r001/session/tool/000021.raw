@@ -1,0 +1,15 @@
+file_sha256:7342febc2d7407ba96484c1109e5a8f61aeec25df9b52c39c2888401d0bc3c7f
+21:             target = event['target']
+22:             if target in cancelled:
+23:                 continue
+24:             # Check if the target posting has already been processed
+25:             if target in postings:
+26:                 account, amount = postings[target]
+27:                 cancelled.add(event['id'])
+28:                 totals[account] -= amount
+29:             else:
+30:                 # Queue this retraction for when the target posting arrives
+31:                 if target not in retraction_queue:
+32:                     retraction_queue[target] = []
+33:                 retraction_queue[target].append(event)
+34:     return totals

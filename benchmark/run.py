@@ -25,6 +25,45 @@ from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, lo
 VARIANTS = {
     'optimized': {'flags': ['--thought-history']},
     'minimal': {'flags': ['--minimal-agent', '--thought-history']},
+    'candidate-checkpoint': {'flags': ['--minimal-agent', '--thought-history',
+                                       '--candidate-checkpoint']},
+    'loop-repair': {'flags': ['--minimal-agent', '--thought-history',
+                              '--candidate-checkpoint', '--bounded-repair']},
+    'loop-stable-prefix': {'flags': ['--minimal-agent', '--thought-history',
+                                     '--candidate-checkpoint', '--bounded-repair',
+                                     '--stable-prefix']},
+    'loop-dedup': {'flags': ['--minimal-agent', '--thought-history',
+                             '--candidate-checkpoint', '--bounded-repair',
+                             '--dedup-commands']},
+    'loop-budget': {'flags': ['--minimal-agent', '--thought-history',
+                              '--candidate-checkpoint', '--bounded-repair',
+                              '--budget-guidance']},
+    'loop-repair-thinking': {'flags': ['--minimal-agent', '--thought-history',
+                                       '--candidate-checkpoint', '--bounded-repair',
+                                       '--enable-thinking']},
+    'loop-noop-gate': {'flags': ['--minimal-agent', '--thought-history',
+                                 '--candidate-checkpoint', '--bounded-repair',
+                                 '--gate-noop-edits']},
+    'loop-elide-noop': {'flags': ['--minimal-agent', '--thought-history',
+                                  '--candidate-checkpoint', '--bounded-repair',
+                                  '--elide-noop-edits']},
+    'loop-repair-best-of-2': {'flags': ['--minimal-agent', '--thought-history',
+                                      '--candidate-checkpoint', '--bounded-repair',
+                                      '--candidates', '2']},
+    'loop-stop-loss': {'flags': ['--minimal-agent', '--thought-history',
+                                '--candidate-checkpoint', '--bounded-repair',
+                                '--candidates', '2', '--stop-loss']},
+    'loop-best-of-2': {'flags': ['--minimal-agent', '--thought-history',
+                                '--candidate-checkpoint', '--candidates', '2']},
+    'loop-semantic': {'flags': ['--minimal-agent', '--thought-history',
+                               '--candidate-checkpoint', '--semantic-loops']},
+    'loop-impact': {'flags': ['--minimal-agent', '--thought-history',
+                             '--candidate-checkpoint', '--symbol-impact']},
+    'loop-reflection': {'flags': ['--minimal-agent', '--thought-history',
+                                 '--candidate-checkpoint', '--failure-reflection']},
+    'loop-combined': {'flags': ['--minimal-agent', '--thought-history',
+                               '--candidate-checkpoint', '--candidates', '2',
+                               '--semantic-loops', '--symbol-impact', '--failure-reflection']},
     'no-kv': {'flags': ['--no-kv-reuse']},
     'no-semantic': {'flags': ['--no-semantic']},
     'no-compaction': {'flags': ['--no-compaction']},
@@ -85,6 +124,10 @@ def main():
     parser.add_argument('--context', default='16384')
     parser.add_argument('--output-reserve', type=int, default=2048)
     parser.add_argument('--temperature', type=float, default=0.0)
+    parser.add_argument('--repetition-penalty', type=float, default=1.0,
+                        help='llama.cpp repeat penalty in (0, 2]; 1.0 disables')
+    parser.add_argument('--repetition-last-n', type=int, default=0,
+                        help='last N tokens penalized in [0, 1024]; 0 disables')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--timeout', type=int, default=600)
@@ -95,6 +138,8 @@ def main():
     parser.add_argument('--repetitions', type=int, default=1)
     parser.add_argument('--order-seed', type=int, default=20260831)
     parser.add_argument('--no-randomize', action='store_true')
+    parser.add_argument('--retain-terminal', action='store_true',
+                        help='retain all terminal workspaces and full verifier metadata')
     parser.add_argument('--gpu-index', type=int, default=0)
     args = parser.parse_args()
     incompatible = [variant for variant in args.variants
@@ -110,6 +155,10 @@ def main():
         parser.error('--output-reserve must be positive')
     if not 0 <= args.temperature <= 2:
         parser.error('--temperature must be in [0, 2]')
+    if not 0 < args.repetition_penalty <= 2:
+        parser.error('--repetition-penalty must be in (0, 2]')
+    if not 0 <= args.repetition_last_n <= 1024:
+        parser.error('--repetition-last-n must be in [0, 1024]')
     if not 0 <= args.seed <= 4294967295:
         parser.error('--seed must be in [0, 4294967295]')
     if args.repetitions < 1:
@@ -124,6 +173,19 @@ def main():
     except (OSError, ValueError, RuntimeError) as error:
         parser.error(str(error))
     args.output.mkdir(parents=True, exist_ok=True)
+    # One bytecode-cache prefix per invocation, outside every workspace, so the
+    # independent verifier can never load a __pycache__ the agent wrote. Writes
+    # are disabled alongside it, so the directory stays empty by design and
+    # every verification compiles from source; it exists to be missed, not to
+    # be reused.
+    cache_prefix = Path(tempfile.mkdtemp(prefix='forge-bench-pycache-'))
+    try:
+        return execute(parser, args, tasks, forge, model, cache_prefix)
+    finally:
+        shutil.rmtree(cache_prefix, ignore_errors=True)
+
+
+def execute(parser, args, tasks, forge, model, cache_prefix):
     records = []
     metadata = {'schema_version': 2, 'harness': 'forge',
                 'model_file': model.name, 'model_sha256': digest(model), 'gpu_layers': args.gpu_layers,
@@ -136,6 +198,8 @@ def main():
                 'max_tokens': args.max_tokens, 'max_input': args.max_input,
                 'output_reserve': args.output_reserve,
                 'temperature': args.temperature, 'seed': args.seed,
+                'repetition_penalty': args.repetition_penalty,
+                'repetition_last_n': args.repetition_last_n,
                 'task_suite': args.suite, 'repetitions': args.repetitions,
                 'order_seed': args.order_seed, 'randomized_order': not args.no_randomize,
                 'lifecycle': 'cold', 'gpu_index': args.gpu_index,
@@ -166,12 +230,15 @@ def main():
                        '--model', str(model), '--gpu-layers', args.gpu_layers,
                        '--prompt-protocol', args.prompt_protocol,
                        '--context', args.context, '--output-reserve', str(args.output_reserve),
-                       '--temperature', str(args.temperature), '--seed', str(args.seed),
-                       '--allow-write', '--allow-exec', '--json', '--max-turns',
+                        '--temperature', str(args.temperature), '--seed', str(args.seed),
+                        '--repetition-penalty', str(args.repetition_penalty),
+                        '--repetition-last-n', str(args.repetition_last_n),
+                        '--allow-write', '--allow-exec', '--json', '--max-turns',
                        str(args.max_turns), '--wall-ms', str(args.timeout * 1000),
                        '--max-tokens', str(args.max_tokens), '--max-input', str(args.max_input),
                        *policy['flags'],
                        *(['--chat-template', args.chat_template] if args.chat_template else [])]
+            write_json(output / 'command.json', command)
             with (output / 'stdout.jsonl').open('w', encoding='utf-8') as out, \
                     (output / 'stderr.txt').open('w', encoding='utf-8') as err:
                 process_result = run_monitored(command, stdout=out, stderr=err,
@@ -184,8 +251,20 @@ def main():
                 shutil.copytree(session, output / 'session', dirs_exist_ok=True)
                 if (session / 'metrics.json').exists():
                     metrics = json.loads((session / 'metrics.json').read_text(encoding='utf-8'))
+            before_verification = snapshot_protected(root, task)
+            before_verification_inputs = {
+                str(path.relative_to(root)).replace('\\', '/'): digest(path)
+                for path in root.rglob('*') if path.is_file() and
+                not any(part in ('.git', '.forge', '__pycache__', '.pytest_cache')
+                        for part in path.relative_to(root).parts)} if args.retain_terminal else None
             verification = verify_task(root, task, output, timeout=args.verification_timeout,
-                                       gpu_index=args.gpu_index)
+                                       gpu_index=args.gpu_index, cache_prefix=cache_prefix)
+            write_json(output / 'verification.json', verification)
+            after_verification_inputs = {
+                str(path.relative_to(root)).replace('\\', '/'): digest(path)
+                for path in root.rglob('*') if path.is_file() and
+                not any(part in ('.git', '.forge', '__pycache__', '.pytest_cache')
+                        for part in path.relative_to(root).parts)} if args.retain_terminal else None
             unchanged = protected_unchanged(root, before_protected)
             protect_protected(root, task, readonly=False)
             startup_seconds = (metrics['load_ms'] / 1000.0) if 'load_ms' in metrics else None
@@ -201,6 +280,13 @@ def main():
                                stdout=diff, check=False)
             if not passed:
                 shutil.copytree(root, output / 'failed-workspace', ignore=shutil.ignore_patterns('.git'))
+            if args.retain_terminal:
+                shutil.copytree(root, output / 'terminal-workspace',
+                                ignore=shutil.ignore_patterns('.git', '.forge', '__pycache__', '.pytest_cache'))
+                write_json(output / 'verification-inputs.json', {
+                    'before': before_verification_inputs, 'after': after_verification_inputs,
+                    'protected_before': before_verification,
+                    'protected_after': snapshot_protected(root, task)})
             timing = {'lifecycle': 'cold', 'startup_seconds': startup_seconds,
                       'agent_seconds': agent_seconds,
                       'agent_process_seconds': process_result['wall_seconds'],
@@ -219,6 +305,10 @@ def main():
                       'thought_budget': policy.get('thought_budget'), 'metrics': metrics,
                       'resource_usage': process_result['resource_usage'],
                       'verification_resource_usage': verification['resource_usage'], **fixture}
+            if args.retain_terminal:
+                record.update(verification=verification, terminal_workspace='terminal-workspace',
+                              verification_inputs_unchanged=before_verification_inputs == after_verification_inputs,
+                              protected_before_verification=before_verification == before_protected)
             records.append(record)
             write_json(output / 'result.json', record)
             write_json(args.output / 'results.json', records)

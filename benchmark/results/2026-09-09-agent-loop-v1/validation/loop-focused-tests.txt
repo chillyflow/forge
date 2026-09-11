@@ -1,0 +1,89 @@
+Test project C:/Users/flowc/dev/forge/build-gpu
+    Start 19: semantic_state
+1/6 Test #19: semantic_state ...................Exit code 0xc0000409***Exception:   1.60 sec
+Assertion failed: info.files == 1 && info.canonical_files == (canonical ? 1u : 0u), file C:\Users\flowc\dev\forge\tests\unit\test_semantic_state.c, line 90
+
+    Start 20: impact
+2/6 Test #20: impact ...........................Exit code 0xc0000409***Exception:   1.81 sec
+Assertion failed: reason(yyjson_doc_get_root(doc), "unsupported_change"), file C:\Users\flowc\dev\forge\tests\unit\test_impact.c, line 245
+
+    Start 21: candidate_store
+3/6 Test #21: candidate_store ..................   Passed    0.10 sec
+    Start 23: chat_template
+4/6 Test #23: chat_template ....................   Passed    0.11 sec
+    Start 27: minimal_agent_integration
+5/6 Test #27: minimal_agent_integration ........   Passed    2.92 sec
+    Start 28: interactive_integration
+6/6 Test #28: interactive_integration ..........***Failed    1.19 sec
+..........F.......
+======================================================================
+FAIL: test_ordinary_loop_retains_final_and_question_evidence (__main__.InteractiveTests.test_ordinary_loop_retains_final_and_question_evidence)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\dev\forge\tests\integration\test_interactive.py", line 111, in test_ordinary_loop_retains_final_and_question_evidence
+    self.run_script([call("ask_user", {"question": "Which naming convention?"}),
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     final("Use snake_case."), final("Naming retained.")],
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    "first\nsnake_case\nsecond\n/quit\n", minimal=False)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\flowc\dev\forge\tests\integration\test_interactive.py", line 54, in run_script
+    self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False != True : {"schema_version":1,"type":"state","sequence":1,"elapsed_ms":0,"data":{"state":0}}
+{"schema_version":1,"type":"request","sequence":2,"elapsed_ms":0,"data":"first"}
+{"schema_version":1,"type":"repository_scan","sequence":3,"elapsed_ms":47,"data":{"schema_version":1,"backend":"scan","events":[],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":false,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":0,"path_encoding":"utf-8","index_mode":"full","generation":1,"changed":false,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"working_state","sequence":4,"elapsed_ms":47,"data":{"turn":0,"artifact":"context/0000.state.json","hash":7839804824684825533}}
+{"schema_version":1,"type":"context_plan","sequence":5,"elapsed_ms":47,"data":{"turn":1,"artifact":"context/0001.json","hash":3680436846159780837,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":6,"elapsed_ms":47,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":7,"elapsed_ms":47,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":8,"elapsed_ms":47,"data":"{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"ask_user\",\"arguments\":\"{\\\"question\\\":\\\"Which naming convention?\\\"}\"}}]}"}
+{"schema_version":1,"type":"inference","sequence":9,"elapsed_ms":47,"data":{"prompt_tokens":2845,"cached_tokens":0,"generated_tokens":40,"simulated":true}}
+{"schema_version":1,"type":"model_output","sequence":10,"elapsed_ms":47,"data":"{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"ask_user\",\"arguments\":\"{\\\"question\\\":\\\"Which naming convention?\\\"}\"}}]}"}
+{"schema_version":1,"type":"state","sequence":11,"elapsed_ms":47,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":12,"elapsed_ms":47,"data":{"tool":"ask_user","args":{"question":"Which naming convention?"}}}
+{"schema_version":1,"type":"state","sequence":13,"elapsed_ms":47,"data":{"state":4}}
+{"schema_version":1,"type":"patch_snapshot","sequence":14,"elapsed_ms":47,"data":{"artifact":"patch.diff","status":"not_collected","reason":"explicit_git_diff_required"}}
+{"schema_version":1,"type":"state","sequence":15,"elapsed_ms":47,"data":{"state":8}}
+{"schema_version":1,"type":"error","sequence":16,"elapsed_ms":47,"data":{"schema_version":1,"status":"io","simulated":true,"prompt_tokens":2845,"generated_tokens":40,"cached_tokens":0,"prefill_tokens":2845,"turns":1,"tool_calls":1,"raw_tool_bytes":0,"visible_tool_bytes":0,"files_modified":0,"context_evictions":0,"loop_warnings":0,"grammar_fast_tokens":0,"grammar_fallback_tokens":0,"think_tokens":0,"forced_actions":0,"action_stops":0,"action_select_tokens":0,"action_argument_tokens":0,"patch_tokens":0,"final_tokens":0,"memory_tokens":0,"forced_action_progress_tokens":0,"raw_tool_tokens":0,"visible_tool_tokens":0,"files_opened":0,"validation_commands":0,"validation_failures":0,"generation_arena_peak_bytes":65648,"repo_full_scans":1,"repo_delta_scans":0,"filesystem_events":0,"watch_reopens":0,"stale_generations":0,"index_cold_parses":0,"index_incremental_parses":0,"index_cache_hits":0,"index_cache_evictions":0,"peak_index_source_bytes":0,"peak_index_nodes":0,"checkpoint_lookups":0,"checkpoint_hits":0,"checkpoint_misses":0,"checkpoint_captures":0,"checkpoint_evictions":0,"checkpoint_restored_tokens":0,"checkpoint_reused_tokens":0,"checkpoint_additional_tokens":0,"checkpoint_peak_bytes":0,"load_ms":0.0,"prefill_ms":0.0,"decode_ms":0.0,"sampling_ms":0.0,"duration_ms":47.0,"tool_ms":0.0,"validation_ms":0.0,"index_ms":31.0,"checkpoint_probe_ms":0.0,"checkpoint_capture_ms":0.0,"checkpoint_restore_ms":0.0}}
+{"schema_version":1,"type":"state","sequence":1,"elapsed_ms":0,"data":{"state":0}}
+{"schema_version":1,"type":"request","sequence":2,"elapsed_ms":0,"data":"second"}
+{"schema_version":1,"type":"repository_scan","sequence":3,"elapsed_ms":47,"data":{"schema_version":1,"backend":"scan","events":[],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":false,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":0,"path_encoding":"utf-8","index_mode":"full","generation":1,"changed":false,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"working_state","sequence":4,"elapsed_ms":47,"data":{"turn":0,"artifact":"context/0000.state.json","hash":14623568269082176411}}
+{"schema_version":1,"type":"context_plan","sequence":5,"elapsed_ms":47,"data":{"turn":1,"artifact":"context/0001.json","hash":4293447358071909522,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":6,"elapsed_ms":47,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":7,"elapsed_ms":47,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":8,"elapsed_ms":47,"data":"{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"final\",\"arguments\":\"{\\\"answer\\\":\\\"Use snake_case.\\\"}\"}}]}"}
+{"schema_version":1,"type":"inference","sequence":9,"elapsed_ms":47,"data":{"prompt_tokens":2897,"cached_tokens":2512,"generated_tokens":36,"simulated":true}}
+{"schema_version":1,"type":"model_output","sequence":10,"elapsed_ms":47,"data":"{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"final\",\"arguments\":\"{\\\"answer\\\":\\\"Use snake_case.\\\"}\"}}]}"}
+{"schema_version":1,"type":"repository_scan","sequence":11,"elapsed_ms":78,"data":{"schema_version":1,"backend":"ReadDirectoryChangesW","events":[],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":true,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":1,"path_encoding":"utf-8","index_mode":"full","generation":1,"changed":false,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"patch_snapshot","sequence":12,"elapsed_ms":78,"data":{"artifact":"patch.diff","status":"not_collected","reason":"explicit_git_diff_required"}}
+{"schema_version":1,"type":"state","sequence":13,"elapsed_ms":78,"data":{"state":8}}
+{"schema_version":1,"type":"error","sequence":14,"elapsed_ms":78,"data":{"schema_version":1,"status":"memory","simulated":true,"prompt_tokens":2897,"generated_tokens":36,"cached_tokens":2512,"prefill_tokens":385,"turns":1,"tool_calls":0,"raw_tool_bytes":0,"visible_tool_bytes":0,"files_modified":0,"context_evictions":0,"loop_warnings":0,"grammar_fast_tokens":0,"grammar_fallback_tokens":0,"think_tokens":0,"forced_actions":0,"action_stops":0,"action_select_tokens":0,"action_argument_tokens":0,"patch_tokens":0,"final_tokens":0,"memory_tokens":0,"forced_action_progress_tokens":0,"raw_tool_tokens":0,"visible_tool_tokens":0,"files_opened":0,"validation_commands":0,"validation_failures":0,"generation_arena_peak_bytes":65648,"repo_full_scans":2,"repo_delta_scans":0,"filesystem_events":0,"watch_reopens":0,"stale_generations":0,"index_cold_parses":0,"index_incremental_parses":0,"index_cache_hits":0,"index_cache_evictions":0,"peak_index_source_bytes":0,"peak_index_nodes":0,"checkpoint_lookups":0,"checkpoint_hits":0,"checkpoint_misses":0,"checkpoint_captures":0,"checkpoint_evictions":0,"checkpoint_restored_tokens":0,"checkpoint_reused_tokens":0,"checkpoint_additional_tokens":0,"checkpoint_peak_bytes":0,"load_ms":0.0,"prefill_ms":0.0,"decode_ms":0.0,"sampling_ms":0.0,"duration_ms":78.0,"tool_ms":0.0,"validation_ms":0.0,"index_ms":78.0,"checkpoint_probe_ms":0.0,"checkpoint_capture_ms":0.0,"checkpoint_restore_ms":0.0}}
+Forge conversation. Requests continue the current task. /new [task] clears history; /begin then /end submits multiline input; /quit exits. During questions, /decline refuses an answer and /cancel stops the session.
+Task> 
+Question: Which naming convention?
+Answer> Session: C:\Users\flowc\AppData\Local\Temp\forge-interactive-ld3revb2/.forge/sessions/dea2974dae305d05e08cd8dcac1638dc
+SIMULATED turns=1 prompt=2845 generated=40 cached=0 elapsed=47ms
+forge: io: Cannot retain the question exchange
+Task> Session: C:\Users\flowc\AppData\Local\Temp\forge-interactive-ld3revb2/.forge/sessions/4dce5a5d702b0355a37aa56611983c92
+SIMULATED turns=1 prompt=2897 generated=36 cached=2512 elapsed=78ms
+forge: memory: Cannot retain the accepted final conversation exchange
+Task> forge: memory: Cannot retain the accepted final conversation exchange
+
+
+----------------------------------------------------------------------
+Ran 18 tests in 1.083s
+
+FAILED (failures=1)
+
+
+50% tests passed, 3 tests failed out of 6
+
+Total Test time (real) =   7.81 sec
+
+The following tests FAILED:
+	 19 - semantic_state (Exit code 0xc0000409)
+	 20 - impact (Exit code 0xc0000409)
+	 28 - interactive_integration (Failed)
+Errors while running CTest

@@ -1,0 +1,26 @@
+file_sha256:c4a65726a0743f698570f18c13e37239b4694ff71b6ef02b25f43e9a83576f31
+1: def positions_for(messages):
+2:     entries, positions = {}, {}
+3:     voided = set()
+4:     
+5:     for message in messages:
+6:         if message['kind'] == 'post':
+7:             # If this post has been voided by a previous retraction, skip it
+8:             if message['key'] in voided:
+9:                 continue
+10:             bucket, delta = message['bucket'], message['delta']
+11:             entries[message['key']] = (bucket, delta)
+12:             positions.setdefault(bucket, 0)
+13:             positions[bucket] += delta
+14:         else:  # message['kind'] == 'retract'
+15:             reference = message['reference']
+16:             if reference in voided:
+17:                 continue
+18:             voided.add(reference)
+19:             if reference in entries:
+20:                 bucket, delta = entries[reference]
+21:                 positions[bucket] -= delta
+22:                 del entries[reference]
+23:             # If the reference is not in entries, it's an unmatched retraction, which has no effect
+24:     
+25:     return positions

@@ -1,0 +1,38 @@
+FAILED_WORKSPACE_STATE: the edit returned to previously failed contents with identical workspace validation inputs.
+Failure observed on action 15, input_hash=de492729ddbc5a85, stable_inputs=true.
+run_command inputs: {"cwd":".","argv":["gofmt","-l","./repair.go","./repair_test.go"]}
+Failure evidence (historical, not a new test run):
+Automatic validation stopped at format: Validation stage format failed (exit_code=0, files need formatting)
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+./repair.go
+
+stderr:
+
+The listed files need gofmt formatting. Format only files you are authorized to edit (for example with gofmt -w), then try validation again. A zero formatter exit code alone does not pass this check.
+
+Use this assertion to trace the incorrect value before editing. A revert may be an intermediate step in a repair across files. Do not cycle through the same failed implementation; change the implicated condition or a relevant dependency, then validate.
+
+Patched repair.go.
+Recorded edit diff: tool/000028.patch
+Staged Go syntax validation passed before commit.
+Suggested targeted validation (requires command approval): compile/test affected Go packages: .; 0 reverse dependents; then vet and full module tests. Use the validation plan for exact argv and module working directories.
+
+PATCH_NOT_FORMATTED: repair.go is not gofmt-clean. Format it (for example 'gofmt -w repair.go') before final; automatic validation requires gofmt-clean files.
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+repair.go
+
+stderr:
+
+
+POST_EDIT_VALIDATION:
+Automatic validation stopped at format: Validation stage format failed (exit_code=0, files need formatting)
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+./repair.go
+
+stderr:
+
+The listed files need gofmt formatting. Format only files you are authorized to edit (for example with gofmt -w), then try validation again. A zero formatter exit code alone does not pass this check.
+

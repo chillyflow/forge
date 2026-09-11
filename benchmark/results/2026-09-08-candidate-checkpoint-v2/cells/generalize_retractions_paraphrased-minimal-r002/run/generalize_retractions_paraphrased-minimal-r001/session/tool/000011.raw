@@ -1,0 +1,11 @@
+file_sha256:d8974cd59ed9f00fcf05b4eecf05f336c39490fb6fc782004516a52af6b89c00
+1: import unittest
+2: from service import balances
+3: def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
+4: def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}
+5: class BehaviorChecks(unittest.TestCase):
+6:     def test_order_and_duplicates(self):
+7:         p = post('p', 7)
+8:         for events in [[p, retract('r', 'p')], [retract('r', 'p'), p],
+9:                        [p, p, retract('r', 'p'), retract('s', 'p')]]:
+10:             self.assertEqual(balances(events), {'cash': 0})

@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    from service import balances; import unittest; def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}; def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}; p = post('p', 7); events = [p, retract('r', 'p')]; print('Events:', events); result = balances(events); print('Result:', result); print('Expected: {"cash": 0}'); print('Test passes:', result == {'cash': 0})
+                                                   ^^^
+SyntaxError: invalid syntax

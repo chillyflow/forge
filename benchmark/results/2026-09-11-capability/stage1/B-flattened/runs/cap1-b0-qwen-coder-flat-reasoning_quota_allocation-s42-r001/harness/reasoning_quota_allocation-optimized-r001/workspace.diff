@@ -1,0 +1,43 @@
+diff --git a/repair.go b/repair.go
+index 6fe9102..80d31cf 100644
+--- a/repair.go
++++ b/repair.go
+@@ -34,6 +34,7 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 	if capacity < minTotal || capacity > maxTotal {
+ 		return nil, false
+ 	}
++
+ 	left := capacity - minTotal
+ 	for left > 0 {
+ 		weightTotal := int64(0)
+@@ -45,7 +46,7 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 			}
+ 		}
+ 		if weightTotal <= 0 {
+-			return nil, false
++			break
+ 		}
+ 		shares := make([]quotaShare, 0, len(active))
+ 		used := 0
+@@ -67,6 +68,7 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 		if left == 0 {
+ 			break
+ 		}
++		// Handle rounding leftovers by largest fractional remainder with ID tie-break
+ 		sort.SliceStable(shares, func(i, j int) bool {
+ 			if shares[i].remainder == shares[j].remainder {
+ 				return shares[i].index < shares[j].index
+@@ -79,11 +81,11 @@ func AllocateQuota(capacity int, requests []Request) (map[string]int, bool) {
+ 			if left > 0 && out[id] < requests[share.index].Max {
+ 				out[id]++
+ 				left--
+-				progressed = true
++				preferred = true
+ 			}
+ 		}
+ 		if !progressed {
+-			return nil, false
++			break
+ 		}
+ 	}
+ 	return out, true

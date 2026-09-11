@@ -1,0 +1,35 @@
+diff --git a/service.py b/service.py
+index b7bbbde..7b06538 100644
+--- a/service.py
++++ b/service.py
+@@ -1,6 +1,5 @@
+ def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
++    seen, postings, cancelled, totals = set(), {}, set(), {}
+     for event in events:
+         if event['id'] in seen:
+             continue
+@@ -9,14 +8,15 @@ def balances(events):
+             account, amount = event['account'], event['amount']
+             postings[event['id']] = (account, amount)
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
+-        else:
++            totals[account] += amount
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'retract':
+             target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
++            if target in postings and target not in cancelled:
+                 account, amount = postings[target]
+                 totals[account] -= amount
++                cancelled.add(target)
+     return totals

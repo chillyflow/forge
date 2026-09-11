@@ -1,0 +1,25 @@
+def positions_for(messages):
+    entries, positions = {}, {}
+    voided = set()
+    
+    for message in messages:
+        if message['kind'] == 'post':
+            # Only process the first post with this key (idempotent)
+            if message['key'] in entries:
+                continue
+            bucket, delta = message['bucket'], message['delta']
+            entries[message['key']] = (bucket, delta)
+            positions.setdefault(bucket, 0)
+            positions[bucket] += delta
+        else:  # message['kind'] == 'retract'
+            reference = message['reference']
+            # A retraction cancels its referenced posting exactly once
+            if reference in voided:
+                continue
+            voided.add(reference)
+            if reference in entries:
+                bucket, delta = entries[reference]
+                positions[bucket] -= delta
+                del entries[reference]
+    
+    return positions

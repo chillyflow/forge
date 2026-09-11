@@ -1,0 +1,11 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Debug:
+Case [p, retract(r, p)]: {'cash': 0}
+Case [retract(r, p), p]: {}
+What happens in case 2 step by step:
+1. retract(r, p): cancelled = {"p"}
+2. post(p, 7): should skip because p in cancelled
+But result is {} not {"cash": 0}
+
+stderr:

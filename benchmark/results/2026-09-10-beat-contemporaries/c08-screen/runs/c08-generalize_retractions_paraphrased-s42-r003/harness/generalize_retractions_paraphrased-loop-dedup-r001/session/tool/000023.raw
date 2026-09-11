@@ -1,0 +1,8 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+  File "<string>", line 1
+    import importlib; import sys; sys.path.insert(0, '.'); import service; importlib.reload(service); print('Service module reloaded'); from service import balances; print('balances function available'); def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}; def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}; p = post('p', 7); result = balances([p, retract('r', 'p')]); print('Result:', result)
+                                                                                                                                                                                                            ^^^
+SyntaxError: invalid syntax

@@ -1,0 +1,8 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+  File "<string>", line 1
+    import sys; sys.path.insert(0, '.'); from test_service import *; print('Testing all cases from test_order_and_duplicates:'); p = post('p', 7); print('p =', p); test_cases = [[p, retract('r', 'p')], [retract('r', 'p'), p], [p, p, retract('r', 'p'), retract('s', 'p')]]; results = []; expected = [{'cash': 0}, {'cash': 0}, {'cash': 0}]; for i, events in enumerate(test_cases): result = balances(events); print(f'Case {i+1}: {events} -> {result}'); results.append(result); print(f'Expected: {expected[i]}'); print(f'Match: {result == expected[i]}'); print()
+                                                                                                                                                                                                                                                                                                                                                   ^^^
+SyntaxError: invalid syntax

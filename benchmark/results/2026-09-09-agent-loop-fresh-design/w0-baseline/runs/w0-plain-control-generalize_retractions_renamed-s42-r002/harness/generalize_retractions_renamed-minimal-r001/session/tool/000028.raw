@@ -1,0 +1,26 @@
+file_sha256:0a3f34c5106c93798cfb3fa8c0873a2a2dbfeb34a0f51b7edf3e56c2b341845d
+1: def positions_for(messages):
+2:     visited = set()
+3:     voided = set()
+4:     entries, positions = {}, {}
+5:     for message in messages:
+6:         if message['key'] in visited:
+7:             continue
+8:         visited.add(message['key'])
+9:         if message['kind'] == 'post':
+10:             # If this posting was already voided by a retraction, skip it
+11:             if message['key'] in voided:
+12:                 continue
+13:             bucket, delta = message['bucket'], message['delta']
+14:             entries[message['key']] = (bucket, delta)
+15:             positions.setdefault(bucket, 0)
+16:             positions[bucket] += delta
+17:         else:
+18:             reference = message['reference']
+19:             # If we've already voided this posting, ignore the retraction
+20:             if reference in voided:
+21:                 continue
+22:             # Mark the referenced posting as voided
+23:             voided.add(reference)
+24:             if reference in entries:
+25:                 bucket, delta = entries[reference]
