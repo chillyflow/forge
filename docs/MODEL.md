@@ -57,6 +57,32 @@ recommends a 0.15 sampling temperature; every arm here is greedy, which is
 near that but not identical, and the other two models have no strong low
 temperature guidance. Consult each publisher's model card for license terms.
 
+## Capability-stage models — 2026-09-11
+
+Two further GGUF files were downloaded, hash-verified and measured in the
+capability stage (`benchmark/results/2026-09-11-capability/`):
+
+| Property | Qwen3-30B-A3B-Thinking-2507 | Devstral-Small-2-24B-Instruct-2512 |
+| --- | --- | --- |
+| Filename | `Qwen3-30B-A3B-Thinking-2507-Q4_K_M.gguf` | `Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf` |
+| Publisher (GGUF) | [unsloth](https://huggingface.co/unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF) | [unsloth](https://huggingface.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF) |
+| Hugging Face revision | `a9b37aaac12b2bd0098783a443429543dd76a14d` | `6e458b8add42681bfd023de5eab93637694aaf82` |
+| SHA-256 | `b7380c816fca5a03b746be3d42773fb9a1c4b3bb4b3a1f3d9c2aeb10a720cba6` | `d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496` |
+| Size (bytes) | 18,556,686,752 | 14,334,446,752 |
+| Architecture (GGUF) | `qwen3` | `mistral3` |
+
+The Thinking model runs the minimal native loop with `--enable-thinking` and a
+4096-token per-turn reserve. Native thinking did not raise success on the six
+reasoning-gated Go fixtures: 3/18 versus the Qwen coder's 6/18 (fixture-level
+4/6 vs 1/6, Fisher exact p = 0.24). Devstral runs the ordinary flattened agent:
+its Mistral template enforces strict user/assistant alternation and rejects
+the minimal loop's trailing control user-message after tool results, a Forge
+renderer limitation recorded in the capability stage, not a model defect.
+Devstral was the only arm to meet both stage bars (10/18 reasoning-gated;
+fixture-level 4/6 vs 0/6, p = 0.061; and 5/12 retraction across all four
+manifests) against its same-loop control's 0/18 and 0/12. These are
+directional screening results, not gate evidence.
+
 ## Native-thinking models
 
 Forge can preserve a model's template-native reasoning path. The model
