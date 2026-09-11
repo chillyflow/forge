@@ -58,6 +58,8 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `inference` | `gpu_layers` | `"auto"`, `-1` for all layers, or 0–65,535. Default 0. |
 | `inference` | `threads` | Integer 0–1,024; 0 leaves thread selection to the backend/planner. |
 | `inference` | `temperature` | Finite integer or float 0–2. |
+| `inference` | `repetition_penalty` | Finite integer or float in (0, 2]; 1.0 disables the penalty. Default 1.0. |
+| `inference` | `repetition_last_n` | Integer 0–1,024; last N tokens penalized, 0 disables. Default 0. |
 | `inference` | `seed` | Integer 0–4,294,967,295. |
 | `inference` | `reuse_prefix` | Boolean; enables existing prompt-prefix reuse. |
 | `inference` | `grammar_fast_path` | Boolean; enables existing greedy grammar fast path. |

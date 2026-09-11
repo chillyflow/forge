@@ -44,6 +44,17 @@ tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-re
   measurements, clean freeze enforcement, evidence audits and mechanism ablations.
 - Native system/user/assistant/tool prompt protocol, action-budget guidance,
   guarded line hunks and explicit flattened-protocol compatibility.
+- Opt-in minimal-loop candidate validation with net workspace snapshots,
+  persistent repair episodes and reserved validation/final actions; measured as
+  a development experiment, with default promotion still unaccepted.
+- Opt-in sequential best-of-N with shared total budgets, independent content
+  copies, journaled real-workspace selection and guarded restoration.
+- Conservative canonical failed-state detection and one bounded diagnostic
+  action per failed-validation episode, with validation/final actions reserved.
+- Preliminary Go declaration-impact and test-name targeting with broad final
+  verification; Python lexical evidence retains conservative fallback.
+- Persistent in-process native conversations and user questions through CLI and
+  library callbacks. Questions currently require one candidate.
 - Cross-platform core CI, sanitizers, and direct-backend compilation.
 
 ## Partial: do not overstate these
@@ -51,10 +62,12 @@ tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-re
 | Design area | Present | Missing |
 | --- | --- | --- |
 | Context DAG | General dependencies, shared closure, flags, snapshots | Richer relevance/profiler and semantic candidates |
-| Repository graph | Go declarations, occurrences and package import/reverse graph | Resolved calls/types, symbol impact and test mapping |
-| Incremental indexing | Native watch/delta updates, retained Go trees, transactional edits and syntax hashes | Additional AST languages, semantic change impact, large-repository performance evidence |
+| Repository graph | Go declarations, occurrences, package import/reverse graph and syntactic impact/test candidates | Resolved calls/types and sound symbol/test coverage mapping |
+| Incremental indexing | Native watch/delta updates, retained Go trees, transactional edits, syntax hashes and declaration impact | Additional AST languages, resolved semantic impact, large-repository performance evidence |
 | Working memory | Typed claims, host outcomes, validation and compaction | Semantic summary dependency cache and resume |
-| Validation scheduler | Six-stage Go verification plus Python compiler syntax and unittest/pytest discovery | Symbol impact and languages beyond Go/Python |
+| Validation scheduler | Six-stage Go/Python verification and opt-in preliminary Go impact/test-name targeting | Sound coverage mapping and languages beyond Go/Python |
+| Candidate completion | Opt-in validation/completion checkpoints, conservative semantic loops, bounded failure reflection and real-workspace best-of-N selection | Measured promotion, preservation and fresh-holdout gates |
+| Interactive sessions | Bounded actual conversation history, user questions, one loaded model across tasks | Disk resume and shared clarifications across multiple candidates |
 | Context checkpoints | Active sequential reuse plus independent same-instance host snapshots | Automatic semantic checkpoint policy, aggregate eviction, disk KV resume |
 | Diagnostics | Named bounded adapters with normalized evidence and raw streams | Additional formats and language validation schedulers |
 | Memory | Arena/slice/file-view APIs, action JSON and read-file callers | Broader lifetime migration and measured application memory savings |
@@ -65,9 +78,16 @@ tracked separately in the [OpenCode reliability campaign](plans/beat-opencode-re
 
 ## Required remaining work
 
-1. Close the new retraction and rolling-window reliability failures and preserve
-   protected fixtures across comparison harnesses, then evaluate another untouched
-   clean-frozen holdout after tuning; extend comparisons to larger repository tasks.
+1. Improve the implemented opt-in loop interventions before promotion: the
+   [seven-arm diagnostic](../benchmark/results/2026-09-09-agent-loop-v1/README.md)
+   completed all 42 runs, and no intervention beat minimal. Implementation and
+   model accuracy remain separate; see [agent loop options and limits](AGENT_LOOP.md).
+   Follow the [agent-loop repair plan](plans/agent-loop-all-green.md) for context,
+   recovery and candidate-allocation fixes, with explicit all-pass development
+   and preservation gates on one frozen implementation.
+   Close the retraction and
+   rolling-window failures, pass preservation gates, then evaluate an untouched
+   clean-frozen holdout; extend comparisons to larger repository tasks.
 2. Resolved repository relationships, structural diff impact and progressive retrieval.
 3. Dependency-aware cached summaries and larger-repository watcher measurements.
 4. Automatic semantic checkpoint selection/eviction and persisted session resume.
@@ -91,6 +111,31 @@ The design's v0.1 performance gate remains a real measured reduction in prompt
 processing against an established local harness using the same GGUF/hardware.
 Its v1.0 gate additionally requires broad platform/language support and published
 task-success/timing evidence. Neither follows from the development version alone.
+
+The [remaining-loop diagnostic](../benchmark/results/2026-09-09-agent-loop-v1/README.md)
+used one frozen runtime across seven arms and six examined Go/Python fixtures,
+one repetition each. Minimal passed 4/6; semantic, reflection and combined passed
+3/6; candidate checkpoints, best-of-two and impact passed 2/6. Median cold time
+was 66.117 s for minimal and 137.453 s for combined. All protected inputs and
+shared budgets passed audit. No failed root or discarded child had a passing
+terminal workspace. Semantic warnings and bounded reflection activated, but every
+impact plan fell back to broad checks, so test-targeting latency gains remain
+unmeasured. The full Windows GPU suite passed 31 tests with one opt-in skip.
+These mechanisms remain opt-in; persistent conversations have separate contract
+tests, and questions currently require one candidate. This diagnostic provides
+no superiority, preservation, fresh-holdout or release-gate claim. Its temperature
+and budgets differ from the earlier checkpoint experiment below.
+
+The [candidate validation and completion diagnostic](../benchmark/results/2026-09-08-candidate-checkpoint-v3/README.md)
+completed 9/18 runs versus 6/18 for the same-binary minimal control across six
+examined Go/Python fixtures. The entire gain came from one distractor fixture.
+Median cold time was 27.759 s versus 28.351 s, while aggregate time was higher
+at 533.140 s versus 475.279 s. Neither arm lost a test-passing terminal workspace
+to missing completion, so that specific benefit was not demonstrated. The
+earlier 7/18 tie and its prefix-cache defect remain recorded separately; the
+final implementation also failed its add smoke after damaging an earlier
+passing edit. The feature remains opt-in, with no superiority, preservation or
+fresh-holdout claim. These loop experiments do not close the design release gates.
 
 The earlier [tranche-2 campaign](../benchmark/results/2026-09-02-tranche2-native/README.md)
 records Forge 83/87 versus OpenCode 71/87 and Aider 69/87, with a positive

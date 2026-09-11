@@ -53,6 +53,7 @@ backend is supported; see [the build guide](docs/BUILD.md).
 
 ```sh
 forge complete "Write a Go binary search function" --model /models/coder.gguf
+forge chat --workspace ./my-repository --model /models/coder.gguf
 forge run "Fix the failing storage tests" \
   --workspace ./my-repository --model /models/coder.gguf \
   --gpu-layers -1 --allow-write --allow-exec
@@ -74,7 +75,11 @@ forge context /path/to/repo/.forge/sessions/SESSION
 forge replay /path/to/repo/.forge/sessions/SESSION --json
 ```
 
-No arguments prints help. `forge --model MODEL` opens a simple task prompt.
+No arguments prints help. `forge --model MODEL` starts the same persistent native
+conversation as `forge chat`, retaining one loaded model and bounded history.
+Use `/new` to reset, `/quit` to exit, and `/begin` ... `/end` for multiline input.
+The `ask_user` tool accepts clarification, refusal, or cancellation; answers do
+not change permissions. Interactive questions currently require one candidate.
 `--json` emits versioned JSON-lines events. `forge complete` streams generated
 text. `forge run` records model outputs, tool calls, context plans, and metrics.
 Ctrl+C requests cancellation; GPU kernels are not preempted mid-dispatch.
@@ -94,6 +99,13 @@ language environment, not every build tag/platform or arbitrary task correctness
 Validation also compares bounded workspace input snapshots, including unindexed
 test fixtures, before accepting success. See [the validation contract](docs/VALIDATION.md).
 `--no-auto-validation` is an explicit ablation.
+
+Selectable native minimal-loop experiments add changed-candidate validation and
+reserved completion actions, sequential best-of-N with real-workspace selection,
+semantic failed-state detection, bounded failure reflection, and preliminary Go
+symbol-impact planning. They remain opt-in and are not a superiority claim.
+See [agent loop options, usage and limits](docs/AGENT_LOOP.md) and
+[implementation status](docs/ROADMAP.md).
 
 Repository indexing retains bounded Go syntax trees and applies incremental
 Tree-sitter edits after source changes. `index PATH` updates only named inputs

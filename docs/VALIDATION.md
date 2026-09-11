@@ -374,6 +374,14 @@ deduplication, 1,024 indexed Python test files, 1,024 related Python targets,
 each file to 2 MiB and the repository to 100,000 supported files.
 An exceeded planning limit returns an error with no partial/truncated plan.
 
+Agent runs can opt into preliminary declaration-impact planning with
+`--symbol-impact`. This captures a baseline before edits and can select Go test
+names when syntactic evidence permits; the broad final stage stays unchanged.
+Python, unresolved receivers/types and dynamic behavior retain conservative
+fallback. See [the agent loop contract](AGENT_LOOP.md#structural-impact-and-validation)
+for limits. Standalone validation without a captured impact baseline keeps the
+ordinary plan described above.
+
 ## Tests
 
 `tests/unit/test_validation.c` creates and removes isolated temporary fixtures.
