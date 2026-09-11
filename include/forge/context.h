@@ -52,6 +52,23 @@ void forge_context_invalidate(forge_context *, uint64_t dependency, uint64_t gen
 void forge_context_bind_source(forge_context *, uint64_t id, uint64_t source);
 void forge_context_pin(forge_context *, uint64_t id, bool pinned);
 char *forge_context_plan(forge_context *, size_t *tokens, size_t *evicted, forge_error *);
+/* Admit mandatory evidence and a newest-first suffix of whole optional bundles.
+ * Count each complete rendered prompt. input_budget is additionally clamped to
+ * capacity minus output reserve; zero means no input capacity. Raw history is
+ * retained. The ordinary priority planner above is unchanged. */
+char *forge_context_plan_bounded(forge_context *, size_t input_budget, size_t *tokens,
+                                 size_t *evicted, forge_error *);
+/* Bounded planner with a monotonic admission floor: optional segments older
+ * than min_id are never newly admitted (pinned/mandatory closures still
+ * apply, including native call/result pairing). *oldest_admitted receives
+ * the oldest admitted non-pinned ID, or min_id when no optional history was
+ * admitted. min_id=0 plans exactly like forge_context_plan_bounded. The
+ * caller advances min_id across turns; the floor never moves it backwards,
+ * so a dropped exchange stays dropped instead of oscillating in and out of
+ * the rendered prefix. */
+char *forge_context_plan_bounded_floor(forge_context *, size_t input_budget, uint64_t min_id,
+                                       uint64_t *oldest_admitted, size_t *tokens,
+                                       size_t *evicted, forge_error *);
 /* Verify that prompt is the whole current selected rendering and nominate the
  * byte endpoint after its selected system/tools prefix. Every included segment
  * must be immutable, cacheable and non-stale. Success with *byte_end=0 means no

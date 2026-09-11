@@ -267,15 +267,35 @@ const fg_tool_def *fg_tools(size_t *);
 char *fg_tool_schema(bool thought, bool required, bool routed);
 char *fg_tool_native_schema(void);
 char *fg_tool_minimal_native_schema(void);
+char *fg_tool_candidate_schema(bool validation_only);
+char *fg_tool_noedit_schema(void);
+char *fg_tool_native_extensions(const char *base, bool ask_user, bool reflection_only);
 char *fg_tool_native_final_schema(void);
 char *fg_tool_grammar(bool thought, bool required, bool routed);
 forge_status fg_native_action_normalize(const char *, bool include_thought, char **, forge_error *);
 bool fg_tool_validate(const char *, yyjson_val *, forge_error *);
 uint64_t fg_tool_signature(const char *, yyjson_val *, uint64_t generation,
                            uint64_t diagnostic_hash);
+/* Single-slot verdict cache for repeated identical commands. Agent-owned;
+ * tools.c reads and replaces it through the borrowed slot pointer, which is
+ * NULL unless the host opted in. A stored verdict is served only while no
+ * host-observed mutation could have intervened; the slot is cleared on any
+ * executed edit, command, or validation. Out-of-workspace effects are not
+ * observed, the same residual as sequential KV prefix reuse. */
+#define FG_DEDUP_MAX_BYTES ((size_t)1 << 20)
+typedef struct {
+    char *argv_key; /* canonical argv encoding; NULL when empty */
+    char *output;   /* exact rendered verdict bytes, without reuse annotation */
+    int exit_code;
+    size_t out_len, err_len;
+    bool truncated;
+    uint64_t call_id; /* action that produced the verdict */
+} fg_command_verdict;
+void fg_dedup_clear(fg_command_verdict *);
 typedef struct {
     forge_agent_config config;
     forge_repo *repo;
+    struct fg_impact_snapshot *impact;
     fg_session *session;
     char root[FG_PATH_MAX];
     size_t call_id;
@@ -284,6 +304,8 @@ typedef struct {
     bool process_ran;
     bool evidence_failed;      /* An edit event or prepared outcome could not be recorded. */
     fg_process_result process; /* Metadata only; out/err pointers stay NULL. */
+    fg_command_verdict *dedup_slot; /* Borrowed verdict cache; NULL disables reuse. */
+    bool dedup_reused;              /* The last call served a stored verdict. */
 } fg_tool_context;
 typedef struct {
     bool applicable, passed, inputs_changed;
@@ -292,7 +314,10 @@ typedef struct {
     char *json, *summary;
     struct fg_input_snapshot *failed_inputs; /* Complete, stable failed validation inputs. */
     char *failed_command;
+    uint64_t semantic_diagnostic_hash;
+    bool semantic_diagnostic_complete;
 } fg_validation_result;
+bool fg_validation_diagnostic_hash(const char *, uint64_t *);
 forge_status fg_validation_run(fg_tool_context *, const char *const *, size_t, forge_metrics *,
                                fg_validation_result *, forge_error *);
 void fg_validation_result_free(fg_validation_result *);
@@ -304,6 +329,11 @@ forge_status fg_repo_note_change_until(forge_repo *, uint64_t deadline, forge_ca
                                        forge_error *);
 forge_status fg_repo_index_until(forge_repo *, const char *const *, size_t, bool, uint64_t deadline,
                                  forge_cancel_fn, void *, forge_error *);
+/* Copied candidate trials have no Git metadata. Use bounded native discovery
+ * rather than borrowing an ancestor repository's exclusions/index. Set before
+ * the initial full index; the repository retains conservative fallback status. */
+void fg_repo_force_filesystem_index(forge_repo *);
+void fg_agent_mark_independent_workspace(forge_agent *);
 typedef struct fg_repo_monitor fg_repo_monitor;
 typedef struct {
     char *json;

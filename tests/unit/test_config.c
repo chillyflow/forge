@@ -138,6 +138,8 @@ static void config_values(void) {
         "threads = 3\n"
         "seed = 4_294_967_295\n"
         "temperature = 0.25\n"
+        "repetition_penalty = 1.05\n"
+        "repetition_last_n = 64\n"
         "reuse_prefix = false\n"
         "grammar_fast_path = false\n"
         "speculative = false\n"
@@ -180,6 +182,8 @@ static void config_values(void) {
     assert(config.model.gpu_layers == FORGE_GPU_LAYERS_AUTO);
     assert(config.model.threads == 3 && config.model.seed == UINT32_MAX);
     assert(config.model.temperature == 0.25f);
+    assert(config.model.repetition_penalty == 1.05f);
+    assert(config.model.repetition_last_n == 64);
     assert(!config.model.reuse_prefix && !config.model.grammar_fast_path);
     assert(config.limits.output_reserve == 1024 && config.limits.max_turns == 50);
     assert(config.limits.max_generated_tokens == 100000 &&
@@ -242,6 +246,12 @@ static void config_rejections(void) {
         {"inference.temperature = inf", "inference.temperature"},
         {"inference.temperature = -0.1", "inference.temperature"},
         {"inference.temperature = 2.01", "inference.temperature"},
+        {"inference.repetition_penalty = 0", "inference.repetition_penalty"},
+        {"inference.repetition_penalty = -0.5", "inference.repetition_penalty"},
+        {"inference.repetition_penalty = 2.01", "inference.repetition_penalty"},
+        {"inference.repetition_penalty = nan", "inference.repetition_penalty"},
+        {"inference.repetition_last_n = -1", "inference.repetition_last_n"},
+        {"inference.repetition_last_n = 1025", "inference.repetition_last_n"},
         {"inference.speculative = true", "not implemented"},
         {"inference.speculative = 0", "boolean"},
         {"inference.draft_model = 'draft.gguf'", "unknown"},
@@ -425,6 +435,12 @@ static void final_override_validation(void) {
     config.model.temperature = NAN;
     assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
     config.model.temperature = 0;
+    config.model.repetition_penalty = 0;
+    assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
+    config.model.repetition_penalty = 1.0f;
+    config.model.repetition_last_n = -1;
+    assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
+    config.model.repetition_last_n = 0;
     config.model.thinking = (forge_thinking_mode)99;
     assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
     config.model.thinking = FORGE_THINKING_AUTO;

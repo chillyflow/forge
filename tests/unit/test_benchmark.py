@@ -3,9 +3,11 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -34,6 +36,10 @@ FREEZE_SPEC = importlib.util.spec_from_file_location(
     'forge_benchmark_freeze', SOURCE.parent / 'freeze.py')
 FREEZE = importlib.util.module_from_spec(FREEZE_SPEC)
 FREEZE_SPEC.loader.exec_module(FREEZE)
+COMMON_SPEC = importlib.util.spec_from_file_location(
+    'forge_benchmark_common', SOURCE.parent / 'common.py')
+COMMON = importlib.util.module_from_spec(COMMON_SPEC)
+COMMON_SPEC.loader.exec_module(COMMON)
 CAMPAIGN_SPEC = importlib.util.spec_from_file_location(
     'forge_benchmark_campaign', SOURCE.parent / 'campaign.py')
 CAMPAIGN = importlib.util.module_from_spec(CAMPAIGN_SPEC)
@@ -329,6 +335,72 @@ class FixtureTests(unittest.TestCase):
                     self.assertEqual(result['prompt_protocol'], arm)
                     self.assertEqual(aggregate[0]['prompt_protocol'], arm)
 
+    def test_repetition_penalty_is_forwarded_and_recorded(self):
+        task = {'id': 'one', 'prompt': 'repair it', 'files': {'answer.txt': 'broken\n'},
+                'protected_files': ['answer.txt']}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            forge, model = root / 'forge.exe', root / 'model.gguf'
+            forge.write_bytes(b'forge')
+            model.write_bytes(b'model')
+            output = root / 'output-penalty'
+            commands = []
+
+            def monitored(command, **_kwargs):
+                commands.append(command)
+                return {'returncode': 0, 'wall_seconds': 1.0, 'resource_usage': {}}
+
+            argv = ['run.py', '--forge', str(forge), '--model', str(model),
+                    '--output', str(output), '--no-randomize',
+                    '--repetition-penalty', '1.05', '--repetition-last-n', '64']
+            with mock.patch.multiple(
+                    BENCH,
+                    load_tasks=mock.Mock(return_value=[(root / 'one.json', task)]),
+                    check_tools=mock.Mock(),
+                    initialize_git=mock.Mock(),
+                    runtime_bundle=mock.Mock(return_value={'files': []}),
+                    platform_metadata=mock.Mock(return_value={'platform': 'test'}),
+                    run_monitored=monitored,
+                    verify_task=mock.Mock(return_value={
+                        'passed': True, 'wall_seconds': .2, 'resource_usage': {}})), \
+                    mock.patch.object(BENCH.subprocess, 'check_output',
+                                      return_value='forge test'), \
+                    mock.patch.object(BENCH.subprocess, 'run'):
+                with mock.patch.object(BENCH.sys, 'argv', argv), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(BENCH.main(), 0)
+
+            self.assertEqual(len(commands), 1)
+            penalty_index = commands[0].index('--repetition-penalty')
+            self.assertEqual(commands[0][penalty_index + 1], '1.05')
+            last_n_index = commands[0].index('--repetition-last-n')
+            self.assertEqual(commands[0][last_n_index + 1], '64')
+            environment = json.loads(
+                (output / 'environment.json').read_text(encoding='utf-8'))
+            self.assertEqual(environment['repetition_penalty'], 1.05)
+            self.assertEqual(environment['repetition_last_n'], 64)
+
+    def test_repetition_penalty_rejects_out_of_range(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            forge, model = root / 'forge.exe', root / 'model.gguf'
+            forge.write_bytes(b'forge')
+            model.write_bytes(b'model')
+            cases = (
+                (['--repetition-penalty', '0'], '--repetition-penalty'),
+                (['--repetition-penalty', '2.5'], '--repetition-penalty'),
+                (['--repetition-last-n', '1025'], '--repetition-last-n'))
+            for extra, expected in cases:
+                with self.subTest(extra=extra):
+                    argv = ['run.py', '--forge', str(forge), '--model', str(model),
+                            '--output', str(root / 'unused')] + extra
+                    with mock.patch.object(BENCH.sys, 'argv', argv), \
+                            contextlib.redirect_stderr(io.StringIO()) as stderr, \
+                            self.assertRaises(SystemExit) as error:
+                        BENCH.main()
+                    self.assertEqual(error.exception.code, 2)
+                    self.assertIn(expected, stderr.getvalue())
+
     def test_prompt_protocol_rejects_unknown_arm(self):
         argv = ['run.py', '--forge', 'missing', '--model', 'missing', '--output', 'unused',
                 '--prompt-protocol', 'unsupported']
@@ -519,7 +591,8 @@ class FixtureTests(unittest.TestCase):
 
     def test_run_identity_covers_decode_configuration(self):
         for key in ('gpu_layers', 'chat_template', 'task_suite', 'output_reserve',
-                    'temperature', 'seed', 'repetitions', 'order_seed',
+                    'temperature', 'seed', 'repetition_penalty', 'repetition_last_n',
+                    'repetitions', 'order_seed',
                     'randomized_order', 'lifecycle', 'platform', 'go_version', 'gpu'):
             self.assertIn(key, CONSOLIDATE.IDENTITY)
 
@@ -532,6 +605,85 @@ class FixtureTests(unittest.TestCase):
             (root / 'stdout.jsonl').write_text(json.dumps(event) + '\n', encoding='utf-8')
             self.assertEqual(list(FAILURES.actions(root)),
                              [(json.loads(event['data']), True)])
+
+
+class VerificationBytecodeCacheTests(unittest.TestCase):
+    """The verifier must not load bytecode the agent's own commands wrote.
+
+    Python -B and PYTHONDONTWRITEBYTECODE suppress bytecode *writes* and have no
+    effect on *loading*. Only redirecting the cache changes which bytecode an
+    import resolves to. These tests fabricate the exact stale-cache condition -
+    a .pyc whose source has since changed underneath it, with size and mtime
+    preserved so the ordinary invalidation check still passes - and assert the
+    verifier reports the source that is actually on disk.
+    """
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='forge-pycache-')
+        self.root = pathlib.Path(self.temp.name)
+        self.module = self.root / 'm.py'
+        self.module.write_bytes(b'V = 1\n')
+        # Populate __pycache__ for the original source, exactly as a
+        # model-issued `python -m unittest` inside the workspace would.
+        subprocess.run([sys.executable, '-c', 'import m'], cwd=self.root, check=True)
+        self.assertTrue(any(self.root.glob('__pycache__/m.*.pyc')),
+                        'fixture did not produce the stale bytecode it needs')
+        stat = self.module.stat()
+        self.module.write_bytes(b'V = 2\n')          # identical byte length
+        os.utime(self.module, (stat.st_atime, stat.st_mtime))
+        self.assertEqual(self.module.stat().st_size, stat.st_size)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def observed(self, env):
+        result = subprocess.run([sys.executable, '-c', 'import m; print(m.V)'],
+                                cwd=self.root, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def test_dont_write_bytecode_does_not_prevent_loading_the_stale_cache(self):
+        """Guards the reasoning: this is why -B is not the fix."""
+        env = dict(os.environ)
+        env.pop('PYTHONPYCACHEPREFIX', None)
+        env['PYTHONDONTWRITEBYTECODE'] = '1'
+        self.assertEqual(self.observed(env), '1', 'expected the stale bytecode to win')
+
+    def test_verification_environment_isolates_the_cache(self):
+        env = COMMON.verification_environment(cache_prefix=self.root / 'isolated')
+        self.assertEqual(env['PYTHONPYCACHEPREFIX'], str(self.root / 'isolated'))
+        self.assertEqual(self.observed(env), '2',
+                         'verifier loaded workspace bytecode instead of current source')
+
+    def test_verification_environment_without_a_prefix_sets_nothing(self):
+        env = COMMON.verification_environment()
+        self.assertNotIn('PYTHONPYCACHEPREFIX', env)
+        self.assertNotIn('PYTHONDONTWRITEBYTECODE', env)
+
+    def test_redirecting_without_disabling_writes_would_cache_a_stale_module(self):
+        """Why both settings are required, not just the prefix.
+
+        A prefix that is written to accumulates workspace bytecode across
+        commands. Timestamp invalidation compares only mtime and size, so a
+        later same-length edit within the mtime resolution is not detected and
+        the previous candidate's bytecode is served - which can fail a correct
+        repair. This asserts the unsafe configuration really is unsafe, so the
+        two-setting requirement cannot be quietly reduced to one.
+        """
+        prefix = self.root / 'written'
+        unsafe = dict(os.environ)
+        unsafe.pop('PYTHONDONTWRITEBYTECODE', None)
+        unsafe['PYTHONPYCACHEPREFIX'] = str(prefix)
+        self.assertEqual(self.observed(unsafe), '2')      # populates the prefix
+        stat = self.module.stat()
+        self.module.write_bytes(b'V = 3\n')               # same length again
+        os.utime(self.module, (stat.st_atime, stat.st_mtime))
+        self.assertEqual(self.observed(unsafe), '2',
+                         'expected the write-enabled prefix to serve stale bytecode')
+        # The shipped configuration disables writes, so nothing is ever cached.
+        safe = COMMON.verification_environment(cache_prefix=self.root / 'unwritten')
+        self.assertEqual(safe['PYTHONDONTWRITEBYTECODE'], '1')
+        self.assertEqual(self.observed(safe), '3')
 
 
 if __name__ == '__main__':

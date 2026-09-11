@@ -1,4 +1,5 @@
 #include "graph.h"
+#include "impact.h"
 #include "forge/validation.h"
 #include <ctype.h>
 
@@ -655,17 +656,46 @@ static bool vp_python_syntax_commands(vp_graph *g, yyjson_mut_val *commands) {
     return true;
 }
 
+/* Two settings are needed, and each covers what the other cannot.
+ *
+ * -B suppresses bytecode WRITES and has no effect on which bytecode is LOADED.
+ * -X pycache_prefix redirects where bytecode is READ from. Used alone, the
+ * prefix is worse than useless here: it caches workspace modules across a run,
+ * and because timestamp invalidation compares only mtime and size, an edit of
+ * identical length within the mtime resolution is not detected - so a *correct*
+ * repair can be validated against the previous candidate's bytecode. That was
+ * observed directly, not theorised.
+ *
+ * Together they are safe by construction: the prefix is never written, so every
+ * lookup misses and compiles from source, and the workspace __pycache__ - which
+ * a model-issued run_command can write, since the process environment allowlist
+ * carries no bytecode policy - is never consulted.
+ *
+ * The cost is one compile per command rather than a warm cache. It is bounded,
+ * measured, and reported in the plan's limitations rather than assumed away.
+ *
+ * Scope limit, deliberately not overstated: both are interpreter options and
+ * apply to THIS process only. A test that itself spawns another interpreter
+ * gives that grandchild no bytecode policy, because fg_process_at's environment
+ * allowlist carries neither PYTHONPYCACHEPREFIX nor PYTHONDONTWRITEBYTECODE.
+ * Such a grandchild can still read and write the workspace __pycache__. The
+ * limitations string says so rather than claiming a guarantee this cannot
+ * deliver. */
+#define VP_PYCACHE_DIR ".forge/pycache"
+#define VP_PYCACHE "pycache_prefix=" VP_PYCACHE_DIR
+
 static bool vp_python_file_commands(vp_graph *g, yyjson_mut_val *commands, char *const *files,
                                     size_t file_count, bool use_pytest, const char *reason) {
     static const char unittest_script[] =
         "import sys,unittest;"
         "p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);"
         "sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)";
-    const char *pytest_argv[] = {g->python_executable, "-B", "-m", "pytest", "-q", "-p",
-                                 "no:cacheprovider"};
-    const char *unittest_argv[] = {g->python_executable, "-B", "-c", unittest_script};
+    const char *pytest_argv[] = {g->python_executable, "-B", "-X", VP_PYCACHE, "-m", "pytest",
+                                 "-q", "-p", "no:cacheprovider"};
+    const char *unittest_argv[] = {g->python_executable, "-B", "-X", VP_PYCACHE, "-c",
+                                   unittest_script};
     const char *const *prefix = use_pytest ? pytest_argv : unittest_argv;
-    size_t prefix_count = use_pytest ? 7 : 4;
+    size_t prefix_count = use_pytest ? 9 : 6;
     vp_format_batch batch = {0};
     for (size_t i = 0; i < file_count; i++) {
         const char *file = files[i];
@@ -695,9 +725,9 @@ static bool vp_python_broad_command(vp_graph *g, yyjson_mut_val *commands) {
     if (!g->python_test_count && !g->python_pytest)
         return true;
     if (g->python_pytest) {
-        const char *argv[] = {g->python_executable, "-B", "-m", "pytest", "-q", "-p",
+        const char *argv[] = {g->python_executable, "-B", "-X", VP_PYCACHE, "-m", "pytest", "-q", "-p",
                               "no:cacheprovider"};
-        vp_command(g, commands, ".", argv, 7, false, "final_python_pytest_discovery");
+        vp_command(g, commands, ".", argv, 9, false, "final_python_pytest_discovery");
     } else
         vp_python_file_commands(g, commands, g->python_tests, g->python_test_count, false,
                                 "final_python_unittest_files");
@@ -842,7 +872,8 @@ static char *vp_serialize(vp_graph *g) {
               !g->python_test_count && !g->python_pytest ? "none"
               : g->python_pytest                         ? "pytest"
                                                          : "unittest");
-    vp_bool(g, python, "bytecode_writes_disabled", true);
+    vp_bool(g, python, "bytecode_cache_isolated", true);
+    vp_string(g, python, "bytecode_cache_prefix", VP_PYCACHE_DIR);
     vp_bool(g, python, "pytest_cache_disabled", g->python_pytest);
     vp_value(g, python, "targeted_test_files", python_targets);
     for (size_t i = 0; i < g->python_target_count; i++)
@@ -923,8 +954,13 @@ static char *vp_serialize(vp_graph *g) {
             "validation.");
         vp_append_string(
             g, limitations,
-            "Python syntax checks compile source without importing code. Python runs use -B and "
-            "pytest disables its cache provider, but project tests may still mutate inputs and "
+            "Python syntax checks compile source without importing code. Python test runs both "
+            "redirect the bytecode cache to an unwritten prefix and disable bytecode writes, so "
+            "imports made by the test process itself compile from current source and cannot be "
+            "satisfied by a workspace __pycache__ or a previous candidate's bytecode; the cost is "
+            "one compile per command. These are interpreter options and do not reach a further "
+            "interpreter that a test spawns itself, which retains ordinary bytecode behaviour. "
+            "pytest also disables its cache provider. Project tests may still mutate inputs and "
             "must be rejected if the validation snapshot changes.");
         vp_append_string(
             g, limitations,
@@ -1031,5 +1067,167 @@ done:
         out = NULL;
     }
     vp_free(&g);
+    return out;
+}
+
+/* Preliminary symbol tests reuse the command executor and its ordinary policy,
+ * snapshots and
+ * stop-on-failure behavior. This never replaces broad_tests. */
+static bool vp_impact_commands(vp_graph *g, yyjson_mut_val *commands, yyjson_val *tests,
+                               bool dependent) {
+    size_t index, total;
+    yyjson_val *test;
+    const char *directories[VP_MAX_COMMANDS];
+    size_t directory_count = 0;
+    yyjson_arr_foreach(tests, index, total, test) {
+        const char *language = fg_json_str(test, "language");
+        const char *directory = fg_json_str(test, "package_directory");
+        const char *module = fg_json_str(test, "module_directory");
+        const char *reason = fg_json_str(test, "reason");
+        if (!language || strcmp(language, "go") || !directory || !module || !reason ||
+            (dependent != !strcmp(reason, "reverse_import_package")))
+            continue;
+        bool seen = false;
+        for (size_t i = 0; i < directory_count; i++)
+            seen |= !strcmp(directories[i], directory);
+        if (seen)
+            continue;
+        if (directory_count == VP_MAX_COMMANDS)
+            return vp_fail(g, FORGE_ERR_LIMIT, "Too many structural test packages");
+        directories[directory_count++] = directory;
+        fg_buf regex = {0};
+        fg_buf_puts(&regex, "^(");
+        size_t names = 0, j, n;
+        yyjson_val *candidate;
+        yyjson_arr_foreach(tests, j, n, candidate) {
+            const char *path = fg_json_str(candidate, "package_directory");
+            const char *name = fg_json_str(candidate, "name");
+            const char *kind = fg_json_str(candidate, "language");
+            if (!path || strcmp(path, directory) || !kind || strcmp(kind, "go") || !name || !*name)
+                continue;
+            /* Go identifiers contain no regular expression punctuation. Refuse
+             *
+             * unexpected ASCII syntax instead of interpolating an expression. */
+            for (const unsigned char *p = (const unsigned char *)name; *p; p++)
+                if (*p < 128 && !isalnum(*p) && *p != '_') {
+                    fg_buf_clear(&regex);
+                    return vp_fail(g, FORGE_ERR_PARSE, "Invalid structural test identifier");
+                }
+            if (names++)
+                fg_buf_puts(&regex, "|");
+            fg_buf_puts(&regex, name);
+        }
+        fg_buf_puts(&regex, ")$");
+        if (!names || regex.failed || regex.len > VP_BATCH_BYTES) {
+            fg_buf_clear(&regex);
+            return vp_fail(g, FORGE_ERR_LIMIT, "Structural test expression exceeds its limit");
+        }
+        const char *relative = !strcmp(module, directory) ? "."
+                               : !strcmp(module, ".")     ? directory
+                                                          : directory + strlen(module) + 1;
+        char target[FG_PATH_MAX];
+        if (!strcmp(relative, "."))
+            strcpy(target, ".");
+        else
+            snprintf(target, sizeof(target), "./%s", relative);
+        const char *argv[] = {"go",       "test", "-json",    "-count=1",
+                              "-vet=off", "-run", regex.data, target};
+        vp_command(g, commands, module, argv, 8, false,
+                   dependent ? "preliminary_reverse_import_symbol_tests"
+                             : "preliminary_changed_symbol_test_candidates");
+        fg_buf_clear(&regex);
+        if (g->failed)
+            return false;
+    }
+    return true;
+}
+
+char *fg_repo_validation_plan_impact(forge_repo *repo, const fg_impact_snapshot *baseline,
+                                     uint64_t deadline, forge_cancel_fn cancel, void *user,
+                                     forge_error *error) {
+    if (!baseline)
+        return forge_repo_validation_plan(repo, NULL, 0, error);
+    char *impact = fg_impact_analyze(repo, baseline, deadline, cancel, user, error);
+    if (!impact)
+        return NULL;
+    yyjson_doc *idoc = yyjson_read(impact, strlen(impact), 0);
+    yyjson_val *iroot = idoc ? yyjson_doc_get_root(idoc) : NULL;
+    yyjson_val *changes = yyjson_obj_get(iroot, "changed_paths");
+    yyjson_val *tests = yyjson_obj_get(iroot, "targeted_tests");
+    bool fallback = yyjson_get_bool(yyjson_obj_get(iroot, "fallback"));
+    const char *paths[VP_MAX_CHANGES];
+    size_t count = yyjson_arr_size(changes);
+    if (!idoc || !yyjson_is_arr(changes) || !yyjson_is_arr(tests)) {
+        free(impact);
+        yyjson_doc_free(idoc);
+        fg_error(error, FORGE_ERR_PARSE, "Invalid structural impact report");
+        return NULL;
+    }
+    if (count > VP_MAX_CHANGES)
+        fallback = true;
+    for (size_t i = 0; !fallback && i < count; i++)
+        paths[i] = yyjson_get_str(yyjson_arr_get(changes, i));
+    char *ordinary =
+        forge_repo_validation_plan(repo, fallback ? NULL : paths, fallback ? 0 : count, error);
+    yyjson_doc *odoc = ordinary ? yyjson_read(ordinary, strlen(ordinary), 0) : NULL;
+    vp_graph g = {.repo = repo, .error = error};
+    g.doc = odoc ? yyjson_doc_mut_copy(odoc, NULL) : NULL;
+    yyjson_mut_val *root = g.doc ? yyjson_mut_doc_get_root(g.doc) : NULL;
+    char *out = NULL;
+    if (!root) {
+        if (ordinary)
+            vp_fail(&g, FORGE_ERR_MEMORY, "Cannot allocate structural validation plan");
+        goto done;
+    }
+    if (yyjson_get_uint(yyjson_obj_get(iroot, "generation")) !=
+        yyjson_mut_get_uint(yyjson_mut_obj_get(root, "generation"))) {
+        vp_fail(&g, FORGE_ERR_CONFLICT,
+                "Repository changed between impact and validation planning");
+        goto done;
+    }
+    vp_value(&g, root, "structural_impact", yyjson_val_mut_copy(g.doc, iroot));
+    if (!fallback && yyjson_mut_get_bool(yyjson_mut_obj_get(root, "verification_available"))) {
+        yyjson_mut_val *stages = yyjson_mut_obj_get(root, "stages");
+        for (size_t i = 0; i < yyjson_mut_arr_size(stages); i++) {
+            yyjson_mut_val *stage = yyjson_mut_arr_get(stages, i);
+            const char *name = yyjson_mut_get_str(yyjson_mut_obj_get(stage, "name"));
+            if (strcmp(name, "affected_tests") && strcmp(name, "dependent_tests"))
+                continue;
+            yyjson_mut_val *commands = vp_array(&g);
+            if (!vp_impact_commands(&g, commands, tests, !strcmp(name, "dependent_tests")))
+                goto done;
+            if (!yyjson_mut_obj_put(stage, yyjson_mut_str(g.doc, "commands"), commands)) {
+                vp_fail(&g, FORGE_ERR_MEMORY, "Cannot attach structural test commands");
+                goto done;
+            }
+        }
+    }
+    g.command_count = 0;
+    yyjson_mut_val *stages = yyjson_mut_obj_get(root, "stages");
+    for (size_t i = 0; i < yyjson_mut_arr_size(stages); i++)
+        g.command_count +=
+            yyjson_mut_arr_size(yyjson_mut_obj_get(yyjson_mut_arr_get(stages, i), "commands"));
+    if (g.command_count > VP_MAX_COMMANDS) {
+        vp_fail(&g, FORGE_ERR_LIMIT, "Structural validation plan exceeds 2048 commands");
+        goto done;
+    }
+    if (!yyjson_mut_obj_put(root, yyjson_mut_str(g.doc, "command_count"),
+                            yyjson_mut_uint(g.doc, g.command_count)))
+        vp_fail(&g, FORGE_ERR_MEMORY, "Cannot retain structural validation command count");
+    size_t length = 0;
+    if (!g.failed)
+        out = yyjson_mut_write(g.doc, 0, &length);
+    if (!g.failed && (!out || length > FG_MAX_JSON)) {
+        free(out);
+        out = NULL;
+        vp_fail(&g, length > FG_MAX_JSON ? FORGE_ERR_LIMIT : FORGE_ERR_MEMORY,
+                "Cannot serialize bounded structural validation plan");
+    }
+done:
+    yyjson_mut_doc_free(g.doc);
+    yyjson_doc_free(odoc);
+    yyjson_doc_free(idoc);
+    free(ordinary);
+    free(impact);
     return out;
 }

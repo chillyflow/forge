@@ -616,7 +616,10 @@ static void test_python_pytest_plan(void) {
     }
     assert(!strcmp(fg_json_str(root, "verification_status"), "planned"));
     assert(!strcmp(fg_json_str(python, "test_runner"), "pytest"));
-    assert(yyjson_get_bool(yyjson_obj_get(python, "bytecode_writes_disabled")));
+    assert(yyjson_get_bool(yyjson_obj_get(python, "bytecode_cache_isolated")));
+    /* A directory, not the -X option string: benchmark/common.py reports the
+     * same key as a filesystem path, and the two must agree. */
+    assert(!strcmp(fg_json_str(python, "bytecode_cache_prefix"), ".forge/pycache"));
     assert(yyjson_get_bool(yyjson_obj_get(python, "pytest_cache_disabled")));
     assert(yyjson_get_uint(yyjson_obj_get(python, "syntax_file_count")) == 1);
     assert(yyjson_get_uint(yyjson_obj_get(python, "targeted_test_count")) == 1);
@@ -635,11 +638,19 @@ static void test_python_pytest_plan(void) {
     argv = yyjson_obj_get(targeted, "argv");
     assert(array_has(argv, "pytest"));
     assert(array_has(argv, "no:cacheprovider"));
+    /* Both settings are required: -B stops the prefix from ever being written,
+     * and the prefix stops a workspace __pycache__ from satisfying an import.
+     * Redirecting alone would cache workspace modules across a run, where
+     * mtime+size invalidation misses a same-length edit. */
     assert(array_has(argv, "-B"));
+    assert(array_has(argv, "-X"));
+    assert(array_has(argv, "pycache_prefix=.forge/pycache"));
     yyjson_val *broad = command_for(root, "broad_tests", ".", "pytest");
     assert(broad);
     argv = yyjson_obj_get(broad, "argv");
     assert(array_has(argv, "no:cacheprovider"));
+    assert(array_has(argv, "pycache_prefix=.forge/pycache"));
+    assert(array_has(argv, "-B"));
     assert(yyjson_get_uint(yyjson_obj_get(root, "command_count")) == 3);
     yyjson_doc_free(doc);
     fixture_finish(&f);
@@ -714,10 +725,15 @@ static void test_python_unittest_plan(void) {
     }
     assert(!strcmp(fg_json_str(python, "test_runner"), "unittest"));
     assert(!yyjson_get_bool(yyjson_obj_get(python, "pytest_cache_disabled")));
+    assert(yyjson_get_bool(yyjson_obj_get(python, "bytecode_cache_isolated")));
     yyjson_val *targeted = command_for(root, "affected_tests", ".", "./tests/test_calc.py");
     assert(targeted);
     yyjson_val *argv = yyjson_obj_get(targeted, "argv");
     assert(array_has_substring(argv, "unittest.main"));
+    /* The unittest runner imports test modules, so it needs the same isolated
+     * cache as pytest: -B keeps the prefix empty and the prefix keeps the
+     * workspace __pycache__ out of the import path. */
+    assert(array_has(argv, "pycache_prefix=.forge/pycache"));
     assert(array_has(argv, "-B"));
     assert(array_has(argv, "-c"));
     assert(array_has_substring(argv, "testsRun==0"));

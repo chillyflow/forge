@@ -1,10 +1,75 @@
 #include "internal.h"
+#include "forge/diagnostics.h"
 #include "forge/validation.h"
 #include "forge/verification.h"
 #include "input_snapshot.h"
+#include "repo/impact.h"
+#include "semantic_state.h"
 
 #define VALIDATION_MAX_FILES 100000u
 #define VALIDATION_MAX_BYTES (UINT64_C(2) * 1024u * 1024u * 1024u)
+
+/* Fingerprint complete recognized diagnostics from the raw process capture,
+ * never the clipped model-facing summary. Source coordinates may move when
+ * comments change; messages, operands, paths and duplicate counts may not. */
+bool fg_validation_diagnostic_hash(const char *raw, uint64_t *hash) {
+    if (hash)
+        *hash = 0;
+    if (!raw || !hash)
+        return false;
+    forge_diagnostic_options options = forge_diagnostics_default_options();
+    options.max_diagnostics = 512;
+    char *json = forge_diagnostics_parse(raw, strlen(raw), &options, NULL);
+    yyjson_doc *doc = json ? yyjson_read(json, strlen(json), 0) : NULL;
+    free(json);
+    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;
+    yyjson_val *records = yyjson_obj_get(root, "diagnostics");
+    size_t capacity = yyjson_arr_size(records), count = 0;
+    bool complete =
+        root && !yyjson_get_bool(yyjson_obj_get(root, "incomplete")) && capacity && capacity <= 512;
+    fg_semantic_diagnostic *entries = complete ? calloc(capacity, sizeof(*entries)) : NULL;
+    complete = complete && entries;
+    size_t i, n;
+    yyjson_val *record;
+    yyjson_arr_foreach(records, i, n, record) {
+        if (!complete)
+            break;
+        const char *kind = fg_json_str(record, "kind");
+        if (!kind || !strcmp(kind, "output"))
+            continue;
+        yyjson_mut_doc *copy = yyjson_mut_doc_new(NULL);
+        yyjson_mut_val *item = copy ? yyjson_val_mut_copy(copy, record) : NULL;
+        if (!item) {
+            yyjson_mut_doc_free(copy);
+            complete = false;
+            break;
+        }
+        yyjson_mut_doc_set_root(copy, item);
+        yyjson_mut_obj_remove_key(item, "fingerprint");
+        /* Display is the original rendered line, including source coordinates.
+         * Its diagnostic content is already represented by the parsed fields. */
+        yyjson_mut_obj_remove_key(item, "display");
+        yyjson_mut_val *location = yyjson_mut_obj_get(item, "location");
+        yyjson_mut_obj_remove_key(location, "line");
+        yyjson_mut_obj_remove_key(location, "column");
+        yyjson_mut_val *stack = yyjson_mut_obj_get(item, "stack"), *frame;
+        size_t j, frames;
+        yyjson_mut_arr_foreach(stack, j, frames, frame) {
+            yyjson_mut_obj_remove_key(frame, "line");
+            yyjson_mut_obj_remove_key(frame, "column");
+        }
+        entries[count].identity = yyjson_mut_write(copy, 0, NULL);
+        complete = entries[count].identity != NULL;
+        yyjson_mut_doc_free(copy);
+        count++;
+    }
+    bool ok = fg_semantic_diagnostic_fingerprint(entries, count, complete, hash, NULL);
+    for (size_t j = 0; j < count; ++j)
+        free((void *)entries[j].identity);
+    free(entries);
+    yyjson_doc_free(doc);
+    return ok;
+}
 
 static bool cancelled(fg_tool_context *c) {
     return (c->config.cancelled && c->config.cancelled(c->config.userdata)) ||
@@ -125,7 +190,10 @@ forge_status fg_validation_run(fg_tool_context *c, const char *const *paths, siz
     bool evidence_complete = true;
     result->generation = forge_repo_generation(c->repo);
     size_t attempt = ++c->validation_id;
-    char *plan = forge_repo_validation_plan(c->repo, paths, count, e);
+    char *plan = c->config.symbol_impact && c->impact
+                     ? fg_repo_validation_plan_impact(c->repo, c->impact, c->deadline,
+                                                      c->config.cancelled, c->config.userdata, e)
+                     : forge_repo_validation_plan(c->repo, paths, count, e);
     if (!plan)
         return e && e->code ? e->code : FORGE_ERR_MEMORY;
     yyjson_doc *pd = yyjson_read(plan, strlen(plan), 0);
@@ -340,6 +408,9 @@ forge_status fg_validation_run(fg_tool_context *c, const char *const *paths, siz
             yyjson_mut_obj_add_str(rd, record, "status", forge_status_string(status));
             if (status != FORGE_OK) {
                 char *raw = fg_process_render(&r);
+                if (c->config.semantic_loops && !r.truncated && !r.cancelled && !r.timed_out)
+                    result->semantic_diagnostic_complete =
+                        fg_validation_diagnostic_hash(raw, &result->semantic_diagnostic_hash);
                 char *visible = raw ? fg_compress_output(raw, 4096, NULL, NULL) : NULL;
                 fg_buf message = {0};
                 fg_buf_printf(&message, "Automatic validation stopped at %s: %s\n", name,

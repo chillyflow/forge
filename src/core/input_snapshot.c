@@ -32,6 +32,8 @@ typedef struct {
     uint64_t max_bytes, deadline;
     forge_cancel_fn cancelled;
     void *user;
+    fg_input_snapshot_visit_fn visit;
+    void *visit_user;
     forge_error *error;
     char root[FG_PATH_MAX], relative[FG_PATH_MAX];
     unsigned char block[SNAPSHOT_BLOCK_BYTES];
@@ -116,10 +118,17 @@ static bool snapshot_capture(snapshot_scan *scan, uint64_t *length, uint64_t *ha
     scan->snapshot->bytes += (uint64_t)count;
     *length += (uint64_t)count;
     *hash = snapshot_hash_bytes(*hash, scan->block, count);
+    if (scan->visit &&
+        !scan->visit(scan->relative, scan->block, count, false, scan->visit_user, scan->error))
+        return false;
     return snapshot_check(scan);
 }
 
 static bool snapshot_add(snapshot_scan *scan, uint64_t length, uint64_t hash) {
+    if (scan->visit && !scan->visit(scan->relative, NULL, 0, true, scan->visit_user, scan->error))
+        return false;
+    if (!snapshot_check(scan))
+        return false;
     fg_input_snapshot *snapshot = scan->snapshot;
     if (snapshot->count == snapshot->capacity) {
         size_t next = snapshot->capacity > SIZE_MAX / 2 ? scan->max_files : snapshot->capacity * 2;
@@ -632,9 +641,11 @@ static int snapshot_compare_path(const void *left, const void *right) {
     return strcmp(a->path, b->path);
 }
 
-fg_input_snapshot *fg_input_snapshot_take(const char *root, size_t max_files, uint64_t max_bytes,
-                                          forge_cancel_fn cancel, void *user,
-                                          uint64_t absolute_deadline, forge_error *error) {
+fg_input_snapshot *fg_input_snapshot_take_visit(const char *root, size_t max_files,
+                                                uint64_t max_bytes, forge_cancel_fn cancel,
+                                                void *user, uint64_t absolute_deadline,
+                                                fg_input_snapshot_visit_fn visit, void *visit_user,
+                                                forge_error *error) {
     if (!root || !*root || !max_files || !max_bytes || max_files > SIZE_MAX / sizeof(input_file)) {
         fg_error(error, FORGE_ERR_ARGUMENT,
                  "Snapshot requires a workspace and nonzero bounded limits");
@@ -657,6 +668,8 @@ fg_input_snapshot *fg_input_snapshot_take(const char *root, size_t max_files, ui
     scan->max_bytes = max_bytes;
     scan->cancelled = cancel;
     scan->user = user;
+    scan->visit = visit;
+    scan->visit_user = visit_user;
     scan->deadline = absolute_deadline;
     scan->error = error;
     scan->root_length = strlen(root);
@@ -697,6 +710,13 @@ fg_input_snapshot *fg_input_snapshot_take(const char *root, size_t max_files, ui
     }
     snapshot->hash = hash;
     return snapshot;
+}
+
+fg_input_snapshot *fg_input_snapshot_take(const char *root, size_t max_files, uint64_t max_bytes,
+                                          forge_cancel_fn cancel, void *user,
+                                          uint64_t absolute_deadline, forge_error *error) {
+    return fg_input_snapshot_take_visit(root, max_files, max_bytes, cancel, user, absolute_deadline,
+                                        NULL, NULL, error);
 }
 
 bool fg_input_snapshot_equal(const fg_input_snapshot *left, const fg_input_snapshot *right) {

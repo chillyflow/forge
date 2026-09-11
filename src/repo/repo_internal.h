@@ -41,6 +41,7 @@ struct forge_repo {
     uint64_t generation, scan;
     size_t changed, files;
     bool go_index_incomplete, filesystem_scan;
+    bool force_filesystem; /* Independent copied trial; never inherit ancestor Git discovery. */
     forge_error *error;
     forge_index_limits index_limits;
     forge_index_stats index_stats;

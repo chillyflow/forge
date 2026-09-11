@@ -1168,6 +1168,11 @@ static bool index_walk(forge_repo *r, const char *relative, unsigned depth) {
         fg_error(r->error, FORGE_ERR_LIMIT, "Repository path exceeds supported length");
     return ok && !index_stopped(r);
 }
+void fg_repo_force_filesystem_index(forge_repo *r) {
+    if (r)
+        r->force_filesystem = true;
+}
+
 forge_status forge_repo_index(forge_repo *r, forge_error *e) {
     forge_error local = {0};
     if (!e)
@@ -1191,7 +1196,9 @@ forge_status forge_repo_index(forge_repo *r, forge_error *e) {
     const char *args[] = {"git", "--no-lazy-fetch", "-c",       "core.fsmonitor=false", "ls-files",
                           "-z",  "--cached",        "--others", "--exclude-standard",   NULL};
     fg_process_result result = {0};
-    forge_status run = index_process(r, args, 16u * 1024u * 1024u, &result, e);
+    forge_status run = r->force_filesystem
+                           ? FORGE_ERR_UNSUPPORTED
+                           : index_process(r, args, 16u * 1024u * 1024u, &result, e);
     bool ok = true;
     if (run == FORGE_ERR_CANCELLED || run == FORGE_ERR_LIMIT) {
         ok = false;
@@ -1433,7 +1440,7 @@ forge_status forge_repo_index_paths(forge_repo *r, const char *const *requested,
         goto finish;
     }
     bool previous_incomplete = r->go_index_incomplete;
-    if (r->filesystem_scan) {
+    if (r->force_filesystem || r->filesystem_scan) {
         for (size_t i = 0; i < count; i++)
             paths[i].eligible = fallback_path(paths[i].path);
     } else if (!git_path_eligibility(r, paths, count, e)) {

@@ -558,6 +558,20 @@ static forge_status native_force_tool_call_open(llama_state *s, struct llama_sam
     }
     return FORGE_OK;
 }
+/* Capability is probed when the model is loaded. Malformed caller input must
+ * not masquerade as an unsupported backend (and an opt-in probe skip). */
+static forge_status native_request_json(const char *prompt, forge_error *e) {
+    yyjson_doc *doc = yyjson_read(prompt, strlen(prompt), 0);
+    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;
+    const char *protocol = root ? fg_json_str(root, "protocol") : NULL;
+    bool valid = root && yyjson_is_obj(root) && protocol && !strcmp(protocol, "forge-native-v1") &&
+                 yyjson_is_arr(yyjson_obj_get(root, "tools")) &&
+                 yyjson_is_arr(yyjson_obj_get(root, "messages"));
+    yyjson_doc_free(doc);
+    return valid ? FORGE_OK : fg_error(e, FORGE_ERR_PARSE,
+        "Native prompt requires a forge-native-v1 JSON object with tools and messages arrays");
+}
+
 static forge_status llama_generate(forge_model *m, const char *prompt, const char *grammar,
                                    const fg_decode_policy *policy, size_t max_tokens,
                                    forge_token_fn cb, void *u, char **output, forge_metrics *stats,
@@ -576,6 +590,8 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
         if (policy)
             return fg_error(e, FORGE_ERR_ARGUMENT,
                             "Native prompt protocol cannot use routed JSON decoding");
+        if (native_request_json(prompt, e) != FORGE_OK)
+            return FORGE_ERR_PARSE;
         char detail[256] = {0};
         native_render = fg_chat_templates_apply_native(s->chat_templates, prompt,
                                                        s->thinking_mode == FORGE_THINKING_ENABLED,
@@ -750,6 +766,17 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             }
         }
         llama_sampler_chain_add(sampler, grammar_sampler);
+    }
+    if (m->config.repetition_last_n > 0 && m->config.repetition_penalty > 0 &&
+        m->config.repetition_penalty != 1.0f) {
+        struct llama_sampler *penalties = llama_sampler_init_penalties(
+            llama_vocab_n_tokens(s->vocab), m->config.repetition_last_n,
+            m->config.repetition_penalty, 0.0f, 0.0f);
+        if (!penalties) {
+            status = fg_error(e, FORGE_ERR_MEMORY, "Repetition penalty allocation failed");
+            goto finish;
+        }
+        llama_sampler_chain_add(sampler, penalties);
     }
     if (m->config.temperature <= 0)
         llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
@@ -1080,6 +1107,8 @@ static forge_status checkpoint_prefill(forge_model *m, const char *prompt, int32
     int32_t count = 0;
     llama_token *tokens = NULL;
     if (m->config.prompt_protocol == FORGE_PROMPT_NATIVE) {
+        if (native_request_json(prompt, e) != FORGE_OK)
+            return FORGE_ERR_PARSE;
         char detail[256] = {0};
         native_render = fg_chat_templates_apply_native(s->chat_templates, prompt,
                                                        s->thinking_mode == FORGE_THINKING_ENABLED,

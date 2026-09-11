@@ -733,6 +733,289 @@ static void test_rendered_budget_compaction(void) {
     forge_context_destroy(c);
 }
 
+static void test_bounded_native_history_suffix(void) {
+    forge_error error = {0};
+    forge_context *c = forge_context_create(100000, 64, count_chars, NULL);
+    assert(c && forge_context_set_prompt_protocol(c, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    uint64_t system = forge_context_add(c, FORGE_SEG_SYSTEM, "Task permissions remain enforced.",
+                                        100, true, 0, 0);
+    uint64_t tools = forge_context_add(c, FORGE_SEG_TOOLS, "[]", 100, true, 0, 0);
+    assert(system && tools);
+    assert(forge_context_set_flags(c, system, true, true) == FORGE_OK);
+    assert(forge_context_set_flags(c, tools, true, true) == FORGE_OK);
+    assert(forge_context_add(c, FORGE_SEG_TASK, "Repair the current task.", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_SOURCE, "Current source identity: candidate-3.",
+                             100, true, 0, 3));
+    assert(forge_context_add(c, FORGE_SEG_MEMORY,
+                             "Observation: validation candidate-3 failed. Hypothesis: unknown.",
+                             100, true, 0, 3));
+    size_t base_tokens, anchor = 0;
+    char *base = render(c, &base_tokens, NULL);
+    assert(forge_context_cache_anchor(c, base, &anchor, &error) == FORGE_OK && anchor);
+    uint64_t old = forge_context_add(c, FORGE_SEG_ACTION,
+                                     "{\"tool\":\"read_file\",\"args\":{\"path\":\"old.c\"}}",
+                                     100000, false, 0, 1);
+    assert(old && forge_context_add(c, FORGE_SEG_RESULT, "Old short evidence.", 100000, false,
+                                    old, 1));
+    char large[4096];
+    memset(large, 'x', sizeof(large) - 1);
+    large[sizeof(large) - 1] = 0;
+    uint64_t middle = forge_context_add(c, FORGE_SEG_ACTION,
+                                        "{\"tool\":\"read_file\",\"args\":{\"path\":\"middle.c\"}}",
+                                        0, false, 0, 2);
+    assert(middle && forge_context_add(c, FORGE_SEG_RESULT, large, 0, false, middle, 2));
+    uint64_t newest = forge_context_add(c, FORGE_SEG_ACTION,
+                                        "{\"tool\":\"read_file\",\"args\":{\"path\":\"new.c\"}}",
+                                        0, false, 0, 3);
+    assert(newest && forge_context_add(c, FORGE_SEG_RESULT, "Current source evidence.", 0,
+                                       false, newest, 3));
+    size_t tokens = 0, evicted = 0;
+    char *prompt = forge_context_plan_bounded(c, base_tokens + 700, &tokens, &evicted, &error);
+    assert(prompt && tokens == strlen(prompt) && tokens <= base_tokens + 700 && evicted == 4);
+    assert(!strstr(prompt, "old.c") && !strstr(prompt, "middle.c") && strstr(prompt, "new.c"));
+    assert(strstr(prompt, "Task permissions") && strstr(prompt, "Repair the current task."));
+    assert(strstr(prompt, "Current source identity: candidate-3"));
+    assert(strstr(prompt, "validation candidate-3 failed"));
+    for (size_t i = 0; i < 5; i++)
+        assert(view(c, i).selected);
+    for (size_t i = 5; i < 9; i++)
+        assert(!view(c, i).selected);
+    assert(view(c, 9).selected && view(c, 10).selected);
+    size_t next_anchor = 0;
+    assert(forge_context_cache_anchor(c, prompt, &next_anchor, &error) == FORGE_OK);
+    assert(next_anchor == anchor && !memcmp(base, prompt, anchor));
+    yyjson_doc *doc = yyjson_read(prompt, strlen(prompt), 0);
+    assert(doc);
+    yyjson_val *messages = yyjson_obj_get(yyjson_doc_get_root(doc), "messages");
+    size_t calls = 0;
+    for (size_t i = 0; i < yyjson_arr_size(messages); i++) {
+        yyjson_val *message = yyjson_arr_get(messages, i);
+        const char *role = fg_json_str(message, "role");
+        if (!strcmp(role, "assistant")) {
+            yyjson_val *call = yyjson_arr_get(yyjson_obj_get(message, "tool_calls"), 0);
+            yyjson_val *reply = yyjson_arr_get(messages, ++i);
+            assert(reply && !strcmp(fg_json_str(reply, "role"), "tool"));
+            assert(!strcmp(fg_json_str(call, "id"), fg_json_str(reply, "tool_call_id")));
+            calls++;
+        } else
+            assert(strcmp(role, "tool"));
+    }
+    assert(calls == 1);
+    yyjson_doc_free(doc);
+    char *raw = snapshot(c);
+    assert(strstr(raw, "old.c") && strstr(raw, "middle.c") && strstr(raw, large));
+    forge_context *copy = forge_context_import(raw, count_chars, NULL, &error);
+    assert(copy && forge_context_size(copy) == 11);
+    char *again = forge_context_plan_bounded(copy, base_tokens + 700, NULL, NULL, &error);
+    assert(again && !strcmp(prompt, again));
+    free(again);
+    forge_context_destroy(copy);
+    free(raw);
+
+    /* Each turn supplies its own budget; the prior compact selection is not
+     * destructive, and a later larger turn can retain the entire transcript. */
+    char *expanded = forge_context_plan_bounded(c, SIZE_MAX, &tokens, &evicted, &error);
+    assert(expanded && !evicted && strstr(expanded, "old.c") && strstr(expanded, "middle.c"));
+    assert(forge_context_size(c) == 11 && !strcmp(view(c, 7).text,
+                                                "{\"tool\":\"read_file\",\"args\":{\"path\":\"middle.c\"}}"));
+    free(expanded);
+    free(prompt);
+    free(base);
+    forge_context_destroy(c);
+}
+
+static void test_bounded_floor_monotonic_admission(void) {
+    /* A loosened budget must not re-admit a dropped exchange: the admission
+     * window slides forward only, keeping the rendered prefix stable. */
+    forge_error error = {0};
+    forge_context *c = forge_context_create(20000, 100, count_chars, NULL);
+    assert(c);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "SYS", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TASK, "TASK", 100, true, 0, 0));
+    char old_text[2016], mid_text[2016], new_text[128];
+    memset(old_text, 'o', sizeof(old_text) - 1);
+    old_text[sizeof(old_text) - 1] = 0;
+    memset(mid_text, 'm', sizeof(mid_text) - 1);
+    mid_text[sizeof(mid_text) - 1] = 0;
+    memset(new_text, 'n', sizeof(new_text) - 1);
+    new_text[sizeof(new_text) - 1] = 0;
+    assert(forge_context_add(c, FORGE_SEG_SOURCE, old_text, 0, false, 0, 1));
+    uint64_t mid = forge_context_add(c, FORGE_SEG_SOURCE, mid_text, 0, false, 0, 2);
+    assert(mid);
+    assert(forge_context_add(c, FORGE_SEG_SOURCE, new_text, 0, false, 0, 3));
+    size_t tokens = 0, evicted = 0;
+    char *full = forge_context_plan_bounded(c, SIZE_MAX, &tokens, &evicted, &error);
+    assert(full && !evicted);
+    assert(strstr(full, "ooo") && strstr(full, "mmm") && strstr(full, "nnn"));
+
+    /* Shrink until the oldest exchange drops; newest-first admission drops it
+     * alone first, keeping the middle and newest exchanges. */
+    char *narrow = NULL;
+    size_t budget = strlen(full);
+    while (budget > 0) {
+        budget = budget > 10 ? budget - 10 : 0;
+        char *candidate = forge_context_plan_bounded(c, budget, NULL, NULL, &error);
+        if (!candidate)
+            break;
+        if (!strstr(candidate, "ooo")) {
+            narrow = candidate;
+            break;
+        }
+        free(candidate);
+    }
+    assert(narrow && !strstr(narrow, "ooo"));
+    assert(strstr(narrow, "mmm") && strstr(narrow, "nnn"));
+    size_t narrow_tokens = strlen(narrow);
+
+    /* The floor variant with min_id=0 plans exactly like the bounded planner
+     * and reports the oldest admitted optional segment. */
+    uint64_t oldest = 0;
+    char *floored = forge_context_plan_bounded_floor(c, budget, 0, &oldest, NULL, NULL,
+                                                     &error);
+    assert(floored && !strcmp(floored, narrow) && oldest == mid);
+    free(floored);
+
+    /* With the floor set and an infinite budget, the dropped exchange stays
+     * dropped: same bytes as the narrow plan. The unfloored planner
+     * re-admits it, which is the oscillation this experiment removes. */
+    uint64_t oldest2 = 0;
+    char *stable = forge_context_plan_bounded_floor(c, SIZE_MAX, oldest, &oldest2, NULL,
+                                                    NULL, &error);
+    assert(stable && !strcmp(stable, narrow) && oldest2 == oldest);
+    free(stable);
+    char *expanded = forge_context_plan_bounded(c, SIZE_MAX, NULL, NULL, &error);
+    assert(expanded && !strcmp(expanded, full));
+    free(expanded);
+
+    /* A budget fitting only mandatory evidence admits no optional history
+     * and leaves the caller's floor untouched. */
+    size_t tiny_budget = narrow_tokens;
+    char *tiny = NULL;
+    while (tiny_budget > 0) {
+        tiny_budget = tiny_budget > 50 ? tiny_budget - 50 : 0;
+        char *candidate = forge_context_plan_bounded_floor(c, tiny_budget, oldest, &oldest2,
+                                                            NULL, NULL, &error);
+        if (!candidate)
+            break;
+        if (!strstr(candidate, "nnn")) {
+            tiny = candidate;
+            break;
+        }
+        free(candidate);
+    }
+    assert(tiny && !strstr(tiny, "mmm") && !strstr(tiny, "ooo"));
+    assert(strstr(tiny, "SYS") && oldest2 == oldest);
+    free(tiny);
+
+    /* Staleness at the floor does not disturb planning: the stale exchange
+     * is skipped and newer evidence is still admitted. */
+    forge_context_bind_source(c, mid, 7);
+    forge_context_invalidate(c, 7, 99);
+    char *after_stale = forge_context_plan_bounded_floor(c, SIZE_MAX, oldest, &oldest2, NULL,
+                                                          NULL, &error);
+    assert(after_stale && !strstr(after_stale, "mmm") && strstr(after_stale, "nnn"));
+    assert(oldest2 >= oldest);
+    free(after_stale);
+
+    free(narrow);
+    free(full);
+    forge_context_destroy(c);
+}
+
+static void test_bounded_rendered_limits_and_snapshot(void) {
+    forge_error error = {0};
+    size_t tokens = 1, evicted = 1;
+    assert(!forge_context_plan_bounded(NULL, 10, &tokens, &evicted, &error));
+    assert(error.code == FORGE_ERR_ARGUMENT && !tokens && !evicted);
+    forge_context *c = forge_context_create(40, 5, count_chars, NULL);
+    assert(c);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "S", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TASK, "T", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_SOURCE, "U", 0, false, 0, 0));
+    /* Additive estimates total 51, but this complete rendering costs 34. */
+    char *prompt = forge_context_plan_bounded(c, SIZE_MAX, &tokens, &evicted, &error);
+    assert(prompt && tokens == strlen(prompt) && tokens <= 35 && !evicted);
+    size_t full_tokens = tokens;
+    char *raw = snapshot(c);
+    forge_context *copy = forge_context_import(raw, count_chars, NULL, &error);
+    assert(copy && forge_context_size(copy) == 3 && view(copy, 2).selected);
+    forge_context_destroy(copy);
+    free(raw);
+    free(prompt);
+    prompt = forge_context_plan_bounded(c, full_tokens - 1, &tokens, &evicted, &error);
+    assert(prompt && tokens < full_tokens && evicted == 1 && !view(c, 2).selected);
+    free(prompt);
+    assert(!forge_context_plan_bounded(c, 0, &tokens, &evicted, &error));
+    assert(error.code == FORGE_ERR_LIMIT && !tokens && !evicted);
+    for (size_t i = 0; i < forge_context_size(c); i++)
+        assert(!view(c, i).selected);
+
+    /* A raised caller budget cannot consume the create-time output reserve. */
+    assert(forge_context_update(c, view(c, 0).id, "Mandatory evidence cannot fit in 35 tokens.",
+                                 1) == FORGE_OK);
+    assert(!forge_context_plan_bounded(c, SIZE_MAX, &tokens, &evicted, &error));
+    assert(error.code == FORGE_ERR_LIMIT && !tokens && !evicted);
+    forge_context_destroy(c);
+
+    c = forge_context_create(1000, 10, count_chars, NULL);
+    assert(c && forge_context_set_prompt_counter(c, count_template_overhead) == FORGE_OK);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "Mandatory task.", 100, true, 0, 0));
+    assert(!forge_context_plan_bounded(c, 200, &tokens, &evicted, &error));
+    assert(error.code == FORGE_ERR_LIMIT);
+    forge_context_destroy(c);
+
+    c = forge_context_create(501, 1, count_chars, NULL);
+    assert(c && forge_context_set_prompt_protocol(c, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    assert(forge_context_set_prompt_counter(c, count_native_messages) == FORGE_OK);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "Mandatory task.", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TOOLS, "[]", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TASK, "Repair.", 100, true, 0, 0));
+    uint64_t action = forge_context_add(c, FORGE_SEG_ACTION,
+                                        "{\"tool\":\"read_file\",\"args\":{\"path\":\"file.c\"}}",
+                                        0, false, 0, 0);
+    char evidence[1024];
+    memset(evidence, 'x', sizeof(evidence) - 1);
+    evidence[sizeof(evidence) - 1] = 0;
+    assert(action && forge_context_add(c, FORGE_SEG_RESULT, evidence, 100, true, action, 0));
+    prompt = forge_context_plan_bounded(c, 400, &tokens, &evicted, &error);
+    assert(prompt && tokens == 400 && !evicted);
+    free(prompt);
+    assert(!forge_context_plan_bounded(c, 399, &tokens, &evicted, &error));
+    assert(error.code == FORGE_ERR_LIMIT && !tokens && !evicted);
+    forge_context_destroy(c);
+}
+
+static void test_bounded_current_evidence_invalidation(void) {
+    forge_error error = {0};
+    forge_context *c = forge_context_create(10000, 64, count_chars, NULL);
+    assert(c && forge_context_set_prompt_protocol(c, FORGE_PROMPT_NATIVE) == FORGE_OK);
+    assert(forge_context_add(c, FORGE_SEG_SYSTEM, "Permissions.", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TOOLS, "[]", 100, true, 0, 0));
+    assert(forge_context_add(c, FORGE_SEG_TASK, "Task.", 100, true, 0, 0));
+    uint64_t source = forge_context_add(c, FORGE_SEG_SOURCE, "Old source.", 100, true, 0, 1);
+    uint64_t validation = forge_context_add(c, FORGE_SEG_MEMORY, "Old passing validation.",
+                                            100, true, source, 1);
+    assert(source && validation);
+    assert(forge_context_update(c, source, "Current source.", 2) == FORGE_OK);
+    assert(view(c, 4).stale && !view(c, 4).pinned);
+    assert(forge_context_add(c, FORGE_SEG_MEMORY, "Current failure, input identity 2.",
+                             100, true, source, 2));
+    uint64_t action = forge_context_add(c, FORGE_SEG_ACTION,
+                                        "{\"tool\":\"read_file\",\"args\":{\"path\":\"current.c\"}}",
+                                        0, false, 0, 2);
+    uint64_t result = forge_context_add(c, FORGE_SEG_RESULT, "Current read.", 0, true, action, 2);
+    assert(action && result);
+    char *prompt = forge_context_plan_bounded(c, 2048, NULL, NULL, &error);
+    assert(prompt && strstr(prompt, "Current source.") && strstr(prompt, "Current failure"));
+    assert(strstr(prompt, "current.c") && !strstr(prompt, "Old passing validation"));
+    assert(!view(c, 4).selected && forge_context_size(c) == 8);
+    char *raw = snapshot(c);
+    assert(strstr(raw, "Old passing validation"));
+    free(raw);
+    free(prompt);
+    forge_context_destroy(c);
+}
+
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -750,6 +1033,10 @@ int main(void) {
     test_flattened_bytes_and_native_role_pairs();
     test_native_rejects_ambiguous_result_pairing();
     test_rendered_budget_compaction();
+    test_bounded_native_history_suffix();
+    test_bounded_floor_monotonic_admission();
+    test_bounded_rendered_limits_and_snapshot();
+    test_bounded_current_evidence_invalidation();
     puts("Context DAG and snapshot tests passed");
     return 0;
 }

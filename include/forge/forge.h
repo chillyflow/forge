@@ -49,6 +49,10 @@ typedef void (*forge_event_fn)(const forge_event *, void *);
 typedef bool (*forge_policy_fn)(const char *tool, forge_capability, const char *arguments_json,
                                 void *);
 typedef bool (*forge_cancel_fn)(void *);
+
+typedef forge_status (*forge_question_fn)(const char *question, char *answer,
+                                          size_t answer_capacity, void *userdata, forge_error *);
+typedef struct forge_conversation forge_conversation;
 typedef bool (*forge_token_fn)(const char *utf8, size_t length, void *);
 typedef struct {
     size_t context_tokens, output_reserve, max_turns, max_generated_tokens;
@@ -98,6 +102,9 @@ typedef struct {
     int gpu_layers, threads;
     uint32_t seed;
     float temperature;
+    /* Repetition penalty (1.0 = disabled). Applied with repetition_last_n. */
+    float repetition_penalty;
+    int repetition_last_n;
     bool reuse_prefix, grammar_fast_path;
     forge_thinking_mode thinking; /* Jinja enable_thinking control; AUTO preserves legacy. */
     /* NATIVE is selected by forge_default_model_config() and renders structured roles and
@@ -156,9 +163,57 @@ typedef struct {
      * Retains all model prose as assistant content regardless of thought flags;
      * does not nominate optional physical checkpoint cache anchors. */
     bool minimal_agent;
+    /* Opt-in repair experiment on the minimal control. Requires native minimal
+     * mode, validation enabled and at least three actions. Reserves validation
+     * and final actions and accepts only a changed, host-validated workspace. */
+    bool candidate_checkpoint;
+    /* Optional loop interventions. Best-of-N uses a shared total run budget,
+     * validates candidates in the real workspace and preserves initial dirty
+     * contents. Counts >1 require native minimal candidate-checkpoint mode. */
+    size_t candidate_count;
+    bool semantic_loops, failure_reflection, symbol_impact;
+    size_t reflection_tokens; /* 0: 256; one bounded diagnostic action per failure episode. */
+    forge_conversation *conversation; /* Borrowed, in-memory interactive history. */
+    forge_question_fn ask_user;
+    void *question_userdata;
     forge_policy_fn policy;
     forge_cancel_fn cancelled;
     void *userdata;
+    /* Experimental bounded repair history and completion capacity. Requires
+     * candidate_checkpoint; false preserves the append-only checkpoint control. */
+    bool bounded_repair;
+    /* Experimental: retain a rejected identical-replacement edit as a compact
+     * host observation instead of the verbatim action. Requires
+     * candidate_checkpoint; false preserves verbatim retention. The complete
+     * action always stays in the session artifacts. */
+    bool elide_noop_edits;
+    /* Experimental stop-loss: abort a trial after three consecutive
+     * identical-replacement edit rejections, returning the remaining shared
+     * budget to later candidates. Requires candidate_checkpoint; false runs
+     * stuck trials to exhaustion. Only meaningful with candidate_count > 1. */
+    bool stop_loss;
+    /* Experimental command verdict reuse: an identical run_command issued
+     * while no edits, commands, or validations ran since is served from the
+     * stored verdict instead of re-executing. Requires candidate_checkpoint;
+     * false always re-executes. The complete action stays in session
+     * artifacts either way. */
+    bool dedup_commands;
+    /* Experimental stable prefix: the bounded-repair admission window never
+     * re-admits a dropped exchange, so the rendered prefix stops oscillating
+     * when the per-turn budget loosens again. Requires bounded_repair; false
+     * preserves the re-walked suffix. */
+    bool stable_prefix;
+    /* Experimental budget guidance: per-turn remaining input/generated token
+     * counts in the candidate control state plus concise tool-shaped work
+     * discipline in the instructions. Requires bounded_repair; false keeps
+     * the existing control text and instructions. */
+    bool budget_guidance;
+    /* Experimental no-edit gate: after an apply_patch rejected specifically
+     * because its replacement equalled the replaced text, the next ordinary
+     * turn removes apply_patch from the tool registry and renders a host
+     * control line explaining why. The host dispatcher enforces the removal.
+     * Requires candidate_checkpoint and bounded_repair; false is unchanged. */
+    bool gate_noop_edits;
 } forge_agent_config;
 forge_limits forge_default_limits(void);
 forge_model_config forge_default_model_config(void);
@@ -175,6 +230,11 @@ const char *forge_agent_session(const forge_agent *);
  * The minimal diagnostic control does not create working state. */
 char *forge_agent_working_state(const forge_agent *, forge_error *);
 void forge_agent_destroy(forge_agent *);
+forge_conversation *forge_conversation_create(size_t max_history_bytes, size_t max_history_turns,
+                                              forge_error *);
+forge_status forge_conversation_reset(forge_conversation *, forge_error *);
+forge_conversation *forge_conversation_clone(const forge_conversation *, forge_error *);
+void forge_conversation_destroy(forge_conversation *);
 forge_repo *forge_repo_open(const char *workspace, forge_error *);
 forge_status forge_repo_index(forge_repo *, forge_error *);
 /* Atomically refresh up to 4096 named regular files/tombstones after a full

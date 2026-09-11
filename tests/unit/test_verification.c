@@ -413,6 +413,18 @@ static void test_success_and_input_mutation(void) {
     }
 }
 
+static void test_semantic_diagnostic_identity(void) {
+    uint64_t a, b;
+    assert(fg_validation_diagnostic_hash("value.go:3:4: error: expected 2, got 1\n", &a));
+    assert(fg_validation_diagnostic_hash("value.go:9:7: error: expected 2, got 1\n", &b));
+    assert(a == b);
+    assert(fg_validation_diagnostic_hash("value.go:9:7: error: expected 2, got 3\n", &b));
+    assert(a != b);
+    assert(!fg_validation_diagnostic_hash("unrecognized output one\n", &a));
+    assert(!fg_validation_diagnostic_hash("unrecognized output two\n", &b));
+    assert(!fg_validation_diagnostic_hash(NULL, &a));
+}
+
 static int helper(int argc, char **argv) {
     FILE *marker = fopen(".forge/probe-runs", "ab");
     if (!marker)
@@ -458,6 +470,7 @@ int main(int argc, char **argv) {
     test_persistence_failure("validation/0001.json");
     test_persistence_failure("validation/latest.json");
     test_success_and_input_mutation();
+    test_semantic_diagnostic_identity();
     set_path(original_path);
     free(original_path);
     puts("verification orchestration tests passed");

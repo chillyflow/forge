@@ -5,6 +5,7 @@
 #include "forge/index.h"
 #include "forge/retrieval.h"
 #include "forge/summary.h"
+#include "interactive.h"
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
@@ -21,6 +22,7 @@ static bool cancelled(void *u) {
 static void usage(void) {
     puts("Forge " FORGE_VERSION " - native local coding agent\n\n"
          "  forge run TASK --model model.gguf [options]\n"
+         "  forge chat --model model.gguf [options]   persistent conversation (/new, /quit)\n"
          "  forge complete PROMPT --model model.gguf [options]\n"
          "  forge index [CHANGED_PATH] | inspect SYMBOL | references SYMBOL | search TEXT\n"
          "  forge retrieve QUERY [--depth 0..3]    staged indexed evidence as JSON\n"
@@ -44,7 +46,23 @@ static void usage(void) {
          "  --output-reserve N   per-turn generation budget (default 2048)\n"
          "  --max-turns N        hard agent turn limit (default 32)\n"
          "  --minimal-agent      experimental basic native tool loop; no automatic validation\n"
-         "                       full history; ignores semantic, compaction and thought-history settings\n"
+         "  --candidate-checkpoint  require changed, validated repairs in minimal mode\n"
+         "  --bounded-repair     bound checkpoint history and reserve completion capacity\n"
+         "  --elide-noop-edits   retain a rejected identical-replacement edit as a compact\n"
+         "                       host observation; the full action stays in session artifacts\n"
+         "  --stop-loss        abort a trial after 3 consecutive identical-replacement edits\n"
+         "  --stable-prefix     never re-admit a dropped bounded-repair exchange\n"
+         "  --dedup-commands    reuse an identical command verdict while clean\n"
+         "  --budget-guidance   per-turn token budgets plus concise work discipline\n"
+         "  --gate-noop-edits   disable apply_patch for the turn after a no-op edit\n"
+         "  --candidates N       best-of-N (1..8), shared budgets; requires candidate mode\n"
+         "  --semantic-loops     canonical failed-state loop evidence in candidate mode\n"
+         "  --failure-reflection one bounded diagnostic action per failed repair episode\n"
+         "  --reflection-tokens N diagnostic action bound, 32..1024 (default 256)\n"
+         "  --symbol-impact      targeted preliminary checks; broad final verification\n"
+         "  --history-bytes N | --history-turns N   bounded interactive history\n"
+         "                       full history; ignores semantic, compaction and thought-history "
+         "settings\n"
          "  --max-tokens N       total generated-token limit (default 32768)\n"
          "  --max-input N        total prompt-token limit (default 262144)\n"
          "  --timeout-ms N       command timeout (default 120000)\n"
@@ -54,6 +72,8 @@ static void usage(void) {
          "  --threads N          inference threads\n"
          "  --temperature N      finite sampling temperature 0..2\n"
          "  --seed N             sampling seed 0..4294967295\n"
+         "  --repetition-penalty N  repeat penalty (0, 2], 1.0 disabled (default 1.0)\n"
+         "  --repetition-last-n N   last N tokens penalized 0..1024, 0 disabled (default 0)\n"
          "  --chat-template NAME override unsupported model chat template\n"
          "  --prompt-protocol NAME  native roles/tools (default) or flattened compatibility\n"
          "  --enable-thinking | --disable-thinking  set Jinja template thinking control\n"
@@ -115,6 +135,17 @@ static int option_arity(const char *option) {
                                         "--no-compaction",
                                         "--no-thought",
                                         "--minimal-agent",
+                                        "--candidate-checkpoint",
+                                        "--bounded-repair",
+                                        "--elide-noop-edits",
+                                        "--stop-loss",
+                                        "--stable-prefix",
+                                        "--dedup-commands",
+                                        "--budget-guidance",
+                                        "--gate-noop-edits",
+                                        "--semantic-loops",
+                                        "--failure-reflection",
+                                        "--symbol-impact",
                                         "--thought-decode-only",
                                         "--thought-history",
                                         "--thought-required",
@@ -141,6 +172,10 @@ static int option_arity(const char *option) {
                                          "--context",
                                          "--output-reserve",
                                          "--max-turns",
+                                         "--candidates",
+                                         "--reflection-tokens",
+                                         "--history-bytes",
+                                         "--history-turns",
                                          "--max-tokens",
                                          "--max-input",
                                          "--timeout-ms",
@@ -151,6 +186,8 @@ static int option_arity(const char *option) {
                                          "--threads",
                                          "--depth",
                                          "--temperature",
+                                         "--repetition-penalty",
+                                         "--repetition-last-n",
                                          "--seed",
                                          "--checkpoint-cache-bytes",
                                          "--checkpoint-cache-entries",
@@ -451,7 +488,7 @@ static void events(const forge_event *event, void *u) {
     }
     yyjson_doc *d = yyjson_read(event->json, strlen(event->json), 0);
     yyjson_val *data = yyjson_obj_get(yyjson_doc_get_root(d), "data");
-    if (!strcmp(event->type, "message"))
+    if (!strcmp(event->type, "message") || !strcmp(event->type, "final"))
         printf("%s\n", yyjson_get_str(data));
     else if (!strcmp(event->type, "tool_call"))
         fprintf(stderr, "  tool: %s\n", fg_json_str(data, "tool"));
@@ -627,13 +664,13 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     ac.cancelled = cancelled;
     const char *command = NULL, *argument = NULL;
     bool json = false;
+    size_t history_bytes = 0, history_turns = 0;
     bool explicit_model = false, explicit_script = false;
     int depth = 1;
     forge_summary_target summary_target = {0};
     summary_target.scope = FORGE_SUMMARY_FILE;
     forge_summary_options summary_options = forge_default_summary_options();
     bool summary_flags = false, summary_producer = false;
-    char input[8192];
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         if (!strcmp(a, "--help") || !strcmp(a, "-h")) {
@@ -700,6 +737,50 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         }
         if (!strcmp(a, "--minimal-agent")) {
             ac.minimal_agent = true;
+            continue;
+        }
+        if (!strcmp(a, "--candidate-checkpoint")) {
+            ac.candidate_checkpoint = true;
+            continue;
+        }
+        if (!strcmp(a, "--bounded-repair")) {
+            ac.bounded_repair = true;
+            continue;
+        }
+        if (!strcmp(a, "--elide-noop-edits")) {
+            ac.elide_noop_edits = true;
+            continue;
+        }
+        if (!strcmp(a, "--stop-loss")) {
+            ac.stop_loss = true;
+            continue;
+        }
+        if (!strcmp(a, "--stable-prefix")) {
+            ac.stable_prefix = true;
+            continue;
+        }
+        if (!strcmp(a, "--dedup-commands")) {
+            ac.dedup_commands = true;
+            continue;
+        }
+        if (!strcmp(a, "--budget-guidance")) {
+            ac.budget_guidance = true;
+            continue;
+        }
+        if (!strcmp(a, "--gate-noop-edits")) {
+            ac.gate_noop_edits = true;
+            continue;
+        }
+        if (!strcmp(a, "--semantic-loops")) {
+            ac.semantic_loops = true;
+            continue;
+        }
+        if (!strcmp(a, "--failure-reflection")) {
+            ac.failure_reflection = true;
+            continue;
+        }
+        if (!strcmp(a, "--symbol-impact")) {
+            ac.symbol_impact = true;
             continue;
         }
         if (!strcmp(a, "--no-thought")) {
@@ -814,6 +895,22 @@ static int cli_main(int argc, char **argv, forge_config *config) {
                 return failed(&error);
             }
             mc.temperature = temperature;
+        } else if (!strcmp(a, "--repetition-penalty")) {
+            char *end = NULL;
+            errno = 0;
+            float penalty = strtof(value, &end);
+            if (errno || end == value || *end || !isfinite(penalty)) {
+                fg_error(&error, FORGE_ERR_ARGUMENT, "Invalid numeric value for %s", a);
+                return failed(&error);
+            }
+            mc.repetition_penalty = penalty;
+        } else if (!strcmp(a, "--repetition-last-n")) {
+            size_t last_n = 0;
+            if (!number(value, &last_n) || last_n > INT32_MAX) {
+                fg_error(&error, FORGE_ERR_ARGUMENT, "Invalid numeric value for %s", a);
+                return failed(&error);
+            }
+            mc.repetition_last_n = (int)last_n;
         } else {
             size_t n = 0;
             if (!strcmp(a, "--gpu-layers") && !strcmp(value, "auto")) {
@@ -828,7 +925,23 @@ static int cli_main(int argc, char **argv, forge_config *config) {
                 fg_error(&error, FORGE_ERR_ARGUMENT, "Invalid numeric value for %s", a);
                 return failed(&error);
             }
-            if (!strcmp(a, "--context"))
+            if (!strcmp(a, "--candidates")) {
+                if (n < 1 || n > 8) {
+                    fg_error(&error, FORGE_ERR_ARGUMENT, "--candidates must be 1..8");
+                    return failed(&error);
+                }
+                ac.candidate_count = n;
+            } else if (!strcmp(a, "--reflection-tokens")) {
+                if (n < 32 || n > 1024) {
+                    fg_error(&error, FORGE_ERR_ARGUMENT, "--reflection-tokens must be 32..1024");
+                    return failed(&error);
+                }
+                ac.reflection_tokens = n;
+            } else if (!strcmp(a, "--history-bytes"))
+                history_bytes = n;
+            else if (!strcmp(a, "--history-turns"))
+                history_turns = n;
+            else if (!strcmp(a, "--context"))
                 mc.context_tokens = ac.limits.context_tokens = n;
             else if (!strcmp(a, "--output-reserve"))
                 ac.limits.output_reserve = n;
@@ -902,6 +1015,40 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         fg_error(&error, FORGE_ERR_ARGUMENT, "--minimal-agent requires --prompt-protocol native");
         return failed(&error);
     }
+    if (ac.candidate_checkpoint &&
+        (!ac.minimal_agent || ac.skip_validation || ac.limits.max_turns < 3)) {
+        fg_error(
+            &error, FORGE_ERR_ARGUMENT,
+            "--candidate-checkpoint requires --minimal-agent, validation and at least 3 turns");
+        return failed(&error);
+    }
+    if ((ac.bounded_repair || ac.elide_noop_edits || ac.semantic_loops || ac.failure_reflection ||
+         ac.candidate_count > 1 || ac.stop_loss || ac.stable_prefix || ac.dedup_commands ||
+         ac.budget_guidance || ac.gate_noop_edits) &&
+        !ac.candidate_checkpoint) {
+        fg_error(&error, FORGE_ERR_ARGUMENT,
+                 "Loop interventions require --minimal-agent --candidate-checkpoint");
+        return failed(&error);
+    }
+    if (ac.stable_prefix && !ac.bounded_repair) {
+        fg_error(&error, FORGE_ERR_ARGUMENT, "--stable-prefix requires --bounded-repair");
+        return failed(&error);
+    }
+    if (ac.budget_guidance && !ac.bounded_repair) {
+        fg_error(&error, FORGE_ERR_ARGUMENT, "--budget-guidance requires --bounded-repair");
+        return failed(&error);
+    }
+    if (ac.gate_noop_edits && !ac.bounded_repair) {
+        fg_error(&error, FORGE_ERR_ARGUMENT, "--gate-noop-edits requires --bounded-repair");
+        return failed(&error);
+    }
+    if (ac.candidate_count > 1 && (ac.limits.max_turns / ac.candidate_count < 3 ||
+                                   (!mc.script_path && mc.temperature <= 0))) {
+        fg_error(&error, FORGE_ERR_ARGUMENT,
+                 "Best-of-N needs at least 3 actions per candidate and positive --temperature for "
+                 "real sampling");
+        return failed(&error);
+    }
     if (forge_config_validate(config, &error) != FORGE_OK ||
         forge_config_check_exec(config, ac.allow_exec, &error) != FORGE_OK)
         return failed(&error);
@@ -910,12 +1057,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             usage();
             return 0;
         }
-        fprintf(stderr, "Task> ");
-        if (!fgets(input, sizeof(input), stdin))
-            return 0;
-        input[strcspn(input, "\r\n")] = 0;
-        command = "run";
-        argument = input;
+        command = "chat";
     }
     if (summary_flags && strcmp(command, "summarize")) {
         fg_error(&error, FORGE_ERR_ARGUMENT, "Summary options require the summarize command");
@@ -1051,11 +1193,11 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         return error.code ? failed(&error) : 0;
     }
     if (strcmp(command, "run") && strcmp(command, "complete") && strcmp(command, "bench") &&
-        strcmp(command, "summarize")) {
+        strcmp(command, "summarize") && strcmp(command, "chat")) {
         fg_error(&error, FORGE_ERR_ARGUMENT, "Unknown command: %s", command);
         return failed(&error);
     }
-    if (!argument) {
+    if (!argument && strcmp(command, "chat")) {
         usage();
         return 2;
     }
@@ -1116,6 +1258,14 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         forge_model_destroy(ac.model);
         yyjson_doc_free(benchmark);
         return failed(&error);
+    }
+    if (!strcmp(command, "chat")) {
+        forge_status s =
+            argument ? fg_error(&error, FORGE_ERR_ARGUMENT, "chat reads tasks from stdin")
+                     : fg_cli_interactive(&ac, history_bytes, history_turns, events, &json, &error);
+        forge_model_destroy(ac.model);
+        yyjson_doc_free(benchmark);
+        return s == FORGE_OK ? 0 : failed(&error);
     }
     if (!strcmp(command, "summarize")) {
         summary_target.path = argument;

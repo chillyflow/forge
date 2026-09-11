@@ -289,10 +289,86 @@ char *fg_tool_minimal_native_schema(void) {
                                      "argv:strings", true) &&
               native_schema_function(&out, "list_directory",
                                      "List workspace files recursively, excluding hidden, build, "
-                                     "vendor and dependency directories.", "", true) &&
+                                     "vendor and dependency directories.",
+                                     "", true) &&
               native_schema_function(&out, "final", "Finish and report the result.",
-                                     "answer:string", true) && fg_buf_puts(&out, "]");
+                                     "answer:string", true) &&
+              fg_buf_puts(&out, "]");
     if (!ok) {
+        fg_buf_clear(&out);
+        return NULL;
+    }
+    return fg_buf_take(&out);
+}
+
+char *fg_tool_candidate_schema(bool validation_only) {
+    char *basic = validation_only ? fg_strdup("[") : fg_tool_minimal_native_schema();
+    if (!basic)
+        return NULL;
+    fg_buf out = {0};
+    bool ok = fg_buf_add(&out, basic, strlen(basic) - (validation_only ? 0 : 1)) &&
+              native_schema_function(&out, "validate_candidate",                                     "Assess the changed workspace with host Go/Python tests. "
+                                     "Use after completing a repair across files. A passing "
+                                     "candidate must be followed by final.",
+                                     "", !validation_only) &&
+              fg_buf_puts(&out, "]");
+    free(basic);
+    if (!ok) {
+        fg_buf_clear(&out);
+        return NULL;
+    }
+    return fg_buf_take(&out);
+}
+
+/* No-edit registry for the one-turn gate after a rejected identical edit:
+ * the candidate surface without apply_patch. The host dispatcher enforces
+ * the exclusion, so this is not merely a prompt hint. */
+char *fg_tool_noedit_schema(void) {
+    fg_buf out = {0};
+    bool ok = fg_buf_puts(&out, "[") &&
+              native_schema_function(&out, "read_file", "Read an inclusive 1-based line range.",
+                                     "path:string start:line end:line", false) &&
+              native_schema_function(&out, "run_command", "Run an argv array without a shell.",
+                                     "argv:strings", true) &&
+              native_schema_function(&out, "list_directory",
+                                     "List workspace files recursively, excluding hidden, build, "
+                                     "vendor and dependency directories.",
+                                     "", true) &&
+              native_schema_function(&out, "validate_candidate",
+                                     "Assess the changed workspace with host Go/Python tests. "
+                                     "Use after completing a repair across files. A passing "
+                                     "candidate must be followed by final.",
+                                     "", true) &&
+              native_schema_function(&out, "final", "Finish and report the result.",
+                                     "answer:string", true) &&
+              fg_buf_puts(&out, "]");
+    if (!ok) {
+        fg_buf_clear(&out);
+        return NULL;
+    }
+    return fg_buf_take(&out);
+}
+
+char *fg_tool_native_extensions(const char *base, bool ask_user, bool reflection_only) {
+    if (!base || !*base)
+        return NULL;
+    fg_buf out = {0};
+    bool ok = reflection_only ? fg_buf_puts(&out, "[") : fg_buf_add(&out, base, strlen(base) - 1);
+    if (reflection_only)
+        ok =
+            ok &&
+            native_schema_function(
+                &out, "reflect_failure",
+                "Diagnose the host-observed failure. State the cause and one concrete next repair. "
+                "This bounded diagnostic action cannot edit files, run commands, or establish "
+                "success.",
+                "diagnosis:string", false);
+    else if (ask_user)
+        ok = ok && native_schema_function(&out, "ask_user",
+                                          "Ask the user for missing information and wait for their "
+                                          "answer. Questions do not grant process permission.",
+                                          "question:string", true);
+    if (!ok || !fg_buf_puts(&out, "]")) {
         fg_buf_clear(&out);
         return NULL;
     }
@@ -305,7 +381,9 @@ static bool native_known_tool(const char *name) {
     for (size_t i = 0; i < count; i++)
         if (!strcmp(name, tools[i].name))
             return true;
-    return !strcmp(name, "final") || !strcmp(name, "memory");
+    return !strcmp(name, "final") || !strcmp(name, "memory") ||
+           !strcmp(name, "validate_candidate") || !strcmp(name, "ask_user") ||
+           !strcmp(name, "reflect_failure");
 }
 
 forge_status fg_native_action_normalize(const char *message, bool include_thought, char **action,
@@ -393,8 +471,30 @@ forge_status fg_native_action_normalize(const char *message, bool include_though
         return fg_error(error, FORGE_ERR_PARSE,
                         "Native tool arguments must encode one JSON object");
     }
-    if (strcmp(name, "final") && strcmp(name, "memory") &&
-        !fg_tool_validate(name, arguments, error)) {
+    bool candidate = !strcmp(name, "validate_candidate");
+    bool question = !strcmp(name, "ask_user"), reflection = !strcmp(name, "reflect_failure");
+    const char *special = question     ? fg_json_str(arguments, "question")
+                          : reflection ? fg_json_str(arguments, "diagnosis")
+                                       : NULL;
+    yyjson_val *special_value = (question || reflection)
+                                    ? yyjson_obj_get(arguments, question ? "question" : "diagnosis")
+                                    : NULL;
+    size_t special_length = yyjson_get_len(special_value);
+    if ((question || reflection) &&
+        (yyjson_obj_size(arguments) != 1 || !special || !special_length ||
+         special_length != strlen(special) || special_length > (question ? 4096u : 8192u) ||
+         !fg_utf8_valid(special, special_length) ||
+         fg_json_whitespace_only(special, special_length))) {
+        yyjson_doc_free(arguments_document);
+        yyjson_doc_free(document);
+        return fg_error(error, FORGE_ERR_PARSE,
+                        "Question/diagnostic action requires one bounded nonempty string");
+    }
+    if ((candidate && yyjson_obj_size(arguments) != 0) ||
+        (!candidate && !question && !reflection && strcmp(name, "final") &&
+         strcmp(name, "memory") && !fg_tool_validate(name, arguments, error))) {
+        if (candidate)
+            fg_error(error, FORGE_ERR_PARSE, "validate_candidate requires empty arguments");
         yyjson_doc_free(arguments_document);
         yyjson_doc_free(document);
         return error && error->code ? error->code : FORGE_ERR_PARSE;
@@ -1476,16 +1576,29 @@ static char *run(fg_tool_context *c, const char *const *argv, forge_error *e) {
         return NULL;
     }
     char *result = fg_process_render(&r);
-    bool native_protocol =
-        result && !c->config.minimal_agent && c->config.model &&
-        c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
+    bool native_protocol = result && !c->config.minimal_agent && c->config.model &&
+                           c->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
     bool add_native_failure_guidance = native_protocol && r.exit_code != 0;
     bool add_native_success_guidance =
         native_protocol && r.exit_code == 0 && !r.timed_out && !r.cancelled && !r.truncated;
+    /* A zero exit with no output at all is indistinguishable, from the rendered
+     * result alone, from a command that ran and reported nothing. This states
+     * only what the host observed and draws no conclusion from it, which is why
+     * it is not gated on the ordinary loop the way the guidance below is: the
+     * minimal control must keep receiving observations without ever receiving a
+     * corrective instruction. Adding an inference here would silently change
+     * what that control is. */
+    bool add_silent_annotation =
+        result && r.exit_code == 0 && !r.timed_out && !r.cancelled && !r.truncated &&
+        r.out_len == 0 && r.err_len == 0;
     fg_process_free(&r);
-    if (add_native_failure_guidance || add_native_success_guidance) {
+    if (add_native_failure_guidance || add_native_success_guidance || add_silent_annotation) {
         fg_buf guided = {0};
         bool ok = fg_buf_puts(&guided, result);
+        if (ok && add_silent_annotation)
+            ok = fg_buf_puts(&guided,
+                             "\nhost_observation: the command exited 0 and wrote nothing to "
+                             "stdout or stderr.\n");
         if (ok && add_native_failure_guidance)
             ok = fg_buf_puts(
                 &guided,
@@ -1554,11 +1667,82 @@ static char *minimal_list_directory(fg_tool_context *c, forge_error *e) {
     return fg_buf_take(&listing.output);
 }
 
+void fg_dedup_clear(fg_command_verdict *slot) {
+    if (!slot)
+        return;
+    free(slot->argv_key);
+    free(slot->output);
+    memset(slot, 0, sizeof(*slot));
+}
+
+/* Canonical argv encoding: the JSON serialization of the argv array, so
+ * element boundaries cannot collide. Returns NULL for a missing or
+ * non-array argv; validation rejects such calls before any lookup. */
+static char *dedup_key(yyjson_val *args) {
+    yyjson_val *arr = args ? yyjson_obj_get(args, "argv") : NULL;
+    if (!arr || !yyjson_is_arr(arr))
+        return NULL;
+    return yyjson_val_write(arr, 0, NULL);
+}
+
+/* Serve a stored verdict for an identical command issued while no
+ * host-observed mutation intervened. Policy and deadline checks already ran
+ * above, so approval semantics are unchanged; only re-execution is skipped.
+ * Restores the stored process metadata so every downstream observation
+ * (exit code, byte counts, diagnostic hashes, validation episodes) matches
+ * a fresh execution, and records the reuse as its own event. The annotation
+ * states only host-observed facts: which action produced the verdict and
+ * that nothing mutating ran since. Returns NULL on a miss. */
+static char *dedup_reuse(fg_tool_context *c, yyjson_val *args, forge_error *e) {
+    fg_command_verdict *slot = c->dedup_slot;
+    if (!slot || !slot->argv_key || !slot->output)
+        return NULL;
+    char *key = dedup_key(args);
+    if (!key)
+        return NULL;
+    bool match = !strcmp(key, slot->argv_key);
+    free(key);
+    if (!match)
+        return NULL;
+    fg_buf out = {0};
+    bool ok = fg_buf_printf(&out,
+                            "HOST_RECORD: this exact command already ran at action %llu with "
+                            "no edits or commands since; its verdict is reused without "
+                            "re-execution.\n--- earlier verdict ---\n",
+                            (unsigned long long)slot->call_id) &&
+                fg_buf_puts(&out, slot->output);
+    char *annotated = ok ? fg_buf_take(&out) : NULL;
+    if (!annotated) {
+        fg_buf_clear(&out);
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot reuse stored command verdict");
+        return NULL;
+    }
+    c->process_ran = true;
+    c->process.exit_code = slot->exit_code;
+    c->process.out_len = slot->out_len;
+    c->process.err_len = slot->err_len;
+    c->process.truncated = slot->truncated;
+    c->process.timed_out = false;
+    c->process.cancelled = false;
+    c->process.started = true;
+    c->process.duration_ms = 0;
+    c->dedup_reused = true;
+    char payload[96];
+    snprintf(payload, sizeof(payload), "{\"reused_call_id\":%llu}",
+             (unsigned long long)slot->call_id);
+    if (!fg_session_emit(c->session, "command_verdict_reused", payload, e)) {
+        free(annotated);
+        return NULL;
+    }
+    return annotated;
+}
+
 char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bool *changed,
                       forge_error *e) {
     *changed = false;
     c->process_ran = false;
     c->evidence_failed = false;
+    c->dedup_reused = false;
     memset(&c->process, 0, sizeof(c->process));
     if (!fg_tool_validate(name, args, e))
         return NULL;
@@ -1602,10 +1786,18 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
     }
     if (!strcmp(name, "read_file"))
         return read_lines(c, args, e);
-    if (!strcmp(name, "apply_patch"))
-        return patch(c, args, changed, e);
-    if (!strcmp(name, "apply_hunk"))
-        return hunk(c, args, changed, e);
+    if (!strcmp(name, "apply_patch")) {
+        char *edited = patch(c, args, changed, e);
+        if (c->dedup_slot && *changed)
+            fg_dedup_clear(c->dedup_slot);
+        return edited;
+    }
+    if (!strcmp(name, "apply_hunk")) {
+        char *edited = hunk(c, args, changed, e);
+        if (c->dedup_slot && *changed)
+            fg_dedup_clear(c->dedup_slot);
+        return edited;
+    }
     if (!strcmp(name, "find_symbol")) {
         size_t depth;
         fg_json_uint(args, "depth", &depth, 0);
@@ -1669,7 +1861,12 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
         const char *v[] = {
             "git", "-c", "core.fsmonitor=false", "diff", "--no-ext-diff", "--no-textconv",
             "--",  NULL};
-        return run(c, v, e);
+        char *result = run(c, v, e);
+        /* Configured filters can execute: a spawned inspection may have
+         * changed state, so a stored verdict is no longer clean. */
+        if (c->dedup_slot && c->process_ran)
+            fg_dedup_clear(c->dedup_slot);
+        return result;
     }
     if (!strcmp(name, "git_status")) {
         const char *v[] = {"git",
@@ -1679,15 +1876,55 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
                            "--porcelain=v1",
                            "--untracked-files=normal",
                            NULL};
-        return run(c, v, e);
+        char *result = run(c, v, e);
+        if (c->dedup_slot && c->process_ran)
+            fg_dedup_clear(c->dedup_slot);
+        return result;
     }
     if (!strcmp(name, "run_command")) {
+        if (c->dedup_slot) {
+            char *hit = dedup_reuse(c, args, e);
+            if (hit || (e && e->code))
+                return hit;
+        }
         yyjson_val *arr = yyjson_obj_get(args, "argv");
         const char *v[65] = {0};
         size_t i, n;
         yyjson_val *item;
         yyjson_arr_foreach(arr, i, n, item) v[i] = yyjson_get_str(item);
-        return run(c, v, e);
+        char *result = run(c, v, e);
+        if (c->dedup_slot) {
+            /* Any spawned command may have mutated state; only a cleanly
+             * completed, bounded verdict replaces the slot. */
+            if (result && c->process_ran && !c->process.timed_out && !c->process.cancelled &&
+                strlen(result) <= FG_DEDUP_MAX_BYTES) {
+                char *key = dedup_key(args);
+                char *output = key ? fg_strdup(result) : NULL;
+                if (!key || !output) {
+                    free(key);
+                    free(output);
+                    fg_dedup_clear(c->dedup_slot);
+                    if (!result && e && !e->code)
+                        fg_error(e, FORGE_ERR_MEMORY, "Cannot retain command verdict");
+                    if (!result)
+                        return NULL;
+                    /* An executed verdict is kept even when only its cache
+                     * update failed; that failure alone never fails the run. */
+                } else {
+                    fg_dedup_clear(c->dedup_slot);
+                    c->dedup_slot->argv_key = key;
+                    c->dedup_slot->output = output;
+                    c->dedup_slot->exit_code = c->process.exit_code;
+                    c->dedup_slot->out_len = c->process.out_len;
+                    c->dedup_slot->err_len = c->process.err_len;
+                    c->dedup_slot->truncated = c->process.truncated;
+                    c->dedup_slot->call_id = c->call_id;
+                }
+            } else if (c->process_ran) {
+                fg_dedup_clear(c->dedup_slot);
+            }
+        }
+        return result;
     }
     fg_error(e, FORGE_ERR_ARGUMENT, "Unimplemented tool");
     return NULL;

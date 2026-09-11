@@ -726,6 +726,140 @@ finish:
         clear_selection(c);
     return out;
 }
+
+static char *plan_bounded_inner(forge_context *c, size_t input_budget, uint64_t min_id,
+                                uint64_t *oldest_admitted, size_t *tokens, size_t *evicted,
+                                forge_error *e);
+char *forge_context_plan_bounded(forge_context *c, size_t input_budget, size_t *tokens,
+                                 size_t *evicted, forge_error *e) {
+    return plan_bounded_inner(c, input_budget, 0, NULL, tokens, evicted, e);
+}
+
+char *forge_context_plan_bounded_floor(forge_context *c, size_t input_budget, uint64_t min_id,
+                                       uint64_t *oldest_admitted, size_t *tokens,
+                                       size_t *evicted, forge_error *e) {
+    return plan_bounded_inner(c, input_budget, min_id, oldest_admitted, tokens, evicted, e);
+}
+
+static char *plan_bounded_inner(forge_context *c, size_t input_budget, uint64_t min_id,
+                                uint64_t *oldest_admitted, size_t *tokens, size_t *evicted,
+                                forge_error *e) {
+    if (tokens)
+        *tokens = 0;
+    if (evicted)
+        *evicted = 0;
+    if (!c) {
+        fg_error(e, FORGE_ERR_ARGUMENT, "Missing context");
+        return NULL;
+    }
+    clear_selection(c);
+    size_t budget = FG_MIN(input_budget, c->capacity - c->reserve);
+    if (oldest_admitted)
+        *oldest_admitted = min_id;
+    size_t n = c->count ? c->count : 1;
+    closure work = {0};
+    work.stack = malloc(n * sizeof(*work.stack));
+    work.nodes = malloc(n * sizeof(*work.nodes));
+    work.seen = calloc(n, sizeof(*work.seen));
+    char *out = NULL;
+    if (!work.stack || !work.nodes || !work.seen) {
+        fg_error(e, FORGE_ERR_MEMORY, "Context closure allocation failed");
+        goto failure;
+    }
+    /* Pinned evidence and its complete dependency closure are mandatory. Their
+     * additive estimates do not decide whether the native rendering fits. */
+    for (size_t i = 0; i < c->count; i++)
+        if (c->items[i].view.pinned) {
+            size_t ignored_cost;
+            forge_status status = collect_bundle(c, i, &work, &ignored_cost);
+            if (status != FORGE_OK) {
+                fg_error(e, status, status == FORGE_ERR_CONFLICT
+                                        ? "Pinned context depends on stale context"
+                                        : "Pinned context token estimates overflow");
+                goto failure;
+            }
+            select_bundle(c, &work);
+        }
+    out = render_selected(c);
+    if (!out) {
+        fg_error(e, FORGE_ERR_MEMORY, "Prompt allocation or native pairing failed");
+        goto failure;
+    }
+    size_t actual = c->count_prompt_tokens(out, c->user);
+    if (actual > budget) {
+        fg_error(e, FORGE_ERR_LIMIT,
+                 "Rendered mandatory prompt exceeds the input budget (%zu tokens)", budget);
+        goto failure;
+    }
+    /* Walk backwards, admitting complete exchanges in recency order. Stop at
+     * the first bundle that cannot fit rather than selecting a cheap old
+     * fragment behind it. Dependencies and pinned evidence may extend beyond
+     * this chronological suffix; raw segments are never deleted or rewritten.
+     * With a nonzero floor, segments older than min_id are never newly
+     * admitted: the walk ends there, so a previously dropped exchange cannot
+     * re-enter the rendered prefix when the budget loosens again. Pinned and
+     * mandatory closures selected above are unaffected, as is native
+     * call/result pairing through dependency closure. */
+    for (size_t next = c->count; next > 0; next--) {
+        size_t i = next - 1;
+        const forge_segment_view *v = &c->items[i].view;
+        if (v->selected || v->stale ||
+            (c->prompt_protocol == FORGE_PROMPT_NATIVE && v->kind == FORGE_SEG_ACTION))
+            continue;
+        if (min_id && v->id < min_id)
+            break;
+        size_t ignored_cost;
+        forge_status status = collect_bundle(c, i, &work, &ignored_cost);
+        if (status == FORGE_ERR_CONFLICT)
+            continue;
+        if (status != FORGE_OK)
+            break;
+        select_bundle(c, &work);
+        char *candidate = render_selected(c);
+        if (!candidate) {
+            fg_error(e, FORGE_ERR_MEMORY, "Prompt allocation or native pairing failed");
+            goto failure;
+        }
+        size_t measured = c->count_prompt_tokens(candidate, c->user);
+        if (measured > budget) {
+            free(candidate);
+            for (size_t j = 0; j < work.count; j++)
+                c->items[work.nodes[j]].view.selected = false;
+            break;
+        }
+        free(out);
+        out = candidate;
+        actual = measured;
+    }
+    size_t dropped = 0;
+    uint64_t oldest = UINT64_MAX;
+    for (size_t i = 0; i < c->count; i++) {
+        if (!c->items[i].view.selected && !c->items[i].view.stale)
+            dropped++;
+        else if (c->items[i].view.selected && !c->items[i].view.pinned &&
+                 c->items[i].view.id < oldest)
+            oldest = c->items[i].view.id;
+    }
+    if (oldest_admitted)
+        *oldest_admitted = oldest == UINT64_MAX ? min_id : oldest;
+    if (tokens)
+        *tokens = actual;
+    if (evicted)
+        *evicted = dropped;
+    c->planned = true;
+    c->planned_tokens = actual;
+    c->planned_evicted = dropped;
+    goto finish;
+failure:
+    free(out);
+    out = NULL;
+    clear_selection(c);
+finish:
+    free(work.stack);
+    free(work.nodes);
+    free(work.seen);
+    return out;
+}
 size_t forge_context_size(const forge_context *c) {
     return c ? c->count : 0;
 }
@@ -964,7 +1098,7 @@ forge_context *forge_context_import(const char *json, forge_count_tokens_fn fn, 
         previous_id = id;
     }
     c->next_id = next_id;
-    size_t budget = c->capacity - c->reserve, used = 0, dropped = 0;
+    size_t budget = c->capacity - c->reserve, dropped = 0;
     for (size_t i = 0; i < c->count; i++)
         c->items[i].view.selected = selection[i];
     for (size_t i = 0; i < c->count; i++) {
@@ -972,9 +1106,8 @@ forge_context *forge_context_import(const char *json, forge_count_tokens_fn fn, 
         if (planned && s->view.pinned && !s->view.selected)
             goto invalid;
         if (s->view.selected) {
-            if (s->view.tokens > budget - used)
-                goto invalid;
-            used += s->view.tokens;
+            /* Segment costs are estimates. The complete rendered prompt below
+             * is authoritative, including for bounded plans. */
             for (size_t j = 0; j < s->dependency_count; j++)
                 if (!c->items[s->dependencies[j]].view.selected)
                     goto invalid;

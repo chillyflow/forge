@@ -7,6 +7,8 @@ forge_model_config forge_default_model_config(void) {
     forge_model_config config = {0};
     config.context_tokens = 16384;
     config.seed = 42;
+    config.repetition_penalty = 1.0f;
+    config.repetition_last_n = 0;
     config.reuse_prefix = true;
     config.grammar_fast_path = true;
     config.thinking = FORGE_THINKING_DISABLED;

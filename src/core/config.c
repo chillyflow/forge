@@ -235,6 +235,7 @@ typedef enum {
     CFG_U32,
     CFG_BOOL,
     CFG_FLOAT,
+    CFG_REPEAT,
     CFG_CONTEXT,
     CFG_PATH,
     CFG_TEMPLATE,
@@ -266,6 +267,8 @@ static const config_field fields[] = {
     {"inference", "threads", CFG_INT, MODEL_OFFSET(threads), 0, 1024},
     {"inference", "seed", CFG_U32, MODEL_OFFSET(seed), 0, UINT32_MAX},
     {"inference", "temperature", CFG_FLOAT, MODEL_OFFSET(temperature), 0, 2},
+    {"inference", "repetition_penalty", CFG_REPEAT, MODEL_OFFSET(repetition_penalty), 0, 0},
+    {"inference", "repetition_last_n", CFG_INT, MODEL_OFFSET(repetition_last_n), 0, 1024},
     {"inference", "reuse_prefix", CFG_BOOL, MODEL_OFFSET(reuse_prefix), 0, 0},
     {"inference", "grammar_fast_path", CFG_BOOL, MODEL_OFFSET(grammar_fast_path), 0, 0},
     {"inference", "speculative", CFG_SPECULATIVE, 0, 0, 0},
@@ -372,6 +375,19 @@ static forge_status apply_field(forge_config *config, const config_field *field,
             return schema_error(e, value, key, "expected a finite number in [0, 2]");
         if (!isfinite(number) || number < 0 || number > 2)
             return schema_error(e, value, key, "expected a finite number in [0, 2]");
+        *(float *)dest = (float)number;
+        return FORGE_OK;
+    }
+    case CFG_REPEAT: {
+        double number;
+        if (value.type == TOML_FP64)
+            number = value.u.fp64;
+        else if (value.type == TOML_INT64)
+            number = (double)value.u.int64;
+        else
+            return schema_error(e, value, key, "expected a finite number in (0, 2]");
+        if (!isfinite(number) || number <= 0 || number > 2)
+            return schema_error(e, value, key, "expected a finite number in (0, 2]");
         *(float *)dest = (float)number;
         return FORGE_OK;
     }
@@ -636,6 +652,12 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
     if (!isfinite(model->temperature) || model->temperature < 0 || model->temperature > 2)
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "inference.temperature must be finite and in [0, 2]");
+    if (!isfinite(model->repetition_penalty) || model->repetition_penalty <= 0 ||
+        model->repetition_penalty > 2)
+        return fg_error(e, FORGE_ERR_ARGUMENT,
+                        "inference.repetition_penalty must be finite and in (0, 2]");
+    if (model->repetition_last_n < 0 || model->repetition_last_n > 1024)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "inference.repetition_last_n must be in [0, 1024]");
     if ((unsigned)model->thinking > FORGE_THINKING_DISABLED)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid model thinking mode");
     if ((unsigned)model->prompt_protocol > FORGE_PROMPT_NATIVE)

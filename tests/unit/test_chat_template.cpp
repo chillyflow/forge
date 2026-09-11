@@ -1,6 +1,7 @@
 #include "inference/chat_template.h"
 #include "forge/forge.h"
 #include "forge/context.h"
+#include "forge/checkpoint.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -9,6 +10,12 @@
 #include <string>
 
 extern "C" char *fg_tool_minimal_native_schema(void);
+extern "C" char *fg_tool_candidate_schema(bool validation_only);
+extern "C" char *fg_tool_native_schema(void);
+extern "C" char *fg_tool_native_extensions(const char *, bool ask_user, bool reflection_only);
+extern "C" forge_status fg_native_action_normalize(const char *, bool, char **, forge_error *);
+
+static void check_candidate_native_schema(const fg_chat_templates *templates);
 
 static void require(bool condition, const char *expression, int line) {
     if (!condition) {
@@ -112,6 +119,208 @@ static void check_minimal_native_schema(const fg_chat_templates *templates) {
     assert(std::strstr(error, "Native function schemas must include"));
 }
 
+static void check_candidate_native_schema(const fg_chat_templates *templates) {
+    for (bool validation_only : {false, true}) {
+        char *schema = fg_tool_candidate_schema(validation_only);
+        assert(schema);
+        std::string request = "{\"protocol\":\"forge-native-v1\",\"tools\":" + std::string(schema) +
+                              ",\"anchor_message_count\":0,\"messages\":["
+                              "{\"role\":\"system\",\"content\":\"Use the supplied tools.\"},"
+                              "{\"role\":\"user\",\"content\":\"Validate the repair.\"}]}";
+        std::free(schema);
+        char error[256] = {};
+        fg_chat_render *render =
+            fg_chat_templates_apply_native(templates, request.c_str(), false, error, sizeof(error));
+        if (!render)
+            std::fprintf(stderr, "candidate native template failed: %s\n", error);
+        assert(render && fg_chat_render_force_prefix(render));
+        char *parsed = fg_chat_render_parse(
+            render, "<tool_call>\n<function=validate_candidate>\n</function>\n</tool_call>", error,
+            sizeof(error));
+        assert(parsed && std::strstr(parsed, "\"name\":\"validate_candidate\""));
+        std::free(parsed);
+        if (validation_only)
+            assert(!fg_chat_render_parse(
+                render, "<tool_call>\n<function=list_directory>\n</function>\n</tool_call>", error,
+                sizeof(error)));
+        fg_chat_render_destroy(render);
+    }
+}
+
+static fg_chat_render *render_extension(const fg_chat_templates *templates, const char *schema) {
+    std::string request = "{\"protocol\":\"forge-native-v1\",\"tools\":" + std::string(schema) +
+                          ",\"anchor_message_count\":0,\"messages\":["
+                          "{\"role\":\"system\",\"content\":\"Use the supplied tools.\"},"
+                          "{\"role\":\"user\",\"content\":\"Complete the current task.\"}]}";
+    char error[256] = {};
+    fg_chat_render *render =
+        fg_chat_templates_apply_native(templates, request.c_str(), false, error, sizeof(error));
+    if (!render)
+        std::fprintf(stderr, "extension native template failed: %s\n", error);
+    assert(render && fg_chat_render_force_prefix(render));
+    assert(fg_chat_render_grammar(render) && *fg_chat_render_grammar(render));
+    return render;
+}
+
+static char *parse_extension_action(const fg_chat_render *render, const char *raw) {
+    char error[256] = {};
+    char *parsed = fg_chat_render_parse(render, raw, error, sizeof(error));
+    if (!parsed)
+        std::fprintf(stderr, "extension native parse failed: %s\n", error);
+    assert(parsed);
+    forge_error normalized_error = {};
+    char *action = nullptr;
+    forge_status status = fg_native_action_normalize(parsed, false, &action, &normalized_error);
+    if (status != FORGE_OK)
+        std::fprintf(stderr, "extension action normalization failed: %s\n",
+                     normalized_error.message);
+    std::free(parsed);
+    assert(status == FORGE_OK && action);
+    return action;
+}
+
+static void reject_extension_action(const fg_chat_render *render, const char *raw) {
+    char error[256] = {};
+    char *parsed = fg_chat_render_parse(render, raw, error, sizeof(error));
+    if (!parsed)
+        return; /* The actual native grammar/parser may reject before normalization. */
+    forge_error normalized_error = {};
+    char *action = nullptr;
+    forge_status status = fg_native_action_normalize(parsed, false, &action, &normalized_error);
+    std::free(parsed);
+    std::free(action);
+    assert(status != FORGE_OK);
+}
+
+static void check_partner_native_schemas(const fg_chat_templates *templates) {
+    const char *question = "<tool_call>\n<function=ask_user>\n<parameter=question>\n"
+                           "Which naming convention should be used?\n</parameter>\n"
+                           "</function>\n</tool_call>";
+    for (int registry = 0; registry < 3; registry++) {
+        char *base = registry == 0   ? fg_tool_minimal_native_schema()
+                     : registry == 1 ? fg_tool_candidate_schema(false)
+                                     : fg_tool_native_schema();
+        assert(base);
+        char *schema = fg_tool_native_extensions(base, true, false);
+        std::free(base);
+        assert(schema);
+        fg_chat_render *render = render_extension(templates, schema);
+        char *action = parse_extension_action(render, question);
+        assert(std::strstr(action, "\"tool\":\"ask_user\"") &&
+               std::strstr(action, "Which naming convention should be used?"));
+
+        reject_extension_action(render,
+                                "<tool_call>\n<function=ask_user>\n</function>\n</tool_call>");
+        reject_extension_action(render, "<tool_call>\n<function=ask_user>\n<parameter=question>\n"
+                                        "What name?\n</parameter>\n<parameter=approval>\ntrue\n"
+                                        "</parameter>\n</function>\n</tool_call>");
+        reject_extension_action(render, "<tool_call>\n<function=ask_user>\n<parameter=question>\n"
+                                        "\n</parameter>\n</function>\n</tool_call>");
+        reject_extension_action(
+            render, "<tool_call>\n<function=reflect_failure>\n<parameter=diagnosis>\n"
+                    "No failed validation occurred.\n</parameter>\n</function>\n</tool_call>");
+        std::string oversized = "<tool_call>\n<function=ask_user>\n<parameter=question>\n" +
+                                std::string(4097, 'q') +
+                                "\n</parameter>\n</function>\n</tool_call>";
+        reject_extension_action(render, oversized.c_str());
+        fg_chat_render_destroy(render);
+
+        /* Exercise the next physical prompt after a real parsed call, not only
+         * simulated JSON. Its answer remains paired with the asking assistant. */
+        forge_context *history = forge_context_create(
+            131072, 4096, [](const char *text, void *) { return std::strlen(text); }, nullptr);
+        assert(history);
+        assert(forge_context_set_prompt_protocol(history, FORGE_PROMPT_NATIVE) == FORGE_OK);
+        assert(forge_context_add(history, FORGE_SEG_SYSTEM, "Use the supplied tools.", 100, true, 0,
+                                 0));
+        assert(forge_context_add(history, FORGE_SEG_TOOLS, schema, 100, true, 0, 0));
+        assert(forge_context_add(history, FORGE_SEG_SOURCE, "Ask about naming.", 100, true, 0, 0));
+        uint64_t action_id = forge_context_add(history, FORGE_SEG_ACTION, action, 100, true, 0, 0);
+        assert(action_id);
+        assert(forge_context_add(history, FORGE_SEG_RESULT,
+                                 "{\"status\":\"answered\",\"answer\":\"snake_case\"}", 100, true,
+                                 action_id, 0));
+        assert(forge_context_add(history, FORGE_SEG_SOURCE, "Use the user's naming convention.",
+                                 100, true, 0, 0));
+        forge_error context_error = {};
+        size_t tokens = 0, evicted = 0;
+        char *request = forge_context_plan(history, &tokens, &evicted, &context_error);
+        assert(request && !evicted);
+        char error[256] = {};
+        render = fg_chat_templates_apply_native(templates, request, false, error, sizeof(error));
+        assert(render);
+        size_t length = 0;
+        const char *physical = fg_chat_render_prompt(render, &length);
+        const char *assistant =
+            physical ? std::strstr(physical, "<|im_start|>assistant\n") : nullptr;
+        assert(assistant && std::strstr(assistant, "<function=ask_user>") &&
+               std::strstr(assistant,
+                           "<tool_response>\n{\"status\":\"answered\",\"answer\":\"snake_case\"}"));
+        const char *answer = std::strstr(assistant, "snake_case");
+        const char *continuation = std::strstr(assistant, "Use the user's naming convention.");
+        assert(answer && continuation && answer < continuation);
+        std::free(request);
+        std::free(action);
+        std::free(schema);
+        fg_chat_render_destroy(render);
+        forge_context_destroy(history);
+    }
+}
+
+static void check_reflection_native_schema(const fg_chat_templates *templates) {
+    char *base = fg_tool_candidate_schema(false);
+    assert(base);
+    /* A diagnostic checkpoint overrides the ordinary registry even when a
+     * question callback exists. It cannot ask, edit, run a command or finish. */
+    char *schema = fg_tool_native_extensions(base, true, true);
+    std::free(base);
+    assert(schema && std::strstr(schema, "reflect_failure") && !std::strstr(schema, "ask_user"));
+    fg_chat_render *render = render_extension(templates, schema);
+    const char *diagnosis = "<tool_call>\n<function=reflect_failure>\n<parameter=diagnosis>\n"
+                            "The failed test requires two; replace the returned zero.\n"
+                            "</parameter>\n</function>\n</tool_call>";
+    char *action = parse_extension_action(render, diagnosis);
+    assert(std::strstr(action, "\"tool\":\"reflect_failure\"") &&
+           std::strstr(action, "replace the returned zero"));
+    std::free(action);
+    for (const char *rejected :
+         {"<tool_call>\n<function=final>\n<parameter=answer>\nDone\n</parameter>\n</function>\n</"
+          "tool_call>",
+          "<tool_call>\n<function=validate_candidate>\n</function>\n</tool_call>",
+          "<tool_call>\n<function=ask_user>\n<parameter=question>\nHelp?\n</parameter>\n</"
+          "function>\n</tool_call>",
+          "<tool_call>\n<function=reflect_failure>\n</function>\n</tool_call>",
+          "<tool_call>\n<function=reflect_failure>\n<parameter=diagnosis>\n   "
+          "\n</parameter>\n</function>\n</tool_call>",
+          "<tool_call>\n<function=reflect_failure>\n<parameter=diagnosis>\nCause\n</parameter>\n"
+          "<parameter=command>\ngo test\n</parameter>\n</function>\n</tool_call>"})
+        reject_extension_action(render, rejected);
+    std::string oversized = "<tool_call>\n<function=reflect_failure>\n<parameter=diagnosis>\n" +
+                            std::string(8193, 'd') + "\n</parameter>\n</function>\n</tool_call>";
+    reject_extension_action(render, oversized.c_str());
+    std::free(schema);
+    fg_chat_render_destroy(render);
+
+    /* Public/native message inputs can encode malformed strings that cannot
+     * occur as a raw NUL in the C renderer API. Reject rather than truncating. */
+    for (const char *name : {"ask_user", "reflect_failure"}) {
+        const char *field = !std::strcmp(name, "ask_user") ? "question" : "diagnosis";
+        for (const char *value :
+             {"123", "null", "[]", "{}", "\"\"", "\"   \"", "\"visible\\u0000hidden\""}) {
+            std::string message = "{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{"
+                                  "\"type\":\"function\",\"function\":{\"name\":\"" +
+                                  std::string(name) + "\",\"arguments\":{\"" + field +
+                                  "\":" + value + "}}}]}";
+            forge_error error = {};
+            char *normalized = nullptr;
+            forge_status status =
+                fg_native_action_normalize(message.c_str(), false, &normalized, &error);
+            std::free(normalized);
+            assert(status != FORGE_OK);
+        }
+    }
+}
+
 struct model_stream {
     std::string text;
     bool cancel_at_opener = false;
@@ -126,11 +335,14 @@ static bool collect_model(const char *bytes, size_t length, void *userdata) {
 static void check_model(const char *path, int gpu_layers) {
     const char *request =
         "{\"protocol\":\"forge-native-v1\",\"anchor_message_count\":1,\"tools\":["
-        "{\"type\":\"function\",\"function\":{\"name\":\"final\",\"description\":\"Finish with answer done\","
+        "{\"type\":\"function\",\"function\":{\"name\":\"final\",\"description\":\"Finish with "
+        "answer done\","
         "\"parameters\":{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}},"
         "\"required\":[\"answer\"],\"additionalProperties\":false}}}],\"messages\":["
-        "{\"role\":\"system\",\"content\":\"Explain in plain text before calling final with answer done.\"},"
-        "{\"role\":\"user\",\"content\":\"Explain hash tables in at least 1000 words of plain text. "
+        "{\"role\":\"system\",\"content\":\"Explain in plain text before calling final with answer "
+        "done.\"},"
+        "{\"role\":\"user\",\"content\":\"Explain hash tables in at least 1000 words of plain "
+        "text. "
         "Do not call any tools until the explanation is finished.\"}]}";
     forge_model_config config = forge_default_model_config();
     config.model_path = path;
@@ -142,6 +354,23 @@ static void check_model(const char *path, int gpu_layers) {
     if (!model)
         std::fprintf(stderr, "native model load failed: %s\n", error.message);
     assert(model);
+    /* A supported native backend must reject caller syntax as input error,
+     * never report an unsupported checkpoint backend or silently skip a probe. */
+    forge_metrics malformed_metrics = {};
+    assert(forge_complete(model, "Return alpha", 16, nullptr, nullptr,
+                          &malformed_metrics, &error) == FORGE_ERR_PARSE);
+    assert(error.code == FORGE_ERR_PARSE && malformed_metrics.generated_tokens == 0);
+    assert(forge_complete(model, "Return alpha", 16, nullptr, nullptr,
+                          &malformed_metrics, nullptr) == FORGE_ERR_PARSE);
+    forge_checkpoint_options checkpoint_options = forge_default_checkpoint_options();
+    forge_checkpoint_stats malformed_checkpoint = {};
+    error = {};
+    assert(!forge_checkpoint_save(model, "Return alpha", &checkpoint_options,
+                                  &malformed_checkpoint, &error));
+    assert(error.code == FORGE_ERR_PARSE && malformed_checkpoint.prompt_tokens == 0);
+    assert(!forge_checkpoint_save(model, "Return alpha", &checkpoint_options,
+                                  &malformed_checkpoint, nullptr));
+    error = {};
     model_stream cancelled;
     cancelled.cancel_at_opener = true;
     forge_metrics metrics = {};
@@ -165,7 +394,8 @@ static void check_model(const char *path, int gpu_layers) {
     request = bounded_request.c_str();
     model_stream reference;
     error = {};
-    forge_status status = forge_complete(model, request, 768, collect_model, &reference, &metrics, &error);
+    forge_status status =
+        forge_complete(model, request, 768, collect_model, &reference, &metrics, &error);
     if (status != FORGE_OK)
         std::fprintf(stderr, "native generation failed: %s\n", error.message);
     assert(status == FORGE_OK);
@@ -186,7 +416,8 @@ static void check_model(const char *path, int gpu_layers) {
     std::string expected_calls(calls);
     std::free(parsed);
     model_stream repeated;
-    assert(forge_complete(model, request, 768, collect_model, &repeated, &metrics, &error) == FORGE_OK);
+    assert(forge_complete(model, request, 768, collect_model, &repeated, &metrics, &error) ==
+           FORGE_OK);
     assert(metrics.generated_tokens > 256 && metrics.generated_tokens <= 768);
     assert(metrics.cached_tokens > 0 && metrics.forced_actions == 1);
     parsed = fg_chat_render_parse(render, repeated.text.c_str(), detail, sizeof(detail));
@@ -200,7 +431,7 @@ static void check_model(const char *path, int gpu_layers) {
     fg_chat_render_destroy(render);
     fg_chat_templates_destroy(templates);
     forge_model_destroy(model);
-    std::puts("native model checks passed: forced opener, cancellation, budget exhaustion, "
+    std::puts("native model checks passed: malformed-input rejection, forced opener, cancellation, budget exhaustion, "
               "recovery, cached tool-call equivalence, no-callback generation");
 }
 
@@ -252,6 +483,9 @@ int main(int argc, char **argv) {
     templates = fg_chat_templates_create(nullptr, native_source.c_str(), error, sizeof(error));
     assert(templates);
     check_minimal_native_schema(templates);
+    check_candidate_native_schema(templates);
+    check_partner_native_schemas(templates);
+    check_reflection_native_schema(templates);
     fg_chat_render *render =
         fg_chat_templates_apply_native(templates, request, true, error, sizeof(error));
     assert(render);

@@ -19,6 +19,165 @@ SPEC.loader.exec_module(CONTROL)
 
 
 class RepairControlTests(unittest.TestCase):
+    def loop_args(self):
+        self.args.experiment = 'loop-completion'
+        self.args.forge = self.root / 'shared.exe'
+        self.args.max_turns = 32
+        self.args.temperature = 0.6
+        self.args.repetitions = 1
+        return self.args
+
+    def test_loop_protocol_has_seven_same_binary_arms_and_42_cells(self):
+        args = self.loop_args()
+        tasks = [(Path(f'{i}.json'), {'id': f'task-{i}'}) for i in range(6)]
+        protocol = CONTROL.make_protocol(args, tasks, self.identity)
+        expected = {'minimal': 'minimal', 'candidate': 'candidate-checkpoint',
+                    'best-of-2': 'loop-best-of-2', 'semantic': 'loop-semantic',
+                    'impact': 'loop-impact', 'reflection': 'loop-reflection',
+                    'combined': 'loop-combined'}
+        self.assertEqual(CONTROL.arm_variants(args), expected)
+        self.assertEqual(protocol['experiment'], 'loop-completion-diagnostic')
+        self.assertEqual({arm: spec['variant'] for arm, spec in protocol['arms'].items()}, expected)
+        self.assertEqual(CONTROL.arm_runtimes(args), {arm: args.forge for arm in expected})
+        self.assertEqual(len(protocol['schedule']), 42)
+        self.assertEqual(len({cell['cell_id'] for cell in protocol['schedule']}), 42)
+        for start in range(0, 42, 7):
+            block = protocol['schedule'][start:start + 7]
+            self.assertEqual({cell['arm'] for cell in block}, set(expected))
+            self.assertEqual(len({cell['task'] for cell in block}), 1)
+        repeated = CONTROL.make_protocol(args, list(reversed(tasks)), self.identity)
+        self.assertEqual(protocol['schedule'], repeated['schedule'])
+        self.assertIn('No historical binary', protocol['historical_confound'])
+        self.assertEqual(protocol['settings']['candidate_budget_scope'],
+                         'shared_per_task_across_all_candidates')
+
+    def test_loop_variants_have_only_preregistered_interventions(self):
+        args = self.loop_args()
+        common = ['--minimal-agent', '--thought-history', '--candidate-checkpoint']
+        expected = {'minimal': ['--minimal-agent', '--thought-history'],
+                    'candidate': common, 'best-of-2': [*common, '--candidates', '2'],
+                    'semantic': [*common, '--semantic-loops'],
+                    'impact': [*common, '--symbol-impact'],
+                    'reflection': [*common, '--failure-reflection'],
+                    'combined': [*common, '--candidates', '2', '--semantic-loops',
+                                 '--symbol-impact', '--failure-reflection']}
+        protocol = CONTROL.make_protocol(args, [(Path('a.json'), {'id': 'a'})], self.identity)
+        for arm, variant in CONTROL.arm_variants(args).items():
+            with self.subTest(arm=arm):
+                self.assertEqual(CONTROL.RUN_VARIANTS[variant]['flags'], expected[arm])
+                self.assertEqual(protocol['arms'][arm]['flags'], expected[arm])
+        changed = copy.deepcopy(protocol)
+        changed['arms']['combined']['flags'].append('--no-kv-reuse')
+        with self.assertRaisesRegex(ValueError, 'mismatch'):
+            CONTROL.validate_resume(protocol, changed)
+
+    def test_loop_cells_keep_total_budgets_in_every_arm(self):
+        args = self.loop_args()
+        for arm, variant in CONTROL.arm_variants(args).items():
+            command = CONTROL.cell_command(args, {**self.cell, 'arm': arm}, self.root / arm)
+            with self.subTest(arm=arm):
+                for flag, value in [('--forge', str(args.forge)), ('--variants', variant),
+                                    ('--max-turns', '32'), ('--max-tokens', '32768'),
+                                    ('--max-input', '262144'), ('--timeout', '600'),
+                                    ('--verification-timeout', '120'), ('--context', '16384'),
+                                    ('--output-reserve', '2048'), ('--temperature', '0.6'),
+                                    ('--seed', '42'), ('--gpu-layers', '-1'),
+                                    ('--repetitions', '1'), ('--order-seed', '20260831')]:
+                    self.assertEqual(command[command.index(flag) + 1], value)
+                self.assertIn('--no-randomize', command)
+        protocol = CONTROL.make_protocol(args, [(Path('a.json'), {'id': 'repair'})], self.identity)
+        protocol['identity']['runtimes']['best-of-2'] = {'bundle': {'sha256': 'minimal'}}
+        cell = {**self.cell, 'arm': 'best-of-2'}
+        record = {**self.record, 'variant': 'loop-best-of-2'}
+        environment = {**self.environment, 'max_turns': 32, 'temperature': 0.6}
+        CONTROL.validate_record(cell, record, environment, protocol, self.prepared)
+        for metric, value in [('turns', 33), ('generated_tokens', 32769), ('prompt_tokens', 262145)]:
+            oversized = {**record, 'metrics': {**record['metrics'], metric: value}}
+            with self.subTest(metric=metric), self.assertRaisesRegex(ValueError, 'budget'):
+                CONTROL.validate_record(cell, oversized, environment, protocol, self.prepared)
+
+    def test_loop_runtime_bundle_identity_is_enforced_for_all_arms(self):
+        args = self.loop_args()
+        identity = {'runtimes': {arm: {'bundle': {'sha256': 'same', 'files': {'forge.exe': 'x'}}}
+                                  for arm in CONTROL.arm_variants(args)}}
+        CONTROL.validate_runtime_identity(args, identity)
+        for arm in CONTROL.arm_variants(args):
+            changed = copy.deepcopy(identity)
+            changed['runtimes'][arm]['bundle']['files']['ggml.dll'] = 'different'
+            with self.subTest(arm=arm), self.assertRaisesRegex(ValueError, 'all seven arms'):
+                CONTROL.validate_runtime_identity(args, changed)
+
+    def test_loop_identity_freezes_every_arm_source_runtime_and_harness(self):
+        args = self.loop_args()
+        args.model.write_bytes(b'model')
+        task = self.root / 'repair.json'
+        task.write_text('{}')
+        source = {'files': {}, 'head': 'head', 'files_sha256': 'source'}
+        bundle = {'sha256': 'shared', 'files': {'forge.exe': {'sha256': 'binary'}}}
+        with mock.patch.object(CONTROL, 'source_identity', return_value=(source, b'diff')) as source_fn, \
+                mock.patch.object(CONTROL, 'runtime_bundle', return_value=bundle) as runtime_fn, \
+                mock.patch.object(CONTROL, 'platform_metadata', return_value={'os': 'test'}):
+            identity, diff = CONTROL.collect_identity(args, [(task, {'id': 'repair'})])
+        source_fn.assert_called_once_with(args.source_dir, {arm: 'HEAD' for arm in CONTROL.LOOP_ARMS})
+        self.assertEqual(diff, b'diff')
+        self.assertEqual(set(identity['runtimes']), set(CONTROL.LOOP_ARMS))
+        self.assertTrue(all(call.args == (args.forge,) for call in runtime_fn.call_args_list))
+        self.assertTrue(all(runtime['path'] == str(args.forge) and runtime['bundle'] == bundle
+                            for runtime in identity['runtimes'].values()))
+        self.assertEqual(identity['tasks']['repair']['sha256'], CONTROL.digest(task))
+        self.assertEqual(identity['harness']['run.py'], CONTROL.digest(CONTROL.DIRECTORY / 'run.py'))
+        self.assertEqual(identity['harness']['repair_control.py'],
+                         CONTROL.digest(CONTROL.DIRECTORY / 'repair_control.py'))
+        protocol = CONTROL.make_protocol(args, [(task, {'id': 'repair'})], identity)
+        changed = copy.deepcopy(protocol)
+        changed['identity']['runtimes']['combined']['bundle']['sha256'] = 'changed'
+        with self.assertRaisesRegex(ValueError, 'mismatch'):
+            CONTROL.validate_resume(protocol, changed)
+
+    def test_loop_cli_defaults_and_existing_experiment_defaults(self):
+        for name in ('model.gguf', 'shared.exe'):
+            (self.root / name).write_bytes(b'fixture')
+        tasks = self.root / 'tasks'
+        tasks.mkdir()
+        common = ['--model', str(self.root / 'model.gguf'), '--task-dir', str(tasks),
+                  '--output', str(self.root / 'results')]
+        args = CONTROL.parse_args(['--experiment', 'loop-completion', '--forge',
+                                   str(self.root / 'shared.exe'), *common])
+        self.assertEqual((args.max_turns, args.temperature, args.repetitions), (32, 0.6, 1))
+        candidate = CONTROL.parse_args(['--experiment', 'candidate-checkpoint',
+                                        '--candidate-forge', str(self.root / 'shared.exe'),
+                                        '--minimal-forge', str(self.root / 'shared.exe'), *common])
+        self.assertEqual((candidate.max_turns, candidate.temperature, candidate.repetitions),
+                         (16, 0.0, 3))
+        historical = CONTROL.parse_args(['--checkpoint-forge', str(self.root / 'shared.exe'),
+                                         '--current-forge', str(self.root / 'shared.exe'),
+                                         '--minimal-forge', str(self.root / 'shared.exe'),
+                                         '--checkpoint-revision', 'HEAD', '--current-revision', 'HEAD', *common])
+        self.assertEqual((historical.max_turns, historical.temperature, historical.repetitions),
+                         (16, 0.0, 3))
+        with mock.patch.object(sys, 'stderr'), self.assertRaises(SystemExit):
+            CONTROL.parse_args(['--experiment', 'loop-completion', *common])
+        with mock.patch.object(sys, 'stderr'), self.assertRaises(SystemExit):
+            CONTROL.parse_args(['--experiment', 'loop-completion', '--forge',
+                                str(self.root / 'shared.exe'), '--minimal-forge',
+                                str(self.root / 'shared.exe'), *common])
+
+    def test_candidate_protocol_is_two_arm_and_schedule_is_complete(self):
+        self.args.experiment = 'candidate-checkpoint'
+        self.args.candidate_forge = self.root / 'candidate.exe'
+        protocol = CONTROL.make_protocol(self.args, [(Path('a.json'), {'id': 'a'}),
+                                                     (Path('b.json'), {'id': 'b'})], self.identity)
+        self.assertEqual(protocol['arms'], {'candidate': {'variant': 'candidate-checkpoint'},
+                                           'minimal': {'variant': 'minimal'}})
+        self.assertEqual(len(protocol['schedule']), 12)
+        for arm in protocol['arms']:
+            self.assertEqual(sum(cell['arm'] == arm for cell in protocol['schedule']), 6)
+        self.assertIn('no historical arm', protocol['historical_confound'])
+        cell = protocol['schedule'][0] | {'arm': 'candidate'}
+        command = CONTROL.cell_command(self.args, cell, self.root)
+        self.assertEqual(command[command.index('--variants') + 1], 'candidate-checkpoint')
+        self.assertEqual(command[command.index('--forge') + 1], str(self.args.candidate_forge))
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

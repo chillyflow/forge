@@ -1,0 +1,24 @@
+# W4 declared arm: repetition-penalty single-variable test.
+# Matches the W0 candidate-2 baseline (temperature 0.6, seed 42, 32 actions,
+# 16384 context, 2048 reserve) with exactly one change: vendor-suggested
+# repetition penalty 1.05 over the last 64 tokens (llama.cpp defaults).
+# Presence penalty is deliberately excluded (non-vendor, language-mixing risk).
+# Falsification: must beat candidate-2 4/12 on the same 4-manifest x3 protocol;
+# <=4/12 confirms the ceiling and closes the penalty axis.
+# Select with --profile profiles/w4-penalty.toml.
+
+[model]
+context = 16384
+
+[inference]
+gpu_layers = "auto"
+temperature = 0.6
+seed = 42
+repetition_penalty = 1.05
+repetition_last_n = 64
+reuse_prefix = true
+grammar_fast_path = true
+speculative = false
+
+[agent]
+output_reserve = 2048
