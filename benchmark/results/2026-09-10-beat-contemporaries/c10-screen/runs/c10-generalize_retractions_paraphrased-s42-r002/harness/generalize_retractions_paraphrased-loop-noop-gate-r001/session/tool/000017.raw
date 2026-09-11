@@ -1,0 +1,11 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Test case 1: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Result 1: {'cash': 0}
+Test case 2: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result 2: {'cash': 7}
+Test case 3: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Result 3: {'cash': 0}
+Expected for case 3: {"cash": 0}
+
+stderr:

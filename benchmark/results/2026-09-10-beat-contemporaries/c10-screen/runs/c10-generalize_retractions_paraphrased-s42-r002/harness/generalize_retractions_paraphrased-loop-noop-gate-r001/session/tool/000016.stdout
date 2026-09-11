@@ -1,0 +1,9 @@
+Testing the exact case:
+Result: {'cash': 0}
+Expected: {"cash": 0}
+Manual trace:
+1. First p: creates posting, adds 7 to cash
+2. Second p: should be ignored
+3. retract r: cancels posting, subtracts 7 from cash
+4. retract s: tries to cancel again, but already cancelled
+So result should be 0

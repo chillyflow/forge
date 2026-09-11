@@ -1,0 +1,8 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+
+stderr:
+  File "<string>", line 1
+    import sys; sys.path.insert(0, '.'); from ledger import positions_for; def post(i, delta): return {'key': i, 'kind': 'post', 'bucket': 'cash', 'delta': delta}; def retract(i, reference): return {'key': i, 'kind': 'retract', 'reference': reference}; print('Test case [post("p", 7), retract("r", "p")]:', positions_for([post('p', 7), retract('r', 'p')])); print('Test case [retract("r", "p"), post("p", 7)]:', positions_for([retract('r', 'p'), post('p', 7)]))
+                                                                           ^^^
+SyntaxError: invalid syntax

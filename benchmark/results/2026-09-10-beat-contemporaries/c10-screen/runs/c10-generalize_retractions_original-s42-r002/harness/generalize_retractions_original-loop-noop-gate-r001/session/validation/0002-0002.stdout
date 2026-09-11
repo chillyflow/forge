@@ -1,0 +1,19 @@
+Testing case: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+=== DEBUG: Processing events ===
+Event 0: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Added posting p: cash +7, total = 7
+  Current state - postings: {'p': ('cash', 7)}, totals: {'cash': 7}, cancelled: set()
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  Skipping duplicate event p
+Event 2: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  Processing retraction for target p
+  Cancelled set before: set()
+  Added p to cancelled set
+  Cancelled posting p: cash -7, total = 0
+  Current state - postings: {}, totals: {'cash': 0}, cancelled: {'p'}
+Event 3: {'id': 's', 'kind': 'retract', 'target': 'p'}
+  Processing retraction for target p
+  Cancelled set before: {'p'}
+  Target p already cancelled, skipping
+Final result: {'cash': 0}
+Expected: {'cash': 0}

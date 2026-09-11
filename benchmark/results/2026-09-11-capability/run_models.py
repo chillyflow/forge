@@ -226,6 +226,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--stage', type=int, choices=(1, 2), required=True)
     parser.add_argument('--group', choices=sorted(GROUPS), required=True)
+    parser.add_argument('--arms', nargs='+', choices=sorted(ARMS), default=None,
+                        help='optional subset of the group arms (default: the whole group)')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--limit', type=int, default=0)
     args = parser.parse_args()
@@ -234,7 +236,7 @@ def main() -> int:
         if not path.exists():
             print(f'missing required path: {path}', file=sys.stderr)
             return 2
-    for arm in GROUPS[args.group]:
+    for arm in (args.arms or GROUPS[args.group]):
         if not ARMS[arm]['model'].exists():
             print(f'missing model: {ARMS[arm]["model"]}', file=sys.stderr)
             return 2
@@ -242,6 +244,10 @@ def main() -> int:
     write_protocol()
     spec = STAGE1 if args.stage == 1 else STAGE2
     rows = schedule(args.stage, args.group)
+    if args.arms:
+        rows = [row for row in rows if row['arm'] in args.arms]
+        for index, row in enumerate(rows, 1):
+            row['order_index'] = index
 
     runs_dir = HERE / f'stage{args.stage}' / args.group / 'runs'
     runs_dir.mkdir(parents=True, exist_ok=True)

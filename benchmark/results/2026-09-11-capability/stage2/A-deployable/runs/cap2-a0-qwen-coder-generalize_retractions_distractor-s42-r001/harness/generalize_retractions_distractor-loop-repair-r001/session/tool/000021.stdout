@@ -1,0 +1,27 @@
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+Event 2: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+Events list: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+--- Tracing execution ---
+
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  event['id'] = p
+  event['kind'] = post
+  Added to seen: {'p'}
+  Added posting: postings[p] = (cash, 7)
+  postings = {'p': ('cash', 7)}
+  Added to totals: totals[cash] += 7
+  totals = {'cash': 7}
+
+Event 2: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  event['id'] = r
+  event['kind'] = retract
+  Added to seen: {'p', 'r'}
+  Target = p
+  Added target p to cancelled: {'p'}
+  Subtracted from totals: totals[cash] -= 7
+  totals = {'cash': 0}
+
+Final totals: {'cash': 0}

@@ -1,0 +1,28 @@
+Debug:
+p: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+r: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+s: {'id': 's', 'kind': 'retract', 'target': 'p'}
+Full trace:
+Result: {'cash': 0}
+Expected: {"cash": 0}
+
+Let me trace step by step:
+Event 1: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  seen: set()
+  id in seen? False
+  added to seen
+  postings: {}
+  totals: {}
+Event 2: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+  seen: {'p'}
+  id in seen? True
+  should be skipped
+Event 3: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+  seen: {'p'}
+  target: p
+  target in cancelled? False
+  added to cancelled
+Event 4: {'id': 's', 'kind': 'retract', 'target': 'p'}
+  seen: {'p'}
+  target: p
+  target in cancelled? True
