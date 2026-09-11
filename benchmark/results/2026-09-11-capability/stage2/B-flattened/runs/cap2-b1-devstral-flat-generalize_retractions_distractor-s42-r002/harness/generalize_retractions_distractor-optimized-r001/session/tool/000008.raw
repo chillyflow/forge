@@ -1,0 +1,43 @@
+file_sha256:a88ecdff4900332731edbdb3c0ceda7cc4df3b33184cb9e9f34564b50f2e43cd
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     
+5:     # First pass: collect all postings
+6:     for event in events:
+7:         if event['id'] in seen:
+8:             continue
+9:         seen.add(event['id'])
+10:         if event['kind'] == 'post':
+11:             account, amount = event['account'], event['amount']
+12:             postings[event['id']] = (account, amount)
+13:     
+14:     # Second pass: process retractions
+15:     seen.clear()  # Reset seen for retractions processing
+16:     for event in events:
+17:         if event['id'] in seen:
+18:             continue
+19:         seen.add(event['id'])
+20:         if event['kind'] == 'retract':
+21:             target = event['target']
+22:             if target in cancelled:
+23:                 continue
+24:             cancelled.add(target)
+25:             if target in postings:
+26:                 account, amount = postings[target]
+27:                 totals.setdefault(account, 0)
+28:                 totals[account] -= amount
+29:     
+30:     # Third pass: apply postings that weren't cancelled
+31:     seen.clear()  # Reset seen for postings processing
+32:     for event in events:
+33:         if event['id'] in seen:
+34:             continue
+35:         seen.add(event['id'])
+36:         if event['kind'] == 'post':
+37:             if event['id'] not in cancelled:
+38:                 account, amount = event['account'], event['amount']
+39:                 totals.setdefault(account, 0)
+40:                 totals[account] += amount
+41:     
+42:     return totals

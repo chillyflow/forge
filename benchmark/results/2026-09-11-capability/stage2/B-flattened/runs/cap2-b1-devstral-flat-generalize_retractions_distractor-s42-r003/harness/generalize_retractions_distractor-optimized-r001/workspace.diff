@@ -1,0 +1,44 @@
+diff --git a/service.py b/service.py
+index b7bbbde..c32c9a5 100644
+--- a/service.py
++++ b/service.py
+@@ -1,6 +1,8 @@
+ def balances(events):
+     seen, cancelled = set(), set()
+-    postings, totals = {}, {}
++    postings, accounts = {}, set()
++    
++    # First pass: collect all postings and retractions
+     for event in events:
+         if event['id'] in seen:
+             continue
+@@ -8,15 +10,19 @@ def balances(events):
+         if event['kind'] == 'post':
+             account, amount = event['account'], event['amount']
+             postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
+-        else:
++            accounts.add(account)
++        else:  # retract
+             target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
++            if target not in cancelled:
++                cancelled.add(target)
++    
++    # Calculate net balances for all accounts
++    totals = {}
++    for account in accounts:
++        net_balance = 0
++        for event_id, (acc, amount) in postings.items():
++            if acc == account and event_id not in cancelled:
++                net_balance += amount
++        totals[account] = net_balance
++    
+     return totals

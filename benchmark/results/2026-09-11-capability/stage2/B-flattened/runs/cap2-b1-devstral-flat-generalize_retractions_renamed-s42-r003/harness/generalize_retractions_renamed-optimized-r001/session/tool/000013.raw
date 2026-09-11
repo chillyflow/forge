@@ -1,0 +1,43 @@
+TOOL_ERROR [conflict]: old_text must match exactly once in ledger.py. It does not match the current content; the file may have changed since you last read it. Current content follows. Copy the text you intend to replace from it verbatim, including only bytes that are present.
+def positions_for(messages):
+    visited, voided = set(), set()
+    pending_retractions = {}
+    entries, positions = {}, {}
+    for message in messages:
+        if message['key'] in visited:
+            continue
+        visited.add(message['key'])
+        if message['kind'] == 'post':
+            bucket, delta = message['bucket'], message['delta']
+            reference = message['key']
+            
+            # Apply any pending retractions for this posting
+            if reference in pending_retractions:
+                for retract_key in pending_retractions[reference]:
+                    if retract_key not in voided:
+                        voided.add(retract_key)
+                del pending_retractions[reference]
+                # Add the posting with zero delta to retain the zero entry
+                entries[reference] = (bucket, 0)
+                positions[bucket] = 0  # Explicitly set to 0 to ensure account exists
+                continue
+            
+            # Only add the posting if it hasn't been voided
+            if reference not in voided:
+                entries[reference] = (bucket, delta)
+                positions.setdefault(bucket, 0)
+                positions[bucket] += delta
+        else:
+            reference = message['reference']
+            if reference in voided:
+                continue
+            voided.add(message['key'])
+            if reference in entries:
+                bucket, delta = entries[reference]
+                positions[bucket] -= delta
+                # Update the entry to have zero delta to retain the zero entry
+                entries[reference] = (bucket, 0)
+            else:
+                # Store pending retraction
+                pending_retractions.setdefault(reference, []).append(message['key'])
+    return positions

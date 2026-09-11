@@ -1,0 +1,56 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,24 +1,28 @@
+-def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
+-    
+-    # First pass: collect all postings and retractions
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-        else:  # retract
+-            target = event['target']
+-            if target not in cancelled:
+-                cancelled.add(target)
+-    
+-    # Second pass: apply postings that weren't cancelled
+-    for event_id, (account, amount) in postings.items():
+-        if event_id not in cancelled:
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-    
+-    return totals
++def balances(events):
++    seen, cancelled = set(), set()
++    postings, accounts = {}, set()
++    
++    # First pass: collect all postings and retractions
++    for event in events:
++        if event['id'] in seen:
++            continue
++        seen.add(event['id'])
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            postings[event['id']] = (account, amount)
++            accounts.add(account)
++        else:  # retract
++            target = event['target']
++            if target not in cancelled:
++                cancelled.add(target)
++    
++    # Second pass: calculate totals for accounts with net postings
++    totals = {}
++    for account in accounts:
++        totals[account] = 0
++    
++    for event_id, (account, amount) in postings.items():
++        if event_id not in cancelled:
++            totals[account] += amount
++    
++    return totals

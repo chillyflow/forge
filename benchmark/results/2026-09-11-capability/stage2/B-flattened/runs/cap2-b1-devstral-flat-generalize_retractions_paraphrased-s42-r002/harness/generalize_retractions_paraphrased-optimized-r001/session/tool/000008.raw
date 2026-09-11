@@ -1,0 +1,28 @@
+file_sha256:f02c0c523692ade0d00d1ae1cbf1d7518c224fbe8eea0c402572e02c4609fc1c
+1: def balances(events):
+2:     seen, postings, totals = set(), {}, {}
+3:     
+4:     # First pass: collect all unique post events
+5:     for event in events:
+6:         if event['id'] in seen:
+7:             continue
+8:         seen.add(event['id'])
+9:         if event['kind'] == 'post':
+10:             account, amount = event['account'], event['amount']
+11:             postings[event['id']] = (account, amount)
+12:             totals.setdefault(account, 0)
+13:             totals[account] += amount
+14:     
+15:     # Second pass: process retract events (only unique ones not already seen)
+16:     seen.clear()
+17:     for event in events:
+18:         if event['id'] in seen:
+19:             continue
+20:         seen.add(event['id'])
+21:         if event['kind'] == 'retract':
+22:             target = event['target']
+23:             if target in postings:
+24:                 account, amount = postings[target]
+25:                 totals[account] -= amount
+26:     
+27:     return totals

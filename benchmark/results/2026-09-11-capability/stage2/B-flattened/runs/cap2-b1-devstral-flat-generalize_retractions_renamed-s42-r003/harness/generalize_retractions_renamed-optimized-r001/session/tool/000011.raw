@@ -1,0 +1,43 @@
+file_sha256:27fbe9ef344e1b24dc7aa3b25a801896869d214183181887ac965f16852ef44c
+1: def positions_for(messages):
+2:     visited, voided = set(), set()
+3:     pending_retractions = {}
+4:     entries, positions = {}, {}
+5:     for message in messages:
+6:         if message['key'] in visited:
+7:             continue
+8:         visited.add(message['key'])
+9:         if message['kind'] == 'post':
+10:             bucket, delta = message['bucket'], message['delta']
+11:             reference = message['key']
+12:             
+13:             # Apply any pending retractions for this posting
+14:             if reference in pending_retractions:
+15:                 for retract_key in pending_retractions[reference]:
+16:                     if retract_key not in voided:
+17:                         voided.add(retract_key)
+18:                 del pending_retractions[reference]
+19:                 # Add the posting with zero delta to retain the zero entry
+20:                 entries[reference] = (bucket, 0)
+21:                 positions[bucket] = 0  # Explicitly set to 0 to ensure account exists
+22:                 continue
+23:             
+24:             # Only add the posting if it hasn't been voided
+25:             if reference not in voided:
+26:                 entries[reference] = (bucket, delta)
+27:                 positions.setdefault(bucket, 0)
+28:                 positions[bucket] += delta
+29:         else:
+30:             reference = message['reference']
+31:             if reference in voided:
+32:                 continue
+33:             voided.add(message['key'])
+34:             if reference in entries:
+35:                 bucket, delta = entries[reference]
+36:                 positions[bucket] -= delta
+37:                 # Update the entry to have zero delta to retain the zero entry
+38:                 entries[reference] = (bucket, 0)
+39:             else:
+40:                 # Store pending retraction
+41:                 pending_retractions.setdefault(reference, []).append(message['key'])
+42:     return positions

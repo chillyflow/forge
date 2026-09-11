@@ -1,0 +1,1375 @@
+{"schema_version":1,"type":"state","sequence":1,"elapsed_ms":0,"data":{"state":0}}
+{"schema_version":1,"type":"request","sequence":2,"elapsed_ms":0,"data":"Repair balances: process each globally unique message once. A void notice neutralizes its referenced credit, whether the notice comes before or after that credit. A credit contributes at most once. Unknown references create no accounts; known accounts remain present at zero. Inspect source and run the tests. Do not modify tests."}
+{"schema_version":1,"type":"repository_scan","sequence":3,"elapsed_ms":78,"data":{"schema_version":1,"backend":"scan","events":[],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":false,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":0,"path_encoding":"utf-8","index_mode":"full","generation":1,"changed":false,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"working_state","sequence":4,"elapsed_ms":94,"data":{"turn":0,"artifact":"context/0000.state.json","hash":14506714460437343614}}
+{"schema_version":1,"type":"context_plan","sequence":5,"elapsed_ms":94,"data":{"turn":1,"artifact":"context/0001.json","hash":10605305613637124827,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":6,"elapsed_ms":94,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":7,"elapsed_ms":94,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":8,"elapsed_ms":1141,"data":"{\""}
+{"schema_version":1,"type":"token","sequence":9,"elapsed_ms":1172,"data":"tool"}
+{"schema_version":1,"type":"token","sequence":10,"elapsed_ms":1203,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":11,"elapsed_ms":1219,"data":"read"}
+{"schema_version":1,"type":"token","sequence":12,"elapsed_ms":1250,"data":"_file"}
+{"schema_version":1,"type":"token","sequence":13,"elapsed_ms":1266,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":14,"elapsed_ms":1297,"data":"args"}
+{"schema_version":1,"type":"token","sequence":15,"elapsed_ms":1312,"data":"\":{\""}
+{"schema_version":1,"type":"token","sequence":16,"elapsed_ms":1344,"data":"path"}
+{"schema_version":1,"type":"token","sequence":17,"elapsed_ms":1375,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":18,"elapsed_ms":1391,"data":"service"}
+{"schema_version":1,"type":"token","sequence":19,"elapsed_ms":1422,"data":".py"}
+{"schema_version":1,"type":"token","sequence":20,"elapsed_ms":1437,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":21,"elapsed_ms":1469,"data":"start"}
+{"schema_version":1,"type":"token","sequence":22,"elapsed_ms":1484,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":23,"elapsed_ms":1516,"data":"1"}
+{"schema_version":1,"type":"token","sequence":24,"elapsed_ms":1547,"data":",\""}
+{"schema_version":1,"type":"token","sequence":25,"elapsed_ms":1562,"data":"end"}
+{"schema_version":1,"type":"token","sequence":26,"elapsed_ms":1594,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":27,"elapsed_ms":1625,"data":"2"}
+{"schema_version":1,"type":"token","sequence":28,"elapsed_ms":1641,"data":"0"}
+{"schema_version":1,"type":"token","sequence":29,"elapsed_ms":1672,"data":"0"}
+{"schema_version":1,"type":"token","sequence":30,"elapsed_ms":1687,"data":"1"}
+{"schema_version":1,"type":"token","sequence":31,"elapsed_ms":1719,"data":"}}"}
+{"schema_version":1,"type":"inference","sequence":32,"elapsed_ms":1719,"data":{"prompt_tokens":2008,"cached_tokens":0,"generated_tokens":24,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":33,"elapsed_ms":1719,"data":"{\"tool\":\"read_file\",\"args\":{\"path\":\"service.py\",\"start\":1,\"end\":2001}}"}
+{"schema_version":1,"type":"state","sequence":34,"elapsed_ms":1719,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":35,"elapsed_ms":1719,"data":{"tool":"read_file","args":{"path":"service.py","start":1,"end":2001}}}
+{"schema_version":1,"type":"state","sequence":36,"elapsed_ms":1719,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":37,"elapsed_ms":1734,"data":{"id":1,"name":"read_file","output":"file_sha256:0bfc7661de632302ebd1d82277db844a4ed9e25ba30c45cba4275725ec24470e\n1: def balances(events):\n2:     seen, cancelled = set(), set()\n3:     postings, totals = {}, {}\n4:     for event in events:\n5:         if event['id'] in seen:\n6:             continue\n7:         seen.add(event['id'])\n8:         if event['kind'] == 'post':\n9:             account, amount = event['account'], event['amount']\n10:             postings[event['id']] = (account, amount)\n11:             totals.setdefault(account, 0)\n12:             if True:\n13:                 totals[account] += amount\n14:         else:\n15:             target = event['target']\n16:             if target in cancelled:\n17:                 continue\n18:             cancelled.add(target)\n19:             if target in postings:\n20:                 account, amount = postings[target]\n21:                 totals[account] -= amount\n22:     return totals\n","duration_ms":0.0,"status":"ok"}}
+{"schema_version":1,"type":"state","sequence":38,"elapsed_ms":1734,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":39,"elapsed_ms":1734,"data":{"turn":1,"artifact":"context/0001.state.json","hash":4255080843685964554}}
+{"schema_version":1,"type":"state","sequence":40,"elapsed_ms":1734,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":41,"elapsed_ms":1750,"data":{"turn":2,"artifact":"context/0002.json","hash":14336731213369431917,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":42,"elapsed_ms":1750,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":43,"elapsed_ms":1750,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":44,"elapsed_ms":2172,"data":"{\""}
+{"schema_version":1,"type":"token","sequence":45,"elapsed_ms":2187,"data":"tool"}
+{"schema_version":1,"type":"token","sequence":46,"elapsed_ms":2219,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":47,"elapsed_ms":2234,"data":"read"}
+{"schema_version":1,"type":"token","sequence":48,"elapsed_ms":2266,"data":"_file"}
+{"schema_version":1,"type":"token","sequence":49,"elapsed_ms":2297,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":50,"elapsed_ms":2312,"data":"args"}
+{"schema_version":1,"type":"token","sequence":51,"elapsed_ms":2344,"data":"\":{\""}
+{"schema_version":1,"type":"token","sequence":52,"elapsed_ms":2359,"data":"path"}
+{"schema_version":1,"type":"token","sequence":53,"elapsed_ms":2391,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":54,"elapsed_ms":2422,"data":"test"}
+{"schema_version":1,"type":"token","sequence":55,"elapsed_ms":2437,"data":"_service"}
+{"schema_version":1,"type":"token","sequence":56,"elapsed_ms":2469,"data":".py"}
+{"schema_version":1,"type":"token","sequence":57,"elapsed_ms":2484,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":58,"elapsed_ms":2516,"data":"start"}
+{"schema_version":1,"type":"token","sequence":59,"elapsed_ms":2547,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":60,"elapsed_ms":2562,"data":"1"}
+{"schema_version":1,"type":"token","sequence":61,"elapsed_ms":2594,"data":",\""}
+{"schema_version":1,"type":"token","sequence":62,"elapsed_ms":2609,"data":"end"}
+{"schema_version":1,"type":"token","sequence":63,"elapsed_ms":2641,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":64,"elapsed_ms":2672,"data":"2"}
+{"schema_version":1,"type":"token","sequence":65,"elapsed_ms":2687,"data":"0"}
+{"schema_version":1,"type":"token","sequence":66,"elapsed_ms":2719,"data":"0"}
+{"schema_version":1,"type":"token","sequence":67,"elapsed_ms":2750,"data":"1"}
+{"schema_version":1,"type":"token","sequence":68,"elapsed_ms":2766,"data":"}}"}
+{"schema_version":1,"type":"inference","sequence":69,"elapsed_ms":2766,"data":{"prompt_tokens":2320,"cached_tokens":1541,"generated_tokens":25,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":70,"elapsed_ms":2766,"data":"{\"tool\":\"read_file\",\"args\":{\"path\":\"test_service.py\",\"start\":1,\"end\":2001}}"}
+{"schema_version":1,"type":"state","sequence":71,"elapsed_ms":2766,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":72,"elapsed_ms":2766,"data":{"tool":"read_file","args":{"path":"test_service.py","start":1,"end":2001}}}
+{"schema_version":1,"type":"state","sequence":73,"elapsed_ms":2766,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":74,"elapsed_ms":2781,"data":{"id":2,"name":"read_file","output":"file_sha256:d8974cd59ed9f00fcf05b4eecf05f336c39490fb6fc782004516a52af6b89c00\n1: import unittest\n2: from service import balances\n3: def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}\n4: def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}\n5: class BehaviorChecks(unittest.TestCase):\n6:     def test_order_and_duplicates(self):\n7:         p = post('p', 7)\n8:         for events in [[p, retract('r', 'p')], [retract('r', 'p'), p],\n9:                        [p, p, retract('r', 'p'), retract('s', 'p')]]:\n10:             self.assertEqual(balances(events), {'cash': 0})\n11:     def test_independent_postings(self):\n12:         self.assertEqual(balances([post('a', 7), post('b', -2), retract('r', 'a')]), {'cash': -2})\n13:         self.assertEqual(balances([retract('r', 'missing')]), {})\n14:         self.assertEqual(balances([]), {})\n","duration_ms":0.0,"status":"ok"}}
+{"schema_version":1,"type":"state","sequence":75,"elapsed_ms":2781,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":76,"elapsed_ms":2781,"data":{"turn":2,"artifact":"context/0002.state.json","hash":8289950878287673961}}
+{"schema_version":1,"type":"state","sequence":77,"elapsed_ms":2781,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":78,"elapsed_ms":2781,"data":{"turn":3,"artifact":"context/0003.json","hash":6743464990126379406,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":79,"elapsed_ms":2781,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":80,"elapsed_ms":2781,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":81,"elapsed_ms":3219,"data":"{\""}
+{"schema_version":1,"type":"token","sequence":82,"elapsed_ms":3250,"data":"th"}
+{"schema_version":1,"type":"token","sequence":83,"elapsed_ms":3266,"data":"ought"}
+{"schema_version":1,"type":"token","sequence":84,"elapsed_ms":3281,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":85,"elapsed_ms":3312,"data":"The"}
+{"schema_version":1,"type":"token","sequence":86,"elapsed_ms":3328,"data":" current"}
+{"schema_version":1,"type":"token","sequence":87,"elapsed_ms":3359,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":88,"elapsed_ms":3391,"data":" has"}
+{"schema_version":1,"type":"token","sequence":89,"elapsed_ms":3406,"data":" a"}
+{"schema_version":1,"type":"token","sequence":90,"elapsed_ms":3437,"data":" bug"}
+{"schema_version":1,"type":"token","sequence":91,"elapsed_ms":3453,"data":":"}
+{"schema_version":1,"type":"token","sequence":92,"elapsed_ms":3484,"data":" it"}
+{"schema_version":1,"type":"token","sequence":93,"elapsed_ms":3516,"data":" processes"}
+{"schema_version":1,"type":"token","sequence":94,"elapsed_ms":3531,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":95,"elapsed_ms":3562,"data":" events"}
+{"schema_version":1,"type":"token","sequence":96,"elapsed_ms":3594,"data":" before"}
+{"schema_version":1,"type":"token","sequence":97,"elapsed_ms":3609,"data":" checking"}
+{"schema_version":1,"type":"token","sequence":98,"elapsed_ms":3641,"data":" if"}
+{"schema_version":1,"type":"token","sequence":99,"elapsed_ms":3672,"data":" the"}
+{"schema_version":1,"type":"token","sequence":100,"elapsed_ms":3687,"data":" target"}
+{"schema_version":1,"type":"token","sequence":101,"elapsed_ms":3719,"data":" post"}
+{"schema_version":1,"type":"token","sequence":102,"elapsed_ms":3734,"data":" has"}
+{"schema_version":1,"type":"token","sequence":103,"elapsed_ms":3766,"data":" been"}
+{"schema_version":1,"type":"token","sequence":104,"elapsed_ms":3797,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":105,"elapsed_ms":3828,"data":"."}
+{"schema_version":1,"type":"token","sequence":106,"elapsed_ms":3844,"data":" This"}
+{"schema_version":1,"type":"token","sequence":107,"elapsed_ms":3875,"data":" means"}
+{"schema_version":1,"type":"token","sequence":108,"elapsed_ms":3906,"data":" a"}
+{"schema_version":1,"type":"token","sequence":109,"elapsed_ms":3922,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":110,"elapsed_ms":3953,"data":" can"}
+{"schema_version":1,"type":"token","sequence":111,"elapsed_ms":3969,"data":" cancel"}
+{"schema_version":1,"type":"token","sequence":112,"elapsed_ms":4000,"data":" a"}
+{"schema_version":1,"type":"token","sequence":113,"elapsed_ms":4031,"data":" post"}
+{"schema_version":1,"type":"token","sequence":114,"elapsed_ms":4047,"data":" that"}
+{"schema_version":1,"type":"token","sequence":115,"elapsed_ms":4078,"data":" comes"}
+{"schema_version":1,"type":"token","sequence":116,"elapsed_ms":4109,"data":" later"}
+{"schema_version":1,"type":"token","sequence":117,"elapsed_ms":4125,"data":","}
+{"schema_version":1,"type":"token","sequence":118,"elapsed_ms":4156,"data":" but"}
+{"schema_version":1,"type":"token","sequence":119,"elapsed_ms":4172,"data":" the"}
+{"schema_version":1,"type":"token","sequence":120,"elapsed_ms":4203,"data":" post"}
+{"schema_version":1,"type":"token","sequence":121,"elapsed_ms":4234,"data":" is"}
+{"schema_version":1,"type":"token","sequence":122,"elapsed_ms":4250,"data":" never"}
+{"schema_version":1,"type":"token","sequence":123,"elapsed_ms":4281,"data":" added"}
+{"schema_version":1,"type":"token","sequence":124,"elapsed_ms":4297,"data":" to"}
+{"schema_version":1,"type":"token","sequence":125,"elapsed_ms":4328,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":126,"elapsed_ms":4359,"data":" because"}
+{"schema_version":1,"type":"token","sequence":127,"elapsed_ms":4375,"data":" it"}
+{"schema_version":1,"type":"token","sequence":128,"elapsed_ms":4406,"data":"'s"}
+{"schema_version":1,"type":"token","sequence":129,"elapsed_ms":4422,"data":" skipped"}
+{"schema_version":1,"type":"token","sequence":130,"elapsed_ms":4453,"data":" as"}
+{"schema_version":1,"type":"token","sequence":131,"elapsed_ms":4484,"data":" a"}
+{"schema_version":1,"type":"token","sequence":132,"elapsed_ms":4500,"data":" duplicate"}
+{"schema_version":1,"type":"token","sequence":133,"elapsed_ms":4531,"data":"."}
+{"schema_version":1,"type":"token","sequence":134,"elapsed_ms":4562,"data":" The"}
+{"schema_version":1,"type":"token","sequence":135,"elapsed_ms":4578,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":136,"elapsed_ms":4609,"data":" is"}
+{"schema_version":1,"type":"token","sequence":137,"elapsed_ms":4625,"data":" to"}
+{"schema_version":1,"type":"token","sequence":138,"elapsed_ms":4656,"data":" process"}
+{"schema_version":1,"type":"token","sequence":139,"elapsed_ms":4687,"data":" all"}
+{"schema_version":1,"type":"token","sequence":140,"elapsed_ms":4703,"data":" posts"}
+{"schema_version":1,"type":"token","sequence":141,"elapsed_ms":4734,"data":" first"}
+{"schema_version":1,"type":"token","sequence":142,"elapsed_ms":4766,"data":","}
+{"schema_version":1,"type":"token","sequence":143,"elapsed_ms":4781,"data":" then"}
+{"schema_version":1,"type":"token","sequence":144,"elapsed_ms":4812,"data":" process"}
+{"schema_version":1,"type":"token","sequence":145,"elapsed_ms":4828,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":146,"elapsed_ms":4859,"data":"s"}
+{"schema_version":1,"type":"token","sequence":147,"elapsed_ms":4891,"data":"."}
+{"schema_version":1,"type":"token","sequence":148,"elapsed_ms":4906,"data":" Also"}
+{"schema_version":1,"type":"token","sequence":149,"elapsed_ms":4937,"data":","}
+{"schema_version":1,"type":"token","sequence":150,"elapsed_ms":4953,"data":" the"}
+{"schema_version":1,"type":"token","sequence":151,"elapsed_ms":4984,"data":" code"}
+{"schema_version":1,"type":"token","sequence":152,"elapsed_ms":5016,"data":" should"}
+{"schema_version":1,"type":"token","sequence":153,"elapsed_ms":5031,"data":" ensure"}
+{"schema_version":1,"type":"token","sequence":154,"elapsed_ms":5062,"data":" that"}
+{"schema_version":1,"type":"token","sequence":155,"elapsed_ms":5078,"data":" unknown"}
+{"schema_version":1,"type":"token","sequence":156,"elapsed_ms":5109,"data":" references"}
+{"schema_version":1,"type":"token","sequence":157,"elapsed_ms":5141,"data":" ("}
+{"schema_version":1,"type":"token","sequence":158,"elapsed_ms":5156,"data":"ret"}
+{"schema_version":1,"type":"token","sequence":159,"elapsed_ms":5187,"data":"ract"}
+{"schema_version":1,"type":"token","sequence":160,"elapsed_ms":5219,"data":"s"}
+{"schema_version":1,"type":"token","sequence":161,"elapsed_ms":5234,"data":" targeting"}
+{"schema_version":1,"type":"token","sequence":162,"elapsed_ms":5266,"data":" non"}
+{"schema_version":1,"type":"token","sequence":163,"elapsed_ms":5281,"data":"-existent"}
+{"schema_version":1,"type":"token","sequence":164,"elapsed_ms":5312,"data":" posts"}
+{"schema_version":1,"type":"token","sequence":165,"elapsed_ms":5344,"data":")"}
+{"schema_version":1,"type":"token","sequence":166,"elapsed_ms":5359,"data":" don"}
+{"schema_version":1,"type":"token","sequence":167,"elapsed_ms":5391,"data":"'t"}
+{"schema_version":1,"type":"token","sequence":168,"elapsed_ms":5406,"data":" create"}
+{"schema_version":1,"type":"token","sequence":169,"elapsed_ms":5437,"data":" accounts"}
+{"schema_version":1,"type":"token","sequence":170,"elapsed_ms":5469,"data":"."}
+{"schema_version":1,"type":"token","sequence":171,"elapsed_ms":5484,"data":" Let"}
+{"schema_version":1,"type":"token","sequence":172,"elapsed_ms":5516,"data":" me"}
+{"schema_version":1,"type":"token","sequence":173,"elapsed_ms":5531,"data":" run"}
+{"schema_version":1,"type":"token","sequence":174,"elapsed_ms":5562,"data":" the"}
+{"schema_version":1,"type":"token","sequence":175,"elapsed_ms":5594,"data":" tests"}
+{"schema_version":1,"type":"token","sequence":176,"elapsed_ms":5609,"data":" first"}
+{"schema_version":1,"type":"token","sequence":177,"elapsed_ms":5641,"data":" to"}
+{"schema_version":1,"type":"token","sequence":178,"elapsed_ms":5672,"data":" confirm"}
+{"schema_version":1,"type":"token","sequence":179,"elapsed_ms":5687,"data":" the"}
+{"schema_version":1,"type":"token","sequence":180,"elapsed_ms":5719,"data":" current"}
+{"schema_version":1,"type":"token","sequence":181,"elapsed_ms":5734,"data":" behavior"}
+{"schema_version":1,"type":"token","sequence":182,"elapsed_ms":5766,"data":","}
+{"schema_version":1,"type":"token","sequence":183,"elapsed_ms":5797,"data":" then"}
+{"schema_version":1,"type":"token","sequence":184,"elapsed_ms":5828,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":185,"elapsed_ms":5844,"data":" the"}
+{"schema_version":1,"type":"token","sequence":186,"elapsed_ms":5875,"data":" code"}
+{"schema_version":1,"type":"token","sequence":187,"elapsed_ms":5906,"data":".\\"}
+{"schema_version":1,"type":"token","sequence":188,"elapsed_ms":5922,"data":"n"}
+{"schema_version":1,"type":"token","sequence":189,"elapsed_ms":6000,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":190,"elapsed_ms":6016,"data":"tool"}
+{"schema_version":1,"type":"token","sequence":191,"elapsed_ms":6031,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":192,"elapsed_ms":6062,"data":"run"}
+{"schema_version":1,"type":"token","sequence":193,"elapsed_ms":6078,"data":"_command"}
+{"schema_version":1,"type":"token","sequence":194,"elapsed_ms":6109,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":195,"elapsed_ms":6141,"data":"args"}
+{"schema_version":1,"type":"token","sequence":196,"elapsed_ms":6156,"data":"\":{\""}
+{"schema_version":1,"type":"token","sequence":197,"elapsed_ms":6187,"data":"argv"}
+{"schema_version":1,"type":"token","sequence":198,"elapsed_ms":6203,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":199,"elapsed_ms":6234,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":200,"elapsed_ms":6250,"data":"python"}
+{"schema_version":1,"type":"token","sequence":201,"elapsed_ms":6281,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":202,"elapsed_ms":6312,"data":"-"}
+{"schema_version":1,"type":"token","sequence":203,"elapsed_ms":6328,"data":"B"}
+{"schema_version":1,"type":"token","sequence":204,"elapsed_ms":6359,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":205,"elapsed_ms":6375,"data":"-"}
+{"schema_version":1,"type":"token","sequence":206,"elapsed_ms":6406,"data":"X"}
+{"schema_version":1,"type":"token","sequence":207,"elapsed_ms":6437,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":208,"elapsed_ms":6453,"data":"py"}
+{"schema_version":1,"type":"token","sequence":209,"elapsed_ms":6484,"data":"cache"}
+{"schema_version":1,"type":"token","sequence":210,"elapsed_ms":6516,"data":"_prefix"}
+{"schema_version":1,"type":"token","sequence":211,"elapsed_ms":6531,"data":"=."}
+{"schema_version":1,"type":"token","sequence":212,"elapsed_ms":6562,"data":"forge"}
+{"schema_version":1,"type":"token","sequence":213,"elapsed_ms":6578,"data":"/p"}
+{"schema_version":1,"type":"token","sequence":214,"elapsed_ms":6609,"data":"yc"}
+{"schema_version":1,"type":"token","sequence":215,"elapsed_ms":6641,"data":"ache"}
+{"schema_version":1,"type":"token","sequence":216,"elapsed_ms":6656,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":217,"elapsed_ms":6687,"data":"-"}
+{"schema_version":1,"type":"token","sequence":218,"elapsed_ms":6719,"data":"c"}
+{"schema_version":1,"type":"token","sequence":219,"elapsed_ms":6734,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":220,"elapsed_ms":6766,"data":"import"}
+{"schema_version":1,"type":"token","sequence":221,"elapsed_ms":6781,"data":" sys"}
+{"schema_version":1,"type":"token","sequence":222,"elapsed_ms":6812,"data":","}
+{"schema_version":1,"type":"token","sequence":223,"elapsed_ms":6844,"data":"un"}
+{"schema_version":1,"type":"token","sequence":224,"elapsed_ms":6859,"data":"ittest"}
+{"schema_version":1,"type":"token","sequence":225,"elapsed_ms":6891,"data":";"}
+{"schema_version":1,"type":"token","sequence":226,"elapsed_ms":6922,"data":"p"}
+{"schema_version":1,"type":"token","sequence":227,"elapsed_ms":6937,"data":"="}
+{"schema_version":1,"type":"token","sequence":228,"elapsed_ms":6969,"data":"un"}
+{"schema_version":1,"type":"token","sequence":229,"elapsed_ms":6984,"data":"ittest"}
+{"schema_version":1,"type":"token","sequence":230,"elapsed_ms":7016,"data":".main"}
+{"schema_version":1,"type":"token","sequence":231,"elapsed_ms":7047,"data":"(module"}
+{"schema_version":1,"type":"token","sequence":232,"elapsed_ms":7062,"data":"=None"}
+{"schema_version":1,"type":"token","sequence":233,"elapsed_ms":7094,"data":","}
+{"schema_version":1,"type":"token","sequence":234,"elapsed_ms":7109,"data":"argv"}
+{"schema_version":1,"type":"token","sequence":235,"elapsed_ms":7141,"data":"=['"}
+{"schema_version":1,"type":"token","sequence":236,"elapsed_ms":7172,"data":"un"}
+{"schema_version":1,"type":"token","sequence":237,"elapsed_ms":7187,"data":"ittest"}
+{"schema_version":1,"type":"token","sequence":238,"elapsed_ms":7219,"data":"','"}
+{"schema_version":1,"type":"token","sequence":239,"elapsed_ms":7250,"data":"-"}
+{"schema_version":1,"type":"token","sequence":240,"elapsed_ms":7266,"data":"v"}
+{"schema_version":1,"type":"token","sequence":241,"elapsed_ms":7297,"data":"',"}
+{"schema_version":1,"type":"token","sequence":242,"elapsed_ms":7328,"data":"*"}
+{"schema_version":1,"type":"token","sequence":243,"elapsed_ms":7344,"data":"sys"}
+{"schema_version":1,"type":"token","sequence":244,"elapsed_ms":7375,"data":".argv"}
+{"schema_version":1,"type":"token","sequence":245,"elapsed_ms":7391,"data":"["}
+{"schema_version":1,"type":"token","sequence":246,"elapsed_ms":7422,"data":"1"}
+{"schema_version":1,"type":"token","sequence":247,"elapsed_ms":7453,"data":":"}
+{"schema_version":1,"type":"token","sequence":248,"elapsed_ms":7469,"data":"]],"}
+{"schema_version":1,"type":"token","sequence":249,"elapsed_ms":7500,"data":"exit"}
+{"schema_version":1,"type":"token","sequence":250,"elapsed_ms":7531,"data":"=False"}
+{"schema_version":1,"type":"token","sequence":251,"elapsed_ms":7547,"data":");"}
+{"schema_version":1,"type":"token","sequence":252,"elapsed_ms":7578,"data":"sys"}
+{"schema_version":1,"type":"token","sequence":253,"elapsed_ms":7594,"data":".exit"}
+{"schema_version":1,"type":"token","sequence":254,"elapsed_ms":7625,"data":"(not"}
+{"schema_version":1,"type":"token","sequence":255,"elapsed_ms":7656,"data":" p"}
+{"schema_version":1,"type":"token","sequence":256,"elapsed_ms":7672,"data":".result"}
+{"schema_version":1,"type":"token","sequence":257,"elapsed_ms":7703,"data":".w"}
+{"schema_version":1,"type":"token","sequence":258,"elapsed_ms":7734,"data":"as"}
+{"schema_version":1,"type":"token","sequence":259,"elapsed_ms":7750,"data":"Successful"}
+{"schema_version":1,"type":"token","sequence":260,"elapsed_ms":7781,"data":"()"}
+{"schema_version":1,"type":"token","sequence":261,"elapsed_ms":7812,"data":" or"}
+{"schema_version":1,"type":"token","sequence":262,"elapsed_ms":7828,"data":" p"}
+{"schema_version":1,"type":"token","sequence":263,"elapsed_ms":7859,"data":".result"}
+{"schema_version":1,"type":"token","sequence":264,"elapsed_ms":7891,"data":".t"}
+{"schema_version":1,"type":"token","sequence":265,"elapsed_ms":7906,"data":"ests"}
+{"schema_version":1,"type":"token","sequence":266,"elapsed_ms":7937,"data":"Run"}
+{"schema_version":1,"type":"token","sequence":267,"elapsed_ms":7953,"data":"=="}
+{"schema_version":1,"type":"token","sequence":268,"elapsed_ms":7984,"data":"0"}
+{"schema_version":1,"type":"token","sequence":269,"elapsed_ms":8016,"data":")\","}
+{"schema_version":1,"type":"token","sequence":270,"elapsed_ms":8031,"data":"\"."}
+{"schema_version":1,"type":"token","sequence":271,"elapsed_ms":8062,"data":"/"}
+{"schema_version":1,"type":"token","sequence":272,"elapsed_ms":8094,"data":"test"}
+{"schema_version":1,"type":"token","sequence":273,"elapsed_ms":8109,"data":"_service"}
+{"schema_version":1,"type":"token","sequence":274,"elapsed_ms":8141,"data":".py"}
+{"schema_version":1,"type":"token","sequence":275,"elapsed_ms":8156,"data":"\"]"}
+{"schema_version":1,"type":"token","sequence":276,"elapsed_ms":8187,"data":"}}"}
+{"schema_version":1,"type":"inference","sequence":277,"elapsed_ms":8187,"data":{"prompt_tokens":2682,"cached_tokens":1853,"generated_tokens":196,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":278,"elapsed_ms":8187,"data":"{\"thought\":\"The current implementation has a bug: it processes retract events before checking if the target post has been seen. This means a retract can cancel a post that comes later, but the post is never added to totals because it's skipped as a duplicate. The fix is to process all posts first, then process retracts. Also, the code should ensure that unknown references (retracts targeting non-existent posts) don't create accounts. Let me run the tests first to confirm the current behavior, then fix the code.\\n\",\"tool\":\"run_command\",\"args\":{\"argv\":[\"python\",\"-B\",\"-X\",\"pycache_prefix=.forge/pycache\",\"-c\",\"import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)\",\"./test_service.py\"]}}"}
+{"schema_version":1,"type":"state","sequence":279,"elapsed_ms":8187,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":280,"elapsed_ms":8187,"data":{"thought":"The current implementation has a bug: it processes retract events before checking if the target post has been seen. This means a retract can cancel a post that comes later, but the post is never added to totals because it's skipped as a duplicate. The fix is to process all posts first, then process retracts. Also, the code should ensure that unknown references (retracts targeting non-existent posts) don't create accounts. Let me run the tests first to confirm the current behavior, then fix the code.\n","tool":"run_command","args":{"argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"]}}}
+{"schema_version":1,"type":"state","sequence":281,"elapsed_ms":8187,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":282,"elapsed_ms":8391,"data":{"id":3,"name":"run_command","output":"exit_code=1 timeout=false cancelled=false truncated=false\nstdout:\n\nstderr:\ntest_independent_postings (test_service.BehaviorChecks.test_independent_postings) ... ok\r\ntest_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates) ... FAIL\r\n\r\n======================================================================\r\nFAIL: test_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates)\r\n----------------------------------------------------------------------\r\nTraceback (most recent call last):\r\n  File \"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-fs5ioy4x\\test_service.py\", line 10, in test_order_and_duplicates\r\n    self.assertEqual(balances(events), {'cash': 0})\r\nAssertionError: {'cash': 7} != {'cash': 0}\r\n- {'cash': 7}\r\n?          ^\r\n\r\n+ {'cash': 0}\r\n?          ^\r\n\r\n\r\n----------------------------------------------------------------------\r\nRan 2 tests in 0.000s\r\n\r\nFAILED (failures=1)\r\n","duration_ms":157.0,"status":"conflict","exit_code":1,"timeout":false,"cancelled":false,"truncated":false,"stdout_bytes":0,"stderr_bytes":852}}
+{"schema_version":1,"type":"state","sequence":283,"elapsed_ms":8391,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":284,"elapsed_ms":8391,"data":{"turn":3,"artifact":"context/0003.state.json","hash":8870067900406141037}}
+{"schema_version":1,"type":"state","sequence":285,"elapsed_ms":8391,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":286,"elapsed_ms":8406,"data":{"turn":4,"artifact":"context/0004.json","hash":9185117340781549153,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":287,"elapsed_ms":8406,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":288,"elapsed_ms":8406,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":289,"elapsed_ms":9125,"data":"{\""}
+{"schema_version":1,"type":"token","sequence":290,"elapsed_ms":9156,"data":"th"}
+{"schema_version":1,"type":"token","sequence":291,"elapsed_ms":9172,"data":"ought"}
+{"schema_version":1,"type":"token","sequence":292,"elapsed_ms":9203,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":293,"elapsed_ms":9234,"data":"The"}
+{"schema_version":1,"type":"token","sequence":294,"elapsed_ms":9250,"data":" test"}
+{"schema_version":1,"type":"token","sequence":295,"elapsed_ms":9281,"data":" failure"}
+{"schema_version":1,"type":"token","sequence":296,"elapsed_ms":9297,"data":" shows"}
+{"schema_version":1,"type":"token","sequence":297,"elapsed_ms":9328,"data":" that"}
+{"schema_version":1,"type":"token","sequence":298,"elapsed_ms":9359,"data":" balances"}
+{"schema_version":1,"type":"token","sequence":299,"elapsed_ms":9375,"data":"(event"}
+{"schema_version":1,"type":"token","sequence":300,"elapsed_ms":9406,"data":"s"}
+{"schema_version":1,"type":"token","sequence":301,"elapsed_ms":9437,"data":")"}
+{"schema_version":1,"type":"token","sequence":302,"elapsed_ms":9453,"data":" returns"}
+{"schema_version":1,"type":"token","sequence":303,"elapsed_ms":9484,"data":" {'"}
+{"schema_version":1,"type":"token","sequence":304,"elapsed_ms":9500,"data":"c"}
+{"schema_version":1,"type":"token","sequence":305,"elapsed_ms":9531,"data":"ash"}
+{"schema_version":1,"type":"token","sequence":306,"elapsed_ms":9562,"data":"':"}
+{"schema_version":1,"type":"token","sequence":307,"elapsed_ms":9578,"data":" "}
+{"schema_version":1,"type":"token","sequence":308,"elapsed_ms":9609,"data":"7"}
+{"schema_version":1,"type":"token","sequence":309,"elapsed_ms":9625,"data":"}"}
+{"schema_version":1,"type":"token","sequence":310,"elapsed_ms":9656,"data":" when"}
+{"schema_version":1,"type":"token","sequence":311,"elapsed_ms":9687,"data":" it"}
+{"schema_version":1,"type":"token","sequence":312,"elapsed_ms":9703,"data":" should"}
+{"schema_version":1,"type":"token","sequence":313,"elapsed_ms":9734,"data":" return"}
+{"schema_version":1,"type":"token","sequence":314,"elapsed_ms":9766,"data":" {'"}
+{"schema_version":1,"type":"token","sequence":315,"elapsed_ms":9797,"data":"c"}
+{"schema_version":1,"type":"token","sequence":316,"elapsed_ms":9812,"data":"ash"}
+{"schema_version":1,"type":"token","sequence":317,"elapsed_ms":9844,"data":"':"}
+{"schema_version":1,"type":"token","sequence":318,"elapsed_ms":9859,"data":" "}
+{"schema_version":1,"type":"token","sequence":319,"elapsed_ms":9891,"data":"0"}
+{"schema_version":1,"type":"token","sequence":320,"elapsed_ms":9922,"data":"}."}
+{"schema_version":1,"type":"token","sequence":321,"elapsed_ms":9937,"data":" This"}
+{"schema_version":1,"type":"token","sequence":322,"elapsed_ms":9969,"data":" suggests"}
+{"schema_version":1,"type":"token","sequence":323,"elapsed_ms":10000,"data":" that"}
+{"schema_version":1,"type":"token","sequence":324,"elapsed_ms":10016,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":325,"elapsed_ms":10047,"data":" events"}
+{"schema_version":1,"type":"token","sequence":326,"elapsed_ms":10078,"data":" are"}
+{"schema_version":1,"type":"token","sequence":327,"elapsed_ms":10094,"data":" not"}
+{"schema_version":1,"type":"token","sequence":328,"elapsed_ms":10125,"data":" properly"}
+{"schema_version":1,"type":"token","sequence":329,"elapsed_ms":10141,"data":" cancel"}
+{"schema_version":1,"type":"token","sequence":330,"elapsed_ms":10172,"data":"ing"}
+{"schema_version":1,"type":"token","sequence":331,"elapsed_ms":10203,"data":" out"}
+{"schema_version":1,"type":"token","sequence":332,"elapsed_ms":10219,"data":" the"}
+{"schema_version":1,"type":"token","sequence":333,"elapsed_ms":10250,"data":" credit"}
+{"schema_version":1,"type":"token","sequence":334,"elapsed_ms":10266,"data":" events"}
+{"schema_version":1,"type":"token","sequence":335,"elapsed_ms":10297,"data":"."}
+{"schema_version":1,"type":"token","sequence":336,"elapsed_ms":10328,"data":" Let"}
+{"schema_version":1,"type":"token","sequence":337,"elapsed_ms":10344,"data":" me"}
+{"schema_version":1,"type":"token","sequence":338,"elapsed_ms":10375,"data":" examine"}
+{"schema_version":1,"type":"token","sequence":339,"elapsed_ms":10406,"data":" the"}
+{"schema_version":1,"type":"token","sequence":340,"elapsed_ms":10422,"data":" source"}
+{"schema_version":1,"type":"token","sequence":341,"elapsed_ms":10453,"data":" code"}
+{"schema_version":1,"type":"token","sequence":342,"elapsed_ms":10469,"data":" to"}
+{"schema_version":1,"type":"token","sequence":343,"elapsed_ms":10500,"data":" understand"}
+{"schema_version":1,"type":"token","sequence":344,"elapsed_ms":10531,"data":" the"}
+{"schema_version":1,"type":"token","sequence":345,"elapsed_ms":10547,"data":" current"}
+{"schema_version":1,"type":"token","sequence":346,"elapsed_ms":10578,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":347,"elapsed_ms":10594,"data":" and"}
+{"schema_version":1,"type":"token","sequence":348,"elapsed_ms":10625,"data":" identify"}
+{"schema_version":1,"type":"token","sequence":349,"elapsed_ms":10656,"data":" the"}
+{"schema_version":1,"type":"token","sequence":350,"elapsed_ms":10672,"data":" bug"}
+{"schema_version":1,"type":"token","sequence":351,"elapsed_ms":10703,"data":".\\"}
+{"schema_version":1,"type":"token","sequence":352,"elapsed_ms":10734,"data":"n"}
+{"schema_version":1,"type":"token","sequence":353,"elapsed_ms":10750,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":354,"elapsed_ms":10781,"data":"tool"}
+{"schema_version":1,"type":"token","sequence":355,"elapsed_ms":10797,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":356,"elapsed_ms":10828,"data":"read"}
+{"schema_version":1,"type":"token","sequence":357,"elapsed_ms":10859,"data":"_file"}
+{"schema_version":1,"type":"token","sequence":358,"elapsed_ms":10875,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":359,"elapsed_ms":10906,"data":"args"}
+{"schema_version":1,"type":"token","sequence":360,"elapsed_ms":10937,"data":"\":{\""}
+{"schema_version":1,"type":"token","sequence":361,"elapsed_ms":10953,"data":"path"}
+{"schema_version":1,"type":"token","sequence":362,"elapsed_ms":10984,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":363,"elapsed_ms":11016,"data":"service"}
+{"schema_version":1,"type":"token","sequence":364,"elapsed_ms":11031,"data":".py"}
+{"schema_version":1,"type":"token","sequence":365,"elapsed_ms":11062,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":366,"elapsed_ms":11078,"data":"start"}
+{"schema_version":1,"type":"token","sequence":367,"elapsed_ms":11109,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":368,"elapsed_ms":11141,"data":"1"}
+{"schema_version":1,"type":"token","sequence":369,"elapsed_ms":11156,"data":",\""}
+{"schema_version":1,"type":"token","sequence":370,"elapsed_ms":11187,"data":"end"}
+{"schema_version":1,"type":"token","sequence":371,"elapsed_ms":11203,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":372,"elapsed_ms":11234,"data":"2"}
+{"schema_version":1,"type":"token","sequence":373,"elapsed_ms":11266,"data":"0"}
+{"schema_version":1,"type":"token","sequence":374,"elapsed_ms":11281,"data":"0"}
+{"schema_version":1,"type":"token","sequence":375,"elapsed_ms":11312,"data":"1"}
+{"schema_version":1,"type":"token","sequence":376,"elapsed_ms":11344,"data":"}}"}
+{"schema_version":1,"type":"inference","sequence":377,"elapsed_ms":11344,"data":{"prompt_tokens":2985,"cached_tokens":1568,"generated_tokens":88,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":378,"elapsed_ms":11344,"data":"{\"thought\":\"The test failure shows that balances(events) returns {'cash': 7} when it should return {'cash': 0}. This suggests that retract events are not properly canceling out the credit events. Let me examine the source code to understand the current implementation and identify the bug.\\n\",\"tool\":\"read_file\",\"args\":{\"path\":\"service.py\",\"start\":1,\"end\":2001}}"}
+{"schema_version":1,"type":"state","sequence":379,"elapsed_ms":11344,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":380,"elapsed_ms":11344,"data":{"thought":"The test failure shows that balances(events) returns {'cash': 7} when it should return {'cash': 0}. This suggests that retract events are not properly canceling out the credit events. Let me examine the source code to understand the current implementation and identify the bug.\n","tool":"read_file","args":{"path":"service.py","start":1,"end":2001}}}
+{"schema_version":1,"type":"state","sequence":381,"elapsed_ms":11344,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":382,"elapsed_ms":11344,"data":{"id":4,"name":"read_file","output":"file_sha256:0bfc7661de632302ebd1d82277db844a4ed9e25ba30c45cba4275725ec24470e\n1: def balances(events):\n2:     seen, cancelled = set(), set()\n3:     postings, totals = {}, {}\n4:     for event in events:\n5:         if event['id'] in seen:\n6:             continue\n7:         seen.add(event['id'])\n8:         if event['kind'] == 'post':\n9:             account, amount = event['account'], event['amount']\n10:             postings[event['id']] = (account, amount)\n11:             totals.setdefault(account, 0)\n12:             if True:\n13:                 totals[account] += amount\n14:         else:\n15:             target = event['target']\n16:             if target in cancelled:\n17:                 continue\n18:             cancelled.add(target)\n19:             if target in postings:\n20:                 account, amount = postings[target]\n21:                 totals[account] -= amount\n22:     return totals\n","duration_ms":0.0,"status":"ok"}}
+{"schema_version":1,"type":"state","sequence":383,"elapsed_ms":11344,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":384,"elapsed_ms":11344,"data":{"turn":4,"artifact":"context/0004.state.json","hash":6462740499126766060}}
+{"schema_version":1,"type":"state","sequence":385,"elapsed_ms":11344,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":386,"elapsed_ms":11359,"data":{"turn":5,"artifact":"context/0005.json","hash":10930870595786779261,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":387,"elapsed_ms":11359,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":388,"elapsed_ms":11359,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":389,"elapsed_ms":12047,"data":"{\""}
+{"schema_version":1,"type":"token","sequence":390,"elapsed_ms":12078,"data":"th"}
+{"schema_version":1,"type":"token","sequence":391,"elapsed_ms":12109,"data":"ought"}
+{"schema_version":1,"type":"token","sequence":392,"elapsed_ms":12125,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":393,"elapsed_ms":12156,"data":"Looking"}
+{"schema_version":1,"type":"token","sequence":394,"elapsed_ms":12172,"data":" at"}
+{"schema_version":1,"type":"token","sequence":395,"elapsed_ms":12203,"data":" the"}
+{"schema_version":1,"type":"token","sequence":396,"elapsed_ms":12234,"data":" code"}
+{"schema_version":1,"type":"token","sequence":397,"elapsed_ms":12250,"data":","}
+{"schema_version":1,"type":"token","sequence":398,"elapsed_ms":12281,"data":" I"}
+{"schema_version":1,"type":"token","sequence":399,"elapsed_ms":12297,"data":" can"}
+{"schema_version":1,"type":"token","sequence":400,"elapsed_ms":12328,"data":" see"}
+{"schema_version":1,"type":"token","sequence":401,"elapsed_ms":12359,"data":" the"}
+{"schema_version":1,"type":"token","sequence":402,"elapsed_ms":12375,"data":" issue"}
+{"schema_version":1,"type":"token","sequence":403,"elapsed_ms":12406,"data":"."}
+{"schema_version":1,"type":"token","sequence":404,"elapsed_ms":12437,"data":" The"}
+{"schema_version":1,"type":"token","sequence":405,"elapsed_ms":12453,"data":" current"}
+{"schema_version":1,"type":"token","sequence":406,"elapsed_ms":12484,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":407,"elapsed_ms":12500,"data":" processes"}
+{"schema_version":1,"type":"token","sequence":408,"elapsed_ms":12531,"data":" events"}
+{"schema_version":1,"type":"token","sequence":409,"elapsed_ms":12562,"data":" in"}
+{"schema_version":1,"type":"token","sequence":410,"elapsed_ms":12578,"data":" order"}
+{"schema_version":1,"type":"token","sequence":411,"elapsed_ms":12609,"data":" and"}
+{"schema_version":1,"type":"token","sequence":412,"elapsed_ms":12641,"data":" sk"}
+{"schema_version":1,"type":"token","sequence":413,"elapsed_ms":12656,"data":"ips"}
+{"schema_version":1,"type":"token","sequence":414,"elapsed_ms":12687,"data":" duplicates"}
+{"schema_version":1,"type":"token","sequence":415,"elapsed_ms":12719,"data":" based"}
+{"schema_version":1,"type":"token","sequence":416,"elapsed_ms":12734,"data":" on"}
+{"schema_version":1,"type":"token","sequence":417,"elapsed_ms":12766,"data":" event"}
+{"schema_version":1,"type":"token","sequence":418,"elapsed_ms":12797,"data":"['"}
+{"schema_version":1,"type":"token","sequence":419,"elapsed_ms":12812,"data":"id"}
+{"schema_version":1,"type":"token","sequence":420,"elapsed_ms":12844,"data":"']."}
+{"schema_version":1,"type":"token","sequence":421,"elapsed_ms":12859,"data":" However"}
+{"schema_version":1,"type":"token","sequence":422,"elapsed_ms":12891,"data":","}
+{"schema_version":1,"type":"token","sequence":423,"elapsed_ms":12922,"data":" the"}
+{"schema_version":1,"type":"token","sequence":424,"elapsed_ms":12937,"data":" problem"}
+{"schema_version":1,"type":"token","sequence":425,"elapsed_ms":12969,"data":" is"}
+{"schema_version":1,"type":"token","sequence":426,"elapsed_ms":13000,"data":" that"}
+{"schema_version":1,"type":"token","sequence":427,"elapsed_ms":13016,"data":" when"}
+{"schema_version":1,"type":"token","sequence":428,"elapsed_ms":13047,"data":" a"}
+{"schema_version":1,"type":"token","sequence":429,"elapsed_ms":13062,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":430,"elapsed_ms":13094,"data":" event"}
+{"schema_version":1,"type":"token","sequence":431,"elapsed_ms":13125,"data":" comes"}
+{"schema_version":1,"type":"token","sequence":432,"elapsed_ms":13141,"data":" before"}
+{"schema_version":1,"type":"token","sequence":433,"elapsed_ms":13172,"data":" its"}
+{"schema_version":1,"type":"token","sequence":434,"elapsed_ms":13203,"data":" target"}
+{"schema_version":1,"type":"token","sequence":435,"elapsed_ms":13219,"data":" post"}
+{"schema_version":1,"type":"token","sequence":436,"elapsed_ms":13250,"data":" event"}
+{"schema_version":1,"type":"token","sequence":437,"elapsed_ms":13266,"data":","}
+{"schema_version":1,"type":"token","sequence":438,"elapsed_ms":13297,"data":" the"}
+{"schema_version":1,"type":"token","sequence":439,"elapsed_ms":13328,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":440,"elapsed_ms":13344,"data":" is"}
+{"schema_version":1,"type":"token","sequence":441,"elapsed_ms":13375,"data":" processed"}
+{"schema_version":1,"type":"token","sequence":442,"elapsed_ms":13406,"data":" and"}
+{"schema_version":1,"type":"token","sequence":443,"elapsed_ms":13422,"data":" adds"}
+{"schema_version":1,"type":"token","sequence":444,"elapsed_ms":13453,"data":" the"}
+{"schema_version":1,"type":"token","sequence":445,"elapsed_ms":13484,"data":" target"}
+{"schema_version":1,"type":"token","sequence":446,"elapsed_ms":13500,"data":" to"}
+{"schema_version":1,"type":"token","sequence":447,"elapsed_ms":13531,"data":" the"}
+{"schema_version":1,"type":"token","sequence":448,"elapsed_ms":13547,"data":" cancelled"}
+{"schema_version":1,"type":"token","sequence":449,"elapsed_ms":13578,"data":" set"}
+{"schema_version":1,"type":"token","sequence":450,"elapsed_ms":13609,"data":"."}
+{"schema_version":1,"type":"token","sequence":451,"elapsed_ms":13625,"data":" Then"}
+{"schema_version":1,"type":"token","sequence":452,"elapsed_ms":13656,"data":" when"}
+{"schema_version":1,"type":"token","sequence":453,"elapsed_ms":13687,"data":" the"}
+{"schema_version":1,"type":"token","sequence":454,"elapsed_ms":13703,"data":" post"}
+{"schema_version":1,"type":"token","sequence":455,"elapsed_ms":13734,"data":" event"}
+{"schema_version":1,"type":"token","sequence":456,"elapsed_ms":13766,"data":" is"}
+{"schema_version":1,"type":"token","sequence":457,"elapsed_ms":13781,"data":" processed"}
+{"schema_version":1,"type":"token","sequence":458,"elapsed_ms":13812,"data":" later"}
+{"schema_version":1,"type":"token","sequence":459,"elapsed_ms":13844,"data":","}
+{"schema_version":1,"type":"token","sequence":460,"elapsed_ms":13859,"data":" it"}
+{"schema_version":1,"type":"token","sequence":461,"elapsed_ms":13891,"data":"'s"}
+{"schema_version":1,"type":"token","sequence":462,"elapsed_ms":13922,"data":" not"}
+{"schema_version":1,"type":"token","sequence":463,"elapsed_ms":13937,"data":" in"}
+{"schema_version":1,"type":"token","sequence":464,"elapsed_ms":13969,"data":" the"}
+{"schema_version":1,"type":"token","sequence":465,"elapsed_ms":14000,"data":" post"}
+{"schema_version":1,"type":"token","sequence":466,"elapsed_ms":14016,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":467,"elapsed_ms":14047,"data":" dict"}
+{"schema_version":1,"type":"token","sequence":468,"elapsed_ms":14062,"data":" yet"}
+{"schema_version":1,"type":"token","sequence":469,"elapsed_ms":14094,"data":","}
+{"schema_version":1,"type":"token","sequence":470,"elapsed_ms":14125,"data":" so"}
+{"schema_version":1,"type":"token","sequence":471,"elapsed_ms":14141,"data":" the"}
+{"schema_version":1,"type":"token","sequence":472,"elapsed_ms":14172,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":473,"elapsed_ms":14203,"data":" has"}
+{"schema_version":1,"type":"token","sequence":474,"elapsed_ms":14219,"data":" no"}
+{"schema_version":1,"type":"token","sequence":475,"elapsed_ms":14250,"data":" effect"}
+{"schema_version":1,"type":"token","sequence":476,"elapsed_ms":14266,"data":"."}
+{"schema_version":1,"type":"token","sequence":477,"elapsed_ms":14297,"data":" But"}
+{"schema_version":1,"type":"token","sequence":478,"elapsed_ms":14328,"data":" the"}
+{"schema_version":1,"type":"token","sequence":479,"elapsed_ms":14344,"data":" post"}
+{"schema_version":1,"type":"token","sequence":480,"elapsed_ms":14375,"data":" event"}
+{"schema_version":1,"type":"token","sequence":481,"elapsed_ms":14406,"data":" itself"}
+{"schema_version":1,"type":"token","sequence":482,"elapsed_ms":14422,"data":" is"}
+{"schema_version":1,"type":"token","sequence":483,"elapsed_ms":14453,"data":" still"}
+{"schema_version":1,"type":"token","sequence":484,"elapsed_ms":14469,"data":" added"}
+{"schema_version":1,"type":"token","sequence":485,"elapsed_ms":14500,"data":" to"}
+{"schema_version":1,"type":"token","sequence":486,"elapsed_ms":14531,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":487,"elapsed_ms":14547,"data":"."}
+{"schema_version":1,"type":"token","sequence":488,"elapsed_ms":14578,"data":" This"}
+{"schema_version":1,"type":"token","sequence":489,"elapsed_ms":14609,"data":" causes"}
+{"schema_version":1,"type":"token","sequence":490,"elapsed_ms":14625,"data":" the"}
+{"schema_version":1,"type":"token","sequence":491,"elapsed_ms":14656,"data":" incorrect"}
+{"schema_version":1,"type":"token","sequence":492,"elapsed_ms":14687,"data":" behavior"}
+{"schema_version":1,"type":"token","sequence":493,"elapsed_ms":14703,"data":" where"}
+{"schema_version":1,"type":"token","sequence":494,"elapsed_ms":14734,"data":" credits"}
+{"schema_version":1,"type":"token","sequence":495,"elapsed_ms":14766,"data":" aren"}
+{"schema_version":1,"type":"token","sequence":496,"elapsed_ms":14781,"data":"'t"}
+{"schema_version":1,"type":"token","sequence":497,"elapsed_ms":14812,"data":" properly"}
+{"schema_version":1,"type":"token","sequence":498,"elapsed_ms":14844,"data":" canceled"}
+{"schema_version":1,"type":"token","sequence":499,"elapsed_ms":14859,"data":" by"}
+{"schema_version":1,"type":"token","sequence":500,"elapsed_ms":14891,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":501,"elapsed_ms":14906,"data":"s"}
+{"schema_version":1,"type":"token","sequence":502,"elapsed_ms":14937,"data":" that"}
+{"schema_version":1,"type":"token","sequence":503,"elapsed_ms":14969,"data":" come"}
+{"schema_version":1,"type":"token","sequence":504,"elapsed_ms":14984,"data":" before"}
+{"schema_version":1,"type":"token","sequence":505,"elapsed_ms":15016,"data":" them"}
+{"schema_version":1,"type":"token","sequence":506,"elapsed_ms":15047,"data":".\\"}
+{"schema_version":1,"type":"token","sequence":507,"elapsed_ms":15062,"data":"n"}
+{"schema_version":1,"type":"token","sequence":508,"elapsed_ms":15094,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":509,"elapsed_ms":15125,"data":"The"}
+{"schema_version":1,"type":"token","sequence":510,"elapsed_ms":15141,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":511,"elapsed_ms":15172,"data":" is"}
+{"schema_version":1,"type":"token","sequence":512,"elapsed_ms":15187,"data":" to"}
+{"schema_version":1,"type":"token","sequence":513,"elapsed_ms":15219,"data":" process"}
+{"schema_version":1,"type":"token","sequence":514,"elapsed_ms":15250,"data":" all"}
+{"schema_version":1,"type":"token","sequence":515,"elapsed_ms":15266,"data":" post"}
+{"schema_version":1,"type":"token","sequence":516,"elapsed_ms":15297,"data":" events"}
+{"schema_version":1,"type":"token","sequence":517,"elapsed_ms":15328,"data":" first"}
+{"schema_version":1,"type":"token","sequence":518,"elapsed_ms":15344,"data":" to"}
+{"schema_version":1,"type":"token","sequence":519,"elapsed_ms":15375,"data":" build"}
+{"schema_version":1,"type":"token","sequence":520,"elapsed_ms":15406,"data":" the"}
+{"schema_version":1,"type":"token","sequence":521,"elapsed_ms":15422,"data":" post"}
+{"schema_version":1,"type":"token","sequence":522,"elapsed_ms":15453,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":523,"elapsed_ms":15469,"data":" dict"}
+{"schema_version":1,"type":"token","sequence":524,"elapsed_ms":15500,"data":","}
+{"schema_version":1,"type":"token","sequence":525,"elapsed_ms":15531,"data":" then"}
+{"schema_version":1,"type":"token","sequence":526,"elapsed_ms":15562,"data":" process"}
+{"schema_version":1,"type":"token","sequence":527,"elapsed_ms":15578,"data":" all"}
+{"schema_version":1,"type":"token","sequence":528,"elapsed_ms":15609,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":529,"elapsed_ms":15625,"data":" events"}
+{"schema_version":1,"type":"token","sequence":530,"elapsed_ms":15656,"data":" to"}
+{"schema_version":1,"type":"token","sequence":531,"elapsed_ms":15687,"data":" cancel"}
+{"schema_version":1,"type":"token","sequence":532,"elapsed_ms":15703,"data":" them"}
+{"schema_version":1,"type":"token","sequence":533,"elapsed_ms":15734,"data":"."}
+{"schema_version":1,"type":"token","sequence":534,"elapsed_ms":15766,"data":" This"}
+{"schema_version":1,"type":"token","sequence":535,"elapsed_ms":15797,"data":" ensures"}
+{"schema_version":1,"type":"token","sequence":536,"elapsed_ms":15812,"data":" that"}
+{"schema_version":1,"type":"token","sequence":537,"elapsed_ms":15844,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":538,"elapsed_ms":15875,"data":"s"}
+{"schema_version":1,"type":"token","sequence":539,"elapsed_ms":15891,"data":" work"}
+{"schema_version":1,"type":"token","sequence":540,"elapsed_ms":15922,"data":" regardless"}
+{"schema_version":1,"type":"token","sequence":541,"elapsed_ms":15953,"data":" of"}
+{"schema_version":1,"type":"token","sequence":542,"elapsed_ms":15969,"data":" their"}
+{"schema_version":1,"type":"token","sequence":543,"elapsed_ms":16000,"data":" order"}
+{"schema_version":1,"type":"token","sequence":544,"elapsed_ms":16031,"data":" relative"}
+{"schema_version":1,"type":"token","sequence":545,"elapsed_ms":16047,"data":" to"}
+{"schema_version":1,"type":"token","sequence":546,"elapsed_ms":16078,"data":" the"}
+{"schema_version":1,"type":"token","sequence":547,"elapsed_ms":16109,"data":" posts"}
+{"schema_version":1,"type":"token","sequence":548,"elapsed_ms":16125,"data":" they"}
+{"schema_version":1,"type":"token","sequence":549,"elapsed_ms":16156,"data":"'re"}
+{"schema_version":1,"type":"token","sequence":550,"elapsed_ms":16187,"data":" cancel"}
+{"schema_version":1,"type":"token","sequence":551,"elapsed_ms":16203,"data":"ing"}
+{"schema_version":1,"type":"token","sequence":552,"elapsed_ms":16234,"data":".\\"}
+{"schema_version":1,"type":"token","sequence":553,"elapsed_ms":16266,"data":"n"}
+{"schema_version":1,"type":"token","sequence":554,"elapsed_ms":16297,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":555,"elapsed_ms":16312,"data":"Let"}
+{"schema_version":1,"type":"token","sequence":556,"elapsed_ms":16344,"data":" me"}
+{"schema_version":1,"type":"token","sequence":557,"elapsed_ms":16375,"data":" also"}
+{"schema_version":1,"type":"token","sequence":558,"elapsed_ms":16391,"data":" check"}
+{"schema_version":1,"type":"token","sequence":559,"elapsed_ms":16422,"data":" the"}
+{"schema_version":1,"type":"token","sequence":560,"elapsed_ms":16453,"data":" test"}
+{"schema_version":1,"type":"token","sequence":561,"elapsed_ms":16469,"data":" file"}
+{"schema_version":1,"type":"token","sequence":562,"elapsed_ms":16500,"data":" to"}
+{"schema_version":1,"type":"token","sequence":563,"elapsed_ms":16531,"data":" understand"}
+{"schema_version":1,"type":"token","sequence":564,"elapsed_ms":16547,"data":" the"}
+{"schema_version":1,"type":"token","sequence":565,"elapsed_ms":16578,"data":" expected"}
+{"schema_version":1,"type":"token","sequence":566,"elapsed_ms":16609,"data":" behavior"}
+{"schema_version":1,"type":"token","sequence":567,"elapsed_ms":16641,"data":" better"}
+{"schema_version":1,"type":"token","sequence":568,"elapsed_ms":16656,"data":".\\"}
+{"schema_version":1,"type":"token","sequence":569,"elapsed_ms":16687,"data":"n"}
+{"schema_version":1,"type":"token","sequence":570,"elapsed_ms":16719,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":571,"elapsed_ms":16734,"data":"tool"}
+{"schema_version":1,"type":"token","sequence":572,"elapsed_ms":16766,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":573,"elapsed_ms":16797,"data":"read"}
+{"schema_version":1,"type":"token","sequence":574,"elapsed_ms":16812,"data":"_file"}
+{"schema_version":1,"type":"token","sequence":575,"elapsed_ms":16844,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":576,"elapsed_ms":16875,"data":"args"}
+{"schema_version":1,"type":"token","sequence":577,"elapsed_ms":16891,"data":"\":{\""}
+{"schema_version":1,"type":"token","sequence":578,"elapsed_ms":16922,"data":"path"}
+{"schema_version":1,"type":"token","sequence":579,"elapsed_ms":16953,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":580,"elapsed_ms":16969,"data":"test"}
+{"schema_version":1,"type":"token","sequence":581,"elapsed_ms":17000,"data":"_service"}
+{"schema_version":1,"type":"token","sequence":582,"elapsed_ms":17031,"data":".py"}
+{"schema_version":1,"type":"token","sequence":583,"elapsed_ms":17047,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":584,"elapsed_ms":17078,"data":"start"}
+{"schema_version":1,"type":"token","sequence":585,"elapsed_ms":17109,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":586,"elapsed_ms":17141,"data":"1"}
+{"schema_version":1,"type":"token","sequence":587,"elapsed_ms":17156,"data":",\""}
+{"schema_version":1,"type":"token","sequence":588,"elapsed_ms":17187,"data":"end"}
+{"schema_version":1,"type":"token","sequence":589,"elapsed_ms":17219,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":590,"elapsed_ms":17234,"data":"2"}
+{"schema_version":1,"type":"token","sequence":591,"elapsed_ms":17266,"data":"0"}
+{"schema_version":1,"type":"token","sequence":592,"elapsed_ms":17297,"data":"0"}
+{"schema_version":1,"type":"token","sequence":593,"elapsed_ms":17312,"data":"1"}
+{"schema_version":1,"type":"token","sequence":594,"elapsed_ms":17344,"data":"}}"}
+{"schema_version":1,"type":"inference","sequence":595,"elapsed_ms":17344,"data":{"prompt_tokens":3361,"cached_tokens":2062,"generated_tokens":206,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":596,"elapsed_ms":17344,"data":"{\"thought\":\"Looking at the code, I can see the issue. The current implementation processes events in order and skips duplicates based on event['id']. However, the problem is that when a retract event comes before its target post event, the retract is processed and adds the target to the cancelled set. Then when the post event is processed later, it's not in the postings dict yet, so the retract has no effect. But the post event itself is still added to totals. This causes the incorrect behavior where credits aren't properly canceled by retracts that come before them.\\n\\nThe fix is to process all post events first to build the postings dict, then process all retract events to cancel them. This ensures that retracts work regardless of their order relative to the posts they're canceling.\\n\\nLet me also check the test file to understand the expected behavior better.\\n\",\"tool\":\"read_file\",\"args\":{\"path\":\"test_service.py\",\"start\":1,\"end\":2001}}"}
+{"schema_version":1,"type":"state","sequence":597,"elapsed_ms":17344,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":598,"elapsed_ms":17344,"data":{"thought":"Looking at the code, I can see the issue. The current implementation processes events in order and skips duplicates based on event['id']. However, the problem is that when a retract event comes before its target post event, the retract is processed and adds the target to the cancelled set. Then when the post event is processed later, it's not in the postings dict yet, so the retract has no effect. But the post event itself is still added to totals. This causes the incorrect behavior where credits aren't properly canceled by retracts that come before them.\n\nThe fix is to process all post events first to build the postings dict, then process all retract events to cancel them. This ensures that retracts work regardless of their order relative to the posts they're canceling.\n\nLet me also check the test file to understand the expected behavior better.\n","tool":"read_file","args":{"path":"test_service.py","start":1,"end":2001}}}
+{"schema_version":1,"type":"state","sequence":599,"elapsed_ms":17344,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":600,"elapsed_ms":17344,"data":{"id":5,"name":"read_file","output":"file_sha256:d8974cd59ed9f00fcf05b4eecf05f336c39490fb6fc782004516a52af6b89c00\n1: import unittest\n2: from service import balances\n3: def post(i, amount): return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}\n4: def retract(i, target): return {'id': i, 'kind': 'retract', 'target': target}\n5: class BehaviorChecks(unittest.TestCase):\n6:     def test_order_and_duplicates(self):\n7:         p = post('p', 7)\n8:         for events in [[p, retract('r', 'p')], [retract('r', 'p'), p],\n9:                        [p, p, retract('r', 'p'), retract('s', 'p')]]:\n10:             self.assertEqual(balances(events), {'cash': 0})\n11:     def test_independent_postings(self):\n12:         self.assertEqual(balances([post('a', 7), post('b', -2), retract('r', 'a')]), {'cash': -2})\n13:         self.assertEqual(balances([retract('r', 'missing')]), {})\n14:         self.assertEqual(balances([]), {})\n","duration_ms":0.0,"status":"ok"}}
+{"schema_version":1,"type":"state","sequence":601,"elapsed_ms":17344,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":602,"elapsed_ms":17359,"data":{"turn":5,"artifact":"context/0005.state.json","hash":9648739351013659712}}
+{"schema_version":1,"type":"state","sequence":603,"elapsed_ms":17359,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":604,"elapsed_ms":17359,"data":{"turn":6,"artifact":"context/0006.json","hash":16641436877201476346,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":605,"elapsed_ms":17359,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":606,"elapsed_ms":17359,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":607,"elapsed_ms":18141,"data":"{\""}
+{"schema_version":1,"type":"token","sequence":608,"elapsed_ms":18156,"data":"th"}
+{"schema_version":1,"type":"token","sequence":609,"elapsed_ms":18187,"data":"ought"}
+{"schema_version":1,"type":"token","sequence":610,"elapsed_ms":18203,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":611,"elapsed_ms":18234,"data":"Now"}
+{"schema_version":1,"type":"token","sequence":612,"elapsed_ms":18266,"data":" I"}
+{"schema_version":1,"type":"token","sequence":613,"elapsed_ms":18281,"data":" understand"}
+{"schema_version":1,"type":"token","sequence":614,"elapsed_ms":18312,"data":" the"}
+{"schema_version":1,"type":"token","sequence":615,"elapsed_ms":18344,"data":" issue"}
+{"schema_version":1,"type":"token","sequence":616,"elapsed_ms":18359,"data":" clearly"}
+{"schema_version":1,"type":"token","sequence":617,"elapsed_ms":18391,"data":"."}
+{"schema_version":1,"type":"token","sequence":618,"elapsed_ms":18422,"data":" The"}
+{"schema_version":1,"type":"token","sequence":619,"elapsed_ms":18437,"data":" current"}
+{"schema_version":1,"type":"token","sequence":620,"elapsed_ms":18469,"data":" implementation"}
+{"schema_version":1,"type":"token","sequence":621,"elapsed_ms":18500,"data":" processes"}
+{"schema_version":1,"type":"token","sequence":622,"elapsed_ms":18516,"data":" events"}
+{"schema_version":1,"type":"token","sequence":623,"elapsed_ms":18547,"data":" in"}
+{"schema_version":1,"type":"token","sequence":624,"elapsed_ms":18578,"data":" order"}
+{"schema_version":1,"type":"token","sequence":625,"elapsed_ms":18594,"data":" and"}
+{"schema_version":1,"type":"token","sequence":626,"elapsed_ms":18625,"data":" has"}
+{"schema_version":1,"type":"token","sequence":627,"elapsed_ms":18641,"data":" a"}
+{"schema_version":1,"type":"token","sequence":628,"elapsed_ms":18672,"data":" bug"}
+{"schema_version":1,"type":"token","sequence":629,"elapsed_ms":18703,"data":" where"}
+{"schema_version":1,"type":"token","sequence":630,"elapsed_ms":18719,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":631,"elapsed_ms":18750,"data":" events"}
+{"schema_version":1,"type":"token","sequence":632,"elapsed_ms":18781,"data":" can"}
+{"schema_version":1,"type":"token","sequence":633,"elapsed_ms":18812,"data":" cancel"}
+{"schema_version":1,"type":"token","sequence":634,"elapsed_ms":18828,"data":" posts"}
+{"schema_version":1,"type":"token","sequence":635,"elapsed_ms":18859,"data":" that"}
+{"schema_version":1,"type":"token","sequence":636,"elapsed_ms":18891,"data":" come"}
+{"schema_version":1,"type":"token","sequence":637,"elapsed_ms":18906,"data":" after"}
+{"schema_version":1,"type":"token","sequence":638,"elapsed_ms":18937,"data":" them"}
+{"schema_version":1,"type":"token","sequence":639,"elapsed_ms":18953,"data":","}
+{"schema_version":1,"type":"token","sequence":640,"elapsed_ms":18984,"data":" but"}
+{"schema_version":1,"type":"token","sequence":641,"elapsed_ms":19016,"data":" posts"}
+{"schema_version":1,"type":"token","sequence":642,"elapsed_ms":19031,"data":" that"}
+{"schema_version":1,"type":"token","sequence":643,"elapsed_ms":19062,"data":" come"}
+{"schema_version":1,"type":"token","sequence":644,"elapsed_ms":19094,"data":" after"}
+{"schema_version":1,"type":"token","sequence":645,"elapsed_ms":19109,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":646,"elapsed_ms":19141,"data":"s"}
+{"schema_version":1,"type":"token","sequence":647,"elapsed_ms":19172,"data":" are"}
+{"schema_version":1,"type":"token","sequence":648,"elapsed_ms":19187,"data":" still"}
+{"schema_version":1,"type":"token","sequence":649,"elapsed_ms":19219,"data":" added"}
+{"schema_version":1,"type":"token","sequence":650,"elapsed_ms":19234,"data":" to"}
+{"schema_version":1,"type":"token","sequence":651,"elapsed_ms":19266,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":652,"elapsed_ms":19297,"data":"."}
+{"schema_version":1,"type":"token","sequence":653,"elapsed_ms":19312,"data":" The"}
+{"schema_version":1,"type":"token","sequence":654,"elapsed_ms":19344,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":655,"elapsed_ms":19375,"data":" is"}
+{"schema_version":1,"type":"token","sequence":656,"elapsed_ms":19391,"data":" to"}
+{"schema_version":1,"type":"token","sequence":657,"elapsed_ms":19422,"data":" separate"}
+{"schema_version":1,"type":"token","sequence":658,"elapsed_ms":19453,"data":" the"}
+{"schema_version":1,"type":"token","sequence":659,"elapsed_ms":19469,"data":" processing"}
+{"schema_version":1,"type":"token","sequence":660,"elapsed_ms":19500,"data":" into"}
+{"schema_version":1,"type":"token","sequence":661,"elapsed_ms":19531,"data":" two"}
+{"schema_version":1,"type":"token","sequence":662,"elapsed_ms":19547,"data":" phases"}
+{"schema_version":1,"type":"token","sequence":663,"elapsed_ms":19578,"data":":"}
+{"schema_version":1,"type":"token","sequence":664,"elapsed_ms":19594,"data":" first"}
+{"schema_version":1,"type":"token","sequence":665,"elapsed_ms":19625,"data":" process"}
+{"schema_version":1,"type":"token","sequence":666,"elapsed_ms":19656,"data":" all"}
+{"schema_version":1,"type":"token","sequence":667,"elapsed_ms":19672,"data":" post"}
+{"schema_version":1,"type":"token","sequence":668,"elapsed_ms":19703,"data":" events"}
+{"schema_version":1,"type":"token","sequence":669,"elapsed_ms":19734,"data":" to"}
+{"schema_version":1,"type":"token","sequence":670,"elapsed_ms":19750,"data":" build"}
+{"schema_version":1,"type":"token","sequence":671,"elapsed_ms":19781,"data":" the"}
+{"schema_version":1,"type":"token","sequence":672,"elapsed_ms":19812,"data":" post"}
+{"schema_version":1,"type":"token","sequence":673,"elapsed_ms":19844,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":674,"elapsed_ms":19859,"data":" dict"}
+{"schema_version":1,"type":"token","sequence":675,"elapsed_ms":19891,"data":","}
+{"schema_version":1,"type":"token","sequence":676,"elapsed_ms":19922,"data":" then"}
+{"schema_version":1,"type":"token","sequence":677,"elapsed_ms":19953,"data":" process"}
+{"schema_version":1,"type":"token","sequence":678,"elapsed_ms":19969,"data":" all"}
+{"schema_version":1,"type":"token","sequence":679,"elapsed_ms":20000,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":680,"elapsed_ms":20016,"data":" events"}
+{"schema_version":1,"type":"token","sequence":681,"elapsed_ms":20047,"data":" to"}
+{"schema_version":1,"type":"token","sequence":682,"elapsed_ms":20078,"data":" cancel"}
+{"schema_version":1,"type":"token","sequence":683,"elapsed_ms":20094,"data":" them"}
+{"schema_version":1,"type":"token","sequence":684,"elapsed_ms":20125,"data":"."}
+{"schema_version":1,"type":"token","sequence":685,"elapsed_ms":20156,"data":" This"}
+{"schema_version":1,"type":"token","sequence":686,"elapsed_ms":20172,"data":" ensures"}
+{"schema_version":1,"type":"token","sequence":687,"elapsed_ms":20203,"data":" that"}
+{"schema_version":1,"type":"token","sequence":688,"elapsed_ms":20219,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":689,"elapsed_ms":20250,"data":"s"}
+{"schema_version":1,"type":"token","sequence":690,"elapsed_ms":20281,"data":" work"}
+{"schema_version":1,"type":"token","sequence":691,"elapsed_ms":20297,"data":" regardless"}
+{"schema_version":1,"type":"token","sequence":692,"elapsed_ms":20328,"data":" of"}
+{"schema_version":1,"type":"token","sequence":693,"elapsed_ms":20359,"data":" their"}
+{"schema_version":1,"type":"token","sequence":694,"elapsed_ms":20375,"data":" order"}
+{"schema_version":1,"type":"token","sequence":695,"elapsed_ms":20406,"data":".\\"}
+{"schema_version":1,"type":"token","sequence":696,"elapsed_ms":20437,"data":"n"}
+{"schema_version":1,"type":"token","sequence":697,"elapsed_ms":20453,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":698,"elapsed_ms":20484,"data":"Let"}
+{"schema_version":1,"type":"token","sequence":699,"elapsed_ms":20500,"data":" me"}
+{"schema_version":1,"type":"token","sequence":700,"elapsed_ms":20531,"data":" implement"}
+{"schema_version":1,"type":"token","sequence":701,"elapsed_ms":20562,"data":" the"}
+{"schema_version":1,"type":"token","sequence":702,"elapsed_ms":20578,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":703,"elapsed_ms":20609,"data":" by"}
+{"schema_version":1,"type":"token","sequence":704,"elapsed_ms":20641,"data":" rew"}
+{"schema_version":1,"type":"token","sequence":705,"elapsed_ms":20656,"data":"riting"}
+{"schema_version":1,"type":"token","sequence":706,"elapsed_ms":20687,"data":" the"}
+{"schema_version":1,"type":"token","sequence":707,"elapsed_ms":20719,"data":" balances"}
+{"schema_version":1,"type":"token","sequence":708,"elapsed_ms":20734,"data":" function"}
+{"schema_version":1,"type":"token","sequence":709,"elapsed_ms":20766,"data":" to"}
+{"schema_version":1,"type":"token","sequence":710,"elapsed_ms":20797,"data":" process"}
+{"schema_version":1,"type":"token","sequence":711,"elapsed_ms":20812,"data":" posts"}
+{"schema_version":1,"type":"token","sequence":712,"elapsed_ms":20844,"data":" first"}
+{"schema_version":1,"type":"token","sequence":713,"elapsed_ms":20859,"data":","}
+{"schema_version":1,"type":"token","sequence":714,"elapsed_ms":20891,"data":" then"}
+{"schema_version":1,"type":"token","sequence":715,"elapsed_ms":20922,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":716,"elapsed_ms":20953,"data":"s"}
+{"schema_version":1,"type":"token","sequence":717,"elapsed_ms":20969,"data":".\\"}
+{"schema_version":1,"type":"token","sequence":718,"elapsed_ms":21000,"data":"n"}
+{"schema_version":1,"type":"token","sequence":719,"elapsed_ms":21016,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":720,"elapsed_ms":21047,"data":"tool"}
+{"schema_version":1,"type":"token","sequence":721,"elapsed_ms":21078,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":722,"elapsed_ms":21109,"data":"apply"}
+{"schema_version":1,"type":"token","sequence":723,"elapsed_ms":21125,"data":"_p"}
+{"schema_version":1,"type":"token","sequence":724,"elapsed_ms":21156,"data":"atch"}
+{"schema_version":1,"type":"token","sequence":725,"elapsed_ms":21187,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":726,"elapsed_ms":21219,"data":"args"}
+{"schema_version":1,"type":"token","sequence":727,"elapsed_ms":21266,"data":"\":{\""}
+{"schema_version":1,"type":"token","sequence":728,"elapsed_ms":21297,"data":"path"}
+{"schema_version":1,"type":"token","sequence":729,"elapsed_ms":21328,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":730,"elapsed_ms":21391,"data":"service"}
+{"schema_version":1,"type":"token","sequence":731,"elapsed_ms":21453,"data":".py"}
+{"schema_version":1,"type":"token","sequence":732,"elapsed_ms":21516,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":733,"elapsed_ms":21547,"data":"old"}
+{"schema_version":1,"type":"token","sequence":734,"elapsed_ms":21578,"data":"_text"}
+{"schema_version":1,"type":"token","sequence":735,"elapsed_ms":21609,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":736,"elapsed_ms":21687,"data":"def"}
+{"schema_version":1,"type":"token","sequence":737,"elapsed_ms":21750,"data":" balances"}
+{"schema_version":1,"type":"token","sequence":738,"elapsed_ms":21828,"data":"(event"}
+{"schema_version":1,"type":"token","sequence":739,"elapsed_ms":21891,"data":"s"}
+{"schema_version":1,"type":"token","sequence":740,"elapsed_ms":21953,"data":"):"}
+{"schema_version":1,"type":"token","sequence":741,"elapsed_ms":22016,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":742,"elapsed_ms":22047,"data":"n"}
+{"schema_version":1,"type":"token","sequence":743,"elapsed_ms":22109,"data":"   "}
+{"schema_version":1,"type":"token","sequence":744,"elapsed_ms":22172,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":745,"elapsed_ms":22219,"data":","}
+{"schema_version":1,"type":"token","sequence":746,"elapsed_ms":22297,"data":" cancelled"}
+{"schema_version":1,"type":"token","sequence":747,"elapsed_ms":22359,"data":" ="}
+{"schema_version":1,"type":"token","sequence":748,"elapsed_ms":22422,"data":" set"}
+{"schema_version":1,"type":"token","sequence":749,"elapsed_ms":22484,"data":"(),"}
+{"schema_version":1,"type":"token","sequence":750,"elapsed_ms":22547,"data":" set"}
+{"schema_version":1,"type":"token","sequence":751,"elapsed_ms":22609,"data":"()"}
+{"schema_version":1,"type":"token","sequence":752,"elapsed_ms":22672,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":753,"elapsed_ms":22703,"data":"n"}
+{"schema_version":1,"type":"token","sequence":754,"elapsed_ms":22766,"data":"   "}
+{"schema_version":1,"type":"token","sequence":755,"elapsed_ms":22828,"data":" post"}
+{"schema_version":1,"type":"token","sequence":756,"elapsed_ms":22891,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":757,"elapsed_ms":22953,"data":","}
+{"schema_version":1,"type":"token","sequence":758,"elapsed_ms":23016,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":759,"elapsed_ms":23078,"data":" ="}
+{"schema_version":1,"type":"token","sequence":760,"elapsed_ms":23125,"data":" {},"}
+{"schema_version":1,"type":"token","sequence":761,"elapsed_ms":23187,"data":" {"}
+{"schema_version":1,"type":"token","sequence":762,"elapsed_ms":23234,"data":"}\\"}
+{"schema_version":1,"type":"token","sequence":763,"elapsed_ms":23281,"data":"n"}
+{"schema_version":1,"type":"token","sequence":764,"elapsed_ms":23344,"data":"   "}
+{"schema_version":1,"type":"token","sequence":765,"elapsed_ms":23391,"data":" for"}
+{"schema_version":1,"type":"token","sequence":766,"elapsed_ms":23453,"data":" event"}
+{"schema_version":1,"type":"token","sequence":767,"elapsed_ms":23500,"data":" in"}
+{"schema_version":1,"type":"token","sequence":768,"elapsed_ms":23578,"data":" events"}
+{"schema_version":1,"type":"token","sequence":769,"elapsed_ms":23641,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":770,"elapsed_ms":23672,"data":"n"}
+{"schema_version":1,"type":"token","sequence":771,"elapsed_ms":23734,"data":"       "}
+{"schema_version":1,"type":"token","sequence":772,"elapsed_ms":23797,"data":" if"}
+{"schema_version":1,"type":"token","sequence":773,"elapsed_ms":23859,"data":" event"}
+{"schema_version":1,"type":"token","sequence":774,"elapsed_ms":23922,"data":"['"}
+{"schema_version":1,"type":"token","sequence":775,"elapsed_ms":23969,"data":"id"}
+{"schema_version":1,"type":"token","sequence":776,"elapsed_ms":24031,"data":"']"}
+{"schema_version":1,"type":"token","sequence":777,"elapsed_ms":24094,"data":" in"}
+{"schema_version":1,"type":"token","sequence":778,"elapsed_ms":24156,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":779,"elapsed_ms":24219,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":780,"elapsed_ms":24250,"data":"n"}
+{"schema_version":1,"type":"token","sequence":781,"elapsed_ms":24312,"data":"           "}
+{"schema_version":1,"type":"token","sequence":782,"elapsed_ms":24375,"data":" continue"}
+{"schema_version":1,"type":"token","sequence":783,"elapsed_ms":24437,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":784,"elapsed_ms":24500,"data":"       "}
+{"schema_version":1,"type":"token","sequence":785,"elapsed_ms":24547,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":786,"elapsed_ms":24609,"data":".add"}
+{"schema_version":1,"type":"token","sequence":787,"elapsed_ms":24672,"data":"(event"}
+{"schema_version":1,"type":"token","sequence":788,"elapsed_ms":24734,"data":"['"}
+{"schema_version":1,"type":"token","sequence":789,"elapsed_ms":24797,"data":"id"}
+{"schema_version":1,"type":"token","sequence":790,"elapsed_ms":24859,"data":"']"}
+{"schema_version":1,"type":"token","sequence":791,"elapsed_ms":24906,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":792,"elapsed_ms":24953,"data":"n"}
+{"schema_version":1,"type":"token","sequence":793,"elapsed_ms":25016,"data":"       "}
+{"schema_version":1,"type":"token","sequence":794,"elapsed_ms":25078,"data":" if"}
+{"schema_version":1,"type":"token","sequence":795,"elapsed_ms":25141,"data":" event"}
+{"schema_version":1,"type":"token","sequence":796,"elapsed_ms":25203,"data":"['"}
+{"schema_version":1,"type":"token","sequence":797,"elapsed_ms":25266,"data":"kind"}
+{"schema_version":1,"type":"token","sequence":798,"elapsed_ms":25312,"data":"']"}
+{"schema_version":1,"type":"token","sequence":799,"elapsed_ms":25375,"data":" =="}
+{"schema_version":1,"type":"token","sequence":800,"elapsed_ms":25437,"data":" '"}
+{"schema_version":1,"type":"token","sequence":801,"elapsed_ms":25531,"data":"post"}
+{"schema_version":1,"type":"token","sequence":802,"elapsed_ms":25594,"data":"':"}
+{"schema_version":1,"type":"token","sequence":803,"elapsed_ms":25656,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":804,"elapsed_ms":25703,"data":"n"}
+{"schema_version":1,"type":"token","sequence":805,"elapsed_ms":25766,"data":"           "}
+{"schema_version":1,"type":"token","sequence":806,"elapsed_ms":25828,"data":" account"}
+{"schema_version":1,"type":"token","sequence":807,"elapsed_ms":25891,"data":","}
+{"schema_version":1,"type":"token","sequence":808,"elapsed_ms":25953,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":809,"elapsed_ms":26016,"data":" ="}
+{"schema_version":1,"type":"token","sequence":810,"elapsed_ms":26078,"data":" event"}
+{"schema_version":1,"type":"token","sequence":811,"elapsed_ms":26141,"data":"['"}
+{"schema_version":1,"type":"token","sequence":812,"elapsed_ms":26203,"data":"account"}
+{"schema_version":1,"type":"token","sequence":813,"elapsed_ms":26266,"data":"'],"}
+{"schema_version":1,"type":"token","sequence":814,"elapsed_ms":26328,"data":" event"}
+{"schema_version":1,"type":"token","sequence":815,"elapsed_ms":26391,"data":"['"}
+{"schema_version":1,"type":"token","sequence":816,"elapsed_ms":26453,"data":"amount"}
+{"schema_version":1,"type":"token","sequence":817,"elapsed_ms":26516,"data":"']"}
+{"schema_version":1,"type":"token","sequence":818,"elapsed_ms":26578,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":819,"elapsed_ms":26625,"data":"n"}
+{"schema_version":1,"type":"token","sequence":820,"elapsed_ms":26703,"data":"           "}
+{"schema_version":1,"type":"token","sequence":821,"elapsed_ms":26750,"data":" post"}
+{"schema_version":1,"type":"token","sequence":822,"elapsed_ms":26812,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":823,"elapsed_ms":26875,"data":"["}
+{"schema_version":1,"type":"token","sequence":824,"elapsed_ms":26937,"data":"event"}
+{"schema_version":1,"type":"token","sequence":825,"elapsed_ms":27000,"data":"['"}
+{"schema_version":1,"type":"token","sequence":826,"elapsed_ms":27062,"data":"id"}
+{"schema_version":1,"type":"token","sequence":827,"elapsed_ms":27125,"data":"']"}
+{"schema_version":1,"type":"token","sequence":828,"elapsed_ms":27187,"data":"]"}
+{"schema_version":1,"type":"token","sequence":829,"elapsed_ms":27234,"data":" ="}
+{"schema_version":1,"type":"token","sequence":830,"elapsed_ms":27297,"data":" ("}
+{"schema_version":1,"type":"token","sequence":831,"elapsed_ms":27359,"data":"account"}
+{"schema_version":1,"type":"token","sequence":832,"elapsed_ms":27422,"data":","}
+{"schema_version":1,"type":"token","sequence":833,"elapsed_ms":27500,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":834,"elapsed_ms":27547,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":835,"elapsed_ms":27594,"data":"n"}
+{"schema_version":1,"type":"token","sequence":836,"elapsed_ms":27656,"data":"           "}
+{"schema_version":1,"type":"token","sequence":837,"elapsed_ms":27719,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":838,"elapsed_ms":27781,"data":".set"}
+{"schema_version":1,"type":"token","sequence":839,"elapsed_ms":27859,"data":"default"}
+{"schema_version":1,"type":"token","sequence":840,"elapsed_ms":27922,"data":"(account"}
+{"schema_version":1,"type":"token","sequence":841,"elapsed_ms":27984,"data":","}
+{"schema_version":1,"type":"token","sequence":842,"elapsed_ms":28047,"data":" "}
+{"schema_version":1,"type":"token","sequence":843,"elapsed_ms":28094,"data":"0"}
+{"schema_version":1,"type":"token","sequence":844,"elapsed_ms":28172,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":845,"elapsed_ms":28219,"data":"n"}
+{"schema_version":1,"type":"token","sequence":846,"elapsed_ms":28281,"data":"           "}
+{"schema_version":1,"type":"token","sequence":847,"elapsed_ms":28344,"data":" if"}
+{"schema_version":1,"type":"token","sequence":848,"elapsed_ms":28391,"data":" True"}
+{"schema_version":1,"type":"token","sequence":849,"elapsed_ms":28453,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":850,"elapsed_ms":28484,"data":"n"}
+{"schema_version":1,"type":"token","sequence":851,"elapsed_ms":28562,"data":"               "}
+{"schema_version":1,"type":"token","sequence":852,"elapsed_ms":28625,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":853,"elapsed_ms":28687,"data":"["}
+{"schema_version":1,"type":"token","sequence":854,"elapsed_ms":28750,"data":"account"}
+{"schema_version":1,"type":"token","sequence":855,"elapsed_ms":28797,"data":"]"}
+{"schema_version":1,"type":"token","sequence":856,"elapsed_ms":28859,"data":" +="}
+{"schema_version":1,"type":"token","sequence":857,"elapsed_ms":28922,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":858,"elapsed_ms":28984,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":859,"elapsed_ms":29062,"data":"       "}
+{"schema_version":1,"type":"token","sequence":860,"elapsed_ms":29125,"data":" else"}
+{"schema_version":1,"type":"token","sequence":861,"elapsed_ms":29187,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":862,"elapsed_ms":29234,"data":"n"}
+{"schema_version":1,"type":"token","sequence":863,"elapsed_ms":29312,"data":"           "}
+{"schema_version":1,"type":"token","sequence":864,"elapsed_ms":29359,"data":" target"}
+{"schema_version":1,"type":"token","sequence":865,"elapsed_ms":29422,"data":" ="}
+{"schema_version":1,"type":"token","sequence":866,"elapsed_ms":29469,"data":" event"}
+{"schema_version":1,"type":"token","sequence":867,"elapsed_ms":29531,"data":"['"}
+{"schema_version":1,"type":"token","sequence":868,"elapsed_ms":29578,"data":"target"}
+{"schema_version":1,"type":"token","sequence":869,"elapsed_ms":29641,"data":"']"}
+{"schema_version":1,"type":"token","sequence":870,"elapsed_ms":29703,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":871,"elapsed_ms":29734,"data":"n"}
+{"schema_version":1,"type":"token","sequence":872,"elapsed_ms":29781,"data":"           "}
+{"schema_version":1,"type":"token","sequence":873,"elapsed_ms":29828,"data":" if"}
+{"schema_version":1,"type":"token","sequence":874,"elapsed_ms":29891,"data":" target"}
+{"schema_version":1,"type":"token","sequence":875,"elapsed_ms":29937,"data":" in"}
+{"schema_version":1,"type":"token","sequence":876,"elapsed_ms":29984,"data":" cancelled"}
+{"schema_version":1,"type":"token","sequence":877,"elapsed_ms":30047,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":878,"elapsed_ms":30078,"data":"n"}
+{"schema_version":1,"type":"token","sequence":879,"elapsed_ms":30141,"data":"               "}
+{"schema_version":1,"type":"token","sequence":880,"elapsed_ms":30187,"data":" continue"}
+{"schema_version":1,"type":"token","sequence":881,"elapsed_ms":30250,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":882,"elapsed_ms":30297,"data":"           "}
+{"schema_version":1,"type":"token","sequence":883,"elapsed_ms":30344,"data":" cancelled"}
+{"schema_version":1,"type":"token","sequence":884,"elapsed_ms":30406,"data":".add"}
+{"schema_version":1,"type":"token","sequence":885,"elapsed_ms":30453,"data":"(target"}
+{"schema_version":1,"type":"token","sequence":886,"elapsed_ms":30500,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":887,"elapsed_ms":30531,"data":"n"}
+{"schema_version":1,"type":"token","sequence":888,"elapsed_ms":30594,"data":"           "}
+{"schema_version":1,"type":"token","sequence":889,"elapsed_ms":30641,"data":" if"}
+{"schema_version":1,"type":"token","sequence":890,"elapsed_ms":30703,"data":" target"}
+{"schema_version":1,"type":"token","sequence":891,"elapsed_ms":30750,"data":" in"}
+{"schema_version":1,"type":"token","sequence":892,"elapsed_ms":30812,"data":" post"}
+{"schema_version":1,"type":"token","sequence":893,"elapsed_ms":30859,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":894,"elapsed_ms":30906,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":895,"elapsed_ms":30953,"data":"n"}
+{"schema_version":1,"type":"token","sequence":896,"elapsed_ms":31000,"data":"               "}
+{"schema_version":1,"type":"token","sequence":897,"elapsed_ms":31062,"data":" account"}
+{"schema_version":1,"type":"token","sequence":898,"elapsed_ms":31109,"data":","}
+{"schema_version":1,"type":"token","sequence":899,"elapsed_ms":31156,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":900,"elapsed_ms":31219,"data":" ="}
+{"schema_version":1,"type":"token","sequence":901,"elapsed_ms":31266,"data":" post"}
+{"schema_version":1,"type":"token","sequence":902,"elapsed_ms":31312,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":903,"elapsed_ms":31359,"data":"["}
+{"schema_version":1,"type":"token","sequence":904,"elapsed_ms":31422,"data":"target"}
+{"schema_version":1,"type":"token","sequence":905,"elapsed_ms":31484,"data":"]\\"}
+{"schema_version":1,"type":"token","sequence":906,"elapsed_ms":31516,"data":"n"}
+{"schema_version":1,"type":"token","sequence":907,"elapsed_ms":31562,"data":"               "}
+{"schema_version":1,"type":"token","sequence":908,"elapsed_ms":31625,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":909,"elapsed_ms":31672,"data":"["}
+{"schema_version":1,"type":"token","sequence":910,"elapsed_ms":31719,"data":"account"}
+{"schema_version":1,"type":"token","sequence":911,"elapsed_ms":31781,"data":"]"}
+{"schema_version":1,"type":"token","sequence":912,"elapsed_ms":31828,"data":" -="}
+{"schema_version":1,"type":"token","sequence":913,"elapsed_ms":31875,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":914,"elapsed_ms":31937,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":915,"elapsed_ms":31984,"data":"   "}
+{"schema_version":1,"type":"token","sequence":916,"elapsed_ms":32047,"data":" return"}
+{"schema_version":1,"type":"token","sequence":917,"elapsed_ms":32094,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":918,"elapsed_ms":32156,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":919,"elapsed_ms":32187,"data":"new"}
+{"schema_version":1,"type":"token","sequence":920,"elapsed_ms":32219,"data":"_text"}
+{"schema_version":1,"type":"token","sequence":921,"elapsed_ms":32250,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":922,"elapsed_ms":32312,"data":"def"}
+{"schema_version":1,"type":"token","sequence":923,"elapsed_ms":32359,"data":" balances"}
+{"schema_version":1,"type":"token","sequence":924,"elapsed_ms":32406,"data":"(event"}
+{"schema_version":1,"type":"token","sequence":925,"elapsed_ms":32469,"data":"s"}
+{"schema_version":1,"type":"token","sequence":926,"elapsed_ms":32516,"data":"):"}
+{"schema_version":1,"type":"token","sequence":927,"elapsed_ms":32578,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":928,"elapsed_ms":32625,"data":"n"}
+{"schema_version":1,"type":"token","sequence":929,"elapsed_ms":32672,"data":"   "}
+{"schema_version":1,"type":"token","sequence":930,"elapsed_ms":32734,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":931,"elapsed_ms":32781,"data":","}
+{"schema_version":1,"type":"token","sequence":932,"elapsed_ms":32828,"data":" cancelled"}
+{"schema_version":1,"type":"token","sequence":933,"elapsed_ms":32891,"data":" ="}
+{"schema_version":1,"type":"token","sequence":934,"elapsed_ms":32937,"data":" set"}
+{"schema_version":1,"type":"token","sequence":935,"elapsed_ms":32984,"data":"(),"}
+{"schema_version":1,"type":"token","sequence":936,"elapsed_ms":33047,"data":" set"}
+{"schema_version":1,"type":"token","sequence":937,"elapsed_ms":33109,"data":"()"}
+{"schema_version":1,"type":"token","sequence":938,"elapsed_ms":33156,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":939,"elapsed_ms":33187,"data":"n"}
+{"schema_version":1,"type":"token","sequence":940,"elapsed_ms":33250,"data":"   "}
+{"schema_version":1,"type":"token","sequence":941,"elapsed_ms":33312,"data":" post"}
+{"schema_version":1,"type":"token","sequence":942,"elapsed_ms":33359,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":943,"elapsed_ms":33406,"data":","}
+{"schema_version":1,"type":"token","sequence":944,"elapsed_ms":33453,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":945,"elapsed_ms":33516,"data":" ="}
+{"schema_version":1,"type":"token","sequence":946,"elapsed_ms":33562,"data":" {},"}
+{"schema_version":1,"type":"token","sequence":947,"elapsed_ms":33625,"data":" {"}
+{"schema_version":1,"type":"token","sequence":948,"elapsed_ms":33672,"data":"}\\"}
+{"schema_version":1,"type":"token","sequence":949,"elapsed_ms":33703,"data":"n"}
+{"schema_version":1,"type":"token","sequence":950,"elapsed_ms":33750,"data":"   "}
+{"schema_version":1,"type":"token","sequence":951,"elapsed_ms":33812,"data":" \\"}
+{"schema_version":1,"type":"token","sequence":952,"elapsed_ms":33844,"data":"n"}
+{"schema_version":1,"type":"token","sequence":953,"elapsed_ms":33891,"data":"   "}
+{"schema_version":1,"type":"token","sequence":954,"elapsed_ms":33937,"data":" #"}
+{"schema_version":1,"type":"token","sequence":955,"elapsed_ms":34000,"data":" First"}
+{"schema_version":1,"type":"token","sequence":956,"elapsed_ms":34047,"data":" pass"}
+{"schema_version":1,"type":"token","sequence":957,"elapsed_ms":34094,"data":":"}
+{"schema_version":1,"type":"token","sequence":958,"elapsed_ms":34141,"data":" process"}
+{"schema_version":1,"type":"token","sequence":959,"elapsed_ms":34203,"data":" all"}
+{"schema_version":1,"type":"token","sequence":960,"elapsed_ms":34266,"data":" post"}
+{"schema_version":1,"type":"token","sequence":961,"elapsed_ms":34312,"data":" events"}
+{"schema_version":1,"type":"token","sequence":962,"elapsed_ms":34359,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":963,"elapsed_ms":34422,"data":"   "}
+{"schema_version":1,"type":"token","sequence":964,"elapsed_ms":34469,"data":" for"}
+{"schema_version":1,"type":"token","sequence":965,"elapsed_ms":34531,"data":" event"}
+{"schema_version":1,"type":"token","sequence":966,"elapsed_ms":34578,"data":" in"}
+{"schema_version":1,"type":"token","sequence":967,"elapsed_ms":34625,"data":" events"}
+{"schema_version":1,"type":"token","sequence":968,"elapsed_ms":34672,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":969,"elapsed_ms":34719,"data":"n"}
+{"schema_version":1,"type":"token","sequence":970,"elapsed_ms":34766,"data":"       "}
+{"schema_version":1,"type":"token","sequence":971,"elapsed_ms":34828,"data":" if"}
+{"schema_version":1,"type":"token","sequence":972,"elapsed_ms":34875,"data":" event"}
+{"schema_version":1,"type":"token","sequence":973,"elapsed_ms":34922,"data":"['"}
+{"schema_version":1,"type":"token","sequence":974,"elapsed_ms":34969,"data":"id"}
+{"schema_version":1,"type":"token","sequence":975,"elapsed_ms":35031,"data":"']"}
+{"schema_version":1,"type":"token","sequence":976,"elapsed_ms":35078,"data":" in"}
+{"schema_version":1,"type":"token","sequence":977,"elapsed_ms":35125,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":978,"elapsed_ms":35187,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":979,"elapsed_ms":35219,"data":"n"}
+{"schema_version":1,"type":"token","sequence":980,"elapsed_ms":35266,"data":"           "}
+{"schema_version":1,"type":"token","sequence":981,"elapsed_ms":35328,"data":" continue"}
+{"schema_version":1,"type":"token","sequence":982,"elapsed_ms":35375,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":983,"elapsed_ms":35422,"data":"       "}
+{"schema_version":1,"type":"token","sequence":984,"elapsed_ms":35469,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":985,"elapsed_ms":35531,"data":".add"}
+{"schema_version":1,"type":"token","sequence":986,"elapsed_ms":35578,"data":"(event"}
+{"schema_version":1,"type":"token","sequence":987,"elapsed_ms":35641,"data":"['"}
+{"schema_version":1,"type":"token","sequence":988,"elapsed_ms":35687,"data":"id"}
+{"schema_version":1,"type":"token","sequence":989,"elapsed_ms":35734,"data":"']"}
+{"schema_version":1,"type":"token","sequence":990,"elapsed_ms":35797,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":991,"elapsed_ms":35828,"data":"n"}
+{"schema_version":1,"type":"token","sequence":992,"elapsed_ms":35891,"data":"       "}
+{"schema_version":1,"type":"token","sequence":993,"elapsed_ms":35937,"data":" if"}
+{"schema_version":1,"type":"token","sequence":994,"elapsed_ms":35984,"data":" event"}
+{"schema_version":1,"type":"token","sequence":995,"elapsed_ms":36031,"data":"['"}
+{"schema_version":1,"type":"token","sequence":996,"elapsed_ms":36094,"data":"kind"}
+{"schema_version":1,"type":"token","sequence":997,"elapsed_ms":36141,"data":"']"}
+{"schema_version":1,"type":"token","sequence":998,"elapsed_ms":36187,"data":" =="}
+{"schema_version":1,"type":"token","sequence":999,"elapsed_ms":36250,"data":" '"}
+{"schema_version":1,"type":"token","sequence":1000,"elapsed_ms":36297,"data":"post"}
+{"schema_version":1,"type":"token","sequence":1001,"elapsed_ms":36359,"data":"':"}
+{"schema_version":1,"type":"token","sequence":1002,"elapsed_ms":36406,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":1003,"elapsed_ms":36453,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1004,"elapsed_ms":36500,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1005,"elapsed_ms":36547,"data":" account"}
+{"schema_version":1,"type":"token","sequence":1006,"elapsed_ms":36609,"data":","}
+{"schema_version":1,"type":"token","sequence":1007,"elapsed_ms":36656,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":1008,"elapsed_ms":36703,"data":" ="}
+{"schema_version":1,"type":"token","sequence":1009,"elapsed_ms":36766,"data":" event"}
+{"schema_version":1,"type":"token","sequence":1010,"elapsed_ms":36812,"data":"['"}
+{"schema_version":1,"type":"token","sequence":1011,"elapsed_ms":36875,"data":"account"}
+{"schema_version":1,"type":"token","sequence":1012,"elapsed_ms":36922,"data":"'],"}
+{"schema_version":1,"type":"token","sequence":1013,"elapsed_ms":36969,"data":" event"}
+{"schema_version":1,"type":"token","sequence":1014,"elapsed_ms":37016,"data":"['"}
+{"schema_version":1,"type":"token","sequence":1015,"elapsed_ms":37078,"data":"amount"}
+{"schema_version":1,"type":"token","sequence":1016,"elapsed_ms":37125,"data":"']"}
+{"schema_version":1,"type":"token","sequence":1017,"elapsed_ms":37172,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":1018,"elapsed_ms":37219,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1019,"elapsed_ms":37266,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1020,"elapsed_ms":37328,"data":" post"}
+{"schema_version":1,"type":"token","sequence":1021,"elapsed_ms":37375,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":1022,"elapsed_ms":37422,"data":"["}
+{"schema_version":1,"type":"token","sequence":1023,"elapsed_ms":37469,"data":"event"}
+{"schema_version":1,"type":"token","sequence":1024,"elapsed_ms":37516,"data":"['"}
+{"schema_version":1,"type":"token","sequence":1025,"elapsed_ms":37578,"data":"id"}
+{"schema_version":1,"type":"token","sequence":1026,"elapsed_ms":37625,"data":"']"}
+{"schema_version":1,"type":"token","sequence":1027,"elapsed_ms":37687,"data":"]"}
+{"schema_version":1,"type":"token","sequence":1028,"elapsed_ms":37734,"data":" ="}
+{"schema_version":1,"type":"token","sequence":1029,"elapsed_ms":37797,"data":" ("}
+{"schema_version":1,"type":"token","sequence":1030,"elapsed_ms":37844,"data":"account"}
+{"schema_version":1,"type":"token","sequence":1031,"elapsed_ms":37891,"data":","}
+{"schema_version":1,"type":"token","sequence":1032,"elapsed_ms":37953,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":1033,"elapsed_ms":38000,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":1034,"elapsed_ms":38047,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1035,"elapsed_ms":38094,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1036,"elapsed_ms":38141,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":1037,"elapsed_ms":38187,"data":".set"}
+{"schema_version":1,"type":"token","sequence":1038,"elapsed_ms":38234,"data":"default"}
+{"schema_version":1,"type":"token","sequence":1039,"elapsed_ms":38281,"data":"(account"}
+{"schema_version":1,"type":"token","sequence":1040,"elapsed_ms":38344,"data":","}
+{"schema_version":1,"type":"token","sequence":1041,"elapsed_ms":38391,"data":" "}
+{"schema_version":1,"type":"token","sequence":1042,"elapsed_ms":38453,"data":"0"}
+{"schema_version":1,"type":"token","sequence":1043,"elapsed_ms":38500,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":1044,"elapsed_ms":38547,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1045,"elapsed_ms":38594,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1046,"elapsed_ms":38656,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":1047,"elapsed_ms":38703,"data":"["}
+{"schema_version":1,"type":"token","sequence":1048,"elapsed_ms":38766,"data":"account"}
+{"schema_version":1,"type":"token","sequence":1049,"elapsed_ms":38812,"data":"]"}
+{"schema_version":1,"type":"token","sequence":1050,"elapsed_ms":38859,"data":" +="}
+{"schema_version":1,"type":"token","sequence":1051,"elapsed_ms":38906,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":1052,"elapsed_ms":38953,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":1053,"elapsed_ms":39000,"data":"   "}
+{"schema_version":1,"type":"token","sequence":1054,"elapsed_ms":39062,"data":" \\"}
+{"schema_version":1,"type":"token","sequence":1055,"elapsed_ms":39094,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1056,"elapsed_ms":39156,"data":"   "}
+{"schema_version":1,"type":"token","sequence":1057,"elapsed_ms":39203,"data":" #"}
+{"schema_version":1,"type":"token","sequence":1058,"elapsed_ms":39250,"data":" Second"}
+{"schema_version":1,"type":"token","sequence":1059,"elapsed_ms":39312,"data":" pass"}
+{"schema_version":1,"type":"token","sequence":1060,"elapsed_ms":39359,"data":":"}
+{"schema_version":1,"type":"token","sequence":1061,"elapsed_ms":39422,"data":" process"}
+{"schema_version":1,"type":"token","sequence":1062,"elapsed_ms":39469,"data":" all"}
+{"schema_version":1,"type":"token","sequence":1063,"elapsed_ms":39531,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":1064,"elapsed_ms":39578,"data":" events"}
+{"schema_version":1,"type":"token","sequence":1065,"elapsed_ms":39625,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":1066,"elapsed_ms":39687,"data":"   "}
+{"schema_version":1,"type":"token","sequence":1067,"elapsed_ms":39734,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":1068,"elapsed_ms":39797,"data":".clear"}
+{"schema_version":1,"type":"token","sequence":1069,"elapsed_ms":39844,"data":"()"}
+{"schema_version":1,"type":"token","sequence":1070,"elapsed_ms":39906,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":1071,"elapsed_ms":39953,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1072,"elapsed_ms":40000,"data":"   "}
+{"schema_version":1,"type":"token","sequence":1073,"elapsed_ms":40047,"data":" for"}
+{"schema_version":1,"type":"token","sequence":1074,"elapsed_ms":40094,"data":" event"}
+{"schema_version":1,"type":"token","sequence":1075,"elapsed_ms":40141,"data":" in"}
+{"schema_version":1,"type":"token","sequence":1076,"elapsed_ms":40203,"data":" events"}
+{"schema_version":1,"type":"token","sequence":1077,"elapsed_ms":40250,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":1078,"elapsed_ms":40281,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1079,"elapsed_ms":40344,"data":"       "}
+{"schema_version":1,"type":"token","sequence":1080,"elapsed_ms":40391,"data":" if"}
+{"schema_version":1,"type":"token","sequence":1081,"elapsed_ms":40437,"data":" event"}
+{"schema_version":1,"type":"token","sequence":1082,"elapsed_ms":40484,"data":"['"}
+{"schema_version":1,"type":"token","sequence":1083,"elapsed_ms":40547,"data":"id"}
+{"schema_version":1,"type":"token","sequence":1084,"elapsed_ms":40594,"data":"']"}
+{"schema_version":1,"type":"token","sequence":1085,"elapsed_ms":40641,"data":" in"}
+{"schema_version":1,"type":"token","sequence":1086,"elapsed_ms":40687,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":1087,"elapsed_ms":40750,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":1088,"elapsed_ms":40781,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1089,"elapsed_ms":40844,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1090,"elapsed_ms":40891,"data":" continue"}
+{"schema_version":1,"type":"token","sequence":1091,"elapsed_ms":40953,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":1092,"elapsed_ms":41000,"data":"       "}
+{"schema_version":1,"type":"token","sequence":1093,"elapsed_ms":41062,"data":" seen"}
+{"schema_version":1,"type":"token","sequence":1094,"elapsed_ms":41109,"data":".add"}
+{"schema_version":1,"type":"token","sequence":1095,"elapsed_ms":41156,"data":"(event"}
+{"schema_version":1,"type":"token","sequence":1096,"elapsed_ms":41203,"data":"['"}
+{"schema_version":1,"type":"token","sequence":1097,"elapsed_ms":41266,"data":"id"}
+{"schema_version":1,"type":"token","sequence":1098,"elapsed_ms":41312,"data":"']"}
+{"schema_version":1,"type":"token","sequence":1099,"elapsed_ms":41359,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":1100,"elapsed_ms":41406,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1101,"elapsed_ms":41453,"data":"       "}
+{"schema_version":1,"type":"token","sequence":1102,"elapsed_ms":41500,"data":" if"}
+{"schema_version":1,"type":"token","sequence":1103,"elapsed_ms":41547,"data":" event"}
+{"schema_version":1,"type":"token","sequence":1104,"elapsed_ms":41609,"data":"['"}
+{"schema_version":1,"type":"token","sequence":1105,"elapsed_ms":41656,"data":"kind"}
+{"schema_version":1,"type":"token","sequence":1106,"elapsed_ms":41703,"data":"']"}
+{"schema_version":1,"type":"token","sequence":1107,"elapsed_ms":41750,"data":" =="}
+{"schema_version":1,"type":"token","sequence":1108,"elapsed_ms":41812,"data":" '"}
+{"schema_version":1,"type":"token","sequence":1109,"elapsed_ms":41859,"data":"ret"}
+{"schema_version":1,"type":"token","sequence":1110,"elapsed_ms":41906,"data":"ract"}
+{"schema_version":1,"type":"token","sequence":1111,"elapsed_ms":41953,"data":"':"}
+{"schema_version":1,"type":"token","sequence":1112,"elapsed_ms":42016,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":1113,"elapsed_ms":42047,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1114,"elapsed_ms":42094,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1115,"elapsed_ms":42156,"data":" target"}
+{"schema_version":1,"type":"token","sequence":1116,"elapsed_ms":42203,"data":" ="}
+{"schema_version":1,"type":"token","sequence":1117,"elapsed_ms":42266,"data":" event"}
+{"schema_version":1,"type":"token","sequence":1118,"elapsed_ms":42312,"data":"['"}
+{"schema_version":1,"type":"token","sequence":1119,"elapsed_ms":42359,"data":"target"}
+{"schema_version":1,"type":"token","sequence":1120,"elapsed_ms":42406,"data":"']"}
+{"schema_version":1,"type":"token","sequence":1121,"elapsed_ms":42453,"data":"\\"}
+{"schema_version":1,"type":"token","sequence":1122,"elapsed_ms":42500,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1123,"elapsed_ms":42547,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1124,"elapsed_ms":42609,"data":" if"}
+{"schema_version":1,"type":"token","sequence":1125,"elapsed_ms":42656,"data":" target"}
+{"schema_version":1,"type":"token","sequence":1126,"elapsed_ms":42703,"data":" in"}
+{"schema_version":1,"type":"token","sequence":1127,"elapsed_ms":42766,"data":" cancelled"}
+{"schema_version":1,"type":"token","sequence":1128,"elapsed_ms":42812,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":1129,"elapsed_ms":42859,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1130,"elapsed_ms":42906,"data":"               "}
+{"schema_version":1,"type":"token","sequence":1131,"elapsed_ms":42953,"data":" continue"}
+{"schema_version":1,"type":"token","sequence":1132,"elapsed_ms":43000,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":1133,"elapsed_ms":43062,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1134,"elapsed_ms":43109,"data":" cancelled"}
+{"schema_version":1,"type":"token","sequence":1135,"elapsed_ms":43156,"data":".add"}
+{"schema_version":1,"type":"token","sequence":1136,"elapsed_ms":43219,"data":"(target"}
+{"schema_version":1,"type":"token","sequence":1137,"elapsed_ms":43266,"data":")\\"}
+{"schema_version":1,"type":"token","sequence":1138,"elapsed_ms":43297,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1139,"elapsed_ms":43344,"data":"           "}
+{"schema_version":1,"type":"token","sequence":1140,"elapsed_ms":43406,"data":" if"}
+{"schema_version":1,"type":"token","sequence":1141,"elapsed_ms":43453,"data":" target"}
+{"schema_version":1,"type":"token","sequence":1142,"elapsed_ms":43500,"data":" in"}
+{"schema_version":1,"type":"token","sequence":1143,"elapsed_ms":43562,"data":" post"}
+{"schema_version":1,"type":"token","sequence":1144,"elapsed_ms":43609,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":1145,"elapsed_ms":43672,"data":":\\"}
+{"schema_version":1,"type":"token","sequence":1146,"elapsed_ms":43703,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1147,"elapsed_ms":43766,"data":"               "}
+{"schema_version":1,"type":"token","sequence":1148,"elapsed_ms":43812,"data":" account"}
+{"schema_version":1,"type":"token","sequence":1149,"elapsed_ms":43875,"data":","}
+{"schema_version":1,"type":"token","sequence":1150,"elapsed_ms":43922,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":1151,"elapsed_ms":43984,"data":" ="}
+{"schema_version":1,"type":"token","sequence":1152,"elapsed_ms":44031,"data":" post"}
+{"schema_version":1,"type":"token","sequence":1153,"elapsed_ms":44078,"data":"ings"}
+{"schema_version":1,"type":"token","sequence":1154,"elapsed_ms":44141,"data":"["}
+{"schema_version":1,"type":"token","sequence":1155,"elapsed_ms":44187,"data":"target"}
+{"schema_version":1,"type":"token","sequence":1156,"elapsed_ms":44234,"data":"]\\"}
+{"schema_version":1,"type":"token","sequence":1157,"elapsed_ms":44266,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1158,"elapsed_ms":44312,"data":"               "}
+{"schema_version":1,"type":"token","sequence":1159,"elapsed_ms":44375,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":1160,"elapsed_ms":44437,"data":"["}
+{"schema_version":1,"type":"token","sequence":1161,"elapsed_ms":44484,"data":"account"}
+{"schema_version":1,"type":"token","sequence":1162,"elapsed_ms":44531,"data":"]"}
+{"schema_version":1,"type":"token","sequence":1163,"elapsed_ms":44578,"data":" -="}
+{"schema_version":1,"type":"token","sequence":1164,"elapsed_ms":44625,"data":" amount"}
+{"schema_version":1,"type":"token","sequence":1165,"elapsed_ms":44687,"data":"\\n"}
+{"schema_version":1,"type":"token","sequence":1166,"elapsed_ms":44734,"data":"   "}
+{"schema_version":1,"type":"token","sequence":1167,"elapsed_ms":44781,"data":" \\"}
+{"schema_version":1,"type":"token","sequence":1168,"elapsed_ms":44828,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1169,"elapsed_ms":44875,"data":"   "}
+{"schema_version":1,"type":"token","sequence":1170,"elapsed_ms":44937,"data":" return"}
+{"schema_version":1,"type":"token","sequence":1171,"elapsed_ms":44984,"data":" totals"}
+{"schema_version":1,"type":"token","sequence":1172,"elapsed_ms":45031,"data":"\"}}"}
+{"schema_version":1,"type":"inference","sequence":1173,"elapsed_ms":45031,"data":{"prompt_tokens":3904,"cached_tokens":2438,"generated_tokens":566,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":1174,"elapsed_ms":45031,"data":"{\"thought\":\"Now I understand the issue clearly. The current implementation processes events in order and has a bug where retract events can cancel posts that come after them, but posts that come after retracts are still added to totals. The fix is to separate the processing into two phases: first process all post events to build the postings dict, then process all retract events to cancel them. This ensures that retracts work regardless of their order.\\n\\nLet me implement the fix by rewriting the balances function to process posts first, then retracts.\\n\",\"tool\":\"apply_patch\",\"args\":{\"path\":\"service.py\",\"old_text\":\"def balances(events):\\n    seen, cancelled = set(), set()\\n    postings, totals = {}, {}\\n    for event in events:\\n        if event['id'] in seen:\\n            continue\\n        seen.add(event['id'])\\n        if event['kind'] == 'post':\\n            account, amount = event['account'], event['amount']\\n            postings[event['id']] = (account, amount)\\n            totals.setdefault(account, 0)\\n            if True:\\n                totals[account] += amount\\n        else:\\n            target = event['target']\\n            if target in cancelled:\\n                continue\\n            cancelled.add(target)\\n            if target in postings:\\n                account, amount = postings[target]\\n                totals[account] -= amount\\n    return totals\",\"new_text\":\"def balances(events):\\n    seen, cancelled = set(), set()\\n    postings, totals = {}, {}\\n    \\n    # First pass: process all post events\\n    for event in events:\\n        if event['id'] in seen:\\n            continue\\n        seen.add(event['id'])\\n        if event['kind'] == 'post':\\n            account, amount = event['account'], event['amount']\\n            postings[event['id']] = (account, amount)\\n            totals.setdefault(account, 0)\\n            totals[account] += amount\\n    \\n    # Second pass: process all retract events\\n    seen.clear()\\n    for event in events:\\n        if event['id'] in seen:\\n            continue\\n        seen.add(event['id'])\\n        if event['kind'] == 'retract':\\n            target = event['target']\\n            if target in cancelled:\\n                continue\\n            cancelled.add(target)\\n            if target in postings:\\n                account, amount = postings[target]\\n                totals[account] -= amount\\n    \\n    return totals\"}}"}
+{"schema_version":1,"type":"state","sequence":1175,"elapsed_ms":45031,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":1176,"elapsed_ms":45031,"data":{"thought":"Now I understand the issue clearly. The current implementation processes events in order and has a bug where retract events can cancel posts that come after them, but posts that come after retracts are still added to totals. The fix is to separate the processing into two phases: first process all post events to build the postings dict, then process all retract events to cancel them. This ensures that retracts work regardless of their order.\n\nLet me implement the fix by rewriting the balances function to process posts first, then retracts.\n","tool":"apply_patch","args":{"path":"service.py","old_text":"def balances(events):\n    seen, cancelled = set(), set()\n    postings, totals = {}, {}\n    for event in events:\n        if event['id'] in seen:\n            continue\n        seen.add(event['id'])\n        if event['kind'] == 'post':\n            account, amount = event['account'], event['amount']\n            postings[event['id']] = (account, amount)\n            totals.setdefault(account, 0)\n            if True:\n                totals[account] += amount\n        else:\n            target = event['target']\n            if target in cancelled:\n                continue\n            cancelled.add(target)\n            if target in postings:\n                account, amount = postings[target]\n                totals[account] -= amount\n    return totals","new_text":"def balances(events):\n    seen, cancelled = set(), set()\n    postings, totals = {}, {}\n    \n    # First pass: process all post events\n    for event in events:\n        if event['id'] in seen:\n            continue\n        seen.add(event['id'])\n        if event['kind'] == 'post':\n            account, amount = event['account'], event['amount']\n            postings[event['id']] = (account, amount)\n            totals.setdefault(account, 0)\n            totals[account] += amount\n    \n    # Second pass: process all retract events\n    seen.clear()\n    for event in events:\n        if event['id'] in seen:\n            continue\n        seen.add(event['id'])\n        if event['kind'] == 'retract':\n            target = event['target']\n            if target in cancelled:\n                continue\n            cancelled.add(target)\n            if target in postings:\n                account, amount = postings[target]\n                totals[account] -= amount\n    \n    return totals"}}}
+{"schema_version":1,"type":"state","sequence":1177,"elapsed_ms":45031,"data":{"state":4}}
+{"schema_version":1,"type":"edit_prepared","sequence":1178,"elapsed_ms":45031,"data":{"schema_version":1,"tool_call":6,"state":"prepared","path":"service.py","scope":"one_agent_text_edit","before_exists":true,"before_bytes":746,"after_bytes":974,"before_artifact":"tool/000006.before","after_artifact":"tool/000006.after","diff_artifact":"tool/000006.patch","diff_format":"unified_full_file","content_only":true,"outcome_artifact":"tool/000006.edit-result.json"}}
+{"schema_version":1,"type":"edit_result","sequence":1179,"elapsed_ms":45047,"data":{"schema_version":1,"tool_call":6,"state":"applied","status":"ok","intent_artifact":"tool/000006.edit.json"}}
+{"schema_version":1,"type":"validation_plan","sequence":1180,"elapsed_ms":45094,"data":{"schema_version":2,"generation":3,"language":"python","status":"planned","verification_status":"planned","graph_kind":"none","sound":false,"applicable":true,"verification_available":true,"broad_verification_required":true,"changed_paths":[],"languages":["python"],"missing_tools":[],"modules":[],"packages":[],"edges":[],"affected_packages":[],"reverse_dependents":[],"fallback_reasons":[],"limitations":["Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.","pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.","Python syntax checks compile source without importing code. Python test runs both redirect the bytecode cache to an unwritten prefix and disable bytecode writes, so imports made by the test process itself compile from current source and cannot be satisfied by a workspace __pycache__ or a previous candidate's bytecode; the cost is one compile per command. These are interpreter options and do not reach a further interpreter that a test spawns itself, which retains ordinary bytecode behaviour. pytest also disables its cache provider. Project tests may still mutate inputs and must be rejected if the validation snapshot changes.","Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration."],"python":{"applicable":true,"executable_available":true,"executable":"python","selection_kind":"changed_files_and_filename_related_tests","syntax_scope":"all_indexed","source_file_count":2,"syntax_file_count":2,"test_file_count":1,"targeted_test_count":0,"syntax_scheduled":true,"tests_applicable":true,"tests_scheduled":true,"test_runner":"unittest","bytecode_cache_isolated":true,"bytecode_cache_prefix":".forge/pycache","pytest_cache_disabled":false,"targeted_test_files":[]},"stages":[{"name":"format","requires_previous_success":false,"commands":[]},{"name":"compile","requires_previous_success":true,"commands":[{"cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"reason":"indexed_python_files_for_unknown_changes"}]},{"name":"affected_tests","requires_previous_success":true,"commands":[]},{"name":"dependent_tests","requires_previous_success":true,"commands":[]},{"name":"vet","requires_previous_success":true,"commands":[]},{"name":"broad_tests","requires_previous_success":true,"commands":[{"cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"reason":"final_python_unittest_files"}]}],"command_count":2}}
+{"schema_version":1,"type":"validation_command_start","sequence":1181,"elapsed_ms":45094,"data":{"id":1,"stage":"compile","cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1182,"elapsed_ms":45125,"data":{"id":1,"stage":"compile","cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":31.0,"stdout_bytes":0,"stderr_bytes":0,"stdout_artifact":"validation/0001-0001.stdout","stderr_artifact":"validation/0001-0001.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_command_start","sequence":1183,"elapsed_ms":45125,"data":{"id":2,"stage":"broad_tests","cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1184,"elapsed_ms":45266,"data":{"id":2,"stage":"broad_tests","cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":141.0,"stdout_bytes":0,"stderr_bytes":283,"stdout_artifact":"validation/0001-0002.stdout","stderr_artifact":"validation/0001-0002.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_result","sequence":1185,"elapsed_ms":45312,"data":{"schema_version":1,"attempt":1,"generation":3,"applicable":true,"session":"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-fs5ioy4x/.forge/sessions/8840b9946b3198373e4e986561dcda74","plan":{"schema_version":2,"generation":3,"language":"python","status":"planned","verification_status":"planned","graph_kind":"none","sound":false,"applicable":true,"verification_available":true,"broad_verification_required":true,"changed_paths":[],"languages":["python"],"missing_tools":[],"modules":[],"packages":[],"edges":[],"affected_packages":[],"reverse_dependents":[],"fallback_reasons":[],"limitations":["Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.","pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.","Python syntax checks compile source without importing code. Python test runs both redirect the bytecode cache to an unwritten prefix and disable bytecode writes, so imports made by the test process itself compile from current source and cannot be satisfied by a workspace __pycache__ or a previous candidate's bytecode; the cost is one compile per command. These are interpreter options and do not reach a further interpreter that a test spawns itself, which retains ordinary bytecode behaviour. pytest also disables its cache provider. Project tests may still mutate inputs and must be rejected if the validation snapshot changes.","Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration."],"python":{"applicable":true,"executable_available":true,"executable":"python","selection_kind":"changed_files_and_filename_related_tests","syntax_scope":"all_indexed","source_file_count":2,"syntax_file_count":2,"test_file_count":1,"targeted_test_count":0,"syntax_scheduled":true,"tests_applicable":true,"tests_scheduled":true,"test_runner":"unittest","bytecode_cache_isolated":true,"bytecode_cache_prefix":".forge/pycache","pytest_cache_disabled":false,"targeted_test_files":[]},"stages":[{"name":"format","requires_previous_success":false,"commands":[]},{"name":"compile","requires_previous_success":true,"commands":[{"cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"reason":"indexed_python_files_for_unknown_changes"}]},{"name":"affected_tests","requires_previous_success":true,"commands":[]},{"name":"dependent_tests","requires_previous_success":true,"commands":[]},{"name":"vet","requires_previous_success":true,"commands":[]},{"name":"broad_tests","requires_previous_success":true,"commands":[{"cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"reason":"final_python_unittest_files"}]}],"command_count":2},"commands":[{"id":1,"stage":"compile","cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":31.0,"stdout_bytes":0,"stderr_bytes":0,"stdout_artifact":"validation/0001-0001.stdout","stderr_artifact":"validation/0001-0001.stderr","status":"ok"},{"id":2,"stage":"broad_tests","cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":141.0,"stdout_bytes":0,"stderr_bytes":283,"stdout_artifact":"validation/0001-0002.stdout","stderr_artifact":"validation/0001-0002.stderr","status":"ok"}],"generation_after":3,"commands_attempted":2,"commands_run":2,"stages_passed":2,"inputs_changed":false,"inputs_checked":true,"input_max_files":100000,"input_max_bytes":2147483648,"input_hash_before":"5ce73a5fa8809857","input_hash_after":"5ce73a5fa8809857","snapshot_ms":0.0,"duration_ms":218.0,"passed":true,"checks_passed":true,"evidence_complete":true,"status":"ok","summary":"Automatic staged validation passed: 2 commands across 2 stages, repository generation=3."}}
+{"schema_version":1,"type":"working_state","sequence":1186,"elapsed_ms":45312,"data":{"turn":6,"artifact":"context/0006.state.json","hash":2861574756194722977}}
+{"schema_version":1,"type":"tool_result","sequence":1187,"elapsed_ms":45328,"data":{"id":6,"name":"apply_patch","output":"Patched service.py.\nRecorded edit diff: tool/000006.patch\n\nPOST_EDIT_VALIDATION:\nAutomatic staged validation passed: 2 commands across 2 stages, repository generation=3.\n","duration_ms":16.0,"status":"ok"}}
+{"schema_version":1,"type":"state","sequence":1188,"elapsed_ms":45328,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":1189,"elapsed_ms":45328,"data":{"turn":6,"artifact":"context/0006.state.json","hash":14355907394087241088}}
+{"schema_version":1,"type":"state","sequence":1190,"elapsed_ms":45328,"data":{"state":6}}
+{"schema_version":1,"type":"file_change","sequence":1191,"elapsed_ms":45359,"data":{"schema_version":1,"backend":"ReadDirectoryChangesW","events":[{"path":"service.py","flags":53},{"path":"service.py.forge-b611e65bce68e770.tmp","flags":175}],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":false,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":1,"path_encoding":"utf-8","index_mode":"full","generation":4,"changed":true,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"working_state","sequence":1192,"elapsed_ms":45359,"data":{"turn":7,"artifact":"context/0007.state.json","hash":824374450144914932}}
+{"schema_version":1,"type":"context_plan","sequence":1193,"elapsed_ms":45391,"data":{"turn":7,"artifact":"context/0007.json","hash":12416224191582983568,"evicted_segments":0}}
+{"schema_version":1,"type":"state","sequence":1194,"elapsed_ms":45391,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":1195,"elapsed_ms":45391,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":1196,"elapsed_ms":47016,"data":"{\""}
+{"schema_version":1,"type":"token","sequence":1197,"elapsed_ms":47047,"data":"th"}
+{"schema_version":1,"type":"token","sequence":1198,"elapsed_ms":47078,"data":"ought"}
+{"schema_version":1,"type":"token","sequence":1199,"elapsed_ms":47109,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":1200,"elapsed_ms":47125,"data":"I"}
+{"schema_version":1,"type":"token","sequence":1201,"elapsed_ms":47156,"data":" need"}
+{"schema_version":1,"type":"token","sequence":1202,"elapsed_ms":47172,"data":" to"}
+{"schema_version":1,"type":"token","sequence":1203,"elapsed_ms":47203,"data":" run"}
+{"schema_version":1,"type":"token","sequence":1204,"elapsed_ms":47234,"data":" the"}
+{"schema_version":1,"type":"token","sequence":1205,"elapsed_ms":47250,"data":" tests"}
+{"schema_version":1,"type":"token","sequence":1206,"elapsed_ms":47281,"data":" again"}
+{"schema_version":1,"type":"token","sequence":1207,"elapsed_ms":47312,"data":" to"}
+{"schema_version":1,"type":"token","sequence":1208,"elapsed_ms":47328,"data":" see"}
+{"schema_version":1,"type":"token","sequence":1209,"elapsed_ms":47359,"data":" if"}
+{"schema_version":1,"type":"token","sequence":1210,"elapsed_ms":47391,"data":" my"}
+{"schema_version":1,"type":"token","sequence":1211,"elapsed_ms":47422,"data":" fix"}
+{"schema_version":1,"type":"token","sequence":1212,"elapsed_ms":47437,"data":" worked"}
+{"schema_version":1,"type":"token","sequence":1213,"elapsed_ms":47469,"data":"."}
+{"schema_version":1,"type":"token","sequence":1214,"elapsed_ms":47500,"data":" The"}
+{"schema_version":1,"type":"token","sequence":1215,"elapsed_ms":47516,"data":" previous"}
+{"schema_version":1,"type":"token","sequence":1216,"elapsed_ms":47547,"data":" test"}
+{"schema_version":1,"type":"token","sequence":1217,"elapsed_ms":47562,"data":" failure"}
+{"schema_version":1,"type":"token","sequence":1218,"elapsed_ms":47594,"data":" showed"}
+{"schema_version":1,"type":"token","sequence":1219,"elapsed_ms":47625,"data":" that"}
+{"schema_version":1,"type":"token","sequence":1220,"elapsed_ms":47656,"data":" balances"}
+{"schema_version":1,"type":"token","sequence":1221,"elapsed_ms":47672,"data":"(event"}
+{"schema_version":1,"type":"token","sequence":1222,"elapsed_ms":47703,"data":"s"}
+{"schema_version":1,"type":"token","sequence":1223,"elapsed_ms":47734,"data":")"}
+{"schema_version":1,"type":"token","sequence":1224,"elapsed_ms":47766,"data":" returned"}
+{"schema_version":1,"type":"token","sequence":1225,"elapsed_ms":47797,"data":" {'"}
+{"schema_version":1,"type":"token","sequence":1226,"elapsed_ms":47828,"data":"c"}
+{"schema_version":1,"type":"token","sequence":1227,"elapsed_ms":47844,"data":"ash"}
+{"schema_version":1,"type":"token","sequence":1228,"elapsed_ms":47875,"data":"':"}
+{"schema_version":1,"type":"token","sequence":1229,"elapsed_ms":47906,"data":" "}
+{"schema_version":1,"type":"token","sequence":1230,"elapsed_ms":47922,"data":"7"}
+{"schema_version":1,"type":"token","sequence":1231,"elapsed_ms":47953,"data":"}"}
+{"schema_version":1,"type":"token","sequence":1232,"elapsed_ms":47984,"data":" when"}
+{"schema_version":1,"type":"token","sequence":1233,"elapsed_ms":48000,"data":" it"}
+{"schema_version":1,"type":"token","sequence":1234,"elapsed_ms":48031,"data":" should"}
+{"schema_version":1,"type":"token","sequence":1235,"elapsed_ms":48062,"data":" return"}
+{"schema_version":1,"type":"token","sequence":1236,"elapsed_ms":48078,"data":" {'"}
+{"schema_version":1,"type":"token","sequence":1237,"elapsed_ms":48109,"data":"c"}
+{"schema_version":1,"type":"token","sequence":1238,"elapsed_ms":48141,"data":"ash"}
+{"schema_version":1,"type":"token","sequence":1239,"elapsed_ms":48156,"data":"':"}
+{"schema_version":1,"type":"token","sequence":1240,"elapsed_ms":48187,"data":" "}
+{"schema_version":1,"type":"token","sequence":1241,"elapsed_ms":48219,"data":"0"}
+{"schema_version":1,"type":"token","sequence":1242,"elapsed_ms":48234,"data":"},"}
+{"schema_version":1,"type":"token","sequence":1243,"elapsed_ms":48266,"data":" indicating"}
+{"schema_version":1,"type":"token","sequence":1244,"elapsed_ms":48297,"data":" that"}
+{"schema_version":1,"type":"token","sequence":1245,"elapsed_ms":48312,"data":" retract"}
+{"schema_version":1,"type":"token","sequence":1246,"elapsed_ms":48344,"data":" events"}
+{"schema_version":1,"type":"token","sequence":1247,"elapsed_ms":48375,"data":" weren"}
+{"schema_version":1,"type":"token","sequence":1248,"elapsed_ms":48391,"data":"'t"}
+{"schema_version":1,"type":"token","sequence":1249,"elapsed_ms":48422,"data":" properly"}
+{"schema_version":1,"type":"token","sequence":1250,"elapsed_ms":48453,"data":" cancel"}
+{"schema_version":1,"type":"token","sequence":1251,"elapsed_ms":48469,"data":"ing"}
+{"schema_version":1,"type":"token","sequence":1252,"elapsed_ms":48500,"data":" out"}
+{"schema_version":1,"type":"token","sequence":1253,"elapsed_ms":48531,"data":" credit"}
+{"schema_version":1,"type":"token","sequence":1254,"elapsed_ms":48547,"data":" events"}
+{"schema_version":1,"type":"token","sequence":1255,"elapsed_ms":48578,"data":".\\"}
+{"schema_version":1,"type":"token","sequence":1256,"elapsed_ms":48609,"data":"n"}
+{"schema_version":1,"type":"token","sequence":1257,"elapsed_ms":48625,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":1258,"elapsed_ms":48656,"data":"tool"}
+{"schema_version":1,"type":"token","sequence":1259,"elapsed_ms":48687,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":1260,"elapsed_ms":48703,"data":"run"}
+{"schema_version":1,"type":"token","sequence":1261,"elapsed_ms":48734,"data":"_command"}
+{"schema_version":1,"type":"token","sequence":1262,"elapsed_ms":48766,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":1263,"elapsed_ms":48781,"data":"args"}
+{"schema_version":1,"type":"token","sequence":1264,"elapsed_ms":48812,"data":"\":{\""}
+{"schema_version":1,"type":"token","sequence":1265,"elapsed_ms":48844,"data":"argv"}
+{"schema_version":1,"type":"token","sequence":1266,"elapsed_ms":48859,"data":"\":"}
+{"schema_version":1,"type":"token","sequence":1267,"elapsed_ms":48891,"data":"[\""}
+{"schema_version":1,"type":"token","sequence":1268,"elapsed_ms":48922,"data":"python"}
+{"schema_version":1,"type":"token","sequence":1269,"elapsed_ms":48937,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":1270,"elapsed_ms":48969,"data":"-"}
+{"schema_version":1,"type":"token","sequence":1271,"elapsed_ms":49000,"data":"B"}
+{"schema_version":1,"type":"token","sequence":1272,"elapsed_ms":49016,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":1273,"elapsed_ms":49047,"data":"-"}
+{"schema_version":1,"type":"token","sequence":1274,"elapsed_ms":49078,"data":"X"}
+{"schema_version":1,"type":"token","sequence":1275,"elapsed_ms":49094,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":1276,"elapsed_ms":49125,"data":"py"}
+{"schema_version":1,"type":"token","sequence":1277,"elapsed_ms":49156,"data":"cache"}
+{"schema_version":1,"type":"token","sequence":1278,"elapsed_ms":49172,"data":"_prefix"}
+{"schema_version":1,"type":"token","sequence":1279,"elapsed_ms":49203,"data":"=."}
+{"schema_version":1,"type":"token","sequence":1280,"elapsed_ms":49234,"data":"forge"}
+{"schema_version":1,"type":"token","sequence":1281,"elapsed_ms":49250,"data":"/p"}
+{"schema_version":1,"type":"token","sequence":1282,"elapsed_ms":49281,"data":"yc"}
+{"schema_version":1,"type":"token","sequence":1283,"elapsed_ms":49312,"data":"ache"}
+{"schema_version":1,"type":"token","sequence":1284,"elapsed_ms":49344,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":1285,"elapsed_ms":49359,"data":"-"}
+{"schema_version":1,"type":"token","sequence":1286,"elapsed_ms":49391,"data":"c"}
+{"schema_version":1,"type":"token","sequence":1287,"elapsed_ms":49406,"data":"\",\""}
+{"schema_version":1,"type":"token","sequence":1288,"elapsed_ms":49437,"data":"import"}
+{"schema_version":1,"type":"token","sequence":1289,"elapsed_ms":49469,"data":" sys"}
+{"schema_version":1,"type":"token","sequence":1290,"elapsed_ms":49484,"data":","}
+{"schema_version":1,"type":"token","sequence":1291,"elapsed_ms":49516,"data":"un"}
+{"schema_version":1,"type":"token","sequence":1292,"elapsed_ms":49547,"data":"ittest"}
+{"schema_version":1,"type":"token","sequence":1293,"elapsed_ms":49562,"data":";"}
+{"schema_version":1,"type":"token","sequence":1294,"elapsed_ms":49594,"data":"p"}
+{"schema_version":1,"type":"token","sequence":1295,"elapsed_ms":49625,"data":"="}
+{"schema_version":1,"type":"token","sequence":1296,"elapsed_ms":49641,"data":"un"}
+{"schema_version":1,"type":"token","sequence":1297,"elapsed_ms":49672,"data":"ittest"}
+{"schema_version":1,"type":"token","sequence":1298,"elapsed_ms":49703,"data":".main"}
+{"schema_version":1,"type":"token","sequence":1299,"elapsed_ms":49719,"data":"(module"}
+{"schema_version":1,"type":"token","sequence":1300,"elapsed_ms":49750,"data":"=None"}
+{"schema_version":1,"type":"token","sequence":1301,"elapsed_ms":49781,"data":","}
+{"schema_version":1,"type":"token","sequence":1302,"elapsed_ms":49812,"data":"argv"}
+{"schema_version":1,"type":"token","sequence":1303,"elapsed_ms":49828,"data":"=['"}
+{"schema_version":1,"type":"token","sequence":1304,"elapsed_ms":49859,"data":"un"}
+{"schema_version":1,"type":"token","sequence":1305,"elapsed_ms":49891,"data":"ittest"}
+{"schema_version":1,"type":"token","sequence":1306,"elapsed_ms":49922,"data":"','"}
+{"schema_version":1,"type":"token","sequence":1307,"elapsed_ms":49937,"data":"-"}
+{"schema_version":1,"type":"token","sequence":1308,"elapsed_ms":49969,"data":"v"}
+{"schema_version":1,"type":"token","sequence":1309,"elapsed_ms":50000,"data":"',"}
+{"schema_version":1,"type":"token","sequence":1310,"elapsed_ms":50016,"data":"*"}
+{"schema_version":1,"type":"token","sequence":1311,"elapsed_ms":50047,"data":"sys"}
+{"schema_version":1,"type":"token","sequence":1312,"elapsed_ms":50078,"data":".argv"}
+{"schema_version":1,"type":"token","sequence":1313,"elapsed_ms":50094,"data":"["}
+{"schema_version":1,"type":"token","sequence":1314,"elapsed_ms":50125,"data":"1"}
+{"schema_version":1,"type":"token","sequence":1315,"elapsed_ms":50156,"data":":"}
+{"schema_version":1,"type":"token","sequence":1316,"elapsed_ms":50172,"data":"]],"}
+{"schema_version":1,"type":"token","sequence":1317,"elapsed_ms":50203,"data":"exit"}
+{"schema_version":1,"type":"token","sequence":1318,"elapsed_ms":50234,"data":"=False"}
+{"schema_version":1,"type":"token","sequence":1319,"elapsed_ms":50250,"data":");"}
+{"schema_version":1,"type":"token","sequence":1320,"elapsed_ms":50281,"data":"sys"}
+{"schema_version":1,"type":"token","sequence":1321,"elapsed_ms":50312,"data":".exit"}
+{"schema_version":1,"type":"token","sequence":1322,"elapsed_ms":50328,"data":"(not"}
+{"schema_version":1,"type":"token","sequence":1323,"elapsed_ms":50359,"data":" p"}
+{"schema_version":1,"type":"token","sequence":1324,"elapsed_ms":50391,"data":".result"}
+{"schema_version":1,"type":"token","sequence":1325,"elapsed_ms":50406,"data":".w"}
+{"schema_version":1,"type":"token","sequence":1326,"elapsed_ms":50437,"data":"as"}
+{"schema_version":1,"type":"token","sequence":1327,"elapsed_ms":50469,"data":"Successful"}
+{"schema_version":1,"type":"token","sequence":1328,"elapsed_ms":50484,"data":"()"}
+{"schema_version":1,"type":"token","sequence":1329,"elapsed_ms":50516,"data":" or"}
+{"schema_version":1,"type":"token","sequence":1330,"elapsed_ms":50547,"data":" p"}
+{"schema_version":1,"type":"token","sequence":1331,"elapsed_ms":50562,"data":".result"}
+{"schema_version":1,"type":"token","sequence":1332,"elapsed_ms":50594,"data":".t"}
+{"schema_version":1,"type":"token","sequence":1333,"elapsed_ms":50625,"data":"ests"}
+{"schema_version":1,"type":"token","sequence":1334,"elapsed_ms":50641,"data":"Run"}
+{"schema_version":1,"type":"token","sequence":1335,"elapsed_ms":50672,"data":"=="}
+{"schema_version":1,"type":"token","sequence":1336,"elapsed_ms":50703,"data":"0"}
+{"schema_version":1,"type":"token","sequence":1337,"elapsed_ms":50719,"data":")\","}
+{"schema_version":1,"type":"token","sequence":1338,"elapsed_ms":50750,"data":"\"."}
+{"schema_version":1,"type":"token","sequence":1339,"elapsed_ms":50781,"data":"/"}
+{"schema_version":1,"type":"token","sequence":1340,"elapsed_ms":50797,"data":"test"}
+{"schema_version":1,"type":"token","sequence":1341,"elapsed_ms":50828,"data":"_service"}
+{"schema_version":1,"type":"token","sequence":1342,"elapsed_ms":50859,"data":".py"}
+{"schema_version":1,"type":"token","sequence":1343,"elapsed_ms":50875,"data":"\"]"}
+{"schema_version":1,"type":"token","sequence":1344,"elapsed_ms":50906,"data":"}}"}
+{"schema_version":1,"type":"inference","sequence":1345,"elapsed_ms":50906,"data":{"prompt_tokens":5181,"cached_tokens":2153,"generated_tokens":149,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":1346,"elapsed_ms":50906,"data":"{\"thought\":\"I need to run the tests again to see if my fix worked. The previous test failure showed that balances(events) returned {'cash': 7} when it should return {'cash': 0}, indicating that retract events weren't properly canceling out credit events.\\n\",\"tool\":\"run_command\",\"args\":{\"argv\":[\"python\",\"-B\",\"-X\",\"pycache_prefix=.forge/pycache\",\"-c\",\"import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)\",\"./test_service.py\"]}}"}
+{"schema_version":1,"type":"state","sequence":1347,"elapsed_ms":50906,"data":{"state":3}}
+{"schema_version":1,"type":"tool_call","sequence":1348,"elapsed_ms":50906,"data":{"thought":"I need to run the tests again to see if my fix worked. The previous test failure showed that balances(events) returned {'cash': 7} when it should return {'cash': 0}, indicating that retract events weren't properly canceling out credit events.\n","tool":"run_command","args":{"argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"]}}}
+{"schema_version":1,"type":"state","sequence":1349,"elapsed_ms":50906,"data":{"state":4}}
+{"schema_version":1,"type":"tool_result","sequence":1350,"elapsed_ms":51094,"data":{"id":7,"name":"run_command","output":"exit_code=0 timeout=false cancelled=false truncated=false\nstdout:\n\nstderr:\ntest_independent_postings (test_service.BehaviorChecks.test_independent_postings) ... ok\r\ntest_order_and_duplicates (test_service.BehaviorChecks.test_order_and_duplicates) ... ok\r\n\r\n----------------------------------------------------------------------\r\nRan 2 tests in 0.000s\r\n\r\nOK\r\n","duration_ms":141.0,"status":"ok","exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"stdout_bytes":0,"stderr_bytes":283}}
+{"schema_version":1,"type":"state","sequence":1351,"elapsed_ms":51094,"data":{"state":5}}
+{"schema_version":1,"type":"working_state","sequence":1352,"elapsed_ms":51094,"data":{"turn":7,"artifact":"context/0007.state.json","hash":18261743863276623058}}
+{"schema_version":1,"type":"state","sequence":1353,"elapsed_ms":51094,"data":{"state":6}}
+{"schema_version":1,"type":"context_plan","sequence":1354,"elapsed_ms":51125,"data":{"turn":8,"artifact":"context/0008.json","hash":7313105161369986078,"evicted_segments":1}}
+{"schema_version":1,"type":"state","sequence":1355,"elapsed_ms":51125,"data":{"state":1}}
+{"schema_version":1,"type":"state","sequence":1356,"elapsed_ms":51125,"data":{"state":2}}
+{"schema_version":1,"type":"token","sequence":1357,"elapsed_ms":53234,"data":"{\""}
+{"schema_version":1,"type":"token","sequence":1358,"elapsed_ms":53266,"data":"final"}
+{"schema_version":1,"type":"token","sequence":1359,"elapsed_ms":53297,"data":"\":\""}
+{"schema_version":1,"type":"token","sequence":1360,"elapsed_ms":53359,"data":"answer"}
+{"schema_version":1,"type":"token","sequence":1361,"elapsed_ms":53406,"data":"\"}"}
+{"schema_version":1,"type":"inference","sequence":1362,"elapsed_ms":53406,"data":{"prompt_tokens":5532,"cached_tokens":1554,"generated_tokens":5,"simulated":false}}
+{"schema_version":1,"type":"model_output","sequence":1363,"elapsed_ms":53406,"data":"{\"final\":\"answer\"}"}
+{"schema_version":1,"type":"repository_scan","sequence":1364,"elapsed_ms":53453,"data":{"schema_version":1,"backend":"ReadDirectoryChangesW","events":[],"rescan_required":false,"initial_scan_required":false,"reopen_required":false,"timed_out":true,"more_pending":false,"reason_flags":0,"dropped_events":0,"dropped_events_unknown":false,"overflow_count":0,"directories":1,"path_encoding":"utf-8","index_mode":"full","generation":5,"changed":false,"watch_available":true,"watch_reopened":false,"watch_startup_reopens":0,"followup_scan_required":false,"after_scan_events":0,"watch_fallback":""}}
+{"schema_version":1,"type":"validation_plan","sequence":1365,"elapsed_ms":53453,"data":{"schema_version":2,"generation":5,"language":"python","status":"planned","verification_status":"planned","graph_kind":"none","sound":false,"applicable":true,"verification_available":true,"broad_verification_required":true,"changed_paths":[],"languages":["python"],"missing_tools":[],"modules":[],"packages":[],"edges":[],"affected_packages":[],"reverse_dependents":[],"fallback_reasons":[],"limitations":["Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.","pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.","Python syntax checks compile source without importing code. Python test runs both redirect the bytecode cache to an unwritten prefix and disable bytecode writes, so imports made by the test process itself compile from current source and cannot be satisfied by a workspace __pycache__ or a previous candidate's bytecode; the cost is one compile per command. These are interpreter options and do not reach a further interpreter that a test spawns itself, which retains ordinary bytecode behaviour. pytest also disables its cache provider. Project tests may still mutate inputs and must be rejected if the validation snapshot changes.","Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration."],"python":{"applicable":true,"executable_available":true,"executable":"python","selection_kind":"changed_files_and_filename_related_tests","syntax_scope":"all_indexed","source_file_count":2,"syntax_file_count":2,"test_file_count":1,"targeted_test_count":0,"syntax_scheduled":true,"tests_applicable":true,"tests_scheduled":true,"test_runner":"unittest","bytecode_cache_isolated":true,"bytecode_cache_prefix":".forge/pycache","pytest_cache_disabled":false,"targeted_test_files":[]},"stages":[{"name":"format","requires_previous_success":false,"commands":[]},{"name":"compile","requires_previous_success":true,"commands":[{"cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"reason":"indexed_python_files_for_unknown_changes"}]},{"name":"affected_tests","requires_previous_success":true,"commands":[]},{"name":"dependent_tests","requires_previous_success":true,"commands":[]},{"name":"vet","requires_previous_success":true,"commands":[]},{"name":"broad_tests","requires_previous_success":true,"commands":[{"cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"reason":"final_python_unittest_files"}]}],"command_count":2}}
+{"schema_version":1,"type":"validation_command_start","sequence":1366,"elapsed_ms":53453,"data":{"id":1,"stage":"compile","cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1367,"elapsed_ms":53500,"data":{"id":1,"stage":"compile","cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":47.0,"stdout_bytes":0,"stderr_bytes":0,"stdout_artifact":"validation/0002-0001.stdout","stderr_artifact":"validation/0002-0001.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_command_start","sequence":1368,"elapsed_ms":53500,"data":{"id":2,"stage":"broad_tests","cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"started":false}}
+{"schema_version":1,"type":"validation_command","sequence":1369,"elapsed_ms":53641,"data":{"id":2,"stage":"broad_tests","cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":141.0,"stdout_bytes":0,"stderr_bytes":283,"stdout_artifact":"validation/0002-0002.stdout","stderr_artifact":"validation/0002-0002.stderr","status":"ok"}}
+{"schema_version":1,"type":"validation_result","sequence":1370,"elapsed_ms":53672,"data":{"schema_version":1,"attempt":2,"generation":5,"applicable":true,"session":"C:\\Users\\flowc\\AppData\\Local\\Temp\\forge-bench-fs5ioy4x/.forge/sessions/8840b9946b3198373e4e986561dcda74","plan":{"schema_version":2,"generation":5,"language":"python","status":"planned","verification_status":"planned","graph_kind":"none","sound":false,"applicable":true,"verification_available":true,"broad_verification_required":true,"changed_paths":[],"languages":["python"],"missing_tools":[],"modules":[],"packages":[],"edges":[],"affected_packages":[],"reverse_dependents":[],"fallback_reasons":[],"limitations":["Python has no structural dependency graph; related tests are selected only by test_<module>.py and <module>_test.py basenames, then broad verification is required.","pytest selection uses indexed configuration, conftest files, pytest imports and filename conventions; undeclared plugins, environments and services need separate validation.","Python syntax checks compile source without importing code. Python test runs both redirect the bytecode cache to an unwritten prefix and disable bytecode writes, so imports made by the test process itself compile from current source and cannot be satisfied by a workspace __pycache__ or a previous candidate's bytecode; the cost is one compile per command. These are interpreter options and do not reach a further interpreter that a test spawns itself, which retains ordinary bytecode behaviour. pytest also disables its cache provider. Project tests may still mutate inputs and must be rejected if the validation snapshot changes.","Unittest file paths use the standard loader's path-to-module conversion; a local test namespace that collides with an installed regular package may need pytest or explicit project configuration."],"python":{"applicable":true,"executable_available":true,"executable":"python","selection_kind":"changed_files_and_filename_related_tests","syntax_scope":"all_indexed","source_file_count":2,"syntax_file_count":2,"test_file_count":1,"targeted_test_count":0,"syntax_scheduled":true,"tests_applicable":true,"tests_scheduled":true,"test_runner":"unittest","bytecode_cache_isolated":true,"bytecode_cache_prefix":".forge/pycache","pytest_cache_disabled":false,"targeted_test_files":[]},"stages":[{"name":"format","requires_previous_success":false,"commands":[]},{"name":"compile","requires_previous_success":true,"commands":[{"cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"reason":"indexed_python_files_for_unknown_changes"}]},{"name":"affected_tests","requires_previous_success":true,"commands":[]},{"name":"dependent_tests","requires_previous_success":true,"commands":[]},{"name":"vet","requires_previous_success":true,"commands":[]},{"name":"broad_tests","requires_previous_success":true,"commands":[{"cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"reason":"final_python_unittest_files"}]}],"command_count":2},"commands":[{"id":1,"stage":"compile","cwd":".","argv":["python","-B","-c","import pathlib,sys;all(compile(pathlib.Path(p).read_bytes(),p,'exec') is not None for p in sys.argv[1:])","./service.py","./test_service.py"],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":47.0,"stdout_bytes":0,"stderr_bytes":0,"stdout_artifact":"validation/0002-0001.stdout","stderr_artifact":"validation/0002-0001.stderr","status":"ok"},{"id":2,"stage":"broad_tests","cwd":".","argv":["python","-B","-X","pycache_prefix=.forge/pycache","-c","import sys,unittest;p=unittest.main(module=None,argv=['unittest','-v',*sys.argv[1:]],exit=False);sys.exit(not p.result.wasSuccessful() or p.result.testsRun==0)","./test_service.py"],"require_empty_stdout":false,"started":true,"exit_code":0,"timeout":false,"cancelled":false,"truncated":false,"duration_ms":141.0,"stdout_bytes":0,"stderr_bytes":283,"stdout_artifact":"validation/0002-0002.stdout","stderr_artifact":"validation/0002-0002.stderr","status":"ok"}],"generation_after":5,"commands_attempted":2,"commands_run":2,"stages_passed":2,"inputs_changed":false,"inputs_checked":true,"input_max_files":100000,"input_max_bytes":2147483648,"input_hash_before":"5ce73a5fa8809857","input_hash_after":"5ce73a5fa8809857","snapshot_ms":0.0,"duration_ms":219.0,"passed":true,"checks_passed":true,"evidence_complete":true,"status":"ok","summary":"Automatic staged validation passed: 2 commands across 2 stages, repository generation=5."}}
+{"schema_version":1,"type":"working_state","sequence":1371,"elapsed_ms":53672,"data":{"turn":8,"artifact":"context/0008.state.json","hash":771147684590653225}}
+{"schema_version":1,"type":"message","sequence":1372,"elapsed_ms":53687,"data":"answer"}
+{"schema_version":1,"type":"patch_snapshot","sequence":1373,"elapsed_ms":53687,"data":{"artifact":"patch.diff","status":"not_collected","reason":"explicit_git_diff_required"}}
+{"schema_version":1,"type":"state","sequence":1374,"elapsed_ms":53687,"data":{"state":7}}
+{"schema_version":1,"type":"done","sequence":1375,"elapsed_ms":53687,"data":{"schema_version":1,"status":"ok","simulated":false,"prompt_tokens":27973,"generated_tokens":1259,"cached_tokens":13169,"prefill_tokens":14804,"turns":8,"tool_calls":7,"raw_tool_bytes":5049,"visible_tool_bytes":5049,"files_modified":1,"context_evictions":1,"loop_warnings":0,"grammar_fast_tokens":809,"grammar_fallback_tokens":450,"think_tokens":0,"forced_actions":0,"action_stops":8,"action_select_tokens":572,"action_argument_tokens":238,"patch_tokens":447,"final_tokens":2,"memory_tokens":0,"forced_action_progress_tokens":0,"raw_tool_tokens":5497,"visible_tool_tokens":5497,"files_opened":4,"validation_commands":4,"validation_failures":0,"generation_arena_peak_bytes":65648,"repo_full_scans":7,"repo_delta_scans":1,"filesystem_events":2,"watch_reopens":0,"stale_generations":0,"index_cold_parses":0,"index_incremental_parses":0,"index_cache_hits":0,"index_cache_evictions":0,"peak_index_source_bytes":0,"peak_index_nodes":0,"checkpoint_lookups":0,"checkpoint_hits":0,"checkpoint_misses":0,"checkpoint_captures":0,"checkpoint_evictions":0,"checkpoint_restored_tokens":0,"checkpoint_reused_tokens":0,"checkpoint_additional_tokens":0,"checkpoint_peak_bytes":0,"load_ms":6531.0,"prefill_ms":7751.0,"decode_ms":44608.0,"sampling_ms":13628.0,"duration_ms":53687.0,"tool_ms":314.0,"validation_ms":437.0,"index_ms":234.0,"checkpoint_probe_ms":0.0,"checkpoint_capture_ms":0.0,"checkpoint_restore_ms":0.0}}

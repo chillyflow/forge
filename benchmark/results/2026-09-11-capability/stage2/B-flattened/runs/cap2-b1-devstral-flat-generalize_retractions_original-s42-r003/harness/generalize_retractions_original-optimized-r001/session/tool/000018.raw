@@ -1,0 +1,28 @@
+file_sha256:affe75b88a291bb6516ea4cee17b90d330a59700e07ba23bf97878c77c501eb5
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     pending_retractions = {}
+5:     for event in events:
+6:         if event['id'] in seen:
+7:             continue
+8:         seen.add(event['id'])
+9:         if event['kind'] == 'post':
+10:             account, amount = event['account'], event['amount']
+11:             postings[event['id']] = (account, amount)
+12:             totals.setdefault(account, 0)
+13:             if event['id'] not in pending_retractions:
+14:                 totals[account] += amount
+15:             if event['id'] in pending_retractions:
+16:                 del pending_retractions[event['id']]
+17:         else:
+18:             target = event['target']
+19:             if target in cancelled:
+20:                 continue
+21:             cancelled.add(target)
+22:             if target in postings:
+23:                 account, amount = postings[target]
+24:                 totals[account] -= amount
+25:             else:
+26:                 pending_retractions[target] = True
+27:     return totals

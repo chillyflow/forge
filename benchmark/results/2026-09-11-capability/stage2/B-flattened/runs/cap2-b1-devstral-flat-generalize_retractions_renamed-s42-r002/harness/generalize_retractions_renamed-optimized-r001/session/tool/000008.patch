@@ -1,0 +1,81 @@
+diff --git "a/ledger.py" "b/ledger.py"
+--- "a/ledger.py"
++++ "b/ledger.py"
+@@ -1,38 +1,39 @@
+-def positions_for(messages):
+-    visited, voided = set(), set()
+-    pending_retractions = {}
+-    entries, positions = {}, {}
+-    for message in messages:
+-        if message['key'] in visited:
+-            continue
+-        visited.add(message['key'])
+-        if message['kind'] == 'post':
+-            bucket, delta = message['bucket'], message['delta']
+-            reference = message['key']
+-            # Check if there are pending retractions for this posting
+-            if reference in pending_retractions:
+-                # This posting is being retracted, ensure bucket exists with 0
+-                positions.setdefault(bucket, 0)
+-                del pending_retractions[reference]
+-            else:
+-                # Add the posting to entries and positions
+-                entries[reference] = (bucket, delta)
+-                positions.setdefault(bucket, 0)
+-                positions[bucket] += delta
+-        else:
+-            reference = message['reference']
+-            if reference in voided:
+-                continue
+-            voided.add(reference)
+-            if reference in entries:
+-                # Apply retraction immediately if posting exists
+-                bucket, delta = entries[reference]
+-                positions[bucket] -= delta
+-                # Ensure bucket remains with 0 value if it becomes zero
+-                if positions[bucket] == 0:
+-                    del positions[bucket]
+-                del entries[reference]
+-            else:
+-                # Defer retraction until posting is encountered
+-                pending_retractions[reference] = True
+-    return positions
++def positions_for(messages):
++    visited, voided = set(), set()
++    pending_retractions = {}
++    entries, positions = {}, {}
++    for message in messages:
++        if message['key'] in visited:
++            continue
++        visited.add(message['key'])
++        if message['kind'] == 'post':
++            bucket, delta = message['bucket'], message['delta']
++            reference = message['key']
++            # Check if there are pending retractions for this posting
++            if reference in pending_retractions:
++                # This posting is being retracted, ensure bucket exists with 0
++                positions.setdefault(bucket, 0)
++                del pending_retractions[reference]
++            else:
++                # Add the posting to entries and positions
++                entries[reference] = (bucket, delta)
++                positions.setdefault(bucket, 0)
++                positions[bucket] += delta
++        else:
++            reference = message['reference']
++            if reference in voided:
++                continue
++            voided.add(reference)
++            if reference in entries:
++                # Apply retraction immediately if posting exists
++                bucket, delta = entries[reference]
++                positions[bucket] -= delta
++                # Ensure bucket remains with 0 value if it becomes zero
++                if positions[bucket] == 0:
++                    # Keep the bucket with 0 value as per specification
++                    pass
++                del entries[reference]
++            else:
++                # Defer retraction until posting is encountered
++                pending_retractions[reference] = True
++    return positions

@@ -1,0 +1,48 @@
+diff --git a/ledger.py b/ledger.py
+index 14a9172..91daa6a 100644
+--- a/ledger.py
++++ b/ledger.py
+@@ -1,5 +1,6 @@
+ def positions_for(messages):
+     visited, voided = set(), set()
++    pending_retractions = {}
+     entries, positions = {}, {}
+     for message in messages:
+         if message['key'] in visited:
+@@ -7,9 +8,16 @@ def positions_for(messages):
+         visited.add(message['key'])
+         if message['kind'] == 'post':
+             bucket, delta = message['bucket'], message['delta']
+-            entries[message['key']] = (bucket, delta)
+-            positions.setdefault(bucket, 0)
+-            if True:
++            reference = message['key']
++            # Check if there are pending retractions for this posting
++            if reference in pending_retractions:
++                # This posting is being retracted, ensure bucket exists with 0
++                positions.setdefault(bucket, 0)
++                del pending_retractions[reference]
++            else:
++                # Add the posting to entries and positions
++                entries[reference] = (bucket, delta)
++                positions.setdefault(bucket, 0)
+                 positions[bucket] += delta
+         else:
+             reference = message['reference']
+@@ -17,6 +25,16 @@ def positions_for(messages):
+                 continue
+             voided.add(reference)
+             if reference in entries:
++                # Apply retraction immediately if posting exists
+                 bucket, delta = entries[reference]
++                positions.setdefault(bucket, 0)
+                 positions[bucket] -= delta
++                # Ensure bucket remains with 0 value if it becomes zero
++                if positions[bucket] == 0:
++                    # Keep the bucket with 0 value as per specification
++                    positions[bucket] = 0
++                del entries[reference]
++            else:
++                # Defer retraction until posting is encountered
++                pending_retractions[reference] = True
+     return positions

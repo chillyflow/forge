@@ -1,0 +1,11 @@
+file_sha256:091ae039f2d71ded9ac038e3ea09116a4ebde8f71e1b3d83009bfaa90f671dff
+5: class JournalCases(unittest.TestCase):
+6:     def test_order_and_duplicates(self):
+7:         p = post('p', 7)
+8:         for messages in [[p, retract('r', 'p')], [retract('r', 'p'), p],
+9:                        [p, p, retract('r', 'p'), retract('s', 'p')]]:
+10:             self.assertEqual(positions_for(messages), {'cash': 0})
+11:     def test_independent_postings(self):
+12:         self.assertEqual(positions_for([post('a', 7), post('b', -2), retract('r', 'a')]), {'cash': -2})
+13:         self.assertEqual(positions_for([retract('r', 'missing')]), {})
+14:         self.assertEqual(positions_for([]), {})

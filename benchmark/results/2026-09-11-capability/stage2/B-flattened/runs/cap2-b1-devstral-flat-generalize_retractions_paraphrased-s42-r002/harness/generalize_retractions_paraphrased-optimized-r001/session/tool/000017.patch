@@ -1,0 +1,60 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,26 +1,30 @@
+-def balances(events):
+-    seen, postings, totals = set(), {}, {}
+-    
+-    # First pass: collect all unique post events
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-    
+-    # Second pass: process retract events (only unique ones not already seen)
+-    for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+-        if event['kind'] == 'retract':
+-            target = event['target']
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-    
+-    return totals
++def balances(events):
++    cancelled = set()
++    totals = {}
++    
++    for event in events:
++        event_id = event['id']
++        if event_id in cancelled:
++            continue
++            
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            if event_id not in cancelled:
++                totals.setdefault(account, 0)
++                totals[account] += amount
++        elif event['kind'] == 'retract':
++            target = event['target']
++            if target in cancelled:
++                continue
++            cancelled.add(target)
++            if target in totals:
++                account = event['account'] if 'account' in event else None
++                if account and account in totals:
++                    totals[account] -= totals.get(target, 0)
++                else:
++                    for acc, amt in totals.items():
++                        if acc == target:
++                            totals[acc] -= amt
++                            break
++    
++    return totals

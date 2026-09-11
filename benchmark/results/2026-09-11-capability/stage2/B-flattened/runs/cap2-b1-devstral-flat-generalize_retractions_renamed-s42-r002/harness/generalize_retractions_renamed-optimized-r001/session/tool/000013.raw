@@ -1,0 +1,41 @@
+file_sha256:c302840b6f796388ae36faa3ee73bac98bb15742069434908a9a8d82623626ff
+1: def positions_for(messages):
+2:     visited, voided = set(), set()
+3:     pending_retractions = {}
+4:     entries, positions = {}, {}
+5:     for message in messages:
+6:         if message['key'] in visited:
+7:             continue
+8:         visited.add(message['key'])
+9:         if message['kind'] == 'post':
+10:             bucket, delta = message['bucket'], message['delta']
+11:             reference = message['key']
+12:             # Check if there are pending retractions for this posting
+13:             if reference in pending_retractions:
+14:                 # This posting is being retracted, ensure bucket exists with 0
+15:                 positions.setdefault(bucket, 0)
+16:                 del pending_retractions[reference]
+17:             else:
+18:                 # Add the posting to entries and positions
+19:                 entries[reference] = (bucket, delta)
+20:                 positions.setdefault(bucket, 0)
+21:                 positions[bucket] += delta
+22:         else:
+23:             reference = message['reference']
+24:             if reference in voided:
+25:                 continue
+26:             voided.add(reference)
+27:             if reference in entries:
+28:                 # Apply retraction immediately if posting exists
+29:                 bucket, delta = entries[reference]
+30:                 positions.setdefault(bucket, 0)
+31:                 positions[bucket] -= delta
+32:                 # Ensure bucket remains with 0 value if it becomes zero
+33:                 if positions[bucket] == 0:
+34:                     # Keep the bucket with 0 value as per specification
+35:                     positions[bucket] = 0
+36:                 del entries[reference]
+37:             else:
+38:                 # Defer retraction until posting is encountered
+39:                 pending_retractions[reference] = True
+40:     return positions

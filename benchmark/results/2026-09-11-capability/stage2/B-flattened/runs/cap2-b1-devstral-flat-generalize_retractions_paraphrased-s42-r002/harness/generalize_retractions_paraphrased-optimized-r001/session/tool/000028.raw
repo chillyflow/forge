@@ -1,0 +1,31 @@
+file_sha256:56edabe878aa47dc68a83e2ad5467ad201512a28ae61c267aafee27a80ec754f
+1: def balances(events):
+2:     cancelled = set()
+3:     totals = {}
+4:     
+5:     # First pass: collect all unique events and build the cancelled set
+6:     for event in events:
+7:         if event['kind'] == 'retract':
+8:             cancelled.add(event['target'])
+9:     
+10:     # Second pass: apply only non-cancelled posts
+11:     for event in events:
+12:         if event['id'] in cancelled:
+13:             continue
+14:         if event['kind'] == 'post':
+15:             account, amount = event['account'], event['amount']
+16:             totals.setdefault(account, 0)
+17:             totals[account] += amount
+18:     
+19:     # Third pass: ensure all referenced accounts appear in result (even with zero balance)
+20:     for event in events:
+21:         if event['kind'] == 'post':
+22:             account = event['account']
+23:             totals.setdefault(account, 0)
+24: 
+25:     return totals
+26:         if event['kind'] == 'post':
+27:             account = event['account']
+28:             totals.setdefault(account, 0)
+29:     
+30:     return totals
