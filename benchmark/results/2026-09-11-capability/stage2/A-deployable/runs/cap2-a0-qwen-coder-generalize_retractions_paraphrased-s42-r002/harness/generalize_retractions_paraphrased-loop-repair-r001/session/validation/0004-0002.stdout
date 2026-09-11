@@ -1,0 +1,12 @@
+Testing case: [p, retract('r', 'p')]
+p = {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+r = {'id': 'r', 'kind': 'retract', 'target': 'p'}
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 0}
+Expected: {'cash': 0}
+
+==================================================
+Testing case: [retract('r', 'p'), p]
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {'cash': 0}
+Expected: {'cash': 0}

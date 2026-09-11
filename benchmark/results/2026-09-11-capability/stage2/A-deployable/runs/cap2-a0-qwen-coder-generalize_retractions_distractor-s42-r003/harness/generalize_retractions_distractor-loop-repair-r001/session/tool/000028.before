@@ -1,0 +1,24 @@
+def balances(events):
+    # Track all postings with their event IDs and amounts
+    postings = []
+    # Track which posting IDs have been cancelled
+    cancelled = set()
+    totals = {}
+    
+    for event in events:
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings.append((event['id'], account, amount))
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:  # event['kind'] == 'retract'
+            target = event['target']
+            if target in cancelled:
+                continue
+            cancelled.add(target)
+            # Find and cancel the posting with this target ID
+            for i, (posting_id, account, amount) in enumerate(postings):
+                if posting_id == target:
+                    totals[account] -= amount
+                    break
+    return totals

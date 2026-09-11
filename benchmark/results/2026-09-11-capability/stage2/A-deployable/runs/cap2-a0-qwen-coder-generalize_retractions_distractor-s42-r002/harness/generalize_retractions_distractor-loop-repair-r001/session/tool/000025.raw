@@ -1,0 +1,13 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Case [p, retract(r, p)]:
+Result: {'cash': 0}
+Expected: {"cash": 0}
+This should be correct since 7 - 7 = 0
+
+Case [retract(r, p), p]:
+Result: {}
+Expected: {"cash": 0}
+This should be empty dict since p was cancelled before it was posted
+
+stderr:

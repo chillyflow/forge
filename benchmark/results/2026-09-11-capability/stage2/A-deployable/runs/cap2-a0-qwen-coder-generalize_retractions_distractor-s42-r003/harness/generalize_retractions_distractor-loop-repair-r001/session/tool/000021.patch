@@ -1,0 +1,46 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,20 +1,22 @@
+-def balances(events):
+-    cancelled = set()
+-    postings = {}
+-    totals = {}
+-    
+-    for event in events:
+-        if event['kind'] == 'post':
+-            account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
+-            totals.setdefault(account, 0)
+-            totals[account] += amount
+-        else:  # event['kind'] == 'retract'
+-            target = event['target']
+-            if target in cancelled:
+-                continue
+-            cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
+-    return totals
++def balances(events):
++    # Track which postings have been cancelled (by their event ID)
++    cancelled = set()
++    # Track all postings by their event ID
++    postings = {}
++    totals = {}
++    
++    for event in events:
++        if event['kind'] == 'post':
++            account, amount = event['account'], event['amount']
++            postings[event['id']] = (account, amount)
++            totals.setdefault(account, 0)
++            totals[account] += amount
++        else:  # event['kind'] == 'retract'
++            target = event['target']
++            if target in cancelled:
++                continue
++            cancelled.add(target)
++            if target in postings:
++                account, amount = postings[target]
++                totals[account] -= amount
++    return totals

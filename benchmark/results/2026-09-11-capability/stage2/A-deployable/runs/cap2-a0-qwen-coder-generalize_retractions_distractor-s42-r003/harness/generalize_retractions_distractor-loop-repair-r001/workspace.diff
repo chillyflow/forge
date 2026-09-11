@@ -1,0 +1,43 @@
+diff --git a/service.py b/service.py
+index b7bbbde..8261303 100644
+--- a/service.py
++++ b/service.py
+@@ -1,22 +1,26 @@
+ def balances(events):
+-    seen, cancelled = set(), set()
+-    postings, totals = {}, {}
++    # Track all postings with their event IDs and amounts
++    postings = []
++    # Track which posting IDs have been cancelled
++    cancelled = set()
++    totals = {}
++    
+     for event in events:
+-        if event['id'] in seen:
+-            continue
+-        seen.add(event['id'])
+         if event['kind'] == 'post':
+             account, amount = event['account'], event['amount']
+-            postings[event['id']] = (account, amount)
++            postings.append((event['id'], account, amount))
+             totals.setdefault(account, 0)
+-            if True:
+-                totals[account] += amount
+-        else:
++            totals[account] += amount
++        else:  # event['kind'] == 'retract'
+             target = event['target']
+             if target in cancelled:
+                 continue
+             cancelled.add(target)
+-            if target in postings:
+-                account, amount = postings[target]
+-                totals[account] -= amount
++            # Find and cancel the posting with this target ID
++            for i, (posting_id, account, amount) in enumerate(postings):
++                if posting_id == target:
++                    totals[account] -= amount
++                    # Remove the posting from our tracking to prevent double cancellation
++                    postings.pop(i)
++                    break
+     return totals

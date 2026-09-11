@@ -1,0 +1,7 @@
+Testing the exact failing case:
+Events: [{'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}]
+Result: {'cash': 0}
+Expected: {"cash": 0}
+The issue: retraction does not add account to involved_accounts because no posting exists yet
+But we still need to track that account "cash" was involved in an operation
+because a posting for it was cancelled

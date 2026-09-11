@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+
+from service import balances
+
+def post(i, amount): 
+    return {'id': i, 'kind': 'post', 'account': 'cash', 'amount': amount}
+
+def retract(i, target): 
+    return {'id': i, 'kind': 'retract', 'target': target}
+
+# Test the failing case
+p = post('p', 7)
+r = retract('r', 'p')
+
+print("Testing case: [p, retract('r', 'p')]")
+print(f"p = {p}")
+print(f"r = {r}")
+print(f"Events: [{p}, {r}]")
+
+result = balances([p, r])
+print(f"Result: {result}")
+print(f"Expected: {{'cash': 0}}")
+
+print("\n" + "="*50)
+
+# Test the reverse case
+print("Testing case: [retract('r', 'p'), p]")
+print(f"Events: [{r}, {p}]")
+
+result2 = balances([r, p])
+print(f"Result: {result2}")
+print(f"Expected: {{'cash': 0}}")

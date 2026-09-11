@@ -58,15 +58,31 @@ significant at six clusters. Do not report the per-run contingency
 (`[[10,8],[0,18]]`) as the headline: the three repetitions of one fixture are
 not independent observations.
 
-## Stage 2 — retraction family (Group B), 12 runs per arm
+## Stage 2 — retraction family (Groups A and B), 12 runs per entitled arm
+
+**Group B pair:**
 
 | Arm | Runs | Fixtures with a pass | Bar: ≥4/12, ≥2 fixtures |
 | --- | ---: | ---: | --- |
 | b1 Devstral | 5/12 | 4/4 | **cleared** |
 | b0 Qwen coder | 0/12 | 0/4 | not cleared |
 
-Every scheduled run reports `protected_files_unchanged` and
-`verification_inputs_unchanged` true; zero protected-file violations.
+**Group A addendum — `a0` coder, the only Group A arm entitled to Stage 2:**
+
+| Arm | Runs | Fixtures with a pass | Bar: ≥4/12, ≥2 fixtures |
+| --- | ---: | ---: | --- |
+| a0 Qwen coder | 2/12 | 2/4 | not cleared |
+
+`a1` Thinking was excluded: it did not clear G-Model and is therefore not
+entitled to the retraction stage. The decision, the schedule and the profile
+were frozen in `stage2/A-deployable/protocol-addendum.json` before execution
+(its declared `frozen_utc` has been corrected to the file's true mtime,
+`22:39:42Z`, which precedes run 1 by 36 s). The `--arms` subset flag this stage
+required was added to `run_models.py` and is committed with this record.
+
+Every scheduled run in both groups reports `protected_files_unchanged` and
+`verification_inputs_unchanged` true; zero protected-file violations across all
+36 Stage 2 runs.
 
 **Secondary finding, reported separately and never substituted for a pass:**
 three further Devstral runs (`original` r001, `original` r003, `renamed`
@@ -74,10 +90,6 @@ r003) left a *passing terminal workspace* without a successful agent run. In
 total 8 of 12 Devstral runs left a test-passing workspace; 5 completed
 successfully. A passing terminal workspace does not overwrite a failed
 primary result.
-
-Group A (`a0` coder, entitled under G-Model) runs its retraction stage as a
-separate addendum (`stage2/A-deployable/`, decision recorded in
-`protocol-addendum.json` before execution).
 
 ## Interpretation and next steps
 
@@ -88,15 +100,25 @@ separate addendum (`stage2/A-deployable/`, decision recorded in
    than on flattened, 0/18).
 2. **Native thinking buys nothing here** on the deployable loop under fixed
    budgets; its axis closes.
-3. The highest-value engineering task the stage identifies is a renderer fix
+3. **The retraction family separates the models cleanly.** Devstral clears at
+   5/12 across all four manifests; the Qwen coder scores 2/12 on the deployable
+   native loop and 0/12 on the flattened agent. The recorded retraction-family
+   exit for Qwen3-Coder is therefore reproduced on a second configuration, and
+   the exit's stated reopen condition — a different hypothesis class, model
+   capability — is met by Devstral rather than asserted.
+4. The highest-value engineering task the stage identifies is a renderer fix
    so Mistral-family templates can run the deployable minimal-native loop,
    where Devstral's capability and the loop's strengths would combine. Until
    that exists, a flattened deployable policy for Mistral-family models is
    the only working configuration, and it needs its own measurement before
    any default changes.
-4. No promotion claim and no default change follows from this stage. A fresh
+5. No promotion claim and no default change follows from this stage. A fresh
    holdout remains the promotion instrument.
 
 Corrections applied from the Hermes session handoff (`HANDOFF.md`): the
 per-run Fisher figure was removed, cluster-level p reported instead; the
 passing-terminal-workspace runs are separated; no significance language.
+
+Stage 2 for Group A was executed after this section was first written and is
+reported above; the `protocol-addendum.json` timestamp correction is also
+recorded here rather than silently in the file.

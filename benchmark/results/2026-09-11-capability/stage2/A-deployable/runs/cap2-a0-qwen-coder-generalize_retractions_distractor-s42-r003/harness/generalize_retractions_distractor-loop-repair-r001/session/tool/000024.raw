@@ -1,0 +1,10 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+p: {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}
+r1: {'id': 'r', 'kind': 'retract', 'target': 'p'}
+r2: {'id': 's', 'kind': 'retract', 'target': 'p'}
+Events: [{'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'p', 'kind': 'post', 'account': 'cash', 'amount': 7}, {'id': 'r', 'kind': 'retract', 'target': 'p'}, {'id': 's', 'kind': 'retract', 'target': 'p'}]
+Result: {'cash': 7}
+Expected: {"cash": 0}
+
+stderr:
