@@ -15,6 +15,7 @@
 struct fg_chat_templates {
     common_chat_templates_ptr value;
     bool supports_thinking;
+    bool rejects_user_after_tool;
 };
 
 struct fg_chat_render {
@@ -153,6 +154,52 @@ static void validate_native_tools(const json &tools) {
             "final, the minimal/candidate registry, or only validate_candidate");
 }
 
+/* Mistral-family templates enforce strict user/assistant alternation and raise
+ * when a user turn follows tool results — which is exactly what the minimal
+ * loop's post-tool host control used to emit. The raise is data-dependent, so
+ * probe the template rather than infer it from its source, and mirror the real
+ * native render's input shape (a leading system message is mandatory there). */
+static bool probe_rejects_user_after_tool(const common_chat_templates *value) {
+    try {
+        common_chat_templates_inputs inputs;
+        common_chat_msg system;
+        system.role = "system";
+        system.content = "probe";
+        inputs.messages.push_back(std::move(system));
+        common_chat_msg call;
+        call.role = "assistant";
+        common_chat_tool_call call_entry;
+        call_entry.name = "final";
+        call_entry.arguments = "{\"answer\":\"probe\"}";
+        call_entry.id = "f0000000";
+        call.tool_calls.push_back(std::move(call_entry));
+        inputs.messages.push_back(std::move(call));
+        common_chat_msg result;
+        result.role = "tool";
+        result.tool_name = "final";
+        result.tool_call_id = "f0000000";
+        result.content = "probe";
+        inputs.messages.push_back(std::move(result));
+        common_chat_msg control;
+        control.role = "user";
+        control.content = "probe";
+        inputs.messages.push_back(std::move(control));
+        common_chat_tool schema;
+        schema.name = "final";
+        schema.description = "probe";
+        schema.parameters = "{\"type\":\"object\"}";
+        inputs.tools.push_back(std::move(schema));
+        inputs.add_generation_prompt = true;
+        inputs.use_jinja = true;
+        inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
+        inputs.parallel_tool_calls = false;
+        common_chat_templates_apply(value, inputs);
+        return false;
+    } catch (...) {
+        return true;
+    }
+}
+
 extern "C" fg_chat_templates *fg_chat_templates_create(const struct llama_model *model,
                                                        const char *template_override, char *error,
                                                        size_t error_size) {
@@ -164,6 +211,7 @@ extern "C" fg_chat_templates *fg_chat_templates_create(const struct llama_model 
         result->supports_thinking =
             source.find("enable_thinking") != std::string::npos ||
             common_chat_templates_support_enable_thinking(result->value.get());
+        result->rejects_user_after_tool = probe_rejects_user_after_tool(result->value.get());
         return result.release();
     } catch (const std::exception &exception) {
         set_error(error, error_size, exception.what());
@@ -179,6 +227,10 @@ extern "C" void fg_chat_templates_destroy(fg_chat_templates *templates) {
 
 extern "C" bool fg_chat_templates_support_thinking(const fg_chat_templates *templates) {
     return templates && templates->supports_thinking;
+}
+
+extern "C" bool fg_chat_templates_rejects_user_after_tool(const fg_chat_templates *templates) {
+    return templates && templates->rejects_user_after_tool;
 }
 
 extern "C" char *fg_chat_templates_apply(const fg_chat_templates *templates, const char *prompt,

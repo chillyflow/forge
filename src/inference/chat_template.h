@@ -19,6 +19,11 @@ fg_chat_templates *fg_chat_templates_create(const struct llama_model *model,
                                             size_t error_size);
 void fg_chat_templates_destroy(fg_chat_templates *templates);
 bool fg_chat_templates_support_thinking(const fg_chat_templates *templates);
+/* True when the model's template raises on a user turn that follows tool
+ * results, as Mistral-family templates do. The host keeps its post-tool control
+ * inside the tool message for those templates rather than emitting a separate
+ * user turn, so the rendered prompt stays valid. */
+bool fg_chat_templates_rejects_user_after_tool(const fg_chat_templates *templates);
 char *fg_chat_templates_apply(const fg_chat_templates *templates, const char *prompt,
                               bool enable_thinking, size_t *length, char *error, size_t error_size);
 
