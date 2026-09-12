@@ -60,6 +60,7 @@ forge_status fg_process(const char *root, const char *const *argv, uint64_t time
                         forge_error *);
 void fg_process_free(fg_process_result *);
 char *fg_process_render(const fg_process_result *);
+char *fg_normalize_workspace_paths(const char *, const char *);
 char *fg_render_bytes(const char *, size_t);
 forge_status fg_process_at(const char *workspace_root, const char *cwd, const char *const *argv,
                            uint64_t timeout, size_t max_bytes, forge_cancel_fn, void *,

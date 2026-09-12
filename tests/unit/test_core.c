@@ -76,6 +76,37 @@ static void test_edit_diffs(void) {
     assert(!fg_edit_diff("x", true, old, next, &length, NULL, NULL, 1, &error));
     assert(error.code == FORGE_ERR_CANCELLED);
 }
+/* A workspace root is rewritten to "." in model-visible host text, in both the
+ * literal and the JSON-escaped spelling. Command output reaches the model
+ * escaped, which is why matching only the literal spelling left the leak. */
+static void test_workspace_path_normalization(void) {
+    const char *root = "C:\\work\\tmp\\forge-bench-ab12cd";
+    char *plain = fg_normalize_workspace_paths(
+        root, "Traceback: File \"C:\\work\\tmp\\forge-bench-ab12cd\\test.py\", line 3");
+    assert(plain && !strstr(plain, "forge-bench-ab12cd"));
+    assert(strstr(plain, "File \".\\test.py\", line 3"));
+    free(plain);
+    /* The escaped spelling: every backslash doubled. */
+    char *escaped = fg_normalize_workspace_paths(
+        root, "File \"C:\\\\work\\\\tmp\\\\forge-bench-ab12cd\\\\test.py\"");
+    assert(escaped && !strstr(escaped, "forge-bench-ab12cd"));
+    assert(strstr(escaped, ".\\\\test.py"));
+    free(escaped);
+    /* Every occurrence, not only the first. */
+    char *twice = fg_normalize_workspace_paths(
+        root, "C:\\work\\tmp\\forge-bench-ab12cd\\a C:\\work\\tmp\\forge-bench-ab12cd\\b");
+    assert(twice && !strcmp(twice, ".\\a .\\b"));
+    free(twice);
+    /* Text without the root is returned unchanged: this is not a rewriter. */
+    char *other = fg_normalize_workspace_paths(root, "no paths here at all");
+    assert(other && !strcmp(other, "no paths here at all"));
+    free(other);
+    /* An absent root cannot normalise; callers keep their original text. */
+    assert(!fg_normalize_workspace_paths("", "text"));
+    assert(!fg_normalize_workspace_paths(NULL, "text"));
+    assert(!fg_normalize_workspace_paths("root", NULL));
+}
+
 static void test_utf8_and_byte_rendering(void) {
     const char text[] = "a\xc2\xa2\xe2\x82\xac\xf0\x9f\x8c\x8d"
                         "z";
@@ -349,6 +380,7 @@ int main(void) {
     forge_model_config defaults = forge_default_model_config();
     assert(defaults.prompt_protocol == FORGE_PROMPT_NATIVE);
     test_edit_diffs();
+    test_workspace_path_normalization();
     test_utf8_and_byte_rendering();
     test_diagnostic_byte_boundaries();
     test_native_tool_schema_and_normalization();

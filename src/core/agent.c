@@ -284,62 +284,6 @@ static bool recovery_materially_different(const recovery_mode *recovery, uint64_
     }
     return true;
 }
-/* Rewrite every occurrence of `needle` in `text` with `with`. */
-static char *replace_all(const char *text, const char *needle, const char *with) {
-    size_t needle_length = strlen(needle);
-    fg_buf out = {0};
-    const char *at = text;
-    for (;;) {
-        const char *hit = strstr(at, needle);
-        if (!hit) {
-            if (!fg_buf_puts(&out, at))
-                break;
-            return fg_buf_take(&out);
-        }
-        if (!fg_buf_add(&out, at, (size_t)(hit - at)) || !fg_buf_puts(&out, with))
-            break;
-        at = hit + needle_length;
-    }
-    fg_buf_clear(&out);
-    return NULL;
-}
-
-/* A rendered prompt must not depend on where the workspace happens to live.
- * Tool output carries absolute paths, so a workspace under a randomly named
- * temporary root produced different prompts for otherwise identical runs and
- * diverged a run that was otherwise reproducible. The workspace root is
- * rewritten to "." — which is also the relative form the model should use.
- *
- * Tool output reaches the model as an escaped JSON string, in which every
- * backslash of the path appears doubled, so that spelling is rewritten first;
- * the literal spelling is rewritten second. */
-static char *normalize_workspace_paths(const char *root, const char *text) {
-    if (!root || !*root || !text)
-        return NULL;
-    fg_buf escaped = {0};
-    for (const char *at = root; *at; at++) {
-        if (*at == '\\') {
-            if (!fg_buf_puts(&escaped, "\\\\")) {
-                fg_buf_clear(&escaped);
-                return NULL;
-            }
-        } else if (!fg_buf_add(&escaped, at, 1)) {
-            fg_buf_clear(&escaped);
-            return NULL;
-        }
-    }
-    char *pattern = fg_buf_take(&escaped);
-    if (!pattern)
-        return NULL;
-    char *first = replace_all(text, pattern, ".");
-    free(pattern);
-    if (!first)
-        return NULL;
-    char *second = replace_all(first, root, ".");
-    free(first);
-    return second;
-}
-
 static bool process_action_name(const char *tool) {
     return tool && (!strcmp(tool, "run_command") || !strcmp(tool, "git_status") ||
                     !strcmp(tool, "git_diff"));
@@ -1204,7 +1148,7 @@ static char *candidate_validate(forge_agent *a, fg_tool_context *tools, candidat
             goto fail;
         }
         if (a->root[0]) {
-            char *normalized = normalize_workspace_paths(a->root, detail);
+            char *normalized = fg_normalize_workspace_paths(a->root, detail);
             if (normalized) {
                 free(detail);
                 detail = normalized;
@@ -1218,7 +1162,7 @@ static char *candidate_validate(forge_agent *a, fg_tool_context *tools, candidat
     if (a->config.bounded_repair && (validated || passed)) {
         const char *evidence =
             feedback.data ? feedback.data : "Validation evidence unavailable.";
-        char *retained = a->root[0] ? normalize_workspace_paths(a->root, evidence) : NULL;
+        char *retained = a->root[0] ? fg_normalize_workspace_paths(a->root, evidence) : NULL;
         if (!retained)
             retained = fg_strdup(evidence);
         if (!retained) {
@@ -1251,7 +1195,7 @@ static char *candidate_validate(forge_agent *a, fg_tool_context *tools, candidat
      * named temporary root would render a different prompt for an otherwise
      * identical run. Best effort: on allocation failure the text is kept. */
     if (text && a->root[0]) {
-        char *normalized = normalize_workspace_paths(a->root, text);
+        char *normalized = fg_normalize_workspace_paths(a->root, text);
         if (normalized) {
             free(text);
             text = normalized;
@@ -1970,7 +1914,7 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
                  * different prompt for an otherwise identical run. Best
                  * effort: on allocation failure the original text is kept. */
                 if (a->root[0]) {
-                    char *normalized = normalize_workspace_paths(a->root, raw);
+                    char *normalized = fg_normalize_workspace_paths(a->root, raw);
                     if (normalized) {
                         free(raw);
                         raw = normalized;
@@ -3200,7 +3144,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
          * workspace path is rewritten here, before this text reaches either the
          * model or the retained diagnostic. */
         if (a->root[0]) {
-            char *normalized = normalize_workspace_paths(a->root, raw);
+            char *normalized = fg_normalize_workspace_paths(a->root, raw);
             if (!normalized) {
                 yyjson_doc_free(d);
                 free(response);

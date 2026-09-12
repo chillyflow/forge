@@ -152,6 +152,26 @@ to match what the model was shown.
   reproducible. This work removes a source of variance; it does not add
   capability.
 
+## What is guarded, and what is not
+
+`tests/unit/test_core.c::test_workspace_path_normalization` covers the rewrite
+itself: the literal spelling, the escaped spelling, every occurrence, and
+passthrough when the root is absent. It lives in `src/core/text.c` as
+`fg_normalize_workspace_paths` precisely so it can be tested — as a `static`
+helper in `agent.c` it was unreachable from the suite.
+
+The test was **falsified before being trusted**: disabling only the
+escaped-spelling pass makes it abort. That is the exact bug that survived a
+green build and 34 passing tests during development, so the test is known to
+have teeth rather than merely to pass.
+
+The **wiring** is not covered by any automated check, and cannot be cheaply:
+Forge has no stub model backend, so exercising the agent loop in CI requires a
+real model and a GGUF. The only instrument that sees the wired-up behaviour is
+the two-run comparison above. Any change to which function renders model-visible
+text should be re-verified with it, because four separate producers exist and
+three of them are not on the obvious code path.
+
 ## Known limitation of the Cause 2 fix
 
 The substitution is an exact string match against the canonical workspace root,
