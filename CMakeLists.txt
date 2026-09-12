@@ -53,6 +53,22 @@ if(MSVC)
 endif()
 add_executable(forge_embed examples/embed.c)
 target_link_libraries(forge_embed PRIVATE Forge::forge)
+if(FORGE_WITH_LLAMA)
+  # Spike 001: measures whether N-way batched decode is affordable, which
+  # decides whether reliability-through-redundancy is a viable strategy.
+  # Guarded because the Serena analysis build sets FORGE_WITH_LLAMA=OFF.
+  add_executable(forge_parallel_sweep spikes/001-parallel-decode/sweep.c)
+  target_link_libraries(forge_parallel_sweep PRIVATE Forge::forge)
+  target_include_directories(forge_parallel_sweep PRIVATE "${llama_SOURCE_DIR}/include"
+                                                           "${llama_SOURCE_DIR}/ggml/include")
+  if(MSVC)
+    target_compile_definitions(forge_parallel_sweep PRIVATE _CRT_SECURE_NO_WARNINGS)
+  endif()
+  if(FORGE_LLAMA_PREBUILT)
+    file(GLOB sweep_llama_dlls "${FORGE_LLAMA_PREBUILT}/*.dll")
+    add_custom_command(TARGET forge_parallel_sweep POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different ${sweep_llama_dlls} $<TARGET_FILE_DIR:forge_parallel_sweep> COMMAND_EXPAND_LISTS)
+  endif()
+endif()
 if(FORGE_LLAMA_PREBUILT)
   file(GLOB llama_dlls "${FORGE_LLAMA_PREBUILT}/*.dll")
   foreach(binary forge forge_embed)
