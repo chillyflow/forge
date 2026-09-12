@@ -87,6 +87,27 @@ static bool snapshot_metadata(const snapshot_scan *scan, const char *name) {
 #endif
 }
 
+/* Python bytecode is derived from source, not task input, and its header embeds
+ * the source modification time. Two byte-identical workspaces therefore produce
+ * different bytecode, and hashing that content made otherwise-identical runs
+ * render different prompts — diverting a run that is otherwise reproducible
+ * into a different trajectory. Excluded at any depth, for files and
+ * directories alike. */
+static bool snapshot_derived(const char *name) {
+    size_t length = strlen(name);
+#ifdef _WIN32
+    if (!_stricmp(name, "__pycache__"))
+        return true;
+    return (length > 4 && !_stricmp(name + length - 4, ".pyc")) ||
+           (length > 4 && !_stricmp(name + length - 4, ".pyo"));
+#else
+    if (!strcmp(name, "__pycache__"))
+        return true;
+    return (length > 4 && !strcmp(name + length - 4, ".pyc")) ||
+           (length > 4 && !strcmp(name + length - 4, ".pyo"));
+#endif
+}
+
 static bool snapshot_push(snapshot_scan *scan, const char *name) {
     size_t length = strlen(name), separator = scan->relative_length ? 1u : 0u;
     if (length >= FG_PATH_MAX || scan->relative_length + separator + length >= FG_PATH_MAX ||
@@ -311,7 +332,8 @@ static bool snapshot_windows_walk(snapshot_scan *scan, HANDLE directory, size_t 
                 break;
             }
             bool is_directory = (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-            bool excluded = is_directory && snapshot_metadata(scan, name);
+            bool excluded =
+                snapshot_derived(name) || (is_directory && snapshot_metadata(scan, name));
             size_t previous = scan->relative_length;
             if (entry.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DEVICE))
                 ok = snapshot_fail(scan, FORGE_ERR_POLICY,
@@ -528,7 +550,8 @@ static bool snapshot_posix_walk(snapshot_scan *scan, int fd, size_t depth) {
                                "Input snapshot rejects links and special files");
             break;
         }
-        if (is_directory && snapshot_metadata(scan, entry->d_name))
+        if (snapshot_derived(entry->d_name) ||
+            (is_directory && snapshot_metadata(scan, entry->d_name)))
             continue;
         size_t previous = scan->relative_length;
         if (!snapshot_push(scan, entry->d_name)) {

@@ -216,6 +216,40 @@ static void test_stable_path_order_and_framing(void) {
     fixture_finish(&b);
 }
 
+/* Python bytecode is derived from source and its header embeds the source
+ * modification time. Two byte-identical workspaces therefore produce different
+ * bytecode; hashing that content made otherwise-identical agent runs render
+ * different prompts and diverge. Bytecode must not be task input. */
+static void test_derived_bytecode_exclusions_are_exact(void) {
+    static const unsigned char pyc_first[] = {0xA7, 0x0D, 0x0D, 0x0A, 0x00, 0x00, 0x00, 0x00,
+                                              0x58, 0x11, 0x22, 0x33, 0x05, 0x00, 0x00, 0x00};
+    /* Same source, same code, different embedded source mtime. */
+    static const unsigned char pyc_rewritten[] = {0xA7, 0x0D, 0x0D, 0x0A, 0x00, 0x00, 0x00, 0x00,
+                                                  0x99, 0x88, 0x77, 0x66, 0x05, 0x00, 0x00, 0x00};
+    fixture f;
+    fixture_start(&f);
+    fixture_write(&f, "input.txt", "x", 1);
+    fixture_write(&f, "service.py", "def f(): pass", 13);
+    fixture_write(&f, "__pycache__/service.cpython-311.pyc", pyc_first, sizeof(pyc_first));
+    fg_input_snapshot *before = take(&f);
+    fixture_write(&f, "__pycache__/service.cpython-311.pyc", pyc_rewritten,
+                  sizeof(pyc_rewritten));
+    fg_input_snapshot *same = take(&f);
+    assert(fg_input_snapshot_equal(before, same));
+    assert(fg_input_snapshot_hash(before) == fg_input_snapshot_hash(same));
+    fg_input_snapshot_destroy(same);
+    /* Excluded at any depth, and as files rather than only as directories. */
+    fixture_write(&f, "pkg/__pycache__/mod.cpython-311.pyc", pyc_first, sizeof(pyc_first));
+    fixture_write(&f, "loose.pyo", pyc_first, sizeof(pyc_first));
+    fg_input_snapshot *deeper = take(&f);
+    assert(fg_input_snapshot_equal(before, deeper));
+    fg_input_snapshot_destroy(deeper);
+    /* Real source and real inputs still count. */
+    fixture_write(&f, "service.py", "def f(): return 1", 17);
+    changed(&f, &before);
+    fixture_finish(&f);
+}
+
 static void test_metadata_exclusions_are_exact(void) {
     fixture f;
     fixture_start(&f);
@@ -503,6 +537,7 @@ int main(void) {
     test_all_file_inputs_and_mutations();
     test_stable_path_order_and_framing();
     test_metadata_exclusions_are_exact();
+    test_derived_bytecode_exclusions_are_exact();
     test_limits_cancellation_and_recovery();
     test_depth_and_path_bounds();
     test_links_and_special_files_are_denied();
