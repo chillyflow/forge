@@ -145,6 +145,19 @@ forge_model *forge_model_load(const forge_model_config *config, forge_error *e) 
 #endif
 }
 
+/* The agent needs to know where host control may be placed, because a template
+ * that rejects a user turn after a tool message cannot receive it as a separate
+ * trailing message. Answering it here keeps the llama backend out of agent.c
+ * and keeps the FORGE_WITH_LLAMA=OFF build linkable. */
+bool forge_model_rejects_user_after_tool(const forge_model *model) {
+#ifdef FORGE_WITH_LLAMA
+    return fg_llama_rejects_user_after_tool(model);
+#else
+    (void)model;
+    return false;
+#endif
+}
+
 forge_status fg_model_parse_native(forge_model *model, const char *response, char **message,
                                    forge_error *error) {
     if (!model || !response || !message || model->config.prompt_protocol != FORGE_PROMPT_NATIVE)

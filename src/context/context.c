@@ -16,6 +16,10 @@ struct forge_context {
     size_t text_bytes, dependency_count, planned_tokens, planned_evicted;
     bool planned;
     forge_prompt_protocol prompt_protocol;
+    /* Set when the loaded model's chat template raises on a user turn that
+     * follows a tool message. The native renderer then merges host control
+     * into the preceding tool reply instead of emitting it as its own turn. */
+    bool reject_user_after_tool;
     uint64_t next_id;
     forge_count_tokens_fn count_tokens, count_prompt_tokens;
     void *user;
@@ -102,6 +106,20 @@ forge_status forge_context_set_prompt_protocol(forge_context *c, forge_prompt_pr
     if (c->prompt_protocol != protocol) {
         clear_selection(c);
         c->prompt_protocol = protocol;
+    }
+    return FORGE_OK;
+}
+/* A template that rejects a user turn after a tool message cannot receive host
+ * control as its own trailing message: the template raises, the raise is
+ * swallowed upstream, and the run dies much later as an input-budget failure.
+ * The renderer merges control into the preceding tool reply instead, which
+ * preserves chronological order without emitting a turn the template refuses. */
+forge_status forge_context_set_rejects_user_after_tool(forge_context *c, bool rejects) {
+    if (!c)
+        return FORGE_ERR_ARGUMENT;
+    if (c->reject_user_after_tool != rejects) {
+        clear_selection(c);
+        c->reject_user_after_tool = rejects;
     }
     return FORGE_OK;
 }
@@ -363,6 +381,41 @@ static bool native_has_single_action_parent(const forge_context *c, const segmen
     return action_parents == 1;
 }
 
+/* Where a host-control merge may be applied, for models whose template refuses
+ * a user turn that follows a tool message. */
+typedef struct {
+    bool reject_user_after_tool;
+    bool tool_is_last;  /* the most recently written message is a tool reply */
+    size_t content_end; /* offset of that reply's closing content quote */
+} native_fold;
+
+/* Insert `text` as escaped JSON string content ending at `position`, extending
+ * the string that closes there. Returns the bytes inserted, or 0 on failure. */
+static size_t native_insert_into(fg_buf *out, size_t position, const char *text) {
+    char *quoted = fg_json_string(text);
+    if (!quoted)
+        return 0;
+    size_t length = strlen(quoted);
+    if (length < 2 || position > out->len) {
+        free(quoted);
+        return 0;
+    }
+    /* fg_json_string returns the value with its surrounding quotes. */
+    size_t inserted = length - 2;
+    fg_buf rebuilt = {0};
+    bool ok = fg_buf_add(&rebuilt, out->data, position) &&
+              fg_buf_add(&rebuilt, quoted + 1, inserted) &&
+              fg_buf_add(&rebuilt, out->data + position, out->len - position);
+    free(quoted);
+    if (!ok) {
+        fg_buf_clear(&rebuilt);
+        return 0;
+    }
+    fg_buf_clear(out);
+    *out = rebuilt;
+    return inserted;
+}
+
 static bool native_put_quoted(fg_buf *out, const char *text) {
     char *quoted = fg_json_string(text);
     bool ok = quoted && fg_buf_puts(out, quoted);
@@ -370,12 +423,26 @@ static bool native_put_quoted(fg_buf *out, const char *text) {
     return ok;
 }
 
-static bool native_flush_plain(fg_buf *out, fg_buf *plain, const char **plain_role, bool *first) {
+static bool native_flush_plain(fg_buf *out, fg_buf *plain, const char **plain_role, bool *first,
+                               native_fold *fold) {
     if (!*plain_role)
         return true;
-    bool ok = (*first || fg_buf_puts(out, ",")) && fg_buf_puts(out, "{\"role\":") &&
-              native_put_quoted(out, *plain_role) && fg_buf_puts(out, ",\"content\":") &&
-              native_put_quoted(out, plain->data ? plain->data : "") && fg_buf_puts(out, "}");
+    bool ok;
+    if (fold->reject_user_after_tool && fold->tool_is_last) {
+        /* The template refuses a user turn after a tool message, so host control
+         * rides inside that reply. Chronological order is preserved; only the
+         * message boundary moves. The reply's content already changes every
+         * turn, so the reusable prefix is unaffected either way. */
+        size_t inserted =
+            native_insert_into(out, fold->content_end, plain->data ? plain->data : "");
+        ok = inserted != 0;
+        fold->content_end += inserted;
+    } else {
+        ok = (*first || fg_buf_puts(out, ",")) && fg_buf_puts(out, "{\"role\":") &&
+             native_put_quoted(out, *plain_role) && fg_buf_puts(out, ",\"content\":") &&
+             native_put_quoted(out, plain->data ? plain->data : "") && fg_buf_puts(out, "}");
+        fold->tool_is_last = false;
+    }
     if (ok)
         *first = false;
     fg_buf_clear(plain);
@@ -384,16 +451,16 @@ static bool native_flush_plain(fg_buf *out, fg_buf *plain, const char **plain_ro
 }
 
 static bool native_queue_plain(fg_buf *out, fg_buf *plain, const char **plain_role, bool *first,
-                               const char *role, const segment *s) {
+                               const char *role, const segment *s, native_fold *fold) {
     if (*plain_role && strcmp(*plain_role, role) &&
-        !native_flush_plain(out, plain, plain_role, first))
+        !native_flush_plain(out, plain, plain_role, first, fold))
         return false;
     *plain_role = role;
     return fg_buf_printf(plain, "\n[%s]\n%s\n", labels[s->view.kind], s->owned);
 }
 
 static bool native_write_pair(fg_buf *out, bool *first, size_t action_index, const segment *action,
-                              const segment *result) {
+                              const segment *result, native_fold *fold) {
     yyjson_doc *document = yyjson_read(action->owned, strlen(action->owned), 0);
     yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
     const char *name = fg_json_str(root, "tool");
@@ -445,10 +512,17 @@ static bool native_write_pair(fg_buf *out, bool *first, size_t action_index, con
          fg_buf_puts(out, args) && fg_buf_puts(out, "}}]}") &&
          fg_buf_puts(out, ",{\"role\":\"tool\",\"name\":") && native_put_quoted(out, name) &&
          fg_buf_puts(out, ",\"tool_call_id\":") && native_put_quoted(out, call_id) &&
-         fg_buf_puts(out, ",\"content\":") && native_put_quoted(out, result->owned) &&
-         fg_buf_puts(out, "}");
-    if (ok)
-        *first = false;
+         fg_buf_puts(out, ",\"content\":") && native_put_quoted(out, result->owned);
+             if (ok && fold) {
+                 /* Remember where this reply's content closes so a following control
+                  * segment can be merged into it, for templates that refuse a user turn
+                  * after a tool message. */
+                 fold->content_end = out->len - 1;
+                 fold->tool_is_last = true;
+             }
+             ok = ok && fg_buf_puts(out, "}");
+             if (ok)
+                 *first = false;
     free(args);
     yyjson_doc_free(document);
     return ok;
@@ -486,6 +560,8 @@ static char *render_selected_native(const forge_context *c, size_t *anchor) {
 
     fg_buf out = {0}, plain = {0};
     const char *plain_role = NULL;
+    native_fold fold = {0};
+    fold.reject_user_after_tool = c->reject_user_after_tool;
     bool first = true;
     if (!fg_buf_puts(&out, "{\"protocol\":\"forge-native-v1\",\"tools\":") ||
         !fg_buf_puts(&out, tools->owned))
@@ -516,18 +592,20 @@ static char *render_selected_native(const forge_context *c, size_t *anchor) {
                         matched = j;
                     }
                 }
-                if (matched == SIZE_MAX || !native_flush_plain(&out, &plain, &plain_role, &first) ||
-                    !native_write_pair(&out, &first, i, s, &c->items[matched]))
+                if (matched == SIZE_MAX ||
+                    !native_flush_plain(&out, &plain, &plain_role, &first, &fold) ||
+                    !native_write_pair(&out, &first, i, s, &c->items[matched], &fold))
                     goto fail;
                 continue;
             }
             if (s->view.kind == FORGE_SEG_RESULT)
                 continue; /* Emitted immediately after its sole assistant call. */
             const char *role = s->view.kind == FORGE_SEG_SYSTEM ? "system" : "user";
-            if (!native_queue_plain(&out, &plain, &plain_role, &first, role, s))
+            if (!native_queue_plain(&out, &plain, &plain_role, &first, role, s, &fold))
                 goto fail;
         }
-    if (!native_flush_plain(&out, &plain, &plain_role, &first) || !fg_buf_puts(&out, "]}"))
+    if (!native_flush_plain(&out, &plain, &plain_role, &first, &fold) ||
+        !fg_buf_puts(&out, "]}"))
         goto fail;
     if (anchor)
         *anchor = stable ? stable_end : 0;
@@ -787,6 +865,18 @@ static char *plan_bounded_inner(forge_context *c, size_t input_budget, uint64_t 
     }
     size_t actual = c->count_prompt_tokens(out, c->user);
     if (actual > budget) {
+        /* Name the segments that consumed the budget, so a limit failure is
+         * attributable from the log instead of a dead end. */
+        fprintf(stderr, "forge: rendered=%zu budget=%zu segments=%zu\n", actual, budget,
+                c->count);
+        for (size_t i = 0; i < c->count; i++) {
+            const segment *s = &c->items[i];
+            if (!s->view.selected)
+                continue;
+            fprintf(stderr, "  seg id=%llu kind=%s tokens=%zu bytes=%zu pinned=%d\n",
+                    (unsigned long long)s->view.id, labels[s->view.kind], s->view.tokens,
+                    s->owned ? strlen(s->owned) : 0, (int)s->view.pinned);
+        }
         fg_error(e, FORGE_ERR_LIMIT,
                  "Rendered mandatory prompt exceeds the input budget (%zu tokens)", budget);
         goto failure;

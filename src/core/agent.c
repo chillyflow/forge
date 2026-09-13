@@ -1419,6 +1419,8 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
                  : "");
     if (!ctx || !schema ||
         forge_context_set_prompt_protocol(ctx, FORGE_PROMPT_NATIVE) != FORGE_OK ||
+        forge_context_set_rejects_user_after_tool(
+            ctx, forge_model_rejects_user_after_tool(a->config.model)) != FORGE_OK ||
         forge_context_set_prompt_counter(ctx, fg_model_count_prompt) != FORGE_OK ||
         !minimal_append(ctx, FORGE_SEG_SYSTEM, instructions, 0) ||
         !(tools_id = forge_context_add(ctx, FORGE_SEG_TOOLS, schema, 100, true, 0, 0)) ||
@@ -2179,6 +2181,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
     bool native_protocol = a->config.model->config.prompt_protocol == FORGE_PROMPT_NATIVE;
     if (ctx && (forge_context_set_prompt_protocol(ctx, a->config.model->config.prompt_protocol) !=
                     FORGE_OK ||
+                forge_context_set_rejects_user_after_tool(
+                    ctx, forge_model_rejects_user_after_tool(a->config.model)) != FORGE_OK ||
                 (native_protocol &&
                  forge_context_set_prompt_counter(ctx, fg_model_count_prompt) != FORGE_OK))) {
         status = fg_error(e, FORGE_ERR_ARGUMENT, "Cannot select the prompt protocol");

@@ -179,7 +179,16 @@ static size_t llama_count_prompt(forge_model *m, const char *prompt) {
         text ? tokenize_text_allocated(s, text, &count, NULL, &bytes, NULL) : NULL;
     free(tokens);
     fg_chat_render_destroy(render);
-    return count > 0 ? (size_t)count : SIZE_MAX / 4;
+    if (count <= 0) {
+        /* SIZE_MAX/4 means "could not count", not "very large". The caller
+         * compares it against a budget, so a template or tokenizer failure is
+         * reported as a budget failure - which sends the investigation in
+         * entirely the wrong direction. Name the real failure here. */
+        fprintf(stderr, "forge: cannot count prompt tokens (render=%s detail=%s)\n",
+                text ? "ok" : "failed", detail[0] ? detail : "(none recorded)");
+        return SIZE_MAX / 4;
+    }
+    return (size_t)count;
 }
 static bool interrupted(forge_cancel_fn cancel, void *u, uint64_t deadline) {
     return (cancel && cancel(u)) || (deadline && fg_now_ms() >= deadline);
@@ -1279,6 +1288,20 @@ static forge_status llama_parse_native(forge_model *m, const char *response, cha
                         *detail ? detail : "chat-template parser rejected the response");
     return FORGE_OK;
 }
+/* Does this model's chat template reject a user turn that follows a tool
+ * message? The renderer emits host control as a trailing user message, which
+ * Mistral-family templates raise on; the raise is swallowed upstream and
+ * surfaces far away as an input-budget failure. The agent needs to know this
+ * before it decides where the control text belongs. */
+bool fg_llama_rejects_user_after_tool(const forge_model *m) {
+    if (!m || !m->backend)
+        return false;
+    const llama_state *s = m->backend;
+    bool rejects = fg_chat_templates_rejects_user_after_tool(s->chat_templates);
+    fprintf(stderr, "forge: template rejects_user_after_tool=%d\n", (int)rejects);
+    return rejects;
+}
+
 bool fg_llama_init(forge_model *m, forge_error *e) {
     uint64_t start = fg_now_ms();
     llama_state *s = calloc(1, sizeof(*s));

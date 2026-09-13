@@ -149,6 +149,8 @@ bool fg_model_instance_init(forge_model *, forge_error *);
 size_t fg_model_count(const char *, void *);
 size_t fg_model_count_prompt(const char *, void *);
 bool fg_llama_init(forge_model *, forge_error *);
+bool fg_llama_rejects_user_after_tool(const forge_model *);
+bool forge_model_rejects_user_after_tool(const forge_model *);
 forge_status fg_model_generate(forge_model *, const char *, const char *, size_t, forge_token_fn,
                                void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,
                                forge_error *);

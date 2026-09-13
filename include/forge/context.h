@@ -32,6 +32,10 @@ typedef size_t (*forge_count_tokens_fn)(const char *, void *);
 forge_context *forge_context_create(size_t capacity, size_t reserve, forge_count_tokens_fn, void *);
 /* Select the logical prompt renderer. The default is FORGE_PROMPT_FLATTENED. */
 forge_status forge_context_set_prompt_protocol(forge_context *, forge_prompt_protocol);
+/* Tell the renderer that the model's template refuses a user turn after a tool
+ * message, so host control is merged into the tool reply rather than emitted as
+ * its own turn. Set once, after the model is loaded. */
+forge_status forge_context_set_rejects_user_after_tool(forge_context *, bool);
 /* Override counting for the complete rendered prompt while retaining the
  * create-time callback for individual segment costs. */
 forge_status forge_context_set_prompt_counter(forge_context *, forge_count_tokens_fn);
