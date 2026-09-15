@@ -24,9 +24,101 @@ typedef struct {
      * model on first routed generation. */
     llama_logit_bias *brace_ban, *eog_ban, *whitespace_ban;
     int32_t brace_ban_count, eog_ban_count, whitespace_ban_count;
+    /* Reduced-candidate greedy sampling. reduce_ids holds the raw top-K ids in
+     * descending logit order while the prefix is selected; reduce_data is the
+     * candidate array those ids are masked in. Both are sized once with the
+     * vocabulary so the selection allocates nothing per token. */
+    llama_token *reduce_ids;
+    llama_token_data *reduce_data;
+    int32_t reduce_capacity;
 } llama_state;
+
+/* Greedy sampling under a live grammar: mask a raw top-K prefix instead of the
+ * whole vocabulary and take its highest-ranked acceptable candidate.
+ *
+ * Exact, not an approximation. The prefix holds the K highest raw logits, so if
+ * any acceptable candidate is inside it, the *best* acceptable candidate is also
+ * inside it - a higher-ranked token inside the prefix would otherwise have to be
+ * acceptable instead. Greedy therefore needs only the first rung that yields a
+ * survivor; the ladder in fg_reduced_next_k and, above it, the full vocabulary
+ * keep the result identical by construction.
+ *
+ * Only used with penalties disabled: the prefix is selected on raw logits, and a
+ * repetition penalty changes the ranking it would have to be selected on. */
+static bool sample_reduced_greedy(llama_state *s, struct llama_sampler *sampler,
+                                  llama_token *out) {
+    const int32_t n_vocab = llama_vocab_n_tokens(s->vocab);
+    if (!s->reduce_ids || !s->reduce_data || n_vocab <= FG_REDUCED_START_K ||
+        s->reduce_capacity <= 0)
+        return false;
+    const float *logits = llama_get_logits_ith(s->ctx, -1);
+    if (!logits)
+        return false;
+
+    /* Probe first: is the constraint real? Applying the whole chain to the raw
+     * maximum answers it through the bans as well, so the case that reaches here
+     * only because a ban blocked the one-candidate path costs one argmax scan
+     * instead of a vocabulary-wide selection. When the maximum is acceptable it
+     * *is* the greedy choice. */
+    llama_token best_id = 0;
+    for (int32_t id = 1; id < n_vocab; id++)
+        if (logits[id] > logits[best_id])
+            best_id = id;
+    llama_token_data probe = {best_id, logits[best_id], 0.0f};
+    llama_token_data_array probe_array = {&probe, 1, -1, false};
+    llama_sampler_apply(sampler, &probe_array);
+    if (probe.logit != -INFINITY) {
+        *out = best_id;
+        llama_sampler_accept(sampler, *out);
+        return true;
+    }
+
+    for (int k = FG_REDUCED_START_K; k > 0 && k <= s->reduce_capacity;
+         k = fg_reduced_next_k(k, (int)n_vocab)) {
+        /* Partial selection of the k highest logits, kept in descending order.
+         * One pass over the vocabulary, and an insertion only when a candidate
+         * beats the current worst. */
+        int32_t filled = 0;
+        for (int32_t id = 0; id < n_vocab; id++) {
+            const float value = logits[id];
+            if (filled == k && value <= logits[s->reduce_ids[k - 1]])
+                continue;
+            int32_t pos = filled < k ? filled : k - 1;
+            while (pos > 0 && logits[s->reduce_ids[pos - 1]] < value) {
+                s->reduce_ids[pos] = s->reduce_ids[pos - 1];
+                pos--;
+            }
+            s->reduce_ids[pos] = id;
+            if (filled < k)
+                filled++;
+        }
+        for (int32_t i = 0; i < filled; i++)
+            s->reduce_data[i] = (llama_token_data){s->reduce_ids[i], logits[s->reduce_ids[i]], 0.0f};
+
+        /* The chain is [bans][grammar][penalties][greedy] here: apply once, then
+         * read the best survivor. Masked entries are -INFINITY. */
+        llama_token_data_array cur = {s->reduce_data, (size_t)filled, -1, false};
+        llama_sampler_apply(sampler, &cur);
+
+        int32_t best = -1;
+        for (size_t i = 0; i < cur.size; i++) {
+            if (cur.data[i].logit == -INFINITY)
+                continue;
+            if (best < 0 || cur.data[i].logit > cur.data[best].logit)
+                best = (int32_t)i;
+        }
+        if (best >= 0) {
+            *out = cur.data[best].id;
+            llama_sampler_accept(sampler, *out);
+            return true;
+        }
+    }
+    return false;
+}
+
 static llama_token sample_token(llama_state *s, struct llama_sampler *sampler,
-                                struct llama_sampler *grammar, bool fast, forge_metrics *stats) {
+                                struct llama_sampler *grammar, bool fast, bool reduced_ok,
+                                forge_metrics *stats) {
     /* For greedy sampling, an allowed global maximum is also the constrained
      * maximum. Grammar apply does not advance its state; accept does. Stochastic
      * sampling keeps the full mask to preserve its original distribution. */
@@ -50,6 +142,13 @@ static llama_token sample_token(llama_state *s, struct llama_sampler *sampler,
     }
     if (grammar)
         stats->grammar_fallback_tokens++;
+    /* Greedy fallback: the raw maximum (or the bans) ruled out the one-candidate
+     * fast path, but greedy still needs only the first acceptable token in rank
+     * order. Probe the constraint and mask a reduced prefix before paying for the
+     * whole vocabulary. */
+    llama_token reduced = 0;
+    if (reduced_ok && grammar && sample_reduced_greedy(s, sampler, &reduced))
+        return reduced;
     return llama_sampler_sample(sampler, s->ctx, -1);
 }
 static void *token_allocate(const fg_checkpoint_allocator *allocator, size_t bytes,
@@ -928,6 +1027,11 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
             s, sampler, grammar_sampler,
             !braces_armed && !awaiting_action && !progress_armed && m->config.grammar_fast_path &&
                 (m->config.temperature <= 0 || (!native && structured)),
+            /* The reduced prefix is selected on raw logits, so it is only valid
+             * where no repetition penalty reshapes the ranking. */
+            m->config.temperature <= 0 &&
+                !(m->config.repetition_last_n > 0 && m->config.repetition_penalty > 0 &&
+                  m->config.repetition_penalty != 1.0f),
             stats);
         stats->sampling_ms += (double)(fg_now_ms() - sampling_start);
         if (llama_vocab_is_eog(s->vocab, token)) {
@@ -1232,6 +1336,8 @@ static void llama_destroy(forge_model *m) {
         if (s->model)
             llama_model_free(s->model);
         free(s->tokens);
+        free(s->reduce_ids);
+        free(s->reduce_data);
         free(s->template_name);
         fg_chat_render_destroy(s->last_native_render);
         fg_chat_templates_destroy(s->chat_templates);
@@ -1338,10 +1444,19 @@ bool fg_llama_init(forge_model *m, forge_error *e) {
     }
     s->capacity = llama_n_ctx(s->ctx);
     s->tokens = malloc(s->capacity * sizeof(*s->tokens));
+    /* Largest reduced rung the ladder can use: it surrenders to the full array
+     * before a rung can reach the vocabulary size, so this is well under it. */
+    int32_t rung = FG_REDUCED_START_K;
+    for (int32_t next = fg_reduced_next_k(rung, llama_vocab_n_tokens(s->vocab)); next > 0;
+         next = fg_reduced_next_k(rung, llama_vocab_n_tokens(s->vocab)))
+        rung = next;
+    s->reduce_capacity = rung;
+    s->reduce_ids = malloc(sizeof(*s->reduce_ids) * (size_t)rung);
+    s->reduce_data = malloc(sizeof(*s->reduce_data) * (size_t)rung);
     const char *tmpl = m->config.chat_template ? m->config.chat_template
                                                : llama_model_chat_template(s->model, NULL);
     s->template_name = fg_strdup(tmpl ? tmpl : "chatml");
-    if (!s->tokens || !s->template_name) {
+    if (!s->tokens || !s->template_name || !s->reduce_ids || !s->reduce_data) {
         fg_error(e, FORGE_ERR_MEMORY, "Inference state allocation failed");
         return false;
     }

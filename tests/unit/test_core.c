@@ -487,6 +487,17 @@ int main(void) {
     assert(!fg_action_begin("no action here"));
     assert(!fg_action_begin("{\"thought\":\"only\"}"));
     assert(!fg_action_begin("{\"x\":1,\"tool\":\"late key\"}"));
+    /* §47 reduced-candidate ladder: each rung is a strict prefix of the next, and
+     * the ladder surrenders to the full array before a rung can reach the
+     * vocabulary size, which keeps the full vocabulary the exact last resort. */
+    assert(fg_reduced_next_k(64, 151936) == 256);
+    assert(fg_reduced_next_k(256, 151936) == 1024);
+    assert(fg_reduced_next_k(65536, 151936) == 0);
+    assert(fg_reduced_next_k(64, 256) == 0);
+    assert(fg_reduced_next_k(64, 100) == 0);
+    assert(fg_reduced_next_k(64, 0) == 0);
+    assert(fg_reduced_next_k(0, 151936) == 0);
+    assert(fg_reduced_next_k(-4, 151936) == 0);
     /* Completion requires a full parse to the end of the text: an unclosed
      * object, or a '}' inside a string, must not end generation early. */
     assert(fg_action_complete("{\"tool\":\"list_files\",\"args\":{\"path\":\".\"}}"));

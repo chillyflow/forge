@@ -1,0 +1,24 @@
+test_diamond (test_service.Closure.test_diamond) ... ERROR
+test_rejections (test_service.Closure.test_rejections) ... ok
+
+======================================================================
+ERROR: test_diamond (test_service.Closure.test_diamond)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-97zheaxr\test_service.py", line 6, in test_diamond
+    self.assertEqual(requirements(graph, ['a']), {'b', 'c', 'd'})
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-97zheaxr\service.py", line 17, in requirements
+    visit(target)
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-97zheaxr\service.py", line 12, in visit
+    visit(dependency)
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-97zheaxr\service.py", line 12, in visit
+    visit(dependency)
+  File "C:\Users\flowc\AppData\Local\Temp\forge-bench-97zheaxr\service.py", line 5, in visit
+    raise ValueError('cycle')
+ValueError: cycle
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+FAILED (errors=1)

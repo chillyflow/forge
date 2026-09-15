@@ -258,6 +258,16 @@ void fg_think_bounds(const fg_decode_policy *, size_t max_tokens, size_t *min_th
                      size_t *think_cap);
 fg_action_phase fg_action_decode_phase(const char *text);
 bool fg_json_whitespace_only(const char *text, size_t length);
+/* Reduced-candidate sampling ladder for the constrained path. The grammar mask
+ * costs time per candidate in the array it is applied to, and a decoder that
+ * still draws from a full distribution needs several acceptable candidates,
+ * while greedy needs only the first acceptable one in rank order. Callers mask a
+ * raw top-K prefix and walk this ladder instead of paying for the whole
+ * vocabulary. fg_reduced_next_k returns the next rung, or 0 when the next one
+ * would reach the vocabulary - which means "use the full array", so the full
+ * vocabulary stays the exact last resort. */
+#define FG_REDUCED_START_K 64
+int fg_reduced_next_k(int current_k, int vocab_size);
 bool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens);
 typedef struct {
     const char *name, *description, *fields, *grammar;

@@ -145,3 +145,16 @@ void fg_think_bounds(const fg_decode_policy *policy, size_t max_tokens, size_t *
     *min_think = FG_MIN(window, cap);
     *think_cap = cap;
 }
+int fg_reduced_next_k(int current_k, int vocab_size) {
+    /* The ladder is a strict prefix sequence: every rung is a superset of the
+     * previous one, so a token accepted at rung K is also present at every later
+     * rung and the first rung that yields an acceptable candidate is already the
+     * answer the full array would have produced. That is why the caller may stop
+     * at the first survivor instead of continuing to the vocabulary. */
+    if (current_k <= 0 || vocab_size <= 0)
+        return 0;
+    long long next = (long long)current_k * 4;
+    if (next >= (long long)vocab_size)
+        return 0;
+    return (int)next;
+}

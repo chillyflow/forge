@@ -1,0 +1,15 @@
+exit_code=1 timeout=false cancelled=false truncated=false
+stdout:
+{"Time":"2026-09-15T11:51:16.8132392-04:00","Action":"start","Package":"holdout"}
+{"Time":"2026-09-15T11:51:16.9843719-04:00","Action":"run","Package":"holdout","Test":"TestCache"}
+{"Time":"2026-09-15T11:51:16.9859233-04:00","Action":"output","Package":"holdout","Test":"TestCache","Output":"=== RUN   TestCache\n","OutputType":"frame"}
+{"Time":"2026-09-15T11:51:16.9859233-04:00","Action":"output","Package":"holdout","Test":"TestCache","Output":"    service_test.go:12: least recent key retained\n","OutputType":"error"}
+{"Time":"2026-09-15T11:51:16.9859233-04:00","Action":"output","Package":"holdout","Test":"TestCache","Output":"--- FAIL: TestCache (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-09-15T11:51:16.9859233-04:00","Action":"fail","Package":"holdout","Test":"TestCache","Elapsed":0}
+{"Time":"2026-09-15T11:51:16.9859233-04:00","Action":"output","Package":"holdout","Output":"FAIL\n","OutputType":"frame"}
+{"Time":"2026-09-15T11:51:16.9864395-04:00","Action":"output","Package":"holdout","Output":"FAIL\tholdout\t0.169s\n","OutputType":"frame"}
+{"Time":"2026-09-15T11:51:16.9864395-04:00","Action":"fail","Package":"holdout","Elapsed":0.173}
+
+stderr:
+
+next_action_guidance: Treat the diagnostics as the change boundary. Preserve behavior not named as failing and make the smallest local edit that addresses the reported condition. The failing assertion and explicit requirements are authoritative; do not reinterpret them or rewrite an otherwise working function. When a requirement names an ordering or tie-break key, compare that semantic key directly; input position or a surrogate index is not equivalent. For an ID tie-break over indexed records, dereference and compare the IDs; changing only comments cannot repair executable behavior.

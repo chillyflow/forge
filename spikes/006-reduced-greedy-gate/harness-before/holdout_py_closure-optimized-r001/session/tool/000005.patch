@@ -1,0 +1,41 @@
+diff --git "a/service.py" "b/service.py"
+--- "a/service.py"
++++ "b/service.py"
+@@ -1,18 +1,19 @@
+-def requirements(graph, targets):
+-    active, visited = set(), set()
+-    def visit(node):
+-        if node in active:
+-            raise ValueError('cycle')
+-        if node in visited:
+-            return
+-        if node not in graph:
+-            raise ValueError('missing job')
+-        active.add(node)
+-        for dependency in graph[node]:
+-            visit(dependency)
+-        # Keep the traversal history for later visits.
+-        visited.add(node)
+-    targets = set(targets)
+-    for target in targets:
+-        visit(target)
+-    return visited - targets
++def requirements(graph, targets):
++    active, visited = set(), set()
++    def visit(node):
++        if node in active:
++            raise ValueError('cycle')
++        if node in visited:
++            return
++        if node not in graph:
++            raise ValueError('missing job')
++        active.add(node)
++        for dependency in graph[node]:
++            visit(dependency)
++        # Keep the traversal history for later visits.
++        visited.add(node)
++        active.discard(node)
++    targets = set(targets)
++    for target in targets:
++        visit(target)
++    return visited - targets
