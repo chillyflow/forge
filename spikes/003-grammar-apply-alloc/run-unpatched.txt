@@ -1,0 +1,65 @@
+model          : C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf
+vocab          : 151936 tokens
+grammar source : native-template (24400 bytes, render_lazy=1)
+prompt tokens  : 2753
+steps          : 24
+chain          : [grammar] top_k 20, top_p 0.8, temp 0.6, dist(42)
+
+shared prefill : 22050 ms for 2753 tokens (125 tok/s)
+
+P1 real steps (gen chain = today's cost; full/reduced apply on identical logits)
+ step   today_ms     full_ms    red64_ms  allowed   match20    redK
+---------------------------------------------------------------------------
+    0      41.13       35.90      35.031        2       yes  151936
+    1      36.95       15.69      15.487        1       yes  151936
+    2      14.50       13.69      15.049        1       yes  151936
+    3      16.35       13.46      19.729        1       yes  151936
+    4      14.27       31.29      33.981        1       yes  151936
+    5      34.44       30.58      32.248        2       yes  151936
+    6      32.58       31.25      31.979        1       yes  151936
+    7      34.30       14.08      19.469        2       yes  151936
+    8      13.99       13.29      17.998        1       yes  151936
+    9      14.54       16.40      19.049        1       yes  151936
+   10      17.53       16.46      18.431        2       yes  151936
+   11      21.81       16.80      18.240        1       yes  151936
+   12      18.93       13.25      19.208        1       yes  151936
+   13      13.87       26.60      24.981        1       yes  151936
+   14      26.06       23.07      28.768        2       yes  151936
+   15      24.81       24.13      25.253        1       yes  151936
+   16      25.08       23.57      28.968        1       yes  151936
+   17      29.02       23.43      28.091        1       yes  151936
+   18      29.33       24.20      26.714        1       yes  151936
+   19      27.50       23.59      35.265        1       yes  151936
+   20      27.25       24.06      25.671        1       yes  151936
+   21      25.85       14.43      15.437        1       yes  151936
+   22      16.31       12.77      19.018        1       yes  151936
+   23      15.11       13.24      20.218        1       yes  151936
+---------------------------------------------------------------------------
+P1 medians    : today 25.08 ms | full apply 23.07 ms | reduced(64) 24.98 ms | top-k select 1.376 ms
+P1 equivalence: top-20 identical 24/24 steps (steps with 20 allowed: 0); top-5 identical 24/24; expansions 144
+P1 truncation : K=64-no-expansion top-1 agreement 15/15 steps; reference-allowed tokens outside the raw top-64: 0 total
+P1 token hash : 21c6df5710bb7794 over 24 tokens; first ids: 27 14172 13429 29 198 27 1688 89871
+
+P2 fixed-state apply cost (median ms over 10 iterations), grammar state reached by
+   accepting the first N tokens of the P1 generation
+state         gram-only   chain-full         K=20         K=64        K=256   no-grammar
+---------------------------------------------------------------------------------------
+root              32.06        32.76        0.005        0.011        0.027         0.04
+mid-action        29.00        29.35        0.005        0.011        0.026         0.04
+post-action       12.22        12.22        0.002        0.004        0.013         0.04
+
+P2b permissive grammar (root ::= [printable-ascii]*), same logits:
+   chain on full array    29.99 ms | chain on K=64    0.025 ms | no grammar    0.041 ms
+   allowed: full array 1, K=64 array 1 | allowed top-20 lists identical: yes
+
+{
+  "spike": "002-grammar-mask-cost",
+  "vocab": 151936,
+  "grammar_source": "native-template",
+  "render_lazy": 1,
+  "prompt_tokens": 2753,
+  "steps": 24,
+  "p1": {"today_median_ms": 25.077, "full_apply_median_ms": 23.071, "reduced_median_ms": 24.981, "select_median_ms": 1.376, "full_over_reduced": 0.9, "match20": 24, "steps_with_20_allowed": 0, "match5": 24, "expansions": 144, "top1_match_k64": 15, "top1_steps": 15, "outside64": 0},
+  "p2_mid_action": {"grammar_only_ms": 29.000, "chain_full_ms": 29.349, "k20_ms": 0.005, "k64_ms": 0.011, "k256_ms": 0.026, "no_grammar_ms": 0.041},
+  "p2_permissive": {"chain_full_ms": 29.990, "k64_ms": 0.025, "no_grammar_ms": 0.041, "allowed_full": 1, "allowed_k64": 1, "equiv_top20": 1}
+}

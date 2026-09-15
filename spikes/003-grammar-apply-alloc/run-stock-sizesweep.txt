@@ -1,0 +1,72 @@
+model          : C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf
+vocab          : 151936 tokens
+grammar source : native-template (24400 bytes, render_lazy=1)
+prompt tokens  : 2753
+steps          : 24
+chain          : [grammar] top_k 20, top_p 0.8, temp 0.6, dist(42)
+
+shared prefill : 22381 ms for 2753 tokens (123 tok/s)
+
+P1 real steps (gen chain = today's cost; full/reduced apply on identical logits)
+ step   today_ms     full_ms    red64_ms  allowed   match20    redK
+---------------------------------------------------------------------------
+    0      46.18       34.05      39.161        2       yes  151936
+    1      37.48       13.85      15.501        1       yes  151936
+    2      15.08       15.13      16.646        1       yes  151936
+    3      14.52       13.61      20.884        1       yes  151936
+    4      14.60       31.68      35.450        1       yes  151936
+    5      32.98       37.26      35.336        2       yes  151936
+    6      36.83       31.11      38.579        1       yes  151936
+    7      40.67       14.44      20.161        2       yes  151936
+    8      14.22       13.10      21.190        1       yes  151936
+    9      13.63       16.27      23.058        1       yes  151936
+   10      17.79       16.00      19.245        2       yes  151936
+   11      17.35       20.62      19.495        1       yes  151936
+   12      18.37       13.72      16.618        1       yes  151936
+   13      13.56       24.62      25.356        1       yes  151936
+   14      25.44       24.30      26.205        2       yes  151936
+   15      23.93       25.84      24.959        1       yes  151936
+   16      23.46       22.64      27.264        1       yes  151936
+   17      25.22       22.09      28.822        1       yes  151936
+   18      23.29       22.66      28.111        1       yes  151936
+   19      25.21       29.34      22.734        1       yes  151936
+   20      23.42       22.87      28.504        1       yes  151936
+   21      24.71       13.79      15.744        1       yes  151936
+   22      13.53       13.12      25.097        1       yes  151936
+   23      18.51       17.27      15.181        1       yes  151936
+---------------------------------------------------------------------------
+P1 medians    : today 23.42 ms | full apply 22.09 ms | reduced(64) 24.96 ms | top-k select 1.388 ms
+P1 equivalence: top-20 identical 24/24 steps (steps with 20 allowed: 0); top-5 identical 24/24; expansions 144
+P1 truncation : K=64-no-expansion top-1 agreement 15/15 steps; reference-allowed tokens outside the raw top-64: 0 total
+P1 token hash : 21c6df5710bb7794 over 24 tokens; first ids: 27 14172 13429 29 198 27 1688 89871
+
+P2 fixed-state apply cost (median ms over 10 iterations), grammar state reached by
+   accepting the first N tokens of the P1 generation
+state         gram-only   chain-full         K=20         K=64        K=256   no-grammar
+---------------------------------------------------------------------------------------
+root              31.64        31.19        0.005        0.011        0.026         0.04
+mid-action        28.86        28.55        0.005        0.011        0.026         0.04
+post-action       12.15        12.23        0.002        0.004        0.013         0.04
+
+P2b permissive grammar (root ::= [printable-ascii]*), same logits:
+   chain on full array    27.48 ms | chain on K=64    0.024 ms | no grammar    0.041 ms
+   allowed: full array 1, K=64 array 1 | allowed top-20 lists identical: yes
+
+P3 cost vs candidate-array size (stock grammar, mid-action state, 10 iterations)
+      1024 candidates:     0.083 ms      81.0 ns/candidate
+      4096 candidates:     0.321 ms      78.3 ns/candidate
+     16384 candidates:     1.403 ms      85.6 ns/candidate
+     65536 candidates:    13.037 ms     198.9 ns/candidate
+    151936 candidates:    31.220 ms     205.5 ns/candidate
+
+{
+  "spike": "002-grammar-mask-cost",
+  "vocab": 151936,
+  "grammar_source": "native-template",
+  "render_lazy": 1,
+  "prompt_tokens": 2753,
+  "steps": 24,
+  "p1": {"today_median_ms": 23.425, "full_apply_median_ms": 22.092, "reduced_median_ms": 24.959, "select_median_ms": 1.388, "full_over_reduced": 0.9, "match20": 24, "steps_with_20_allowed": 0, "match5": 24, "expansions": 144, "top1_match_k64": 15, "top1_steps": 15, "outside64": 0},
+  "p2_mid_action": {"grammar_only_ms": 28.856, "chain_full_ms": 28.550, "k20_ms": 0.005, "k64_ms": 0.011, "k256_ms": 0.026, "no_grammar_ms": 0.041},
+  "p2_permissive": {"chain_full_ms": 27.485, "k64_ms": 0.024, "no_grammar_ms": 0.041, "allowed_full": 1, "allowed_k64": 1, "equiv_top20": 1}
+}

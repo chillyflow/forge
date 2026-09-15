@@ -1,0 +1,70 @@
+diff --git a/src/llama-grammar.cpp b/src/llama-grammar.cpp
+index c685346..08f12b4 100644
+--- a/src/llama-grammar.cpp
++++ b/src/llama-grammar.cpp
+@@ -1365,8 +1365,18 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
+         }
+     }
+ 
+-    std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
+-    candidates_decoded.reserve(cur_p->size);
++    // FORGE PATCH (spike 003): decode every candidate's piece into ONE
++    // contiguous code-point buffer with an ASCII fast path, instead of a
++    // heap-allocating std::vector<uint32_t> per candidate (plus a second
++    // allocation copying it into candidates_grammar). The mask costs ~80 ns
++    // per candidate in the array - 151k candidates is 12-34 ms per token - and
++    // both allocations sit on that path. Semantics are unchanged: code points
++    // and the partial-UTF-8 state come out exactly as decode_utf8 produced
++    // them, including the terminating 0 decode_utf8 always appends.
++    std::vector<uint32_t> codepoint_pool;
++    std::vector<std::pair<size_t, llama_partial_utf8>> decoded_spans;
++    codepoint_pool.reserve(2 * cur_p->size + 16);
++    decoded_spans.reserve(cur_p->size);
+ 
+     llama_grammar_candidates candidates_grammar;
+     candidates_grammar.reserve(cur_p->size);
+@@ -1382,11 +1392,42 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
+         } else if (piece.empty() || piece[0] == 0) {
+             cur_p->data[i].logit = -INFINITY;
+         } else {
+-            candidates_decoded.push_back(decode_utf8(piece, grammar.partial_utf8));
+-            candidates_grammar.push_back({ i, candidates_decoded.back().first.data(), candidates_decoded.back().second, id });
++            const size_t offset = codepoint_pool.size();
++            const size_t n      = piece.size();
++
++            // An ASCII piece with no continuation pending decodes to its own
++            // bytes; only a piece with the high bit set (or a pending partial
++            // sequence) needs the full decoder.
++            bool ascii = grammar.partial_utf8.n_remain == 0;
++            for (size_t k = 0; ascii && k < n; ++k) {
++                if ((unsigned char) piece[k] >= 0x80) {
++                    ascii = false;
++                }
++            }
++
++            llama_partial_utf8 partial;
++            if (ascii) {
++                for (size_t k = 0; k < n; ++k) {
++                    codepoint_pool.push_back((uint32_t) (unsigned char) piece[k]);
++                }
++                codepoint_pool.push_back(0);
++                partial = llama_partial_utf8{ (uint32_t) (unsigned char) piece[n - 1], 0 };
++            } else {
++                auto decoded = decode_utf8(piece, grammar.partial_utf8);
++                codepoint_pool.insert(codepoint_pool.end(), decoded.first.begin(), decoded.first.end());
++                partial = decoded.second;
++            }
++
++            decoded_spans.push_back({ offset, partial });
++            candidates_grammar.push_back({ i, nullptr, partial, id });
+         }
+     }
+ 
++    // The pool has stopped growing, so its pointers are stable now.
++    for (size_t k = 0; k < decoded_spans.size(); ++k) {
++        candidates_grammar[k].code_points = codepoint_pool.data() + decoded_spans[k].first;
++    }
++
+     const auto rejects = llama_grammar_reject_candidates(grammar.rules, grammar.stacks, candidates_grammar);
+     for (const auto & reject : rejects) {
+         cur_p->data[reject.index].logit = -INFINITY;

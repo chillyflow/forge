@@ -1,0 +1,104 @@
+model          : C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf
+vocab          : 151936 tokens
+grammar source : native-template (24400 bytes, render_lazy=1)
+prompt tokens  : 2753
+steps          : 64
+chain          : [grammar] top_k 20, top_p 0.8, temp 0.6, dist(42)
+
+shared prefill : 1192 ms for 2753 tokens (2310 tok/s)
+
+P1 real steps (gen chain = today's cost; full/reduced apply on identical logits)
+ step   today_ms     full_ms    red64_ms  allowed   match20    redK
+---------------------------------------------------------------------------
+    0      29.55       24.63      28.029        2       yes  151936
+    1      26.23        9.64      12.401        1       yes  151936
+    2      12.70       10.21      11.505        1       yes  151936
+    3      10.11       10.30      14.631        1       yes  151936
+    4      11.06       24.96      27.661        1       yes  151936
+    5      25.11       23.98      25.577        2       yes  151936
+    6      24.65       24.08      25.865        1       yes  151936
+    7      24.20        9.78      11.235        2       yes  151936
+    8       9.67        9.70      11.876        1       yes  151936
+    9       9.50       11.22      13.470        1       yes  151936
+   10      13.25       11.50      14.448        2       yes  151936
+   11      12.52       12.97      13.389        1       yes  151936
+   12      11.81        9.39      11.322        1       yes  151936
+   13       9.46       17.01      18.524        1       yes  151936
+   14      16.87       16.39      19.097        2       yes  151936
+   15      16.46       16.24      19.209        1       yes  151936
+   16      16.22       16.19      19.399        1       yes  151936
+   17      16.70       16.79      18.442        1       yes  151936
+   18      16.64       17.05      18.422        1       yes  151936
+   19      16.55       16.79      18.467        1       yes  151936
+   20      16.32       16.42      18.228        1       yes  151936
+   21      16.32       10.23      12.786        1       yes  151936
+   22      11.62       10.36      13.765        1       yes  151936
+   23      10.52       11.33      12.322        1       yes  151936
+   24      10.64        9.19      11.573        1       yes  151936
+   25       9.62       28.03      30.530        1       yes  151936
+   26      28.02       19.07      22.370        1       yes  151936
+   27      19.32        9.22      11.654        1       yes  151936
+   28      11.02       10.28      12.982        1       yes  151936
+   29      11.47       10.95      13.356        2       yes  151936
+   30       9.74        9.56      12.488        1       yes  151936
+   31      10.67        9.46      11.896        2       yes  151936
+   32      10.32       10.48      13.697        1       yes  151936
+   33      10.40        9.99      11.433        1       yes  151936
+   34       9.59       28.32      30.623        4       yes  151936
+   35      27.89       20.08      24.815        1       yes  151936
+   36      19.80       18.14      20.900        1       yes  151936
+   37      17.82       16.83      19.367        1       yes  151936
+   38      16.72        9.21      11.761        1       yes  151936
+   39      10.54        9.24      11.388        1       yes  151936
+   40       9.56        9.33      11.445        2       yes  151936
+   41       9.55        9.18      12.678        1       yes  151936
+   42       9.94       10.54      11.929        2       yes  151936
+   43       9.49        9.31      11.235        1       yes  151936
+   44       9.44        9.67      11.727        2       yes  151936
+   45       9.57        9.42      11.239        2       yes  151936
+   46       9.47        9.27      11.669        1       yes  151936
+   47       9.79        9.15      12.089        2       yes  151936
+   48       9.66       13.37      15.382        1       yes  151936
+   49      13.87       12.15      16.291        3       yes  151936
+   50      13.23       14.59      16.873        1       yes  151936
+   51      15.39       14.79      17.145        1       yes  151936
+   52      14.98       14.62      17.689        1       yes  151936
+   53      15.68       15.60      18.438        1       yes  151936
+   54      12.84       12.53      14.224        1       yes  151936
+   55      12.35       12.45      15.467        1       yes  151936
+   56      12.75       13.14      15.572        2       yes  151936
+   57      12.33       12.22      14.063        1       yes  151936
+   58      12.39       12.17      14.054        1       yes  151936
+   59      13.92       12.14      14.357        1       yes  151936
+   60      12.30       12.28      14.612        1       yes  151936
+   61      12.51       12.20      14.952        1       yes  151936
+   62      12.50       12.35      15.217        1       yes  151936
+   63      12.69       12.13      15.228        1       yes  151936
+---------------------------------------------------------------------------
+P1 medians    : today 12.51 ms | full apply 12.17 ms | reduced(64) 14.45 ms | top-k select 1.271 ms
+P1 equivalence: top-20 identical 64/64 steps (steps with 20 allowed: 0); top-5 identical 64/64; expansions 384
+P1 truncation : K=64-no-expansion top-1 agreement 44/44 steps; reference-allowed tokens outside the raw top-64: 0 total
+
+P2 fixed-state apply cost (median ms over 10 iterations), grammar state reached by
+   accepting the first N tokens of the P1 generation
+state         gram-only   chain-full         K=20         K=64        K=256   no-grammar
+---------------------------------------------------------------------------------------
+root              24.95        26.66        0.010        0.022        0.036         0.04
+mid-action        17.03        17.28        0.033        0.073        0.123         0.04
+post-action       12.61        12.91        0.003        0.004        0.014         0.04
+
+P2b permissive grammar (root ::= [printable-ascii]*), same logits:
+   chain on full array    23.16 ms | chain on K=64    0.070 ms | no grammar    0.040 ms
+   allowed: full array 2, K=64 array 2 | allowed top-20 lists identical: yes
+
+{
+  "spike": "002-grammar-mask-cost",
+  "vocab": 151936,
+  "grammar_source": "native-template",
+  "render_lazy": 1,
+  "prompt_tokens": 2753,
+  "steps": 64,
+  "p1": {"today_median_ms": 12.510, "full_apply_median_ms": 12.169, "reduced_median_ms": 14.448, "select_median_ms": 1.271, "full_over_reduced": 0.8, "match20": 64, "steps_with_20_allowed": 0, "match5": 64, "expansions": 384, "top1_match_k64": 44, "top1_steps": 44, "outside64": 0},
+  "p2_mid_action": {"grammar_only_ms": 17.034, "chain_full_ms": 17.279, "k20_ms": 0.033, "k64_ms": 0.073, "k256_ms": 0.123, "no_grammar_ms": 0.041},
+  "p2_permissive": {"chain_full_ms": 23.157, "k64_ms": 0.070, "no_grammar_ms": 0.040, "allowed_full": 2, "allowed_k64": 2, "equiv_top20": 1}
+}

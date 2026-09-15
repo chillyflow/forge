@@ -68,6 +68,23 @@ if(FORGE_WITH_LLAMA)
     file(GLOB sweep_llama_dlls "${FORGE_LLAMA_PREBUILT}/*.dll")
     add_custom_command(TARGET forge_parallel_sweep POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different ${sweep_llama_dlls} $<TARGET_FILE_DIR:forge_parallel_sweep> COMMAND_EXPAND_LISTS)
   endif()
+  # Spike 002: attributes the constrained-decode cost to the grammar mask and
+  # tests whether masking a reduced candidate array preserves the sampled set.
+  # C++ because it uses the chat-template C++ boundary directly.
+  add_executable(forge_sampler_attribution spikes/002-grammar-mask-cost/sweep.cpp)
+  target_link_libraries(forge_sampler_attribution PRIVATE Forge::forge)
+  target_include_directories(forge_sampler_attribution PRIVATE "${llama_SOURCE_DIR}/include"
+                                                               "${llama_SOURCE_DIR}/ggml/include"
+                                                               "${CMAKE_CURRENT_SOURCE_DIR}/src"
+                                                               "${CMAKE_CURRENT_SOURCE_DIR}/src/inference")
+  if(MSVC)
+    target_compile_definitions(forge_sampler_attribution PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    target_compile_options(forge_sampler_attribution PRIVATE /utf-8)
+  endif()
+  if(FORGE_LLAMA_PREBUILT)
+    file(GLOB attr_llama_dlls "${FORGE_LLAMA_PREBUILT}/*.dll")
+    add_custom_command(TARGET forge_sampler_attribution POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different ${attr_llama_dlls} $<TARGET_FILE_DIR:forge_sampler_attribution> COMMAND_EXPAND_LISTS)
+  endif()
 endif()
 if(FORGE_LLAMA_PREBUILT)
   file(GLOB llama_dlls "${FORGE_LLAMA_PREBUILT}/*.dll")

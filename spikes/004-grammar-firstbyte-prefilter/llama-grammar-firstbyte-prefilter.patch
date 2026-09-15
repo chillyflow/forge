@@ -1,0 +1,172 @@
+diff --git a/src/llama-grammar.cpp b/src/llama-grammar.cpp
+index c685346..9cac2d5 100644
+--- a/src/llama-grammar.cpp
++++ b/src/llama-grammar.cpp
+@@ -1125,6 +1125,22 @@ llama_grammar_candidates llama_grammar_reject_candidates_for_stack(
+ 
+ ////////////////////
+ 
++// FORGE PATCH (spike 004): dense first-byte table, built once per grammar.
++// 0xFF marks a token whose candidate must go through the full decoder.
++static void llama_grammar_build_first_byte(struct llama_grammar & grammar) {
++    if (!grammar.vocab) {
++        return;
++    }
++    const int32_t n_vocab = llama_vocab_n_tokens(grammar.vocab);
++    grammar.first_byte.assign((size_t) n_vocab, 0xFF);
++    for (int32_t id = 0; id < n_vocab; ++id) {
++        const std::string & piece = grammar.vocab->token_to_piece(id);
++        if (!piece.empty() && piece[0] != 0 && (unsigned char) piece[0] < 0x80) {
++            grammar.first_byte[(size_t) id] = (uint8_t) piece[0];
++        }
++    }
++}
++
+ struct llama_grammar * llama_grammar_init_impl(
+         const struct llama_vocab * vocab,
+         const llama_grammar_element ** rules,
+@@ -1192,7 +1208,7 @@ struct llama_grammar * llama_grammar_init_impl(
+     // Important: vec_rules has to be moved here, not copied, because stacks contains
+     // pointers to elements of vec_rules. If vec_rules were copied into llama_grammar
+     // then the pointers would be invalidated when the local vec_rules goes out of scope.
+-    return new llama_grammar {
++    llama_grammar * grammar = new llama_grammar {
+         vocab,
+         std::move(vec_rules),
+         std::move(stacks),
+@@ -1203,7 +1219,13 @@ struct llama_grammar * llama_grammar_init_impl(
+         /* .trigger_buffer_positions = */ {},
+         /* .trigger_tokens = */           {},
+         /* .trigger_patterns = */         {},
++        /* .first_byte = */               {},
+     };
++
++    // FORGE PATCH (spike 004): build the first-byte table with the grammar.
++    llama_grammar_build_first_byte(*grammar);
++
++    return grammar;
+ }
+ 
+ struct llama_grammar * llama_grammar_init_impl(
+@@ -1298,7 +1320,7 @@ struct llama_grammar * llama_grammar_init_impl(
+     // Important: vec_rules has to be moved here, not copied, because stacks contains
+     // pointers to elements of vec_rules. If vec_rules were copied into llama_grammar
+     // then the pointers would be invalidated when the local vec_rules goes out of scope.
+-    return new llama_grammar {
++    llama_grammar * grammar = new llama_grammar {
+         vocab,
+         std::move(vec_rules),
+         std::move(stacks),
+@@ -1309,7 +1331,13 @@ struct llama_grammar * llama_grammar_init_impl(
+         /* .trigger_buffer_positions = */ {},
+         std::move(vec_trigger_tokens),
+         std::move(vec_trigger_patterns),
++        /* .first_byte = */               {},
+     };
++
++    // FORGE PATCH (spike 004): build the first-byte table with the grammar.
++    llama_grammar_build_first_byte(*grammar);
++
++    return grammar;
+ }
+ 
+ void llama_grammar_free_impl(struct llama_grammar * grammar) {
+@@ -1332,6 +1360,7 @@ struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & gra
+         grammar.trigger_buffer_positions,
+         grammar.trigger_tokens,
+         grammar.trigger_patterns,
++        grammar.first_byte,
+     };
+ 
+     // redirect elements in stacks to point to new rules
+@@ -1365,6 +1394,45 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
+         }
+     }
+ 
++    // FORGE PATCH (spike 004): a candidate survives only if its first code point
++    // is accepted by some stack position. For an ASCII first byte that is the test
++    // llama_grammar_match_char() performs, so run it on a dense byte table before
++    // touching the per-token piece cache. Skipped when a pending partial sequence
++    // makes the first byte a continuation byte, or when a stack position matches
++    // candidates by token id.
++    bool prefilter = !grammar.first_byte.empty() && grammar.partial_utf8.n_remain == 0;
++    uint8_t allowed_bytes[32] = {0};
++    llama_token allowed_ids[8] = {0};
++    size_t allowed_id_count = 0;
++    if (prefilter) {
++        for (const auto & stack : grammar.stacks) {
++            if (stack.empty()) {
++                continue; // an empty stack admits end-of-generation only
++            }
++            const llama_grammar_element * top = stack.back();
++            if (top->type == LLAMA_GRETYPE_TOKEN) {
++                // a token position admits exactly one token id
++                if (allowed_id_count < 8) {
++                    allowed_ids[allowed_id_count++] = (llama_token) top->value;
++                } else {
++                    prefilter = false;
++                    break;
++                }
++                continue;
++            }
++            if (top->type == LLAMA_GRETYPE_TOKEN_NOT) {
++                // admits every token except one, so the byte test rejects nothing
++                prefilter = false;
++                break;
++            }
++            for (uint32_t byte = 0; byte < 256; byte++) {
++                if (llama_grammar_match_char(top, byte).first) {
++                    allowed_bytes[byte >> 3] |= (uint8_t) (1u << (byte & 7));
++                }
++            }
++        }
++    }
++
+     std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
+     candidates_decoded.reserve(cur_p->size);
+ 
+@@ -1372,10 +1440,25 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
+     candidates_grammar.reserve(cur_p->size);
+ 
+     for (size_t i = 0; i < cur_p->size; ++i) {
+-        const llama_token id      = cur_p->data[i].id;
++        const llama_token id       = cur_p->data[i].id;
++        const bool       is_eog_id = grammar.vocab->is_eog(id);
++
++        if (prefilter && !is_eog_id) {
++            const uint8_t first = grammar.first_byte[(size_t) id];
++            bool allowed = first != 0xFF &&
++                           (allowed_bytes[first >> 3] & (uint8_t) (1u << (first & 7))) != 0;
++            for (size_t k = 0; !allowed && k < allowed_id_count; k++) {
++                allowed = allowed_ids[k] == id;
++            }
++            if (!allowed) {
++                cur_p->data[i].logit = -INFINITY;
++                continue;
++            }
++        }
++
+         const std::string & piece = grammar.vocab->token_to_piece(id);
+ 
+-        if (grammar.vocab->is_eog(id)) {
++        if (is_eog_id) {
+             if (!allow_eog) {
+                 cur_p->data[i].logit = -INFINITY;
+             }
+diff --git a/src/llama-grammar.h b/src/llama-grammar.h
+index b5a0e58..523bfec 100644
+--- a/src/llama-grammar.h
++++ b/src/llama-grammar.h
+@@ -148,6 +148,12 @@ struct llama_grammar {
+                              trigger_patterns;         // Regular expressions that trigger a lazy grammar. Must be a full match of the entire generated
+                                                        // string, and the grammar will be given the string from the first match group onwards.
+ 
++    // FORGE PATCH (spike 004): dense per-token first-byte table, so the mask can
++    // reject a candidate before touching the per-token piece cache. Spike 003
++    // measured the full-vocabulary mask at ~200 ns/candidate, memory-latency
++    // bound. 0..255 = first byte of an ASCII-leading piece; 0xFF = the candidate
++    // must be decided by the full decoder.
++    std::vector<uint8_t> first_byte;
+ };
+ 
+ //
