@@ -159,6 +159,25 @@ static bool prefill(struct llama_context *ctx, const llama_token *tokens, int32_
     return true;
 }
 
+static bool decode_batch(struct llama_context *ctx, const llama_token *tokens, int32_t count,
+                         llama_pos first, int32_t *logits_index) {
+    struct llama_batch b = llama_batch_init(count, 0, 1);
+    if (!b.token)
+        return false;
+    for (int32_t i = 0; i < count; i++) {
+        b.token[i] = tokens[i];
+        b.pos[i] = first + i;
+        b.n_seq_id[i] = 1;
+        b.seq_id[i][0] = 0;
+        b.logits[i] = (i == count - 1) ? 1 : 0;
+    }
+    b.n_tokens = count;
+    bool ok = llama_decode(ctx, b) == 0;
+    llama_batch_free(b);
+    *logits_index = 0;
+    return ok;
+}
+
 static bool decode_one(struct llama_context *ctx, llama_token token, llama_pos position,
                        int32_t *logits_index) {
     struct llama_batch b = llama_batch_init(1, 0, 1);
@@ -201,6 +220,39 @@ static struct llama_sampler *make_chain(const char *gbnf, const struct llama_voc
 static struct llama_sampler *make_grammar_only(const char *gbnf, const struct llama_vocab *vocab) {
     struct llama_sampler *g = llama_sampler_init_grammar(vocab, gbnf, "root");
     return g;
+}
+
+/* Lazy variants: the grammar sleeps until a trigger pattern or token is seen, which is
+ * how Forge's loop runs the native template render. */
+static struct llama_sampler *make_grammar_lazy(const char *gbnf, const struct llama_vocab *vocab,
+                                               const std::vector<std::string> &patterns,
+                                               const std::vector<llama_token> &tokens) {
+    std::vector<const char *> pats;
+    for (const std::string &p : patterns)
+        pats.push_back(p.c_str());
+    struct llama_sampler *g = llama_sampler_init_grammar_lazy_patterns(
+        vocab, gbnf, "root", pats.empty() ? NULL : pats.data(), pats.size(),
+        tokens.empty() ? NULL : tokens.data(), tokens.size());
+    return g;
+}
+
+static struct llama_sampler *make_chain_lazy(const char *gbnf, const struct llama_vocab *vocab,
+                                             const std::vector<std::string> &patterns,
+                                             const std::vector<llama_token> &tokens) {
+    struct llama_sampler *chain = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    if (!chain)
+        return NULL;
+    struct llama_sampler *g = make_grammar_lazy(gbnf, vocab, patterns, tokens);
+    if (!g) {
+        llama_sampler_free(chain);
+        return NULL;
+    }
+    llama_sampler_chain_add(chain, g);
+    llama_sampler_chain_add(chain, llama_sampler_init_top_k(20));
+    llama_sampler_chain_add(chain, llama_sampler_init_top_p(0.8f, 1));
+    llama_sampler_chain_add(chain, llama_sampler_init_temp(0.6f));
+    llama_sampler_chain_add(chain, llama_sampler_init_dist(42));
+    return chain;
 }
 
 static void fill_full(std::vector<llama_token_data> &buf, const float *logits, int32_t n_vocab) {
@@ -327,9 +379,14 @@ static void topk_coverage(const char * label, const char * gbnf, const struct ll
 }
 
 int main(int argc, char **argv) {
+    /* Unbuffered: a crash mid-run must not take the evidence with it. */
+    setvbuf(stdout, NULL, _IONBF, 0);
     const char *model_path = NULL;
     const char *prompt_path = NULL;
     int steps = 64;
+    int census = 0;
+    int census_steps = 256;
+    const char *grammar_choice = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--model") && i + 1 < argc)
             model_path = argv[++i];
@@ -337,22 +394,36 @@ int main(int argc, char **argv) {
             prompt_path = argv[++i];
         else if (!strcmp(argv[i], "--steps") && i + 1 < argc)
             steps = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--census"))
+            census = 1;
+        else if (!strcmp(argv[i], "--census-steps") && i + 1 < argc)
+            census_steps = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--grammar") && i + 1 < argc)
+            grammar_choice = argv[++i];
         else {
             fprintf(stderr, "unknown argument: %s\n", argv[i]);
             return 2;
         }
     }
-    if (!model_path || !prompt_path || steps < 8) {
+    if (!model_path || (!census && (!prompt_path || steps < 8))) {
         fprintf(stderr, "usage: forge_sampler_attribution --model <gguf> --prompt <file> "
-                        "[--steps 64]\n");
+                        "[--steps 64]\n"
+                        "       forge_sampler_attribution --model <gguf> --census "
+                        "[--census-steps 256] [--grammar native|flat]  (prompt rendered "
+                        "from the native template)\n");
         return 2;
     }
 
     size_t prompt_length = 0;
-    char *prompt = read_file(prompt_path, &prompt_length);
-    if (!prompt) {
-        fprintf(stderr, "cannot read prompt: %s\n", prompt_path);
-        return 1;
+    std::string prompt_text;
+    if (prompt_path) {
+        char *from_file = read_file(prompt_path, &prompt_length);
+        if (!from_file) {
+            fprintf(stderr, "cannot read prompt: %s\n", prompt_path);
+            return 1;
+        }
+        prompt_text.assign(from_file, prompt_length);
+        free(from_file);
     }
 
     llama_backend_init();
@@ -382,6 +453,9 @@ int main(int argc, char **argv) {
 
     /* --- the grammar: Forge's own, native template render preferred --- */
     std::string gbnf;
+    std::string native_prompt;
+    std::vector<std::string> trigger_text;
+    std::vector<llama_token> trigger_tokens;
     const char *grammar_source = "none";
     int render_lazy = 0;
     fg_chat_templates *templates = NULL;
@@ -395,11 +469,16 @@ int main(int argc, char **argv) {
     if (templates) {
         char *tools = fg_tool_native_schema();
         if (tools) {
+            /* A census run must reach the structural region, so it asks for a tool
+             * use instead of a shrug; the cost arms keep the degenerate probe prompt. */
+            const char *user_content = census
+                ? "Read calc.py in the workspace and report the bug you find."
+                : "Probe";
             std::string request = std::string("{\"protocol\":\"forge-native-v1\",\"tools\":") +
                                   tools +
                                   ",\"anchor_message_count\":1,\"messages\":["
                                   "{\"role\":\"system\",\"content\":\"Forge\"},"
-                                  "{\"role\":\"user\",\"content\":\"Probe\"}]}";
+                                  "{\"role\":\"user\",\"content\":\"" + user_content + "\"}]}";
             char err[256] = {0};
             fg_chat_render *render =
                 fg_chat_templates_apply_native(templates, request.c_str(), false, err, sizeof(err));
@@ -409,6 +488,17 @@ int main(int argc, char **argv) {
                     gbnf = g;
                     grammar_source = "native-template";
                     render_lazy = fg_chat_render_grammar_lazy(render) ? 1 : 0;
+                    size_t rlen = 0;
+                    const char *rp = fg_chat_render_prompt(render, &rlen);
+                    if (rp && rlen)
+                        native_prompt.assign(rp, rlen);
+                    for (size_t ti = 0; ti < fg_chat_render_trigger_pattern_count(render); ti++) {
+                        const char *tp = fg_chat_render_trigger_pattern(render, ti);
+                        if (tp)
+                            trigger_text.push_back(tp);
+                    }
+                    for (size_t ti = 0; ti < fg_chat_render_trigger_token_count(render); ti++)
+                        trigger_tokens.push_back((llama_token)fg_chat_render_trigger_token(render, ti));
                 }
                 fg_chat_render_destroy(render);
             } else {
@@ -431,6 +521,24 @@ int main(int argc, char **argv) {
         fprintf(stderr, "no grammar available\n");
         return 1;
     }
+    if (grammar_choice && !strcmp(grammar_choice, "flat")) {
+        char *flat = fg_tool_grammar(false, false, false);
+        if (!flat) {
+            fprintf(stderr, "flat grammar unavailable\n");
+            return 1;
+        }
+        gbnf = flat;
+        grammar_source = "flat-tool-grammar (forced)";
+        free(flat);
+    }
+    if (prompt_text.empty() && !native_prompt.empty())
+        prompt_text = native_prompt;
+    if (prompt_text.empty()) {
+        fprintf(stderr, "no prompt available\n");
+        return 1;
+    }
+    const char *prompt = prompt_text.c_str();
+    prompt_length = prompt_text.size();
 
     int32_t n_prompt = -llama_tokenize(vocab, prompt, prompt_length, NULL, 0, true, true);
     if (n_prompt <= 0) {
@@ -460,6 +568,218 @@ int main(int argc, char **argv) {
     llama_synchronize(ctx);
     printf("shared prefill : %.0f ms for %d tokens (%.0f tok/s)\n\n", now_ms() - t0, (int)n_prompt,
            (double)n_prompt / ((now_ms() - t0) / 1000.0));
+
+    /* ---------- P6/P7: forced-run census and the batching curve ---------- */
+    if (census) {
+        bool c_lazy = render_lazy && (!trigger_text.empty() || !trigger_tokens.empty());
+        struct llama_sampler *c_gen = c_lazy
+            ? make_chain_lazy(gbnf.c_str(), vocab, trigger_text, trigger_tokens)
+            : make_chain(gbnf.c_str(), vocab, true);
+        struct llama_sampler *c_probe = c_lazy
+            ? make_grammar_lazy(gbnf.c_str(), vocab, trigger_text, trigger_tokens)
+            : make_grammar_only(gbnf.c_str(), vocab);
+        printf("census laziness: %s (%zu string triggers, %zu token triggers)\n\n",
+               c_lazy ? "lazy, as the loop runs it" : "eager", trigger_text.size(),
+               trigger_tokens.size());
+        if (!c_gen || !c_probe) {
+            fprintf(stderr, "census sampler construction failed\n");
+            return 1;
+        }
+        std::vector<llama_token_data> c_buf;
+        std::vector<float> c_snap((size_t)n_vocab);
+        std::vector<llama_token> c_tokens;
+        std::vector<int> c_allowed;
+        hist c_sample_ms, c_probe_ms, c_decode_ms, c_run_len;
+        int premise_ok = 0, premise_bad = 0, forced_steps = 0, runs = 0, max_run = 0;
+        long long elidable = 0;
+
+        printf("P6 forced-run census (%s, campaign chain, %d steps)\n", grammar_source, census_steps);
+        printf("%5s %9s %9s %10s %8s %7s\n", "step", "sample_ms", "probe_ms", "decode_ms",
+               "allowed", "forced");
+        printf("-----------------------------------------------------------------\n");
+        llama_pos c_pos = (llama_pos)n_prompt;
+        for (int step = 0; step < census_steps; step++) {
+            const float *logits = llama_get_logits_ith(ctx, logits_index);
+            if (!logits) {
+                fprintf(stderr, "no logits at census step %d\n", step);
+                return 1;
+            }
+            memcpy(c_snap.data(), logits, sizeof(float) * (size_t)n_vocab);
+
+            double ts0 = now_ms();
+            llama_token sampled = llama_sampler_sample(c_gen, ctx, logits_index);
+            c_sample_ms.add(now_ms() - ts0);
+
+            /* The census probe: what the grammar alone admits on these logits. It is
+             * the harness's own cost and is kept out of every projection. */
+            int allowed = 0;
+            c_probe_ms.add(time_apply(c_probe, c_buf, c_snap.data(), n_vocab, NULL, 1, &allowed,
+                                      NULL));
+            bool forced = (allowed == 1);
+            if (forced) {
+                llama_token only = -1;
+                for (size_t i = 0; i < c_buf.size(); i++) {
+                    if (c_buf[i].logit != -INFINITY) {
+                        only = c_buf[i].id;
+                        break;
+                    }
+                }
+                if (only == sampled)
+                    premise_ok++;
+                else
+                    premise_bad++;
+                forced_steps++;
+            }
+            c_allowed.push_back(allowed);
+            c_tokens.push_back(sampled);
+            {
+                std::vector<llama_token> newest(1, sampled);
+                accept_tokens(c_probe, newest, 1);
+            }
+            double td0 = now_ms();
+            if (!decode_one(ctx, sampled, c_pos, &logits_index)) {
+                fprintf(stderr, "census decode failed at step %d\n", step);
+                return 1;
+            }
+            llama_synchronize(ctx);
+            c_decode_ms.add(now_ms() - td0);
+            c_pos++;
+            printf("%5d %9.2f %9.2f %10.2f %8d %7s\n", step, c_sample_ms.v.back(),
+                   c_probe_ms.v.back(), c_decode_ms.v.back(), allowed, forced ? "yes" : "-");
+            fflush(stdout);
+        }
+        for (size_t i = 0; i < c_allowed.size();) {
+            if (c_allowed[i] == 1) {
+                size_t j = i;
+                while (j < c_allowed.size() && c_allowed[j] == 1)
+                    j++;
+                size_t len = j - i;
+                c_run_len.add((double)len);
+                runs++;
+                if ((int)len > max_run)
+                    max_run = (int)len;
+                elidable += (long long)(len - 1);
+                i = j;
+            } else {
+                i++;
+            }
+        }
+        {
+            std::vector<char> text;
+            std::vector<char> piece(256);
+            for (size_t i = 0; i < c_tokens.size(); i++) {
+                int32_t n = llama_token_to_piece(vocab, c_tokens[i], piece.data(),
+                                                (int32_t)piece.size(), 0, true);
+                for (int32_t j = 0; j < n; j++)
+                    text.push_back(piece[(size_t)j]);
+            }
+            text.push_back(0);
+            printf("\ngenerated text (%zu tokens):\n\n%.*s\n\n", c_tokens.size(),
+                   (int)text.size(), text.data());
+        }
+        double sample_med = c_sample_ms.median();
+        double probe_med = c_probe_ms.median();
+        double decode_med = c_decode_ms.median();
+        double tail = sample_med > probe_med ? sample_med - probe_med : 0.0;
+        printf("-----------------------------------------------------------------\n");
+        printf("P6 census summary (%s)\n", grammar_source);
+        printf("   steps                    : %d\n", census_steps);
+        printf("   forced steps             : %d (%.1f%%)\n", forced_steps,
+               100.0 * (double)forced_steps / (double)census_steps);
+        printf("   forced runs              : %d; mean length %.2f, max %d\n", runs,
+               runs ? (double)forced_steps / (double)runs : 0.0, max_run);
+        printf("   premise sampled==only    : %d ok / %d contradicting\n", premise_ok,
+               premise_bad);
+        printf("   per-step medians         : sample %.2f ms | census probe %.2f ms | decode %.2f ms\n",
+               sample_med, probe_med, decode_med);
+        printf("   chain tail (sample-probe): %.2f ms\n", tail);
+        printf("   passes a run could avoid : %lld tokens\n", elidable);
+        {
+            const char *names[5] = {"== 1 (forced)", "== 2", "3-4", "5-8", "9-64"};
+            int buckets[5] = {0, 0, 0, 0, 0};
+            int asleep = 0, wide = 0;
+            for (size_t i = 0; i < c_allowed.size(); i++) {
+                int a = c_allowed[i];
+                if (a >= n_vocab)
+                    asleep++;
+                else if (a <= 1)
+                    buckets[0]++;
+                else if (a <= 2)
+                    buckets[1]++;
+                else if (a <= 4)
+                    buckets[2]++;
+                else if (a <= 8)
+                    buckets[3]++;
+                else if (a <= 64)
+                    buckets[4]++;
+                else
+                    wide++;
+            }
+            printf("   allowed-set census       : asleep(no mask) %d\n", asleep);
+            for (int b = 0; b < 5; b++)
+                printf("                              %-14s %d steps\n", names[b], buckets[b]);
+            printf("                              %-14s %d steps\n\n", "> 64", wide);
+        }
+
+        printf("P7 batched decode cost (continuing positions, synchronized, median of 3)\n");
+        printf("%6s %11s %12s %10s\n", "batch", "total_ms", "per_tok_ms", "vs single");
+        printf("-------------------------------------------------\n");
+        int batch_sizes[5] = {1, 2, 4, 8, 16};
+        double batch_per_tok[5] = {0};
+        for (int bi = 0; bi < 5; bi++) {
+            int bs = batch_sizes[bi];
+            if (bs > (int)c_tokens.size())
+                continue;
+            std::vector<llama_token> chunk(c_tokens.end() - bs, c_tokens.end());
+            hist h;
+            for (int rep = 0; rep < 3; rep++) {
+                int li = 0;
+                double tb0 = now_ms();
+                bool ok = decode_batch(ctx, chunk.data(), bs, c_pos, &li);
+                llama_synchronize(ctx);
+                double tb = now_ms() - tb0;
+                if (!ok) {
+                    fprintf(stderr, "batch decode failed (batch %d)\n", bs);
+                    return 1;
+                }
+                c_pos += (llama_pos)bs;
+                h.add(tb);
+            }
+            batch_per_tok[bi] = h.median() / (double)bs;
+            printf("%6d %11.2f %12.3f %9.2fx\n", bs, h.median(), batch_per_tok[bi],
+                   batch_per_tok[bi] > 0 ? decode_med / batch_per_tok[bi] : 0.0);
+        }
+
+        /* Projection from measured inputs only. Forge must apply the mask either way
+         * (that is how the allowed set is known), so elision trades L single decodes
+         * for one batched decode, and the mask enters both sides. */
+        double mean_run = runs ? (double)forced_steps / (double)runs : 0.0;
+        double batch_used = batch_per_tok[3];
+        double today_tok = sample_med + decode_med;
+        double elide_tok = probe_med + batch_used;
+        double share = 100.0 * (double)forced_steps / (double)census_steps;
+        printf("\nP4 projection (pinned runtime, measured inputs)\n");
+        printf("   today per token          : sample %.2f + decode %.2f = %.2f ms\n", sample_med,
+               decode_med, today_tok);
+        printf("   elided per forced token  : probe %.2f + batched(8) %.3f = %.3f ms\n",
+               probe_med, batch_used, elide_tok);
+        printf("   per forced token         : %.2fx cheaper\n",
+               elide_tok > 0 ? today_tok / elide_tok : 0.0);
+        printf("   net decode saving        : %.1f%% at a %.1f%% forced share (mean run %.2f)\n",
+               share * (1.0 - elide_tok / today_tok), share, mean_run);
+        {
+            double pf_mask = 0.63;
+            double pf_today = pf_mask + tail + decode_med;
+            double pf_elide = pf_mask + batch_used;
+            printf("   spike-004 prefilter regime (mask 0.63 ms on both sides): today %.2f ms -> "
+                   "elided %.2f ms per forced token = %.2fx; net decode saving %.1f%%\n",
+                   pf_today, pf_elide, pf_elide > 0 ? pf_today / pf_elide : 0.0,
+                   share * (1.0 - pf_elide / pf_today));
+        }
+        llama_sampler_free(c_gen);
+        llama_sampler_free(c_probe);
+        return 0;
+    }
 
     std::vector<float> snap((size_t)n_vocab);
     std::vector<llama_token_data> buf_full;
@@ -851,6 +1171,5 @@ int main(int argc, char **argv) {
     llama_free(ctx);
     llama_model_free(model);
     llama_backend_free();
-    free(prompt);
     return 0;
 }

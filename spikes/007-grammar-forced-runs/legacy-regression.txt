@@ -1,0 +1,67 @@
+model          : C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf
+vocab          : 151936 tokens
+grammar source : native-template (24400 bytes, render_lazy=1)
+prompt tokens  : 2737
+steps          : 8
+chain          : [grammar] top_k 20, top_p 0.8, temp 0.6, dist(42)
+
+shared prefill : 918 ms for 2737 tokens (2983 tok/s)
+
+P1 real steps (gen chain = today's cost; full/reduced apply on identical logits)
+ step   today_ms     full_ms    red64_ms  allowed   match20    redK
+---------------------------------------------------------------------------
+    0      28.66       27.20      26.535        2       yes  151936
+    1      26.75       25.63      31.424        1       yes  151936
+    2      27.49       24.76      26.692        2       yes  151936
+    3      24.33       23.34      24.733        1       yes  151936
+    4      23.01       10.97      12.275        2       yes  151936
+    5      10.86        9.27      13.812        1       yes  151936
+    6       9.77        9.28      11.247        2       yes  151936
+    7       9.62        9.22      12.082        1       yes  151936
+---------------------------------------------------------------------------
+P1 medians    : today 24.33 ms | full apply 23.34 ms | reduced(64) 24.73 ms | top-k select 1.308 ms
+P1 equivalence: top-20 identical 8/8 steps (steps with 20 allowed: 0); top-5 identical 8/8; expansions 48
+P1 truncation : K=64-no-expansion top-1 agreement 2/2 steps; reference-allowed tokens outside the raw top-64: 0 total
+P1 token hash : a096a0cceed935dd over 8 tokens; first ids: 151645 151643 27 1688 18111 2210 75 397
+
+P5 reduced+expanded chain (greedy, same state and logits at every step)
+   same token as the full-array reference : 8/8 steps
+   answered without the full vocabulary  : 7/8 steps (median K 1280)
+   cost per step: reference 17.476 ms | proposed 3.873 ms
+
+P2 fixed-state apply cost (median ms over 10 iterations), grammar state reached by
+   accepting the first N tokens of the P1 generation
+state         gram-only   chain-full         K=20         K=64        K=256   no-grammar
+---------------------------------------------------------------------------------------
+root              25.21        25.16        0.005        0.007        0.025         0.04
+mid-action        25.06        26.49        0.005        0.008        0.028         0.04
+post-action        9.61         9.60        0.001        0.003        0.012         0.04
+
+P2b permissive grammar (root ::= [printable-ascii]*), same logits:
+   chain on full array    24.36 ms | chain on K=64    0.019 ms | no grammar    0.039 ms
+   allowed: full array 9, K=64 array 9 | allowed top-20 lists identical: yes
+
+P4 truncation risk of applying the grammar to a reduced array
+P4 root         sampled-set=10 | K=20  outside=10 | K=64  outside=10 | K=256 outside=10
+P4 mid-action   sampled-set=10 | K=20  outside=10 | K=64  outside=10 | K=256 outside=10
+P4 post-action  sampled-set= 2 | K=20  outside=2 | K=64  outside=2 | K=256 outside=2
+P4 permissive   sampled-set=20 | K=20  outside=0 | K=64  outside=0 | K=256 outside=0
+
+P3 cost vs candidate-array size (stock grammar, mid-action state, 10 iterations)
+      1024 candidates:     0.075 ms      72.9 ns/candidate
+      4096 candidates:     0.296 ms      72.2 ns/candidate
+     16384 candidates:     1.311 ms      80.0 ns/candidate
+     65536 candidates:    12.193 ms     186.0 ns/candidate
+    151936 candidates:    28.016 ms     184.4 ns/candidate
+
+{
+  "spike": "002-grammar-mask-cost",
+  "vocab": 151936,
+  "grammar_source": "native-template",
+  "render_lazy": 1,
+  "prompt_tokens": 2737,
+  "steps": 8,
+  "p1": {"today_median_ms": 24.331, "full_apply_median_ms": 23.339, "reduced_median_ms": 24.733, "select_median_ms": 1.308, "full_over_reduced": 0.9, "match20": 8, "steps_with_20_allowed": 0, "match5": 8, "expansions": 48, "top1_match_k64": 2, "top1_steps": 2, "outside64": 0},
+  "p2_mid_action": {"grammar_only_ms": 25.063, "chain_full_ms": 26.491, "k20_ms": 0.005, "k64_ms": 0.008, "k256_ms": 0.028, "no_grammar_ms": 0.040},
+  "p2_permissive": {"chain_full_ms": 24.362, "k64_ms": 0.019, "no_grammar_ms": 0.039, "allowed_full": 9, "allowed_k64": 9, "equiv_top20": 1}
+}
