@@ -7,6 +7,34 @@ One repetition per cell: this is an examined development diagnostic, not a
 superiority, preservation or holdout claim — the same language as the
 seven-arm loop pilot.
 
+## Amendment 1 — launch identity (2026-09-18, before the first E3 cell)
+
+This preregistration was frozen 2026-09-17 and then retained unexecuted: E2 v1
+returned not material on one retained cell, so the E2 fix cycle ran first (fix
+commit `5520c33a`; corrected-implementation screen v2 returned material). E3
+launches now; its identity is corrected from the frozen record as follows, and
+**nothing else in this document changes** — the bar, arms, schedule, fixtures
+and profile are exactly as frozen:
+
+- `forge.exe` sha256 at launch: `6a6b882378095b57c4a412256f8642546cb7df3c0e0027047c7d6365800c28dd`
+  (frozen line named `3378441430cdd40d8f835a11a0764f6f3b7f37cc9a20d790e21f363374960e77`).
+  The delta is the E2 fix set: `5520c33a` (rerank wall-budget — extends the
+  retrieval snapshot's relative deadline by the callback budget; changes no
+  scores and no ordering) and `11e8c822` (record-only — captures the server's
+  `x-typesafe-request-id`/`date` headers in raw records). No loop, prompt,
+  tool or scoring behavior changed.
+- Arm labels `rich` / `rich-judge` above are the frozen `benchmark/run.py`
+  variants `optimized` / `optimized-judge` (re-verified sha256 `6c0cc041…`,
+  matches the frozen line).
+- The two engagement-preflight runs are the first two judge-arm cells of the
+  12-cell schedule (`go_api_pagination`, `generalize_retractions_original`);
+  the full schedule skips them (resume-safe), so the screen remains exactly
+  12 cells.
+- Re-verified at launch, all matching the frozen lines: `judge-e3.toml`
+  `e5f03637…`; the six task manifests (`2bb193ba…`, `8d909f5d…`, `27603cd6…`,
+  `3e32c2aa…`, `93bedc92…`, `359e98e0…`); model
+  `Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf` `fadc3e5f…88ad`.
+
 ## Question
 
 When the richer agent loop (no `--minimal-agent`) has the optional judge

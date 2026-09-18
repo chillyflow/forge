@@ -1,0 +1,25 @@
+TOOL_ERROR [conflict]: stale file_sha256 for service.py; current file_sha256 is bbaaf4f74f0f72b089df74dcf7dfd788e0cf6e0c283ce26b6f50540c68589408. Current selected content follows; use this hash for a revised hunk.
+No edit performed. file_sha256:bbaaf4f74f0f72b089df74dcf7dfd788e0cf6e0c283ce26b6f50540c68589408
+file_line_count:23
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            if target in cancelled:
+                continue
+            cancelled.add(target)
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+            # If the posting hasn't arrived yet, we still mark it as cancelled
+            # so that when it arrives, we won't process it

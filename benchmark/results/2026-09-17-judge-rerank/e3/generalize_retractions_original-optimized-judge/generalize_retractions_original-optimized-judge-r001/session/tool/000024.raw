@@ -1,0 +1,34 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+Current implementation:
+def balances(events):
+    seen, cancelled = set(), set()
+    postings, totals = {}, {}
+    for event in events:
+        if event['id'] in seen:
+            continue
+        seen.add(event['id'])
+        if event['kind'] == 'post':
+            account, amount = event['account'], event['amount']
+            postings[event['id']] = (account, amount)
+            # If this posting was already cancelled by a retraction, don't process it
+            if event['id'] in cancelled:
+                continue
+            totals.setdefault(account, 0)
+            totals[account] += amount
+        else:
+            target = event['target']
+            if target in cancelled:
+                continue
+            cancelled.add(target)
+            if target in postings:
+                account, amount = postings[target]
+                totals[account] -= amount
+            # If the posting hasn't arrived yet, we still mark it as cancelled
+            # so that when it arrives, we won't process it
+    return totals
+
+
+stderr:
+
+next_action_guidance: A successful process exit does not prove that tests ran or that the implementation is correct. Confirm that the test runner executed the relevant tests; for Python unittest use python -m unittest discover -v or an explicit test module, not direct execution of a definition-only test file. If required validation actually passed and the task is complete, call final. Do not repeat an already verified validation command.

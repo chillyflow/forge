@@ -1,0 +1,21 @@
+file_sha256:0bfc7661de632302ebd1d82277db844a4ed9e25ba30c45cba4275725ec24470e
+1: def balances(events):
+2:     seen, cancelled = set(), set()
+3:     postings, totals = {}, {}
+4:     for event in events:
+5:         if event['id'] in seen:
+6:             continue
+7:         seen.add(event['id'])
+8:         if event['kind'] == 'post':
+9:             account, amount = event['account'], event['amount']
+10:             postings[event['id']] = (account, amount)
+11:             totals.setdefault(account, 0)
+12:             if True:
+13:                 totals[account] += amount
+14:         else:
+15:             target = event['target']
+16:             if target in cancelled:
+17:                 continue
+18:             cancelled.add(target)
+19:             if target in postings:
+20:                 account, amount = postings[target]
