@@ -270,6 +270,12 @@ class FixtureTests(unittest.TestCase):
         self.assertEqual(BENCH.VARIANTS['thought-native-decode-only']['thought_cue'], '')
         self.assertIn('--disable-thinking', BENCH.VARIANTS[
             'thought-native-disabled-decode-only']['flags'])
+        repair_judge = BENCH.VARIANTS['loop-repair-judge']['flags']
+        self.assertEqual(repair_judge[:5], ['--minimal-agent', '--thought-history',
+                                            '--candidate-checkpoint', '--bounded-repair',
+                                            '--judge'])
+        self.assertEqual(repair_judge[5:], ['--config',
+            'C:/Users/flowc/dev/forge/benchmark/results/2026-09-18-typesafe-repair-feedback/judge.toml'])
         action = '{"tool":"read_file","args":{"path":"x","start":1,"end":1}}'
         self.assertEqual(CONSOLIDATE.classify('Plan: reason\n' + action, 'Plan: '),
                          'routed_prefix')
