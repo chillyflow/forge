@@ -61,7 +61,7 @@ static void usage(void) {
          "  --failure-reflection one bounded diagnostic action per failed repair episode\n"
          "  --reflection-tokens N diagnostic action bound, 32..1024 (default 256)\n"
          "  --symbol-impact      targeted preliminary checks; broad final verification\n"
-         "  --judge              optional hosted judgment service for retrieval reranking\n"
+         "  --judge              optional hosted judgment service for retrieval reranking and repair feedback\n"
          "  --history-bytes N | --history-turns N   bounded interactive history\n"
          "                       full history; ignores semantic, compaction and thought-history "
          "settings\n"

@@ -247,6 +247,279 @@ static forge_status parse_response(forge_judge *j, const char *body, size_t len,
     return status;
 }
 
+static void record_run(forge_judge *j, const char *request, const char *response,
+                       size_t response_len, forge_status status, double latency_ms,
+                       const char *error_message);
+static forge_status judge_transport(forge_judge *j, const char *request, size_t request_len,
+                                    char **response, size_t *response_len, forge_error *e);
+
+static bool add_string_field(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key,
+                             const char *value) {
+    return yyjson_mut_obj_add_str(doc, obj, key, value ? value : "");
+}
+
+static bool add_feedback_choice_question(yyjson_mut_doc *doc, yyjson_mut_val *questions,
+                                         const char *key, const char *instructions,
+                                         const char *const *options,
+                                         const char *const *descriptions, size_t count) {
+    yyjson_mut_val *key_val = yyjson_mut_strcpy(doc, key);
+    yyjson_mut_val *question = yyjson_mut_obj(doc), *criteria = yyjson_mut_obj(doc);
+    bool ok = key_val && question && criteria &&
+              yyjson_mut_obj_add_str(doc, question, "type", "choice") &&
+              yyjson_mut_obj_add_str(doc, question, "instructions", instructions) &&
+              yyjson_mut_obj_add_val(doc, question, "criteria", criteria);
+    for (size_t i = 0; ok && i < count; i++)
+        ok = yyjson_mut_obj_add_str(doc, criteria, options[i], descriptions[i]);
+    return ok && yyjson_mut_obj_add(questions, key_val, question);
+}
+
+static bool add_feedback_noul_question(yyjson_mut_doc *doc, yyjson_mut_val *questions,
+                                       const char *key, const char *instructions,
+                                       const char *true_desc, const char *false_desc) {
+    yyjson_mut_val *key_val = yyjson_mut_strcpy(doc, key);
+    yyjson_mut_val *question = yyjson_mut_obj(doc), *criteria = yyjson_mut_obj(doc);
+    bool ok = key_val && question && criteria &&
+              yyjson_mut_obj_add_str(doc, question, "type", "noul") &&
+              yyjson_mut_obj_add_str(doc, question, "instructions", instructions) &&
+              yyjson_mut_obj_add_str(doc, criteria, "true", true_desc) &&
+              yyjson_mut_obj_add_str(doc, criteria, "false", false_desc) &&
+              yyjson_mut_obj_add_val(doc, question, "criteria", criteria);
+    return ok && yyjson_mut_obj_add(questions, key_val, question);
+}
+
+static bool add_feedback_score_question(yyjson_mut_doc *doc, yyjson_mut_val *questions,
+                                        const char *key, const char *instructions,
+                                        const char *const *levels, size_t count) {
+    yyjson_mut_val *key_val = yyjson_mut_strcpy(doc, key);
+    yyjson_mut_val *question = yyjson_mut_obj(doc), *criteria = yyjson_mut_arr(doc);
+    bool ok = key_val && question && criteria && count >= 2 && count <= 10 &&
+              yyjson_mut_obj_add_str(doc, question, "type", "score") &&
+              yyjson_mut_obj_add_str(doc, question, "instructions", instructions);
+    for (size_t i = 0; ok && i < count; i++)
+        ok = yyjson_mut_arr_add_str(doc, criteria, levels[i]);
+    ok = ok && yyjson_mut_obj_add_val(doc, question, "criteria", criteria);
+    return ok && yyjson_mut_obj_add(questions, key_val, question);
+}
+
+static char *build_feedback_request(const forge_judge *j,
+                                    const forge_judge_feedback_request *request,
+                                    forge_error *e) {
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc ? yyjson_mut_obj(doc) : NULL;
+    bool ok = root != NULL;
+    if (ok) {
+        yyjson_mut_doc_set_root(doc, root);
+        yyjson_mut_val *state = yyjson_mut_obj(doc), *validation = yyjson_mut_obj(doc),
+                       *current = yyjson_mut_obj(doc), *loop = yyjson_mut_obj(doc),
+                       *questions = yyjson_mut_obj(doc);
+        ok = state && validation && current && loop && questions &&
+             yyjson_mut_obj_add_val(doc, root, "state", state) &&
+             yyjson_mut_obj_add_str(doc, root, "model", j->model) &&
+             yyjson_mut_obj_add_val(doc, root, "questions", questions) &&
+             add_string_field(doc, state, "task", request->task) &&
+             yyjson_mut_obj_add_val(doc, state, "validation", validation) &&
+             add_string_field(doc, validation, "summary", request->validation_summary) &&
+             add_string_field(doc, validation, "failed_command", request->failed_command) &&
+             yyjson_mut_obj_add_val(doc, state, "current", current) &&
+             add_string_field(doc, current, "path", request->current_path) &&
+             add_string_field(doc, current, "source", request->current_source) &&
+             add_string_field(doc, state, "last_delta", request->last_delta) &&
+             yyjson_mut_obj_add_val(doc, state, "loop", loop) &&
+             yyjson_mut_obj_add_uint(doc, loop, "remaining_actions", request->remaining_actions) &&
+             yyjson_mut_obj_add_uint(doc, loop, "candidate_attempts", request->candidate_attempts) &&
+             yyjson_mut_obj_add_uint(doc, loop, "input_hash", request->input_hash) &&
+             yyjson_mut_obj_add_uint(doc, loop, "initial_hash", request->initial_hash) &&
+             yyjson_mut_obj_add_bool(doc, loop, "repeated_failure", request->repeated_failure) &&
+             yyjson_mut_obj_add_bool(doc, loop, "bounded_repair", request->bounded_repair);
+        static const char *const families[] = {"code_defect", "test_or_requirement_mismatch",
+                                               "environment_or_dependency", "missing_evidence",
+                                               "unknown"};
+        static const char *const family_desc[] = {
+            "The failure most likely comes from incorrect implementation logic in `current.source` or related code.",
+            "The observed tests, task, or inferred requirement appear inconsistent or incomplete.",
+            "The failure most likely comes from missing dependencies, filesystem state, interpreter/toolchain differences, or another environment condition.",
+            "The state does not yet contain enough inspected source or validation evidence to choose a safe repair.",
+            "None of the supplied categories is clearly supported by the state."};
+        static const char *const readiness[] = {
+            "No actionable signal; the next step should not edit code.",
+            "Needs more inspection before a repair can be selected.",
+            "A concrete suspect is visible, but the exact repair may still need confirmation.",
+            "An actionable repair is likely from the supplied validation, source, and delta."};
+        static const char *const actions[] = {"inspect_source", "patch_code", "run_validation", "defer"};
+        static const char *const action_desc[] = {
+            "Inspect current or related source before editing.",
+            "Patch implementation code; enough evidence identifies a likely fix.",
+            "Run host validation; the current candidate may already satisfy the observed failure.",
+            "Do not act on this judgment because the evidence is missing, contradictory, unsafe, or low confidence."};
+        ok = ok && add_feedback_choice_question(
+                       doc, questions, "failure_family",
+                       "Classify the primary cause of the failed validation in `validation.summary` given `task`, `current.source`, `last_delta`, and `loop`.",
+                       families, family_desc, sizeof(families) / sizeof(*families)) &&
+             add_feedback_noul_question(
+                 doc, questions, "evidence_gap",
+                 "Does this state lack enough direct source or validation evidence to choose a safe next repair action?",
+                 "More inspection is needed before editing or accepting the candidate.",
+                 "The supplied task, validation summary, current source, and previous delta are sufficient for a concrete next step.") &&
+             add_feedback_score_question(
+                 doc, questions, "repair_readiness",
+                 "How ready is this failed repair episode for an implementation patch?", readiness,
+                 sizeof(readiness) / sizeof(*readiness)) &&
+             add_feedback_choice_question(
+                 doc, questions, "next_action",
+                 "What should the coding agent do next, if host code acts conservatively on low confidence?",
+                 actions, action_desc, sizeof(actions) / sizeof(*actions));
+    }
+    char *json = NULL;
+    if (ok) {
+        size_t len = 0;
+        json = yyjson_mut_write(doc, 0, &len);
+        if (json && len > FG_MAX_JSON) {
+            free(json);
+            json = NULL;
+            fg_error(e, FORGE_ERR_LIMIT, "Judge feedback request exceeds the maximum body size");
+        }
+    }
+    if (!ok && !(e && e->code))
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot build judge feedback request");
+    if (doc)
+        yyjson_mut_doc_free(doc);
+    return json;
+}
+
+static forge_status require_answer(yyjson_val *answers, const char *key, const char *type,
+                                   yyjson_val **out, forge_error *e) {
+    yyjson_val *answer = answers ? yyjson_obj_get(answers, key) : NULL;
+    const char *actual = answer ? fg_json_str(answer, "type") : NULL;
+    if (!answer || !actual || strcmp(actual, type))
+        return fg_error(e, FORGE_ERR_PARSE, "Judge feedback response is missing %s %s", type, key);
+    *out = answer;
+    return FORGE_OK;
+}
+
+static forge_status number_field(yyjson_val *obj, const char *key, double min, double max,
+                                 double *out, forge_error *e) {
+    yyjson_val *value = yyjson_obj_get(obj, key);
+    if (!value || !yyjson_is_num(value))
+        return fg_error(e, FORGE_ERR_PARSE, "Judge feedback response is missing numeric %s", key);
+    double n = yyjson_get_num(value);
+    if (!(n >= min && n <= max))
+        return fg_error(e, FORGE_ERR_PARSE, "Judge feedback response field %s is outside range", key);
+    *out = n;
+    return FORGE_OK;
+}
+
+static forge_status copy_choice_field(yyjson_val *obj, const char *key, char *out,
+                                      size_t capacity, forge_error *e) {
+    const char *value = fg_json_str(obj, key);
+    if (!value || strlen(value) >= capacity)
+        return fg_error(e, FORGE_ERR_PARSE, "Judge feedback response has invalid %s", key);
+    snprintf(out, capacity, "%s", value);
+    return FORGE_OK;
+}
+
+static forge_status parse_feedback_response(forge_judge *j, const char *body, size_t len,
+                                            forge_judge_feedback_result *out, forge_error *e) {
+    yyjson_doc *doc = yyjson_read(body, len, 0);
+    if (!doc)
+        return fg_error(e, FORGE_ERR_PARSE, "Judge feedback response is not valid JSON");
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *answers = root ? yyjson_obj_get(root, "answers") : NULL;
+    forge_status status = FORGE_OK;
+    memset(out, 0, sizeof(*out));
+    if (!answers || !yyjson_is_obj(answers)) {
+        status = fg_error(e, FORGE_ERR_PARSE, "Judge feedback response is missing answers");
+        goto finish;
+    }
+    yyjson_val *family = NULL, *gap = NULL, *readiness = NULL, *action = NULL;
+    if ((status = require_answer(answers, "failure_family", "choice", &family, e)) != FORGE_OK ||
+        (status = require_answer(answers, "evidence_gap", "noul", &gap, e)) != FORGE_OK ||
+        (status = require_answer(answers, "repair_readiness", "score", &readiness, e)) != FORGE_OK ||
+        (status = require_answer(answers, "next_action", "choice", &action, e)) != FORGE_OK)
+        goto finish;
+    if ((status = copy_choice_field(family, "choice", out->failure_family,
+                                    sizeof(out->failure_family), e)) != FORGE_OK ||
+        (status = number_field(family, "confidence", 0.0, 1.0, &out->failure_confidence, e)) !=
+            FORGE_OK ||
+        (status = number_field(gap, "noul", 0.0, 1.0, &out->evidence_gap, e)) != FORGE_OK ||
+        (status = number_field(readiness, "score", 0.0, 3.0, &out->repair_readiness, e)) !=
+            FORGE_OK ||
+        (status = number_field(readiness, "confidence", 0.0, 1.0,
+                               &out->repair_readiness_confidence, e)) != FORGE_OK ||
+        (status = copy_choice_field(action, "choice", out->next_action,
+                                    sizeof(out->next_action), e)) != FORGE_OK ||
+        (status = number_field(action, "confidence", 0.0, 1.0,
+                               &out->next_action_confidence, e)) != FORGE_OK)
+        goto finish;
+    const char *model = fg_json_str(root, "model");
+    if (model) {
+        snprintf(out->model, sizeof(out->model), "%s", model);
+        snprintf(j->last_model, sizeof(j->last_model), "%s", model);
+    }
+    yyjson_val *usage = yyjson_obj_get(root, "usage");
+    yyjson_val *in = usage ? yyjson_obj_get(usage, "input_tokens") : NULL;
+    yyjson_val *sent = usage ? yyjson_obj_get(usage, "output_tokens") : NULL;
+    out->input_tokens = in && yyjson_is_uint(in) ? (size_t)yyjson_get_uint(in) : 0;
+    out->output_tokens = sent && yyjson_is_uint(sent) ? (size_t)yyjson_get_uint(sent) : 0;
+    j->last_input_tokens = out->input_tokens;
+    j->last_output_tokens = out->output_tokens;
+    j->input_tokens += j->last_input_tokens;
+    j->output_tokens += j->last_output_tokens;
+    out->available = true;
+finish:
+    yyjson_doc_free(doc);
+    return status;
+}
+
+forge_status forge_judge_feedback(forge_judge *j, const forge_judge_feedback_request *request,
+                                  forge_judge_feedback_result *out, forge_error *e) {
+    if (out)
+        memset(out, 0, sizeof(*out));
+    if (!j || !request || !out || !request->task || !request->validation_summary)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid judge feedback arguments");
+    if (j->options.cancelled && j->options.cancelled(j->options.userdata))
+        return fg_error(e, FORGE_ERR_CANCELLED, "Judge feedback call cancelled");
+    char *body = build_feedback_request(j, request, e);
+    if (!body)
+        return e && e->code ? e->code : FORGE_ERR_MEMORY;
+    char *response = NULL;
+    size_t response_len = 0;
+    forge_status status = FORGE_OK;
+    uint64_t start = fg_now_ms();
+    for (unsigned attempt = 0;; attempt++) {
+        j->record_request_id[0] = 0;
+        j->record_response_date[0] = 0;
+        status = judge_transport(j, body, strlen(body), &response, &response_len, e);
+        if (status == FORGE_OK || attempt > 0 || status != FORGE_ERR_IO)
+            break;
+        sleep_ms(JUDGE_RETRY_BACKOFF_MS);
+        if (j->options.cancelled && j->options.cancelled(j->options.userdata)) {
+            status = fg_error(e, FORGE_ERR_CANCELLED, "Judge feedback call cancelled");
+            break;
+        }
+        if (e) {
+            e->code = FORGE_OK;
+            e->message[0] = 0;
+        }
+    }
+    double latency = (double)(fg_now_ms() - start);
+    j->calls++;
+    j->last_latency_ms = latency;
+    j->total_latency_ms += latency;
+    j->last_input_tokens = 0;
+    j->last_output_tokens = 0;
+    if (status == FORGE_OK)
+        status = parse_feedback_response(j, response, response_len, out, e);
+    if (status == FORGE_OK)
+        out->latency_ms = latency;
+    else
+        j->failures++;
+    record_run(j, body, response, response_len, status, latency,
+               status == FORGE_OK ? "" : (e ? e->message : ""));
+    free(response);
+    free(body);
+    return status;
+}
+
 /* Best-effort raw recording: never fails the call it documents. */
 static void record_run(forge_judge *j, const char *request, const char *response,
                        size_t response_len, forge_status status, double latency_ms,

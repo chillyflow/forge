@@ -3,6 +3,7 @@
 #include "forge/memory.h"
 #include "forge/index.h"
 #include "forge/validation.h"
+#include "forge/judge.h"
 #include "input_snapshot.h"
 #include "candidate_store.h"
 #include "semantic_state.h"
@@ -1003,11 +1004,133 @@ static fg_input_snapshot *candidate_snapshot(forge_agent *a, uint64_t deadline, 
                                   a->config.cancelled, a->config.userdata, deadline, e);
 }
 
+static char *candidate_feedback_source(const forge_agent *a, const candidate_checkpoint *cp,
+                                      uint64_t deadline) {
+    if (!cp->last_path[0])
+        return NULL;
+    char *quoted = fg_json_string(cp->last_path);
+    fg_buf args = {0};
+    fg_buf_printf(&args, "{\"path\":%s,\"start\":1,\"end\":0}", quoted ? quoted : "null");
+    free(quoted);
+    if (args.failed || (a->config.policy &&
+                        !a->config.policy("read_file", FORGE_CAP_READ, args.data,
+                                          a->config.userdata))) {
+        fg_buf_clear(&args);
+        return NULL;
+    }
+    fg_buf_clear(&args);
+    if ((a->config.cancelled && a->config.cancelled(a->config.userdata)) || fg_now_ms() >= deadline)
+        return NULL;
+    char full[FG_PATH_MAX];
+    size_t length = 0;
+    char *text = fg_safe_path(a->root, cp->last_path, false, full, NULL)
+                     ? fg_read_file(full, a->config.limits.max_file_bytes, &length, NULL) : NULL;
+    if (!text || (length && memchr(text, 0, length)) || !fg_utf8_valid(text, length)) {
+        free(text);
+        return NULL;
+    }
+    size_t take = fg_utf8_prefix(text, length, 8192);
+    fg_buf out = {0};
+    fg_buf_add(&out, text, take);
+    if (take < length)
+        fg_buf_puts(&out, "\n[feedback source truncated]");
+    free(text);
+    return fg_buf_take(&out);
+}
+
+static void emit_judge_feedback(forge_agent *a, const forge_judge_feedback_result *r) {
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc ? yyjson_mut_obj(doc) : NULL;
+    bool ok = root != NULL;
+    if (ok) {
+        yyjson_mut_doc_set_root(doc, root);
+        ok = yyjson_mut_obj_add_str(doc, root, "model", r->model) &&
+             yyjson_mut_obj_add_str(doc, root, "failure_family", r->failure_family) &&
+             yyjson_mut_obj_add_real(doc, root, "failure_confidence", r->failure_confidence) &&
+             yyjson_mut_obj_add_real(doc, root, "evidence_gap", r->evidence_gap) &&
+             yyjson_mut_obj_add_real(doc, root, "repair_readiness", r->repair_readiness) &&
+             yyjson_mut_obj_add_real(doc, root, "repair_readiness_confidence",
+                                     r->repair_readiness_confidence) &&
+             yyjson_mut_obj_add_str(doc, root, "next_action", r->next_action) &&
+             yyjson_mut_obj_add_real(doc, root, "next_action_confidence",
+                                     r->next_action_confidence) &&
+             yyjson_mut_obj_add_uint(doc, root, "input_tokens", r->input_tokens) &&
+             yyjson_mut_obj_add_uint(doc, root, "output_tokens", r->output_tokens) &&
+             yyjson_mut_obj_add_real(doc, root, "latency_ms", r->latency_ms);
+    }
+    char *json = ok ? yyjson_mut_write(doc, 0, NULL) : NULL;
+    if (json)
+        (void)fg_session_emit(&a->session, "judge_feedback", json, NULL);
+    free(json);
+    if (doc)
+        yyjson_mut_doc_free(doc);
+}
+
+static void append_judge_feedback(forge_agent *a, candidate_checkpoint *cp,
+                                  const fg_validation_result *validation,
+                                  const char *task, uint64_t input_hash, bool validated,
+                                  bool passed, size_t turn, uint64_t deadline,
+                                  fg_buf *feedback) {
+    if (!a->config.judge || !a->config.bounded_repair || !validated || passed || !validation->summary)
+        return;
+    uint64_t now = fg_now_ms(), budget = forge_judge_budget_ms(a->config.judge);
+    if (deadline && (now >= deadline || budget > deadline - now))
+        return;
+    char *source = candidate_feedback_source(a, cp, deadline);
+    forge_judge_feedback_request request = {0};
+    request.task = task ? task : "";
+    request.validation_summary = validation->summary;
+    request.failed_command = validation->failed_command;
+    request.current_path = cp->last_path;
+    request.current_source = source ? source : "";
+    request.last_delta = cp->last_delta;
+    request.remaining_actions = a->config.limits.max_turns > turn ? a->config.limits.max_turns - turn : 0;
+    request.candidate_attempts = cp->attempts;
+    request.input_hash = input_hash;
+    request.initial_hash = fg_input_snapshot_hash(cp->initial);
+    request.repeated_failure = cp->semantic_repeated;
+    request.bounded_repair = a->config.bounded_repair;
+    forge_judge_feedback_result result = {0};
+    forge_error error = {0};
+    forge_status status = forge_judge_feedback(a->config.judge, &request, &result, &error);
+    free(source);
+    if (status != FORGE_OK || !result.available)
+        return;
+    emit_judge_feedback(a, &result);
+    fg_buf_printf(feedback,
+                  "JUDGE_FEEDBACK: failure_family=%s confidence=%.2f evidence_gap=%.2f "
+                  "repair_readiness=%.2f readiness_confidence=%.2f next_action=%s "
+                  "next_action_confidence=%.2f.\n",
+                  result.failure_family, result.failure_confidence, result.evidence_gap,
+                  result.repair_readiness, result.repair_readiness_confidence, result.next_action,
+                  result.next_action_confidence);
+    bool uncertain = result.next_action_confidence < 0.55 || result.failure_confidence < 0.45 ||
+                     result.repair_readiness_confidence < 0.45;
+    bool inspect = uncertain || result.evidence_gap >= 0.60 || !strcmp(result.failure_family, "missing_evidence") ||
+                   !strcmp(result.next_action, "inspect_source") || !strcmp(result.next_action, "defer");
+    if (inspect) {
+        fg_buf_puts(feedback,
+                    "JUDGE_FEEDBACK_GUIDANCE: advisory only; inspect source or validation "
+                    "evidence before editing. Low-confidence or high-gap feedback must not "
+                    "force a patch.\n");
+    } else if (!strcmp(result.next_action, "patch_code") && result.repair_readiness >= 2.0) {
+        fg_buf_puts(feedback,
+                    "JUDGE_FEEDBACK_GUIDANCE: advisory only; patch the implicated "
+                    "implementation only if the next action can state a concrete repair "
+                    "hypothesis. Host validation remains authoritative.\n");
+    } else if (!strcmp(result.next_action, "run_validation")) {
+        fg_buf_puts(feedback,
+                    "JUDGE_FEEDBACK_GUIDANCE: advisory only; rerun validation only if the "
+                    "current workspace differs from the failed candidate or the prior evidence "
+                    "was incomplete.\n");
+    }
+}
+
 /* A changed action signature or repository generation is not candidate evidence.
  * Compare complete workspace inputs, including files the language index omits.
  * Never infer test success from an arbitrary exit-zero run_command. */
 static char *candidate_validate(forge_agent *a, fg_tool_context *tools, candidate_checkpoint *cp,
-                                forge_error *e) {
+                                const char *task, size_t turn, forge_error *e) {
     fg_input_snapshot *before = candidate_snapshot(a, tools->deadline, e), *after = NULL;
     if (!before)
         return NULL;
@@ -1140,6 +1263,8 @@ static char *candidate_validate(forge_agent *a, fg_tool_context *tools, candidat
                     "failed candidate. Comment changes or rephrased actions did not resolve it. "
                     "Change the implicated logic before validating again. This is loop evidence, "
                     "not a proof of program equivalence.\n");
+    append_judge_feedback(a, cp, &result, task, input_hash, validated, passed, turn,
+                          tools->deadline, &feedback);
     if (a->config.bounded_repair && !validated && !passed && result.summary) {
         char *detail = fg_compress_output(result.summary, 2048, NULL, NULL);
         if (!detail) {
@@ -1834,7 +1959,7 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
             free(answer);
         } else if (final) {
             char *feedback = a->config.candidate_checkpoint
-                                 ? candidate_validate(a, &tools, &checkpoint, e)
+                                 ? candidate_validate(a, &tools, &checkpoint, request, turn, e)
                                  : fg_strdup("Completed.");
             uint64_t id = minimal_append(ctx, FORGE_SEG_ACTION, action, 0);
             if (!feedback || !id || !minimal_append(ctx, FORGE_SEG_RESULT, feedback, id))
@@ -1861,7 +1986,7 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
             if (state(a, FORGE_AGENT_TOOL_REQUEST, e) &&
                 fg_session_emit(&a->session, "tool_call", action, e) &&
                 state(a, FORGE_AGENT_TOOL_RUNNING, e))
-                feedback = candidate_validate(a, &tools, &checkpoint, e);
+                feedback = candidate_validate(a, &tools, &checkpoint, request, turn, e);
             /* Validation runs real test processes: no stored verdict is clean
              * afterwards, whether it passed or not. */
             if (tools.dedup_slot)

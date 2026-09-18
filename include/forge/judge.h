@@ -48,6 +48,36 @@ typedef struct {
     void *transport_userdata;
 } forge_judge_options;
 
+typedef struct {
+    const char *task;
+    const char *validation_summary;
+    const char *failed_command;
+    const char *current_path;
+    const char *current_source;
+    const char *last_delta;
+    size_t remaining_actions;
+    size_t candidate_attempts;
+    uint64_t input_hash;
+    uint64_t initial_hash;
+    bool repeated_failure;
+    bool bounded_repair;
+} forge_judge_feedback_request;
+
+typedef struct {
+    bool available;
+    char model[64];
+    char failure_family[32];
+    double failure_confidence;
+    double evidence_gap;
+    double repair_readiness;
+    double repair_readiness_confidence;
+    char next_action[32];
+    double next_action_confidence;
+    size_t input_tokens;
+    size_t output_tokens;
+    double latency_ms;
+} forge_judge_feedback_result;
+
 typedef struct forge_judge forge_judge;
 
 forge_judge *forge_judge_create(const forge_judge_options *, forge_error *);
@@ -60,6 +90,13 @@ void forge_judge_destroy(forge_judge *);
 forge_status forge_judge_rerank(forge_judge *, const char *query, size_t count,
                                 const char *const *paths, const char *const *snippets,
                                 const char *const *stages, double *scores, forge_error *);
+
+/* Evaluate a complete failed validation episode and return structured advisory
+ * feedback for the next repair turn. The host remains in control: failures are
+ * fail-open, the answer cannot establish validation success, and callers should
+ * treat low-confidence choices as defer. */
+forge_status forge_judge_feedback(forge_judge *, const forge_judge_feedback_request *,
+                                  forge_judge_feedback_result *, forge_error *);
 
 /* Retrieval rerank callback (forge_rerank_fn); userdata is a forge_judge.
  * Fills info on success from the judge's own telemetry. */

@@ -1,11 +1,14 @@
 """Deterministic bounded-repair contracts; scripted runs do not measure model quality."""
 
+import http.server
 import json
+import os
 import pathlib
 import re
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 
 
@@ -52,16 +55,19 @@ class BoundedRepairTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def command(self, actions, *options, task=None, checkpoint=True, bounded=True, command="run"):
+    def command(self, actions, *options, task=None, checkpoint=True, bounded=True, command="run",
+                config=False):
         script = self.root / "script.json"
         script.write_text(json.dumps(actions), encoding="utf-8")
         args = [FORGE, command]
         if command == "run":
             args.append(task or "Repair value() without changing tests, validate, and finish.")
-        args += ["--script", str(script), "--workspace", str(self.root), "--no-config", "--json",
+        args += ["--script", str(script), "--workspace", str(self.root), "--json",
                 "--minimal-agent", "--prompt-protocol", "native", "--context", "16384",
                 "--output-reserve", "2048", "--allow-write", "--allow-exec", "--max-turns", "10",
                 "--max-input", "80000", "--max-tokens", "32768", "--wall-ms", "60000"]
+        if not config:
+            args.append("--no-config")
         if checkpoint:
             args.append("--candidate-checkpoint")
         if bounded:
@@ -79,6 +85,9 @@ class BoundedRepairTests(unittest.TestCase):
         session = sessions[0]
         metrics = json.loads((session / "metrics.json").read_text(encoding="utf-8"))
         return events, session, metrics, result
+
+    def root_sessions(self):
+        return sorted((self.root / ".forge" / "sessions").iterdir())
 
     @staticmethod
     def kind(events, name):
@@ -274,6 +283,100 @@ class BoundedRepairTests(unittest.TestCase):
         self.assertFalse(self.kind(events, "final"))
         self.assertTrue(self.kind(events, "candidate_checkpoint"))
         self.assertFalse(any(item["passed"] for item in self.kind(events, "candidate_checkpoint")))
+
+    def test_judge_feedback_is_appended_after_failed_candidate_validation(self):
+        if type(self) is not BoundedRepairTests:
+            return
+        requests = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers.get("content-length", "0"))
+                body = self.rfile.read(length).decode("utf-8")
+                requests.append(json.loads(body))
+                payload = {
+                    "model": "jev-feedback-test",
+                    "answers": {
+                        "failure_family": {
+                            "type": "choice",
+                            "choice": "code_defect",
+                            "probabilities": {
+                                "code_defect": 0.8,
+                                "test_or_requirement_mismatch": 0.05,
+                                "environment_or_dependency": 0.05,
+                                "missing_evidence": 0.05,
+                                "unknown": 0.05,
+                            },
+                            "confidence": 0.78,
+                        },
+                        "evidence_gap": {"type": "noul", "noul": 0.2},
+                        "repair_readiness": {
+                            "type": "score",
+                            "score": 2.6,
+                            "legend": {"0": "No actionable signal", "1": "Needs more inspection",
+                                       "2": "Concrete suspect", "3": "Actionable repair likely"},
+                            "probabilities": {"0": 0.0, "1": 0.05, "2": 0.3, "3": 0.65},
+                            "confidence": 0.7,
+                        },
+                        "next_action": {
+                            "type": "choice",
+                            "choice": "patch_code",
+                            "probabilities": {"inspect_source": 0.1, "patch_code": 0.8,
+                                              "run_validation": 0.05, "defer": 0.05},
+                            "confidence": 0.76,
+                        },
+                    },
+                    "usage": {"input_tokens": 222, "output_tokens": 0},
+                }
+                encoded = json.dumps(payload).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+
+            def log_message(self, *_):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        def stop_server():
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+
+        self.addCleanup(stop_server)
+        (self.root / "forge.toml").write_text(
+            "[judge]\nendpoint = \"http://127.0.0.1:%d\"\napi_key_env = \"FORGE_TEST_TYPESAFE_KEY\"\n" %
+            server.server_port,
+            encoding="utf-8")
+        env = os.environ.copy()
+        env["FORGE_TEST_TYPESAFE_KEY"] = "test-key"
+        script = [patch("return 1", "return 0"), validate(),
+                  patch("return 0", "return 2"), validate(), final()]
+        result = subprocess.run(self.command(script, "--judge", config=True), capture_output=True,
+                                text=True,
+                                encoding="utf-8", timeout=90, env=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
+        feedback = self.kind(events, "judge_feedback")
+        self.assertEqual(len(feedback), 1)
+        self.assertEqual(feedback[0]["failure_family"], "code_defect")
+        self.assertEqual(feedback[0]["next_action"], "patch_code")
+        session = self.root_sessions()[0]
+        prompt = json.dumps(self.prompt(session, 3))
+        self.assertIn("JUDGE_FEEDBACK: failure_family=code_defect", prompt)
+        self.assertIn("JUDGE_FEEDBACK_GUIDANCE", prompt)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0]["state"]["task"],
+                         "Repair value() without changing tests, validate, and finish.")
+        self.assertIn("failure_family", requests[0]["questions"])
+        self.assertIn("repair_readiness", requests[0]["questions"])
+        self.assertEqual(requests[0]["state"]["current"]["path"], "value.py")
+        self.assertIn("return 0", requests[0]["state"]["current"]["source"])
+        self.assert_verified_repair(events)
 
     def test_bounded_repair_requires_checkpoint(self):
         result = subprocess.run(self.command([final()], checkpoint=False), capture_output=True,

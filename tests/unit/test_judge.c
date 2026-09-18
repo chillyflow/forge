@@ -247,6 +247,94 @@ static void test_retrieval_glue(void) {
     forge_judge_destroy(judge);
 }
 
+static void test_feedback_payload_and_result(void) {
+    stub_state stub = {0};
+    stub.response =
+        "{\"model\":\"jev-feedback\",\"answers\":{"
+        "\"failure_family\":{\"type\":\"choice\",\"choice\":\"code_defect\","
+        "\"probabilities\":{\"code_defect\":0.72,\"test_or_requirement_mismatch\":0.05,"
+        "\"environment_or_dependency\":0.04,\"missing_evidence\":0.09,\"unknown\":0.10},"
+        "\"confidence\":0.68},"
+        "\"evidence_gap\":{\"type\":\"noul\",\"noul\":0.21},"
+        "\"repair_readiness\":{\"type\":\"score\",\"score\":2.4,"
+        "\"legend\":{\"0\":\"No actionable signal\",\"1\":\"Needs more inspection\","
+        "\"2\":\"Concrete suspect\",\"3\":\"Actionable repair likely\"},"
+        "\"probabilities\":{\"0\":0.02,\"1\":0.08,\"2\":0.38,\"3\":0.52},"
+        "\"confidence\":0.71},"
+        "\"next_action\":{\"type\":\"choice\",\"choice\":\"patch_code\","
+        "\"probabilities\":{\"inspect_source\":0.11,\"patch_code\":0.78,"
+        "\"run_validation\":0.03,\"defer\":0.08},\"confidence\":0.74}},"
+        "\"usage\":{\"input_tokens\":111,\"output_tokens\":22}}";
+    forge_judge *judge = make_judge(&stub, NULL, 0);
+    forge_judge_feedback_request request = {0};
+    request.task = "Repair value() without changing tests.";
+    request.validation_summary = "AssertionError: 0 != 2";
+    request.failed_command = "{\"cwd\":\".\",\"argv\":[\"python\",\"-m\",\"unittest\"]}";
+    request.current_path = "value.py";
+    request.current_source = "def value():\n    return 0\n";
+    request.last_delta = "{\"tool\":\"apply_patch\",\"args\":{\"path\":\"value.py\"}}";
+    request.remaining_actions = 5;
+    request.candidate_attempts = 2;
+    request.input_hash = 0x1234;
+    request.initial_hash = 0x5678;
+    request.repeated_failure = true;
+    request.bounded_repair = true;
+    forge_judge_feedback_result result = {0};
+    forge_error error = {0};
+    assert(forge_judge_feedback(judge, &request, &result, &error) == FORGE_OK);
+    assert(result.available);
+    assert(!strcmp(result.model, "jev-feedback"));
+    assert(!strcmp(result.failure_family, "code_defect"));
+    assert(result.failure_confidence > 0.67 && result.failure_confidence < 0.69);
+    assert(result.evidence_gap > 0.20 && result.evidence_gap < 0.22);
+    assert(result.repair_readiness > 2.39 && result.repair_readiness < 2.41);
+    assert(!strcmp(result.next_action, "patch_code"));
+    assert(result.next_action_confidence > 0.73 && result.next_action_confidence < 0.75);
+    assert(result.input_tokens == 111 && result.output_tokens == 22);
+    yyjson_doc *doc = yyjson_read(stub.request, stub.request_len, 0);
+    assert(doc);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    assert(!strcmp(yyjson_get_str(yyjson_obj_get(root, "model")), "jev-latest"));
+    yyjson_val *state = yyjson_obj_get(root, "state");
+    assert(!strcmp(yyjson_get_str(yyjson_obj_get(state, "task")), request.task));
+    assert(!strcmp(fg_json_str(yyjson_obj_get(state, "validation"), "summary"),
+                   request.validation_summary));
+    assert(!strcmp(fg_json_str(yyjson_obj_get(state, "current"), "source"), request.current_source));
+    yyjson_val *questions = yyjson_obj_get(root, "questions");
+    assert(yyjson_obj_size(questions) == 4);
+    assert(!strcmp(fg_json_str(yyjson_obj_get(questions, "failure_family"), "type"), "choice"));
+    assert(!strcmp(fg_json_str(yyjson_obj_get(questions, "evidence_gap"), "type"), "noul"));
+    assert(!strcmp(fg_json_str(yyjson_obj_get(questions, "repair_readiness"), "type"), "score"));
+    assert(!strcmp(fg_json_str(yyjson_obj_get(questions, "next_action"), "type"), "choice"));
+    assert(yyjson_obj_get(yyjson_obj_get(yyjson_obj_get(questions, "failure_family"), "criteria"),
+                          "missing_evidence"));
+    assert(yyjson_obj_get(yyjson_obj_get(yyjson_obj_get(questions, "next_action"), "criteria"),
+                          "defer"));
+    yyjson_doc_free(doc);
+    forge_judge_stats stats = {0};
+    forge_judge_metrics(judge, &stats);
+    assert(stats.calls == 1 && stats.failures == 0 && stats.candidates_scored == 0);
+    assert(stats.input_tokens == 111 && stats.output_tokens == 22);
+    forge_judge_destroy(judge);
+}
+
+static void test_feedback_fail_open_errors(void) {
+    stub_state stub = {0};
+    stub.response = "{\"model\":\"m\",\"answers\":{}}";
+    forge_judge *judge = make_judge(&stub, NULL, 0);
+    forge_judge_feedback_request request = {0};
+    request.task = "task";
+    request.validation_summary = "failure";
+    forge_judge_feedback_result result = {0};
+    forge_error error = {0};
+    assert(forge_judge_feedback(judge, &request, &result, &error) == FORGE_ERR_PARSE);
+    assert(!result.available);
+    forge_judge_stats stats = {0};
+    forge_judge_metrics(judge, &stats);
+    assert(stats.calls == 1 && stats.failures == 1);
+    forge_judge_destroy(judge);
+}
+
 static void test_budget(void) {
     stub_state stub = {0};
     forge_judge *judge = make_judge(&stub, NULL, 0); /* timeout_ms 500. */
@@ -459,6 +547,8 @@ int main(int argc, char **argv) {
         return live_probe();
     test_permutation();
     test_payload_and_scores();
+    test_feedback_payload_and_result();
+    test_feedback_fail_open_errors();
     test_retry_once();
     test_fail_open_errors();
     test_retrieval_glue();
