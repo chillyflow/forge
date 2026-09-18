@@ -24,6 +24,8 @@ from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, lo
 # baseline, which deliberately injects no scaffold.
 VARIANTS = {
     'optimized': {'flags': ['--thought-history']},
+    'optimized-judge': {'flags': ['--thought-history', '--judge', '--config',
+                                  'C:/Users/flowc/dev/forge/benchmark/results/2026-09-17-judge-rerank/judge-e3.toml']},
     'minimal': {'flags': ['--minimal-agent', '--thought-history']},
     'candidate-checkpoint': {'flags': ['--minimal-agent', '--thought-history',
                                        '--candidate-checkpoint']},

@@ -7,8 +7,11 @@
 3. Case-sensitive literal text in indexed files.
 4. FTS5 matches for quoted query terms, ordered by BM25 and canonical path.
 
-There is no embedding model, inference call, resolved call/type graph or measured
-retrieval-quality claim. Go declarations and package imports are syntactic.
+There is no embedding model, resolved call/type graph or measured
+retrieval-quality claim. An explicitly granted optional hosted judge may rerank
+candidates before the output budget trim (see Configuration and security); it
+never adds or drops candidates, and any judge failure keeps the deterministic
+order. Go declarations and package imports are syntactic.
 Other indexed text languages participate in literal/FTS search, without AST
 semantics. An optional indexed `seed_file` can seed the graph when the query has
 no exact symbol. A missing seed is an error, not an inferred directory.
@@ -52,6 +55,10 @@ ordered by hop distance and package/file path. Literal results use path order;
 FTS uses rank then path. Exact duplicate spans are removed. Later stages skip
 files represented by an earlier stage. This favors structured evidence, but it
 does not prove that every chosen excerpt is relevant to a natural-language task.
+When the optional hosted judge is explicitly granted, it reorders candidates by
+its relevance scores before trimming, and the output carries a `rerank` object
+(`applied`, `reason`, `model`, `scored`, `latency_ms`, `input_tokens`,
+`output_tokens`) recording the outcome.
 
 | Default | Meaning |
 | --- | --- |

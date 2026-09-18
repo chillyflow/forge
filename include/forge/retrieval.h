@@ -12,6 +12,22 @@ extern "C" {
 #define FORGE_RETRIEVAL_MAX_CANDIDATES ((size_t)4096)
 #define FORGE_RETRIEVAL_MAX_SOURCE_BYTES ((size_t)256 * 1024 * 1024)
 
+/* Optional semantic rerank of the collected candidate list, applied before the
+ * output-budget trim. The callback fills scores[count] in [0,1] (higher first)
+ * and may fill info with its own telemetry. Any callback error keeps the
+ * deterministic order and is reported in the output's `rerank` object;
+ * reordering never adds or drops candidates. */
+typedef struct {
+    const char *model; /* Borrowed; valid only during the callback. */
+    size_t input_tokens, output_tokens;
+    double latency_ms;
+    bool reported;
+} forge_rerank_info;
+typedef forge_status (*forge_rerank_fn)(void *userdata, const char *query, size_t count,
+                                        const char *const *paths, const char *const *snippets,
+                                        const char *const *stages, double *scores,
+                                        forge_rerank_info *info, forge_error *e);
+
 typedef struct {
     /* Optional indexed workspace-relative file for graph seeding. No live
      * filesystem lookup; a missing file is NOT_FOUND. Exact symbol hits also
@@ -26,12 +42,16 @@ typedef struct {
     void *count_userdata;
     forge_cancel_fn cancelled;
     void *userdata;
+    forge_rerank_fn rerank;
+    void *rerank_userdata;
 } forge_retrieval_options;
 
 typedef struct {
     uint64_t generation;
     size_t results, output_bytes, output_tokens, candidates, source_bytes;
     bool tokens_known, truncated;
+    bool reranked;         /* True when a configured rerank callback reordered results. */
+    size_t rerank_scored;  /* Candidates the callback scored; zero when not configured. */
 } forge_retrieval_stats;
 
 /* Defaults: 16 results, 64 KiB complete JSON, 2 KiB excerpts, 256 candidate
@@ -47,7 +67,10 @@ forge_retrieval_options forge_default_retrieval_options(void);
  * excerpt provenance, graph limitations and an explicit stage/budget trace.
  * Bounds apply to the complete serialized JSON; output tokens are counted on
  * that exact JSON, not added per result. Low-priority tail results are omitted
- * until budgets fit. A budget too small for metadata returns LIMIT. Excerpts
+ * until budgets fit. A configured rerank callback may reorder candidates before
+ * trimming; a callback failure keeps the deterministic order and is reported in
+ * the `rerank` object, and reordering never adds or drops candidates. A budget
+ * too small for metadata returns LIMIT. Excerpts
  * and limited stages are marked; candidate counts are not total-match counts.
  * Cancellation/SQL/corrupt observed metadata failures return no partial output.
  * Stats are zero on failure. JSON contains no self-referential output count.

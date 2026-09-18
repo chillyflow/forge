@@ -23,6 +23,12 @@ typedef struct {
     size_t count, candidates, source_bytes, graph_reasons;
     stage_trace trace[STAGES];
     bool truncated, halt, graph_incomplete, graph_loaded;
+    /* Rerank outcome metadata; rendered only when a callback is configured. */
+    bool rerank_applied;
+    const char *rerank_reason;
+    char rerank_error[256], rerank_model[64];
+    size_t rerank_scored, rerank_input_tokens, rerank_output_tokens;
+    double rerank_latency_ms;
 } retrieval;
 
 forge_retrieval_options forge_default_retrieval_options(void) {
@@ -384,6 +390,92 @@ static char *fts_terms(const char *query, forge_error *error) {
     return fg_buf_take(&terms);
 }
 
+void fg_rerank_permutation(const double *scores, size_t count, size_t *order) {
+    for (size_t i = 0; i < count; i++)
+        order[i] = i;
+    for (size_t i = 1; i < count; i++) {
+        size_t index = order[i];
+        double key = scores[index] >= 0.0 && scores[index] <= 1.0 ? scores[index] : -1.0;
+        size_t j = i;
+        while (j > 0) {
+            size_t previous = order[j - 1];
+            double value =
+                scores[previous] >= 0.0 && scores[previous] <= 1.0 ? scores[previous] : -1.0;
+            if (value >= key)
+                break;
+            order[j] = previous;
+            j--;
+        }
+        order[j] = index;
+    }
+}
+
+/* Apply the optional rerank callback. Returns false only on an internal
+ * allocation failure (the caller then fails the whole retrieval); a callback
+ * error keeps the deterministic order and is recorded in the metadata. */
+static bool rerank_apply(retrieval *b, const char *query) {
+    size_t count = b->count;
+    const char *snippets[FORGE_RETRIEVAL_MAX_RESULTS], *stage_list[FORGE_RETRIEVAL_MAX_RESULTS];
+    double scores[FORGE_RETRIEVAL_MAX_RESULTS];
+    for (size_t i = 0; i < count; i++) {
+        yyjson_mut_val *row = yyjson_mut_arr_get(b->results, i);
+        yyjson_mut_val *snippet = row ? yyjson_mut_obj_get(row, "snippet") : NULL;
+        const char *text = snippet ? yyjson_mut_get_str(snippet) : NULL;
+        snippets[i] = text ? text : "";
+        stage_list[i] = stage_names[b->stages[i]];
+        scores[i] = 0.0;
+    }
+    forge_rerank_info info = {0};
+    forge_error rerank_error = {0};
+    forge_status status = b->options.rerank(b->options.rerank_userdata, query, count, b->paths,
+                                            snippets, stage_list, scores, &info, &rerank_error);
+    b->rerank_scored = count;
+    if (status != FORGE_OK) {
+        b->rerank_reason = "failed";
+        snprintf(b->rerank_error, sizeof(b->rerank_error), "%s",
+                 rerank_error.message[0] ? rerank_error.message : forge_status_string(status));
+        return true;
+    }
+    size_t order[FORGE_RETRIEVAL_MAX_RESULTS];
+    fg_rerank_permutation(scores, count, order);
+    yyjson_mut_val *values[FORGE_RETRIEVAL_MAX_RESULTS];
+    const char *paths[FORGE_RETRIEVAL_MAX_RESULTS];
+    size_t starts[FORGE_RETRIEVAL_MAX_RESULTS], ends[FORGE_RETRIEVAL_MAX_RESULTS];
+    unsigned stage_ids[FORGE_RETRIEVAL_MAX_RESULTS];
+    for (size_t i = 0; i < count; i++) {
+        values[i] = yyjson_mut_arr_get(b->results, i);
+        paths[i] = b->paths[i];
+        starts[i] = b->starts[i];
+        ends[i] = b->ends[i];
+        stage_ids[i] = b->stages[i];
+    }
+    if (!yyjson_mut_arr_clear(b->results)) {
+        fail(b, FORGE_ERR_MEMORY, "Cannot rerank retrieval results");
+        return false;
+    }
+    for (size_t i = 0; i < count; i++) {
+        size_t from = order[i];
+        if (!yyjson_mut_arr_add_val(b->results, values[from])) {
+            fail(b, FORGE_ERR_MEMORY, "Cannot rerank retrieval results");
+            return false;
+        }
+        b->paths[i] = paths[from];
+        b->starts[i] = starts[from];
+        b->ends[i] = ends[from];
+        b->stages[i] = stage_ids[from];
+    }
+    b->rerank_applied = true;
+    b->rerank_reason = "ok";
+    if (info.reported) {
+        if (info.model)
+            snprintf(b->rerank_model, sizeof(b->rerank_model), "%s", info.model);
+        b->rerank_latency_ms = info.latency_ms;
+        b->rerank_input_tokens = info.input_tokens;
+        b->rerank_output_tokens = info.output_tokens;
+    }
+    return true;
+}
+
 static char *render(retrieval *b, const char *query, size_t *bytes, size_t *tokens) {
     yyjson_mut_val *root = yyjson_mut_obj(b->doc), *trace = yyjson_mut_arr(b->doc);
     if (!root || !trace) {
@@ -411,6 +503,21 @@ static char *render(retrieval *b, const char *query, size_t *bytes, size_t *toke
         yyjson_mut_obj_add_bool(b->doc, root, "truncated", b->truncated) &&
         yyjson_mut_obj_add_val(b->doc, root, "stages", trace) &&
         yyjson_mut_obj_add_val(b->doc, root, "results", b->results);
+    if (ok && b->options.rerank) {
+        yyjson_mut_val *rerank = yyjson_mut_obj(b->doc);
+        ok = rerank && yyjson_mut_obj_add_bool(b->doc, rerank, "applied", b->rerank_applied) &&
+             yyjson_mut_obj_add_str(b->doc, rerank, "reason",
+                                    b->rerank_reason ? b->rerank_reason : "failed") &&
+             yyjson_mut_obj_add_str(b->doc, rerank, "error", b->rerank_error) &&
+             (b->rerank_model[0]
+                  ? yyjson_mut_obj_add_str(b->doc, rerank, "model", b->rerank_model)
+                  : yyjson_mut_obj_add_null(b->doc, rerank, "model")) &&
+             yyjson_mut_obj_add_uint(b->doc, rerank, "scored", b->rerank_scored) &&
+             yyjson_mut_obj_add_real(b->doc, rerank, "latency_ms", b->rerank_latency_ms) &&
+             yyjson_mut_obj_add_uint(b->doc, rerank, "input_tokens", b->rerank_input_tokens) &&
+             yyjson_mut_obj_add_uint(b->doc, rerank, "output_tokens", b->rerank_output_tokens) &&
+             yyjson_mut_obj_add_val(b->doc, root, "rerank", rerank);
+    }
     for (unsigned i = 0; ok && i < STAGES; i++) {
         yyjson_mut_val *s = yyjson_mut_obj(b->doc);
         ok = s && yyjson_mut_obj_add_str(b->doc, s, "stage", stage_names[i]) &&
@@ -567,6 +674,12 @@ char *forge_repo_retrieve(forge_repo *repo, const char *query,
         if (b->halt && !b->trace[i].attempted && !strcmp(b->trace[i].reason, "exhausted"))
             b->trace[i].reason = "earlier_budget";
     size_t bytes = 0, tokens = 0;
+    if (ok && !stopped(b) && b->options.rerank) {
+        if (!b->count)
+            b->rerank_reason = "no_candidates";
+        else
+            ok = rerank_apply(b, query);
+    }
     char *json = ok && !stopped(b) ? render(b, query, &bytes, &tokens) : NULL;
     uint64_t generation = b->snapshot.generation;
     if (begun && fg_repo_snapshot_end(&b->snapshot, json != NULL, error) != FORGE_OK) {
@@ -581,7 +694,9 @@ char *forge_repo_retrieve(forge_repo *repo, const char *query,
                                          b->candidates,
                                          b->source_bytes,
                                          o.count_tokens != NULL,
-                                         b->truncated};
+                                         b->truncated,
+                                         b->rerank_applied,
+                                         b->rerank_scored};
     if (!json && !error->code)
         fail(b, FORGE_ERR_IO, "Indexed retrieval failed");
     yyjson_mut_doc_free(b->doc);

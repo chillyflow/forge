@@ -337,6 +337,9 @@ void fg_validation_result_free(fg_validation_result *);
 char *fg_tool_execute(fg_tool_context *, const char *, yyjson_val *, bool *, forge_error *);
 char *fg_repo_search(forge_repo *, const char *, size_t, forge_error *);
 char *fg_repo_targets(forge_repo *, const char *, forge_error *);
+/* Stable descending permutation of candidate indices by rerank score; invalid
+ * or out-of-range scores sort last. Pure; unit-tested without a repository. */
+void fg_rerank_permutation(const double *scores, size_t count, size_t *order);
 forge_status fg_repo_note_change(forge_repo *, forge_error *);
 forge_status fg_repo_note_change_until(forge_repo *, uint64_t deadline, forge_cancel_fn, void *,
                                        forge_error *);

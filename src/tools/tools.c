@@ -1,6 +1,7 @@
 #include "internal.h"
 #include "forge/memory.h"
 #include "forge/retrieval.h"
+#include "forge/judge.h"
 #include "core/digest.h"
 #include "edit_journal.h"
 #include "tree_sitter/api.h"
@@ -1818,6 +1819,10 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
             options.count_tokens = fg_model_count;
             options.count_userdata = c->config.model;
             options.max_output_tokens = c->config.limits.context_tokens / 4;
+        }
+        if (c->config.judge) {
+            options.rerank = forge_judge_rerank_retrieval;
+            options.rerank_userdata = c->config.judge;
         }
         return forge_repo_retrieve(c->repo, fg_json_str(args, "query"), &options, NULL, e);
     }

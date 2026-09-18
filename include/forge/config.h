@@ -33,10 +33,17 @@ typedef struct {
     size_t thought_budget;
     bool thought_budget_unbounded;
     forge_shell_network shell_network;
+    /* Hosted judge parameters ([judge] table). Configuration never grants judge
+     * use; the CLI --judge flag does. NULL strings mean "use the judge module's
+     * default" (endpoint, model alias, key environment variable name). */
+    const char *judge_endpoint, *judge_model, *judge_api_key_env, *judge_record_dir;
+    size_t judge_timeout_ms, judge_max_candidates;
     /* Private storage. Do not free, assign, or copy these pointers. The public
      * model strings may be replaced by borrowed CLI strings; destroy only frees
      * the storage allocated by this configuration object. */
     char *_owned_model_path, *_owned_script_path, *_owned_chat_template;
+    char *_owned_judge_endpoint, *_owned_judge_model, *_owned_judge_api_key_env,
+        *_owned_judge_record_dir;
 } forge_config;
 
 /* Initialize before use. Config objects are not shallow-copyable. No permissions

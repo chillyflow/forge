@@ -116,6 +116,7 @@ typedef struct {
 typedef struct forge_model forge_model;
 typedef struct forge_agent forge_agent;
 typedef struct forge_repo forge_repo;
+typedef struct forge_judge forge_judge;
 typedef struct {
     const char *workspace;
     forge_model *model; /* Borrowed; model must outlive agent. One active run per model. */
@@ -179,6 +180,10 @@ typedef struct {
     forge_policy_fn policy;
     forge_cancel_fn cancelled;
     void *userdata;
+    /* Optional hosted judgment provider (borrowed; NULL disables). When set,
+     * the agent's retrieval tool may rerank candidates before budget trimming;
+     * any provider failure leaves the deterministic ordering unchanged. */
+    forge_judge *judge;
     /* Experimental bounded repair history and completion capacity. Requires
      * candidate_checkpoint; false preserves the append-only checkpoint control. */
     bool bounded_repair;

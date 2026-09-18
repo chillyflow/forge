@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "forge/config.h"
+#include "forge/judge.h"
 #include "tomlc17.h"
 #include <ctype.h>
 #include <errno.h>
@@ -43,6 +44,8 @@ void forge_config_init(forge_config *config) {
     config->thought_routed = false;
     config->thought_native = false;
     config->compact_context = true;
+    config->judge_timeout_ms = FORGE_JUDGE_DEFAULT_TIMEOUT_MS;
+    config->judge_max_candidates = FORGE_JUDGE_DEFAULT_MAX_CANDIDATES;
 }
 
 void forge_config_destroy(forge_config *config) {
@@ -51,6 +54,10 @@ void forge_config_destroy(forge_config *config) {
     free(config->_owned_model_path);
     free(config->_owned_script_path);
     free(config->_owned_chat_template);
+    free(config->_owned_judge_endpoint);
+    free(config->_owned_judge_model);
+    free(config->_owned_judge_api_key_env);
+    free(config->_owned_judge_record_dir);
     memset(config, 0, sizeof(*config));
 }
 
@@ -59,15 +66,27 @@ static forge_status config_copy(forge_config *dst, const forge_config *src, forg
     dst->_owned_model_path = fg_strdup(src->model.model_path);
     dst->_owned_script_path = fg_strdup(src->model.script_path);
     dst->_owned_chat_template = fg_strdup(src->model.chat_template);
+    dst->_owned_judge_endpoint = fg_strdup(src->judge_endpoint);
+    dst->_owned_judge_model = fg_strdup(src->judge_model);
+    dst->_owned_judge_api_key_env = fg_strdup(src->judge_api_key_env);
+    dst->_owned_judge_record_dir = fg_strdup(src->judge_record_dir);
     if ((src->model.model_path && !dst->_owned_model_path) ||
         (src->model.script_path && !dst->_owned_script_path) ||
-        (src->model.chat_template && !dst->_owned_chat_template)) {
+        (src->model.chat_template && !dst->_owned_chat_template) ||
+        (src->judge_endpoint && !dst->_owned_judge_endpoint) ||
+        (src->judge_model && !dst->_owned_judge_model) ||
+        (src->judge_api_key_env && !dst->_owned_judge_api_key_env) ||
+        (src->judge_record_dir && !dst->_owned_judge_record_dir)) {
         forge_config_destroy(dst);
         return fg_error(e, FORGE_ERR_MEMORY, "Cannot copy configuration strings");
     }
     dst->model.model_path = dst->_owned_model_path;
     dst->model.script_path = dst->_owned_script_path;
     dst->model.chat_template = dst->_owned_chat_template;
+    dst->judge_endpoint = dst->_owned_judge_endpoint;
+    dst->judge_model = dst->_owned_judge_model;
+    dst->judge_api_key_env = dst->_owned_judge_api_key_env;
+    dst->judge_record_dir = dst->_owned_judge_record_dir;
     return FORGE_OK;
 }
 
@@ -244,7 +263,8 @@ typedef enum {
     CFG_NETWORK,
     CFG_SPECULATIVE,
     CFG_LANGUAGES,
-    CFG_THINKING
+    CFG_THINKING,
+    CFG_JUDGE_STRING
 } config_kind;
 
 typedef struct {
@@ -294,6 +314,14 @@ static const config_field fields[] = {
     {"tools.shell", "timeout", CFG_TIMEOUT, 0, 1, 86400},
     {"tools.shell", "network", CFG_NETWORK, 0, 0, 0},
     {"index", "languages", CFG_LANGUAGES, 0, 0, 0},
+    {"judge", "endpoint", CFG_JUDGE_STRING, 0, 0, 0},
+    {"judge", "model", CFG_JUDGE_STRING, 0, 0, 0},
+    {"judge", "api_key_env", CFG_JUDGE_STRING, 0, 0, 0},
+    {"judge", "record_dir", CFG_JUDGE_STRING, 0, 0, 0},
+    {"judge", "timeout_ms", CFG_SIZE, offsetof(forge_config, judge_timeout_ms),
+     FORGE_JUDGE_MIN_TIMEOUT_MS, FORGE_JUDGE_MAX_TIMEOUT_MS},
+    {"judge", "max_candidates", CFG_SIZE, offsetof(forge_config, judge_max_candidates), 1,
+     FORGE_JUDGE_MAX_CANDIDATES},
 };
 #undef MODEL_OFFSET
 #undef LIMIT_OFFSET
@@ -333,6 +361,48 @@ static forge_status apply_field(forge_config *config, const config_field *field,
             config->_owned_chat_template = owned;
             config->model.chat_template = owned;
         }
+        return FORGE_OK;
+    }
+    case CFG_JUDGE_STRING: {
+        size_t limit = !strcmp(field->key, "record_dir") ? FG_PATH_MAX - 1 : 2048;
+        if (!string_valid(value, limit))
+            return schema_error(e, value, key,
+                                "expected a nonempty string without embedded "
+                                "NUL bytes, within the supported length");
+        char *owned = NULL;
+        if (!strcmp(field->key, "record_dir")) {
+            char resolved[FG_PATH_MAX], base[FG_PATH_MAX];
+            parent_path(source, base);
+            forge_error path_error = {0};
+            if (absolute_path(base, value.u.str.ptr, resolved, &path_error) != FORGE_OK)
+                return schema_error(e, value, key, path_error.message);
+            owned = fg_strdup(resolved);
+        } else {
+            owned = fg_strdup(value.u.str.ptr);
+        }
+        if (!owned)
+            return fg_error(e, FORGE_ERR_MEMORY, "%s: Cannot allocate %s", source, key);
+        char **public_slot = NULL, **owned_slot = NULL;
+        if (!strcmp(field->key, "endpoint")) {
+            public_slot = (char **)&config->judge_endpoint;
+            owned_slot = &config->_owned_judge_endpoint;
+        } else if (!strcmp(field->key, "model")) {
+            public_slot = (char **)&config->judge_model;
+            owned_slot = &config->_owned_judge_model;
+        } else if (!strcmp(field->key, "api_key_env")) {
+            public_slot = (char **)&config->judge_api_key_env;
+            owned_slot = &config->_owned_judge_api_key_env;
+        } else if (!strcmp(field->key, "record_dir")) {
+            public_slot = (char **)&config->judge_record_dir;
+            owned_slot = &config->_owned_judge_record_dir;
+        }
+        if (!public_slot || !owned_slot) {
+            free(owned);
+            return schema_error(e, value, key, "unsupported configuration field");
+        }
+        free(*owned_slot);
+        *owned_slot = owned;
+        *public_slot = owned;
         return FORGE_OK;
     }
     case CFG_BOOL:
@@ -435,7 +505,7 @@ static forge_status apply_field(forge_config *config, const config_field *field,
 }
 
 static const char *child_table(const char *table, const char *key) {
-    static const char *const top[] = {"model", "inference", "agent", "tools", "index"};
+    static const char *const top[] = {"model", "inference", "agent", "tools", "index", "judge"};
     if (!*table) {
         for (size_t i = 0; i < sizeof(top) / sizeof(top[0]); i++)
             if (!strcmp(key, top[i]))
@@ -685,6 +755,13 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
         !cache->max_captures_per_prompt ||
         cache->max_captures_per_prompt > FORGE_CHECKPOINT_CACHE_MAX_ANCHORS)
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid inference.checkpoints limits");
+    if (config->judge_timeout_ms < FORGE_JUDGE_MIN_TIMEOUT_MS ||
+        config->judge_timeout_ms > FORGE_JUDGE_MAX_TIMEOUT_MS)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "judge.timeout_ms must be in [%zu, %zu]",
+                        FORGE_JUDGE_MIN_TIMEOUT_MS, FORGE_JUDGE_MAX_TIMEOUT_MS);
+    if (!config->judge_max_candidates || config->judge_max_candidates > FORGE_JUDGE_MAX_CANDIDATES)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "judge.max_candidates must be in [1, %zu]",
+                        FORGE_JUDGE_MAX_CANDIDATES);
     clear_error(e);
     return FORGE_OK;
 }

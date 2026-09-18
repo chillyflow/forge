@@ -81,8 +81,21 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `tools.shell` | `timeout` | Integer 1–86,400 **seconds**; CLI `--timeout-ms` is in milliseconds. |
 | `tools.shell` | `network` | Boolean restriction described below; never grants execution permission. |
 | `index` | `languages` | Exactly `["go"]`; other/empty/duplicate language lists fail. |
+| `judge` | `endpoint` | Nonempty `http(s)` base URL; default `https://api.typesafe.ai`. |
+| `judge` | `model` | Nonempty model alias or pinned id (e.g. `jev-1.13.0`); default `jev-latest`. The response's versioned id is recorded per call. |
+| `judge` | `api_key_env` | Nonempty environment variable name holding the API key; default `TYPESAFE_API_KEY`. The key is read at call time and never stored in configuration or artifacts. |
+| `judge` | `record_dir` | Optional directory for raw request/response artifacts; resolved relative to the file defining it. |
+| `judge` | `timeout_ms` | Integer 100–30,000 milliseconds per attempt; default 2,000. |
+| `judge` | `max_candidates` | Integer 1–256 candidates per rerank request; default 32. |
 
-See `forge.toml.example` and `profiles/*.toml`. There are deliberately no config
+See `forge.toml.example` and `profiles/*.toml`. The `judge` table configures an
+optional hosted judgment service (TypeSafe "System One"/Jev) and never grants
+its use: the CLI `--judge` flag does. When granted, `forge retrieve` and the
+agent's retrieval tool may rerank candidates before budget trimming; any
+service failure keeps the deterministic order and is reported in the output's
+`rerank` object. The API key is the one documented environment-variable
+exception — read from the named variable at call time because no vault is
+built in. There are deliberately no config
 keys for tool permission grants, script fixtures, draft models, the
 reasoning-channel wire policy, KV quantization, network sandbox backends or
 unsupported index languages. The model-level `enable_thinking` key controls

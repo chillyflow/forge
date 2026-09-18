@@ -76,8 +76,13 @@ Unicode-path portability is not promised.
 
 `.forge` is ignored in this repository. Session prompts, source snippets, tool
 results, and command output can contain secrets. Review them before uploading.
-No telemetry, cloud inference, model download, or automatic sharing is built into
-the runtime. Review repository files and use a clean environment before indexing
+No telemetry, model download, or automatic sharing is built into the runtime.
+The default configuration performs no cloud inference: the optional hosted
+judge is off unless the CLI `--judge` flag grants it, its API key comes from an
+environment variable at call time, and it sends selected retrieval excerpts
+(paths and source snippets) to the endpoint configured in the `[judge]` table.
+Raw judge requests and responses are recorded only under the configured record
+directory. Review repository files and use a clean environment before indexing
 sensitive source. A model can still be influenced by malicious repository text;
 prompt instructions are not a security boundary.
 

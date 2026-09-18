@@ -4,6 +4,7 @@
 #include "forge/verification.h"
 #include "forge/index.h"
 #include "forge/retrieval.h"
+#include "forge/judge.h"
 #include "forge/summary.h"
 #include "interactive.h"
 #include <errno.h>
@@ -60,6 +61,7 @@ static void usage(void) {
          "  --failure-reflection one bounded diagnostic action per failed repair episode\n"
          "  --reflection-tokens N diagnostic action bound, 32..1024 (default 256)\n"
          "  --symbol-impact      targeted preliminary checks; broad final verification\n"
+         "  --judge              optional hosted judgment service for retrieval reranking\n"
          "  --history-bytes N | --history-turns N   bounded interactive history\n"
          "                       full history; ignores semantic, compaction and thought-history "
          "settings\n"
@@ -146,6 +148,7 @@ static int option_arity(const char *option) {
                                         "--semantic-loops",
                                         "--failure-reflection",
                                         "--symbol-impact",
+                                        "--judge",
                                         "--thought-decode-only",
                                         "--thought-history",
                                         "--thought-required",
@@ -635,6 +638,24 @@ static forge_status summarize_repository(const forge_agent_config *config,
     forge_repo_close(repo);
     return status;
 }
+/* Build the optional hosted judge from configuration. Creation performs no
+ * network work; a missing API key is reported here and calls fail open. */
+static forge_judge *create_judge(const forge_config *config, forge_error *error) {
+    const char *env =
+        config->judge_api_key_env ? config->judge_api_key_env : FORGE_JUDGE_DEFAULT_KEY_ENV;
+    const char *key = getenv(env);
+    if (!key || !*key)
+        fprintf(stderr, "judge: %s is not set; hosted judgment calls will fail open\n", env);
+    forge_judge_options options = {0};
+    options.endpoint = config->judge_endpoint;
+    options.model = config->judge_model;
+    options.api_key_env = config->judge_api_key_env;
+    options.record_dir = config->judge_record_dir;
+    options.timeout_ms = config->judge_timeout_ms;
+    options.max_candidates = config->judge_max_candidates;
+    options.cancelled = cancelled;
+    return forge_judge_create(&options, error);
+}
 static int cli_main(int argc, char **argv, forge_config *config) {
     forge_error error = {0};
     forge_agent_config ac = {0};
@@ -663,7 +684,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
     ac.thought_budget_unbounded = config->thought_budget_unbounded;
     ac.cancelled = cancelled;
     const char *command = NULL, *argument = NULL;
-    bool json = false;
+    bool json = false, judge_flag = false;
     size_t history_bytes = 0, history_turns = 0;
     bool explicit_model = false, explicit_script = false;
     int depth = 1;
@@ -694,6 +715,10 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         }
         if (!strcmp(a, "--allow-write")) {
             ac.allow_write = true;
+            continue;
+        }
+        if (!strcmp(a, "--judge")) {
+            judge_flag = true;
             continue;
         }
         if (!strcmp(a, "--no-config"))
@@ -1177,12 +1202,22 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         else if (!strcmp(command, "references"))
             text = forge_repo_references(r, argument, &error);
         else if (!strcmp(command, "retrieve")) {
+            forge_judge *judge = NULL;
+            if (judge_flag && !(judge = create_judge(config, &error))) {
+                forge_repo_close(r);
+                return failed(&error);
+            }
             forge_retrieval_options options = forge_default_retrieval_options();
             options.graph_depth = (size_t)depth;
             options.max_output_bytes = FG_MIN(options.max_output_bytes, ac.limits.max_tool_bytes);
             options.cancelled = cancelled;
             options.deadline_ms = retrieval_deadline;
+            if (judge) {
+                options.rerank = forge_judge_rerank_retrieval;
+                options.rerank_userdata = judge;
+            }
             text = forge_repo_retrieve(r, argument, &options, NULL, &error);
+            forge_judge_destroy(judge);
         } else
             text = fg_repo_search(r, argument, 50, &error);
         if (text) {
@@ -1259,10 +1294,18 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         yyjson_doc_free(benchmark);
         return failed(&error);
     }
+    forge_judge *judge = NULL;
+    if (judge_flag && !(judge = create_judge(config, &error))) {
+        forge_model_destroy(ac.model);
+        yyjson_doc_free(benchmark);
+        return failed(&error);
+    }
+    ac.judge = judge;
     if (!strcmp(command, "chat")) {
         forge_status s =
             argument ? fg_error(&error, FORGE_ERR_ARGUMENT, "chat reads tasks from stdin")
                      : fg_cli_interactive(&ac, history_bytes, history_turns, events, &json, &error);
+        forge_judge_destroy(judge);
         forge_model_destroy(ac.model);
         yyjson_doc_free(benchmark);
         return s == FORGE_OK ? 0 : failed(&error);
@@ -1271,6 +1314,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
         summary_target.path = argument;
         forge_status status = summarize_repository(&ac, &summary_target, &summary_options,
                                                    summary_deadline, model_load_ms, &error);
+        forge_judge_destroy(judge);
         forge_model_destroy(ac.model);
         return status == FORGE_OK ? 0 : failed(&error);
     }
@@ -1296,6 +1340,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             fprintf(stderr, "%s\n", m);
             free(m);
         }
+        forge_judge_destroy(judge);
         forge_model_destroy(ac.model);
         return s == FORGE_OK ? 0 : failed(&error);
     }
@@ -1341,6 +1386,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             m->simulated ? "SIMULATED" : "INFERENCE", m->turns, m->prompt_tokens,
             m->generated_tokens, m->cached_tokens, m->duration_ms);
     forge_agent_destroy(agent);
+    forge_judge_destroy(judge);
     forge_model_destroy(ac.model);
     yyjson_doc_free(benchmark);
     return s == FORGE_OK ? 0 : failed(&error);

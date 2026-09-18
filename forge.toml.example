@@ -33,3 +33,18 @@ network = false # This forbids shell execution, including --allow-exec.
 
 [index]
 languages = ["go"] # Other languages are rejected by the current Go index.
+
+# Optional hosted judgment service (TypeSafe "System One"/Jev). Off by default:
+# configuration never grants its use; the CLI --judge flag does. When granted,
+# `forge retrieve` and the agent's retrieval tool may rerank candidates before
+# the output budget trim. Any service failure keeps the deterministic order.
+# The API key is read from the named environment variable at call time and is
+# never stored in configuration or artifacts. Calls send selected retrieval
+# excerpts (paths and source snippets) to the configured endpoint.
+[judge]
+# endpoint = "https://api.typesafe.ai"
+# model = "jev-latest"      # pin a versioned id (e.g. jev-1.13.0) for experiments
+# api_key_env = "TYPESAFE_API_KEY"
+# timeout_ms = 2000         # per attempt, 100..30000
+# max_candidates = 32       # 1..256 candidates per rerank request
+# record_dir = ".forge/judge-raw"  # optional raw request/response archive
