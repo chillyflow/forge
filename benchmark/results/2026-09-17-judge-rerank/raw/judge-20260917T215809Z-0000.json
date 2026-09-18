@@ -1,0 +1,196 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T215809Z",
+    "latency_ms": 562.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_compress_output",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/candidate-02/diagnosis/context-review.md",
+                    "stage": "literal",
+                    "snippet": "   `fg_compress_output(action, 2048, ...)` as `checkpoint.last_delta`.\n   `candidate_control` then labels this complete action excerpt\n   `PREVIOUS_APPLIED_DELTA (historical tool arguments)`. Thus model hypotheses\n   can be copied into mandatory host evidence; a long hypothesis can also crowd\n   actual patch arguments out of that excerpt. In the renamed r1 fixture,\n   prompts 0016 and 0028 contain `assistant_content` inside this host record.\n   Prompt 0007's excerpt starts with a truncated tail, losing its action identity.\n2. `candidate_validate` retains the complete tool feedback string in\n   `latest_feedback`, including instructions such as `PASS. Call final now` or\n   `NOT PASSED. The repair episode remains active`. `candidate_control` replays\n   that string even when `current_inputs` differs from `latest_validation_inputs`.\n   The historical label and both hashes are present, but the old imperative is\n   still included in the most recent mandatory user message. Host final gating\n   remains correct; the prompt can nevertheless direct a model using an old\n   candidate's result.\n\nRecommended change has no public context API:\n\n- Capture the previous edit from parsed tool name and arguments, excluding both\n  `assistant_content` and `thought`. Retain its journal identity and path before\n  any bounded old/new-text excerpt. Label truncation as an excerpt. Keep full raw\n  action/model output in the existing session artifacts.\n- Keep the last complete validation's outcome, input identity, validation ID,\n  failed-command identity, and diagnostic body as observations. Render current\n  operational guidance from current checkpoint state. If hashes differ, state\n  that the prior result applies to different inputs and current input has not\n  been verified by that result. Do not replay the prior completion/repair\n  imperative. Keep the prior diagnostic available, explicitly historical.\n- Continue keeping incomplete attempts separate from the last complete result;\n  reads, reverts, changed assertions, and fewer failures do not"
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "    char *detail = fg_compress_output(diagnostic, 2048, NULL, NULL);\n    if (!key || !detail) {\n        free(key);\n        free(detail);\n        fg_input_snapshot_destroy(inputs);\n        return;\n    }\n    history->latest = history->next++ % 8;\n    failed_workspace *entry = &history->entries[history->latest];\n    failed_workspace_free(entry);\n    *entry = (failed_workspace){inputs, key, detail, turn};\n}\nstatic void repair_validation(repair_history *history, fg_validation_result *result, size_t turn) {\n    repair_remember(history, result->failed_inputs, result->failed_command, result->summary, turn);\n    result->failed_inputs = NULL;\n}\nstatic char *repair_evidence(const failed_workspace *entry, bool returned) {\n    fg_buf text = {0};\n    fg_buf_printf(&text,\n                  \"%s\\nFailure observed on action %zu, input_hash=%016llx, stable_inputs=%s.\\n\"\n                  \"run_command inputs: %s\\nFailure evidence (historical, not a new test run):\\n%s\\n\"\n                  \"Use this assertion to trace the incorrect value before editing. \"\n                  \"A revert may be an intermediate step in a repair across files. \"\n                  \"Do not cycle through the same failed implementation; change the implicated \"\n                  \"condition or a relevant dependency, then validate.\\n\",\n                  returned ? \"FAILED_WORKSPACE_STATE: the edit returned to previously failed \"\n                             \"contents with identical workspace validation inputs.\"\n                           : \"REPAIR_EVIDENCE: retained historical failure; consult current host \"\n                             \"validation for the latest verdict.\",\n                  entry->turn, (unsigned long long)fg_input_snapshot_hash(entry->inputs),\n                  entry->inputs ? \"true\" : \"false\", entry->command, entry->diagnostic);\n    return fg_buf_take(&text);\n}\n/* Use the existing planner, including its zero-test-rejecting Python runner.\n * This is advice before generation, never command execution or verification. */\nstatic char *validation_guida"
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-fresh-design/W2-CHANGES.md",
+                    "stage": "literal",
+                    "snippet": "`thought` before `fg_compress_output`. The compressor keeps a head and a tail\nand clips the middle, so verbose prose at the front consumed the head and the\nclip landed on `old_text` and often the argument envelope, leaving only the tail\nof `new_text`. The prose is not lost: the complete action remains in the\n`tool_call` event. An unparseable action keeps its original record rather than\nlosing it, so a compression failure cannot abort a run whose edit is already on\ndisk.\n\n### Silent `run_command` annotated\n\n`src/tools/tools.c` — a command that exits 0 having written nothing to stdout or\nstderr now carries a host observation saying exactly that, and that empty output\nis not evidence any test was collected or executed.\n\nDeliberately **not** gated on the ordinary loop, unlike the adjacent\n`next_action_guidance` (which is gated on `!minimal_agent` and therefore never\nreaches the arms under test). It is an observation, not advice.\n\nPer the plan, this does **not** discriminate: all six candidate-2 failures and\nboth passes issued at least one such command. Whether the model then formed a\nfalse success belief is not established by retained evidence, and this change\nmust not be presented as if it were a lever.\n\n### `agent_mode` capability claims made honest\n\n`src/core/agent.c` — `recovery` and `corrective_prompts` were hardcoded `true`\nfor both the bounded-repair and candidate-checkpoint modes regardless of\nconfiguration, while `--failure-reflection` was not in the profile and\n`loop_warnings` was 0 in all twelve candidate-2 runs. They are now derived from\n`config.failure_reflection` and `config.semantic_loops` respectively.\n\n## Deliberately not built, with reasons\n\n**Report whether the file already contains the intended `new_text`.** The\nidentical-replacement rejection fires in `fg_tool_execute`'s pre-dispatch gate\n(`src/tools/tools.c:1636`), deliberately *before* policy and filesystem work, so\nthe file has not been read at that point. Adding the check means either reading\na file before its policy check or moving the r"
+                },
+                {
+                    "path": "docs/DIAGNOSTICS.md",
+                    "stage": "literal",
+                    "snippet": "The internal `fg_compress_output` and `fg_diagnostic_hash` signatures remain\nunchanged. Named multi-record output uses the normalized pipeline. The existing\nsmall generic-output contract, generic tail view, and single Go output-event\nclipping behavior remain for callers that depend on them. Those legacy views\ndo not expose all new JSON metadata; use the length-taking API for structured\nconsumers and raw byte streams.\n\nThe hash ignores ordinary output records and Go envelope timing/order. Textual\ntiming, addresses, and arbitrary application log fields are not universally\nnormalized. Treat it only as a loop-detection hint, never a security identifier,\na command outcome, or evidence that a test ran.\n\n`tests/unit/test_diagnostics.c` is offline and requires no Go, Rust, Python,\ncompiler subprocess, model, or GPU. It exercises the supported fixture formats,\ninterleaved Go fragments, explicit versus unknown metadata, duplicate counts,\nranking, malformed schemas, invalid coordinates, NUL/invalid UTF-8, color\nremoval, resource limits, renderer byte boundaries, deterministic malformed\nbyte cases, and the older compressor/hash contracts. Integration with actual\ntool invocations is a separate runtime test responsibility.\n"
+                },
+                {
+                    "path": "src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "    char *detail = fg_compress_output(diagnostic, 2048, NULL, NULL);\n    if (!key || !detail) {\n        free(key);\n        free(detail);\n        fg_input_snapshot_destroy(inputs);\n        return;\n    }\n    history->latest = history->next++ % 8;\n    failed_workspace *entry = &history->entries[history->latest];\n    failed_workspace_free(entry);\n    *entry = (failed_workspace){inputs, key, detail, turn};\n}\nstatic void repair_validation(repair_history *history, fg_validation_result *result, size_t turn) {\n    repair_remember(history, result->failed_inputs, result->failed_command, result->summary, turn);\n    result->failed_inputs = NULL;\n}\nstatic char *repair_evidence(const failed_workspace *entry, bool returned) {\n    fg_buf text = {0};\n    fg_buf_printf(&text,\n                  \"%s\\nFailure observed on action %zu, input_hash=%016llx, stable_inputs=%s.\\n\"\n                  \"run_command inputs: %s\\nFailure evidence (historical, not a new test run):\\n%s\\n\"\n                  \"Use this assertion to trace the incorrect value before editing. \"\n                  \"A revert may be an intermediate step in a repair across files. \"\n                  \"Do not cycle through the same failed implementation; change the implicated \"\n                  \"condition or a relevant dependency, then validate.\\n\",\n                  returned ? \"FAILED_WORKSPACE_STATE: the edit returned to previously failed \"\n                             \"contents with identical workspace validation inputs.\"\n                           : \"REPAIR_EVIDENCE: retained historical failure; consult current host \"\n                             \"validation for the latest verdict.\",\n                  entry->turn, (unsigned long long)fg_input_snapshot_hash(entry->inputs),\n                  entry->inputs ? \"true\" : \"false\", entry->command, entry->diagnostic);\n    return fg_buf_take(&text);\n}\n/* Use the existing planner, including its zero-test-rejecting Python runner.\n * This is advice before generation, never command execution or verification. */\nstatic char *validation_guida"
+                },
+                {
+                    "path": "src/core/verification.c",
+                    "stage": "literal",
+                    "snippet": "                char *visible = raw ? fg_compress_output(raw, 4096, NULL, NULL) : NULL;\n                fg_buf message = {0};\n                fg_buf_printf(&message, \"Automatic validation stopped at %s: %s\\n\", name,\n                              e && e->message[0] ? e->message : forge_status_string(status));\n                if (visible)\n                    fg_buf_puts(&message, visible);\n                if (require_empty && r.exit_code == 0 && r.out_len)\n                    fg_buf_puts(&message,\n                                \"\\nThe listed files need gofmt formatting. Format only files \"\n                                \"you are authorized to edit (for example with gofmt -w), then \"\n                                \"try validation again. A zero formatter exit code alone does \"\n                                \"not pass this check.\\n\");\n                result->summary = fg_buf_take(&message);\n                free(raw);\n                free(visible);\n            }\n            if (!emit_value(c->session, \"validation_command\", record, e)) {\n                evidence_complete = false;\n                status = e && e->code ? e->code : FORGE_ERR_IO;\n            }\n            fg_process_free(&r);\n            if (status != FORGE_OK)\n                break;\n        }\n        if (status != FORGE_OK)\n            break;\n        if (yyjson_arr_size(list))\n            result->stages++;\n    }\nfinish:\n    if (before && result->commands) {\n        uint64_t snapshot_start = fg_now_ms();\n        forge_error snapshot_error = {0};\n        after = fg_input_snapshot_take(c->root, VALIDATION_MAX_FILES, VALIDATION_MAX_BYTES,\n                                       c->config.cancelled, c->config.userdata, c->deadline,\n                                       &snapshot_error);\n        snapshot_ms += (double)(fg_now_ms() - snapshot_start);\n        if (!after) {\n            result->inputs_changed = true; /* Unknown is never accepted as unchanged. */\n            status = snapshot_error.code ? snapshot_error.code : FORGE_ERR_IO;\n            if (e)\n   "
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": "char *fg_compress_output(const char *, size_t, size_t *, forge_error *);\nuint64_t fg_diagnostic_hash(const char *);\n\n/* Internal checkpoint I/O seam. Real backends provide physical sequence state;\n * unit fixtures may substitute deterministic bytes, never model evidence. */\ntypedef struct {\n    void *userdata;\n    void *(*allocate)(void *, size_t, forge_error *);\n    void (*release)(void *, void *, size_t);\n} fg_checkpoint_allocator;\ntypedef struct {\n    forge_status (*supported)(forge_model *, forge_error *);\n    forge_status (*prefill)(forge_model *, const char *, int32_t **, size_t *, forge_metrics *,\n                            forge_cancel_fn, void *, uint64_t, forge_error *);\n    size_t (*state_size)(forge_model *);\n    size_t (*state_get)(forge_model *, uint8_t *, size_t);\n    size_t (*state_set)(forge_model *, const uint8_t *, size_t);\n    bool (*accept_tokens)(forge_model *, const int32_t *, size_t);\n    void (*clear)(forge_model *);\n    /* Optional automatic-cache hooks. probe_prefix performs only template/\n     * token work, allocates all extra buffers through the supplied allocator,\n     * and reports LCP(full tokens, separately templated raw prefix tokens).\n     * live_prefix includes a matching final token; callers subtract it when\n     * logits need recomputation. live_matches requires EXACT sequence coverage. */\n    forge_status (*probe_prefix)(forge_model *, const char *, size_t, const int32_t *, size_t,\n                                 size_t *, const fg_checkpoint_allocator *, forge_cancel_fn, void *,\n                                 uint64_t, forge_error *);\n    size_t (*live_prefix)(forge_model *, const int32_t *, size_t);\n    bool (*live_matches)(forge_model *, const int32_t *, size_t);\n} fg_checkpoint_backend;\n\ntypedef struct fg_checkpoint_cache fg_checkpoint_cache;\ntypedef struct {\n    fg_checkpoint_cache *cache;\n    const int32_t *tokens;\n    size_t token_count, anchors[FORGE_CHECKPOINT_CACHE_MAX_ANCHORS], anchor_count;\n    size_t capture_attempts, restored_tokens, previous_live_prefix;\n "
+                },
+                {
+                    "path": "src/tools/diagnostics.c",
+                    "stage": "literal",
+                    "snippet": "char *fg_compress_output(const char *raw, size_t budget, size_t *visible, forge_error *error) {\n    if (!raw || budget < 64) {\n        fg_error(error, FORGE_ERR_ARGUMENT, \"Invalid output budget\");\n        return NULL;\n    }\n    char *json = forge_diagnostics_parse(raw, strlen(raw), NULL, error);\n    if (!json)\n        return NULL;\n    yyjson_doc *doc = yyjson_read(json, strlen(json), 0);\n    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;\n    yyjson_val *adapters = yyjson_obj_get(root, \"adapters\"),\n               *summary = yyjson_obj_get(root, \"summary\");\n    bool go_only = yyjson_arr_size(adapters) == 1 &&\n                   !strcmp(yyjson_get_str(yyjson_arr_get_first(adapters)), \"go_test\");\n    bool generic_only = yyjson_arr_size(adapters) == 0 ||\n                        (yyjson_arr_size(adapters) == 1 &&\n                         !strcmp(yyjson_get_str(yyjson_arr_get_first(adapters)), \"generic\"));\n    /* Preserve the original small-output contract, and its byte-exact Go\n     * output-only clipping behavior for embedders. Named multi-record streams\n     * use the normalized ranking/deduplication pipeline. */\n    bool go_output_only = go_only && !yyjson_get_uint(yyjson_obj_get(summary, \"go_pass_events\")) &&\n                          !yyjson_get_uint(yyjson_obj_get(summary, \"go_fail_events\")) &&\n                          !yyjson_get_uint(yyjson_obj_get(summary, \"duplicate_occurrences\")) &&\n                          yyjson_arr_size(yyjson_obj_get(root, \"diagnostics\")) <= 1;\n    bool raw_bounded = !yyjson_get_bool(yyjson_obj_get(root, \"input_truncated\"));\n    char *result = ((generic_only || go_output_only) && raw_bounded) || budget > FG_MAX_JSON\n                       ? legacy_compress_output(raw, budget, visible, error)\n                       : forge_diagnostics_render(json, strlen(json), budget, visible, error);\n    yyjson_doc_free(doc);\n    free(json);\n    return result;\n}\n"
+                },
+                {
+                    "path": "tests/unit/test_core.c",
+                    "stage": "literal",
+                    "snippet": "        char *compressed = fg_compress_output(raw, budget, &visible, &error);\n        assert(compressed && error.code == FORGE_OK);\n        assert(visible == strlen(compressed) && visible <= budget);\n        assert(fg_utf8_valid(compressed, visible));\n        free(compressed);\n    }\n}\nstatic void test_diagnostic_byte_boundaries(void) {\n    forge_error error = {0};\n    fg_buf line = {0}, raw = {0};\n    fg_buf_puts(&line, \"x.go:1: error \");\n    while (line.len < 1023)\n        fg_buf_puts(&line, \"a\");\n    fg_buf_puts(&line, \"\\xe2\\x82\\xac\"\n                       \"after clip\");\n    char *quoted = fg_json_string(line.data);\n    assert(quoted);\n    fg_buf_printf(&raw, \"{\\\"Action\\\":\\\"output\\\",\\\"Output\\\":%s}\\n\", quoted);\n    free(quoted);\n    char *compressed = fg_compress_output(raw.data, 2048, NULL, &error);\n    assert(compressed && strlen(compressed) == 1024 && compressed[1023] == '\\n');\n    assert(fg_utf8_valid(compressed, strlen(compressed)));\n    assert(!strstr(compressed, \"after clip\"));\n    free(compressed);\n    fg_buf_clear(&line);\n    fg_buf_clear(&raw);\n\n    /* Exercise generic prefix, tail-start and final boundaries at every byte. */\n    fg_buf_puts(&raw, \"x.go:1: error \");\n    for (size_t i = 0; i < 250; i++)\n        fg_buf_puts(&raw, \"\\xe2\\x82\\xac\");\n    fg_buf_puts(&raw, \"\\nprogress \");\n    for (size_t i = 0; i < 700; i++)\n        fg_buf_puts(&raw, \"\\xf0\\x9f\\x8c\\x8d\");\n    fg_buf_puts(&raw, \"\\n\");\n    assert_valid_compression(raw.data, 64, 1536);\n    fg_buf_clear(&raw);\n\n    /* No relevant diagnostics: Go's fallback tail must also accept budget<80. */\n    fg_buf_puts(&raw, \"{\\\"Action\\\":\\\"output\\\",\\\"Output\\\":\\\"\");\n    for (size_t i = 0; i < 200; i++)\n        fg_buf_puts(&raw, \"\\xc2\\xa2\");\n    fg_buf_puts(&raw, \"\\\"}\\n\");\n    assert_valid_compression(raw.data, 64, 256);\n    fg_buf_clear(&raw);\n\n    /* Long failure identities can reach the final output budget boundary. */\n    fg_buf_puts(&raw, \"{\\\"Action\\\":\\\"fail\\\",\\\"Package\\\":\\\"\");\n    for (size_t i = 0; i < 200; i++)\n        fg_buf_puts(&raw, \"\\xe2\\x82\\xac\");"
+                },
+                {
+                    "path": "tests/unit/test_diagnostics.c",
+                    "stage": "literal",
+                    "snippet": "    view = fg_compress_output(duplicated.data, 512, NULL, &error);\n    assert(view && strstr(view, \"[x2]\"));\n    free(view);\n    yyjson_doc_free(doc);\n    fg_buf_clear(&duplicated);\n\n    const char *a = \"{\\\"Time\\\":\\\"one\\\",\\\"Action\\\":\\\"fail\\\",\\\"Package\\\":\\\"p\\\",\\\"Test\\\":\\\"TestA\\\"}\\n\"\n                    \"{\\\"Action\\\":\\\"output\\\",\\\"Output\\\":\\\"a_test.go:9: expected 4 got 3\\\\n\\\"}\\n\";\n    const char *b = \"{\\\"Action\\\":\\\"output\\\",\\\"Output\\\":\\\"a_test.go:9: expected 4 got 3\\\\n\\\"}\\n\"\n                    \"{\\\"Elapsed\\\":2.3,\\\"Time\\\":\\\"two\\\",\\\"Action\\\":\\\"fail\\\",\\\"Package\\\":\\\"p\\\",\"\n                    \"\\\"Test\\\":\\\"TestA\\\"}\\n\";\n    assert(fg_diagnostic_hash(a) == fg_diagnostic_hash(b));\n    assert(fg_diagnostic_hash(\"x.c:1: error: one\\n\") != fg_diagnostic_hash(\"x.c:1: error: two\\n\"));\n    assert(fg_diagnostic_hash(one) == fg_diagnostic_hash(one));\n}\n\nstatic void test_pytest(void) {\n    const char *text = \"================ FAILURES ================\\n\"\n                       \"________________ test_sum _________________\\n\"\n                       \"    def test_sum():\\n\"\n                       \">       assert total == 4\\n\"\n                       \"E       assert 3 == 4\\n\"\n                       \"tests/test_math.py:8: AssertionError\\n\"\n                       \"FAILED tests/test_math.py::test_sum - assert 3 == 4\\n\";\n    yyjson_doc *doc = parse(text, FORGE_DIAGNOSTICS_AUTO);\n    yyjson_val *record = find_record(doc, \"test\", \"test_sum\");\n    assert(!strcmp(string_at(record, \"adapter\"), \"pytest\"));\n    assert(!strcmp(string_at(record, \"message\"), \"assert 3 == 4\"));\n    assert(yyjson_is_null(yyjson_obj_get(record, \"expected\")));\n    assert(yyjson_is_null(yyjson_obj_get(record, \"actual\")));\n    assert(yyjson_arr_size(yyjson_obj_get(record, \"stack\")) == 1);\n    assert(!strcmp(string_at(yyjson_obj_get(record, \"location\"), \"path\"), \"tests/test_math.py\"));\n    assert(!strcmp(string_at(find_record(doc, \"test\", \"tests/test_math.py::test_sum\"), \"format\"),\n                   \"pytest_summary\"));\n    yyjson_doc_free(doc);\n\n    doc = parse(\"Traceback (most "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c8": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[8].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c9": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[9].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.18
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.16
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.42
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.36
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.17
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.18
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.24
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.92
+            },
+            "c8": {
+                "type": "noul",
+                "noul": 0.22
+            },
+            "c9": {
+                "type": "noul",
+                "noul": 0.13
+            }
+        },
+        "usage": {
+            "input_tokens": 6245,
+            "output_tokens": 174
+        }
+    }
+}

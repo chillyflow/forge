@@ -1,0 +1,298 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T223456Z",
+    "latency_ms": 407.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "where is the pre-command input snapshot taken",
+            "candidates": [
+                {
+                    "path": "spikes/002-grammar-mask-cost/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... The grammar is taken from Forge itself: the native template render\r\n(`fg_chat_templates_apply_native` → `fg_chat_render_grammar`) when available, else\r\nthe ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/acceptance-policy-notes.md",
+                    "stage": "fts5",
+                    "snippet": " ... retention: `complete-except-git-forge`.\n- Input inventory: `all-files-except-root-git-forge-directories`.\n- Pre-verification snapshot required.\n\nThe exclusion applies only to root ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/benchmark/agent_loop_acceptance.py",
+                    "stage": "fts5",
+                    "snippet": " ... files, 'full verifier input maps differ from retained snapshots')\n    require(archived_snapshot(archive_files, 'pre-verification/') == before and\n            archived_snapshot(archive_files, 'terminal/') == terminal ... "
+                },
+                {
+                    "path": "docs/REPRODUCIBILITY.md",
+                    "stage": "fts5",
+                    "snippet": " ... core/input_snapshot.c` excludes `__pycache__`, `*.pyc` and `*.pyo`\nat any depth, in both the Windows and POSIX walks. The pre-existing\n`snapshot_metadata ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/l3-comparison/selftest.py",
+                    "stage": "fts5",
+                    "snippet": " ... cache = output / name / '__pycache__/x.pyc'\n            cache.parent.mkdir(parents=True)\n            cache.write_bytes(b'cache input')\n        files = driver.snapshot(output / 'terminal-workspace')\n        driver ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/benchmark/run.py",
+                    "stage": "fts5",
+                    "snippet": " ... def terminal_root_ignored(name, is_directory):\n    \"\"\"Match the host input snapshot's root metadata directory exclusions.\"\"\"\n    return is_directory and (name.casefold() if ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/candidate-02/diagnosis/verification-cache-audit.md",
+                    "stage": "fts5",
+                    "snippet": " ... the retained terminal can execute differently.\n- `src/core/input_snapshot.c:80` excludes `.git` and `.forge` only when the relative prefix is empty. The ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/l3-comparison/driver.py",
+                    "stage": "fts5",
+                    "snippet": " ... protected_before_verification') is True and\n            result.get('verification_inputs_unchanged') is True, 'protected or verifier-input mutation')\n    require(pre_verification == terminal, 'verifier observed ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/tests/unit/test_agent_loop_acceptance.py",
+                    "stage": "fts5",
+                    "snippet": " ... self.validate_record()\n\n    def test_omitted_before_snapshot_and_changed_retention_rejected(self):\n        self.enable_fresh_policy()\n        self.record['evidence'].pop('pre_verification')\n        with ... "
+                },
+                {
+                    "path": "spikes/005-grammar-after-topk/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... This spike measures that count per grammar state.\n\n## Pre-registered bar\n\nFrozen before the run. Measurement is `sweep.cpp`'s P4 arm: for each ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-smoke/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... Its identity is recorded in\n[environment.json](environment.json); the runner did not retain a source snapshot\nfor this smoke. It must not be ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/tests/unit/test_benchmark.py",
+                    "stage": "fts5",
+                    "snippet": " ... snapshot_terminal_inputs(case / 'pre-verification-workspace'), maps['before'])\n                self.assertEqual(BENCH.snapshot_terminal_inputs(case / 'terminal-workspace'), maps['after'])\n                self.assertEqual((case / 'pre ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-08-candidate-checkpoint-v2/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... Arm order is interleaved with seed\n20260831. Source is an uncommitted snapshot on `07c178ac7707e03b175d3e87b2eb657d19d907d5`.\n\nThe GPU Release build passed. CTest passed 26 tests and ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-fresh-design/candidate-05-host-defects/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... of the fix\n\nThe concern with never writing bytecode is that every command recompiles. On the\nreal validation workload:\n\n| | W0 candidate-2 (pre-fix ... "
+                },
+                {
+                    "path": "spikes/003-grammar-apply-alloc/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... not where the time\r\ngoes, the exact route is closed and only candidate reduction (spike 002's\r\nbounded, riskier path) remains.\r\n\r\n## Pre-registered bar ... "
+                },
+                {
+                    "path": "spikes/001-parallel-decode/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... If\nbatching costs ~N×, the idea is dead and Forge should stop pursuing it.\n\n## Pre-registered bar\n\nFrozen before the measurement run (the `steps ... "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c8": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[8].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c9": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[9].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c10": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[10].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c11": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[11].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c12": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[12].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c13": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[13].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c14": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[14].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c15": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[15].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.2
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.29
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.29
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.2
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.22
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.49
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.12
+            },
+            "c8": {
+                "type": "noul",
+                "noul": 0.1
+            },
+            "c9": {
+                "type": "noul",
+                "noul": 0.04
+            },
+            "c10": {
+                "type": "noul",
+                "noul": 0.06
+            },
+            "c11": {
+                "type": "noul",
+                "noul": 0.21
+            },
+            "c12": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c13": {
+                "type": "noul",
+                "noul": 0.04
+            },
+            "c14": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c15": {
+                "type": "noul",
+                "noul": 0.03
+            }
+        },
+        "usage": {
+            "input_tokens": 3357,
+            "output_tokens": 282
+        }
+    }
+}

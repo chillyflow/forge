@@ -1,0 +1,111 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T222545Z",
+    "latency_ms": 406.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_json_whitespace_only",
+            "candidates": [
+                {
+                    "path": "src/inference/llama_backend.c",
+                    "stage": "literal",
+                    "snippet": "        bool whitespace_only = length > 0 && fg_json_whitespace_only(piece, (size_t)length);\n        if (piece != small)\n            free(piece);\n        if (ban) {\n            braces[brace_count].token = token;\n            braces[brace_count].bias = -INFINITY;\n            brace_count++;\n        }\n        if (whitespace_only) {\n            whitespace[whitespace_count].token = token;\n            whitespace[whitespace_count].bias = -INFINITY;\n            whitespace_count++;\n        }\n    }\n    s->brace_ban = braces;\n    s->brace_ban_count = brace_count;\n    s->eog_ban = ends;\n    s->eog_ban_count = eog_count;\n    s->whitespace_ban = whitespace;\n    s->whitespace_ban_count = whitespace_count;\n    return true;\n}\n/* Think budget expired without an action: replace the never-triggered lazy\n * grammar at slot 0 (after conditional ban removal) with an eager grammar over\n * the same GBNF, so the action must open under full constraint — tool\n * constraints retained, all three envelope alternatives open. The end ban is\n * dropped here because a fresh root grammar masks end-of-generation until the\n * action object closes. Selector samplers are re-added in their original\n * order behind the new grammar. The lazy sampler's un-fired trigger buffer is\n * host text the caller already holds, so freeing it loses nothing. */\nstatic forge_status force_action(llama_state *s, struct llama_sampler *chain,\n                                 struct llama_sampler **grammar_sampler, const char *grammar,\n                                 bool eog_banned, bool *progress_armed, forge_error *e) {\n    if (eog_banned)\n        llama_sampler_free(llama_sampler_chain_remove(chain, 0));\n    llama_sampler_free(llama_sampler_chain_remove(chain, 0));\n    *grammar_sampler = NULL;\n    struct llama_sampler *eager = llama_sampler_init_grammar(s->vocab, grammar, \"root\");\n    struct llama_sampler *progress =\n        eager ? llama_sampler_init_logit_bias(llama_vocab_n_tokens(s->vocab),\n                                              s->whitespace_ban_count, s->whi"
+                },
+                {
+                    "path": "src/inference/routing.c",
+                    "stage": "literal",
+                    "snippet": "bool fg_json_whitespace_only(const char *text, size_t length) {\n    if (!text || !length)\n        return false;\n    for (size_t i = 0; i < length; i++)\n        if (text[i] != ' ' && text[i] != '\\t' && text[i] != '\\r' && text[i] != '\\n')\n            return false;\n    return true;\n}\n\nstatic const char *top_level_value(const char *action, const char *key) {\n    size_t key_length = strlen(key);\n    int depth = 0;\n    for (const char *cursor = action; cursor && *cursor;) {\n        if (*cursor == '{' || *cursor == '[') {\n            depth++;\n            cursor++;\n            continue;\n        }\n        if (*cursor == '}' || *cursor == ']') {\n            depth--;\n            cursor++;\n            continue;\n        }\n        if (*cursor != '\"') {\n            cursor++;\n            continue;\n        }\n        const char *start = ++cursor;\n        bool escaped = false;\n        while (*cursor && *cursor != '\"') {\n            if (*cursor == '\\\\' && cursor[1]) {\n                escaped = true;\n                cursor += 2;\n            } else\n                cursor++;\n        }\n        if (!*cursor)\n            return NULL;\n        const char *end = cursor++;\n        if (depth != 1 || escaped || (size_t)(end - start) != key_length ||\n            strncmp(start, key, key_length))\n            continue;\n        while (*cursor == ' ' || *cursor == '\\t' || *cursor == '\\r' || *cursor == '\\n')\n            cursor++;\n        if (*cursor != ':')\n            continue;\n        do {\n            cursor++;\n        } while (*cursor == ' ' || *cursor == '\\t' || *cursor == '\\r' || *cursor == '\\n');\n        return cursor;\n    }\n    return NULL;\n}\n\nfg_action_phase fg_action_decode_phase(const char *text) {\n    const char *action = text;\n    while (action && (*action == ' ' || *action == '\\t' || *action == '\\r' || *action == '\\n'))\n        action++;\n    if (!action || *action != '{')\n        action = text ? fg_action_begin(text) : NULL;\n    if (!action)\n        return FG_ACTION_SELECT;\n    if (top_level_value(action, \"final\"))\n        return FG_ACTIO"
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": "bool fg_json_whitespace_only(const char *text, size_t length);\n/* Reduced-candidate sampling ladder for the constrained path. The grammar mask\n * costs time per candidate in the array it is applied to, and a decoder that\n * still draws from a full distribution needs several acceptable candidates,\n * while greedy needs only the first acceptable one in rank order. Callers mask a\n * raw top-K prefix and walk this ladder instead of paying for the whole\n * vocabulary. fg_reduced_next_k returns the next rung, or 0 when the next one\n * would reach the vocabulary - which means \"use the full array\", so the full\n * vocabulary stays the exact last resort. */\n#define FG_REDUCED_START_K 64\nint fg_reduced_next_k(int current_k, int vocab_size);\nbool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens);\ntypedef struct {\n    const char *name, *description, *fields, *grammar;\n    forge_capability capability;\n} fg_tool_def;\nconst fg_tool_def *fg_tools(size_t *);\n/* `thought` selects whether reasoning is offered, `required` whether it may be\n * empty, and `routed` whether it is a plain-text prefix outside the action JSON.\n * Routed mode leaves the action constrained and uses a lazy grammar trigger. */\nchar *fg_tool_schema(bool thought, bool required, bool routed);\nchar *fg_tool_native_schema(void);\nchar *fg_tool_minimal_native_schema(void);\nchar *fg_tool_candidate_schema(bool validation_only);\nchar *fg_tool_noedit_schema(void);\nchar *fg_tool_native_extensions(const char *base, bool ask_user, bool reflection_only);\nchar *fg_tool_native_final_schema(void);\nchar *fg_tool_grammar(bool thought, bool required, bool routed);\nforge_status fg_native_action_normalize(const char *, bool include_thought, char **, forge_error *);\nbool fg_tool_validate(const char *, yyjson_val *, forge_error *);\nuint64_t fg_tool_signature(const char *, yyjson_val *, uint64_t generation,\n                           uint64_t diagnostic_hash);\n/* Single-slot verdict cache for repeated identical commands. Agent-owned;\n * tools.c re"
+                },
+                {
+                    "path": "src/tools/tools.c",
+                    "stage": "literal",
+                    "snippet": "         fg_json_whitespace_only(special, special_length))) {\n        yyjson_doc_free(arguments_document);\n        yyjson_doc_free(document);\n        return fg_error(error, FORGE_ERR_PARSE,\n                        \"Question/diagnostic action requires one bounded nonempty string\");\n    }\n    if ((candidate && yyjson_obj_size(arguments) != 0) ||\n        (!candidate && !question && !reflection && strcmp(name, \"final\") &&\n         strcmp(name, \"memory\") && !fg_tool_validate(name, arguments, error))) {\n        if (candidate)\n            fg_error(error, FORGE_ERR_PARSE, \"validate_candidate requires empty arguments\");\n        yyjson_doc_free(arguments_document);\n        yyjson_doc_free(document);\n        return error && error->code ? error->code : FORGE_ERR_PARSE;\n    }\n    const char *thought = NULL;\n    char *thought_copy = NULL;\n    yyjson_val *thought_value = yyjson_obj_get(root, \"reasoning_content\");\n    if (thought_value) {\n        const char *parsed_thought =\n            yyjson_is_str(thought_value) ? yyjson_get_str(thought_value) : NULL;\n        size_t thought_length = yyjson_get_len(thought_value);\n        if (!parsed_thought || thought_length != strlen(parsed_thought) ||\n            !fg_utf8_valid(parsed_thought, thought_length)) {\n            yyjson_doc_free(arguments_document);\n            yyjson_doc_free(document);\n            return fg_error(error, FORGE_ERR_PARSE, \"Native reasoning content is invalid\");\n        }\n        /* Like routed decode prose, native reasoning is non-executable text and\n         * its full form is already retained in the raw model_output event. Keep\n         * the normalized ACTION envelope under the identical thought limit by\n         * retaining a valid UTF-8 prefix instead of rejecting an otherwise\n         * valid, policy-checked tool call. */\n        if (include_thought && thought_length) {\n            size_t retained = fg_utf8_prefix(parsed_thought, thought_length, FG_THOUGHT_MAX_BYTES);\n            thought_copy = malloc(retained + 1);\n            if (!thought_copy) {\n        "
+                },
+                {
+                    "path": "tests/unit/test_core.c",
+                    "stage": "literal",
+                    "snippet": "    assert(fg_json_whitespace_only(\" \\t\\r\\n\", 4));\n    assert(!fg_json_whitespace_only(\"\", 0));\n    assert(!fg_json_whitespace_only(\" \\n{\", 3));\n    assert(!fg_native_force_due(false, false, 0, 2048));\n    assert(!fg_native_force_due(true, false, 0, 0));\n    assert(!fg_native_force_due(true, false, 0, 1));\n    assert(!fg_native_force_due(true, false, 1, 1));\n    assert(!fg_native_force_due(true, false, 1, 0));\n    const size_t native_budgets[] = {2, 32, 64, 512, 513, 2048};\n    for (size_t i = 0; i < sizeof(native_budgets) / sizeof(*native_budgets); i++) {\n        size_t budget = native_budgets[i];\n        size_t cap = FG_MIN((size_t)256, budget / 2);\n        assert(!fg_native_force_due(true, false, cap - 1, budget));\n        assert(fg_native_force_due(true, false, cap, budget));\n        assert(!fg_native_force_due(true, true, cap, budget));\n        assert(!fg_native_force_due(false, false, cap, budget));\n        assert(!fg_native_force_due(true, false, budget, budget));\n    }\n    assert(fg_action_decode_phase(\"\") == FG_ACTION_SELECT);\n    assert(fg_action_decode_phase(\"{\\\"tool\\\":\\\"read_file\\\",\\\"args\\\":{\") == FG_ACTION_ARGUMENTS);\n    assert(fg_action_decode_phase(\"{\\\"tool\\\":\\\"apply_patch\\\",\\\"args\\\":{\") == FG_ACTION_PATCH);\n    assert(fg_action_decode_phase(\"{\\\"thought\\\":\\\"use { tool carefully\\\",\"\n                                  \"\\\"tool\\\":\\\"apply_patch\\\",\\\"args\\\":{\") == FG_ACTION_PATCH);\n    assert(fg_action_decode_phase(\"{\\\"thought\\\":\\\"the key \\\\\\\"tool\\\\\\\" is quoted\\\"\") ==\n           FG_ACTION_SELECT);\n    assert(fg_action_decode_phase(\"{\\\"final\\\":\\\"\") == FG_ACTION_FINAL);\n    assert(fg_action_decode_phase(\"{\\\"memory\\\":{\") == FG_ACTION_MEMORY);\n    /* Think bounds: the suppress window stays a quarter capped at 32; the cap\n     * defaults to a measured 256 ceiling (half-turn when smaller); a configured\n     * budget clamps the window; the unbounded ablation removes the cap; and an\n     * empty cue removes the window (banning the opener without steering text is\n     * the measured prompt-echo death configuration"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.13
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.96
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.17
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.14
+            }
+        },
+        "usage": {
+            "input_tokens": 3383,
+            "output_tokens": 89
+        }
+    }
+}

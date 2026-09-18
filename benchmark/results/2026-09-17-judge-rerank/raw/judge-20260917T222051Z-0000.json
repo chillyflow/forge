@@ -1,0 +1,196 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T222051Z",
+    "latency_ms": 765.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_input_snapshot_equal",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "    bool changed = !fg_input_snapshot_equal(cp->initial, before);\n    bool novel = !fg_input_snapshot_equal(cp->assessed ? cp->assessed : cp->initial, before);\n    uint64_t input_hash = fg_input_snapshot_hash(before);\n    bool passed = changed && fg_input_snapshot_equal(cp->passed, before);\n    bool validated = false;\n    cp->semantic_repeated = false;\n    fg_validation_result result = {0};\n    forge_error check_error = {0};\n    forge_status status = FORGE_OK;\n    if (changed && (novel || cp->assessed_passed) && !passed) {\n        if (!tools->repo)\n            tools->repo = agent_repo_open(a, &check_error);\n        status = tools->repo\n                     ? fg_repo_index_until(tools->repo, NULL, 0, true, tools->deadline,\n                                           a->config.cancelled, a->config.userdata, &check_error)\n                     : (check_error.code ? check_error.code : FORGE_ERR_IO);\n        if (status == FORGE_OK) {\n            a->metrics.repo_full_scans++;\n            status = fg_validation_run(tools, NULL, 0, &a->metrics, &result, &check_error);\n        }\n        after = candidate_snapshot(a, tools->deadline, e);\n        if (!after)\n            goto fail;\n        bool stable = fg_input_snapshot_equal(before, after);\n        /* Failed tests assess a candidate too; policy denial, missing tests,\n         * incomplete evidence and changing inputs do not. */\n        yyjson_doc *report = result.json ? yyjson_read(result.json, strlen(result.json), 0) : NULL;\n        yyjson_val *report_root = report ? yyjson_doc_get_root(report) : NULL;\n        bool complete = yyjson_is_true(yyjson_obj_get(report_root, \"evidence_complete\"));\n        validated = stable && complete && result.commands > 0 &&\n                    (status == FORGE_OK || (status == FORGE_ERR_CONFLICT && result.failed_inputs));\n        yyjson_doc_free(report);\n        passed = validated && status == FORGE_OK && result.applicable && result.passed;\n        if (validated) {\n            if (novel)\n                cp->attempts++;\n            fg_input_sna"
+                },
+                {
+                    "path": "docs/INPUT_SNAPSHOTS.md",
+                    "stage": "literal",
+                    "snippet": "bool unchanged = fg_input_snapshot_equal(before, after);\nfg_input_snapshot_destroy(before);\nfg_input_snapshot_destroy(after);\n```\n\nA caller must treat either failed snapshot as missing evidence. Two `NULL`\npointers are **not equal**. `fg_input_snapshot_hash(NULL)` returns zero; a hash\nalone must not replace `fg_input_snapshot_equal` or the success checks.\n\n## What is recorded\n\nEvery regular file is included regardless of extension, size, hidden status,\nGit tracking, `.gitignore`, language support, or directory names such as `vendor`\nand `testdata`. Each record contains a relative path, exact byte length, and a\nstreamed 64-bit FNV-1a content hash. NUL and invalid UTF-8 bytes inside files are\nordinary bytes. Files are never decoded as text.\n\nRecords are sorted by relative path bytes. Paths use `/` between directory\ncomponents. Windows names are obtained through Unicode APIs and encoded as\nUTF-8 without code-page substitution; POSIX filename bytes are retained as-is.\nThe aggregate hash uses explicit length framing and little-endian integers,\nand does not contain the absolute workspace path or filesystem traversal order.\nIdentical file trees in different directories consequently compare equal.\nEquality checks every path, length, and content hash in addition to the aggregate.\nCreation, deletion, renaming, size changes, and same-length content edits change\nthe evidence. Timestamps, ownership, permissions, inode identities, and empty\ndirectories are not part of its persisted identity. Hard-linked regular files\nare included once per pathname and consume the byte budget once per pathname.\n\n### Exact exclusions\n\nOnly actual directories named `.git` and `.forge` **immediately under the\nworkspace root** are excluded with their entire contents. Matching is exact on\nPOSIX and case-insensitive on Windows. Their files do not consume the content\nor file-count budget. No excluded directory is traversed.\n\nNested `testdata/.forge/` or `vendor/.git/` directories remain inputs. A root\n`.git` **file**, such as a worktree pointer, is in"
+                },
+                {
+                    "path": "src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "    bool changed = !fg_input_snapshot_equal(cp->initial, before);\n    bool novel = !fg_input_snapshot_equal(cp->assessed ? cp->assessed : cp->initial, before);\n    uint64_t input_hash = fg_input_snapshot_hash(before);\n    bool passed = changed && fg_input_snapshot_equal(cp->passed, before);\n    bool validated = false;\n    cp->semantic_repeated = false;\n    fg_validation_result result = {0};\n    forge_error check_error = {0};\n    forge_status status = FORGE_OK;\n    if (changed && (novel || cp->assessed_passed) && !passed) {\n        if (!tools->repo)\n            tools->repo = agent_repo_open(a, &check_error);\n        status = tools->repo\n                     ? fg_repo_index_until(tools->repo, NULL, 0, true, tools->deadline,\n                                           a->config.cancelled, a->config.userdata, &check_error)\n                     : (check_error.code ? check_error.code : FORGE_ERR_IO);\n        if (status == FORGE_OK) {\n            a->metrics.repo_full_scans++;\n            status = fg_validation_run(tools, NULL, 0, &a->metrics, &result, &check_error);\n        }\n        after = candidate_snapshot(a, tools->deadline, e);\n        if (!after)\n            goto fail;\n        bool stable = fg_input_snapshot_equal(before, after);\n        /* Failed tests assess a candidate too; policy denial, missing tests,\n         * incomplete evidence and changing inputs do not. */\n        yyjson_doc *report = result.json ? yyjson_read(result.json, strlen(result.json), 0) : NULL;\n        yyjson_val *report_root = report ? yyjson_doc_get_root(report) : NULL;\n        bool complete = yyjson_is_true(yyjson_obj_get(report_root, \"evidence_complete\"));\n        validated = stable && complete && result.commands > 0 &&\n                    (status == FORGE_OK || (status == FORGE_ERR_CONFLICT && result.failed_inputs));\n        yyjson_doc_free(report);\n        passed = validated && status == FORGE_OK && result.applicable && result.passed;\n        if (validated) {\n            if (novel)\n                cp->attempts++;\n            fg_input_sna"
+                },
+                {
+                    "path": "src/core/input_snapshot.c",
+                    "stage": "literal",
+                    "snippet": "bool fg_input_snapshot_equal(const fg_input_snapshot *left, const fg_input_snapshot *right) {\n    if (!left || !right || left->count != right->count || left->bytes != right->bytes ||\n        left->hash != right->hash)\n        return false;\n    for (size_t i = 0; i < left->count; i++) {\n        const input_file *a = &left->files[i], *b = &right->files[i];\n        if (a->length != b->length || a->hash != b->hash || strcmp(a->path, b->path))\n            return false;\n    }\n    return true;\n}\n\nuint64_t fg_input_snapshot_hash(const fg_input_snapshot *snapshot) {\n    return snapshot ? snapshot->hash : 0;\n}\n\nvoid fg_input_snapshot_destroy(fg_input_snapshot *snapshot) {\n    if (snapshot) {\n        for (size_t i = 0; i < snapshot->count; i++)\n            free(snapshot->files[i].path);\n        free(snapshot->files);\n        free(snapshot);\n    }\n}\n"
+                },
+                {
+                    "path": "src/core/input_snapshot.h",
+                    "stage": "literal",
+                    "snippet": "bool fg_input_snapshot_equal(const fg_input_snapshot *left, const fg_input_snapshot *right);\nuint64_t fg_input_snapshot_hash(const fg_input_snapshot *snapshot);\nvoid fg_input_snapshot_destroy(fg_input_snapshot *snapshot);\n#endif\n"
+                },
+                {
+                    "path": "src/core/semantic_state.c",
+                    "stage": "literal",
+                    "snippet": "    if (ok && !fg_input_snapshot_equal(before, after)) {\n        fg_error(error, FORGE_ERR_CONFLICT, \"Workspace changed during semantic state scan\");\n        ok = false;\n    }\n    fg_input_snapshot_destroy(before);\n    fg_input_snapshot_destroy(after);\n    fg_buf_clear(&scan.source);\n    if (!ok) {\n        fg_semantic_state_destroy(state);\n        return NULL;\n    }\n    if (state->count > 1)\n        qsort(state->files, state->count, sizeof(*state->files), sem_compare);\n    uint64_t hash = sem_uint(sem_bytes(SEM_OFFSET, \"forge-semantic-state-v1\", 23), state->count);\n    for (size_t i = 0; i < state->count; i++) {\n        if (!sem_check(&scan)) {\n            fg_semantic_state_destroy(state);\n            return NULL;\n        }\n        const sem_file *file = &state->files[i];\n        hash = sem_frame(hash, file->canonical ? 'C' : 'R', file->path, strlen(file->path));\n        hash = sem_uint(sem_uint(hash, file->units), file->hash);\n    }\n    state->hash = hash;\n    return state;\n}\nbool fg_semantic_state_equal(const fg_semantic_state *a, const fg_semantic_state *b) {\n    if (!a || !b || a->hash != b->hash || a->count != b->count)\n        return false;\n    for (size_t i = 0; i < a->count; i++) {\n        const sem_file *left = &a->files[i], *right = &b->files[i];\n        if (left->hash != right->hash || left->units != right->units ||\n            left->canonical != right->canonical || strcmp(left->path, right->path))\n            return false;\n    }\n    return true;\n}\nuint64_t fg_semantic_state_hash(const fg_semantic_state *state) {\n    return state ? state->hash : 0;\n}\nfg_semantic_state_info fg_semantic_state_describe(const fg_semantic_state *state) {\n    fg_semantic_state_info info = {0};\n    if (state) {\n        info.files = state->count;\n        info.canonical_files = state->canonical_files;\n        info.raw_files = state->count - state->canonical_files;\n        info.complete = true;\n    }\n    return info;\n}\nvoid fg_semantic_state_destroy(fg_semantic_state *state) {\n    if (state) {\n        for (size_t i = 0; i < stat"
+                },
+                {
+                    "path": "src/core/verification.c",
+                    "stage": "literal",
+                    "snippet": "        } else if (!fg_input_snapshot_equal(before, after)) {\n            result->inputs_changed = true;\n            status = fg_error(e, FORGE_ERR_CONFLICT,\n                              \"Workspace inputs changed during validation; verify them again\");\n            if (result->summary) {\n                fg_buf message = {0};\n                fg_buf_puts(&message, result->summary);\n                fg_buf_puts(&message, \"\\nWorkspace inputs changed during validation.\");\n                free(result->summary);\n                result->summary = fg_buf_take(&message);\n            }\n        }\n    }\n    if (result->commands) {\n        forge_error index_error = {0};\n        forge_status indexed =\n            fg_repo_index_until(c->repo, NULL, 0, true, c->deadline, c->config.cancelled,\n                                c->config.userdata, &index_error);\n        if (status == FORGE_OK && indexed != FORGE_OK) {\n            status = indexed;\n            if (e)\n                *e = index_error;\n        } else if (status == FORGE_OK && forge_repo_generation(c->repo) != result->generation) {\n            status = fg_error(e, FORGE_ERR_CONFLICT,\n                              \"Repository changed during validation; verify the new generation\");\n        }\n    }\n    if (status == FORGE_OK && cancelled(c))\n        status = fg_error(e, FORGE_ERR_CANCELLED, \"Validation cancelled or deadline reached\");\n    if (status == FORGE_OK && result->applicable && !result->commands)\n        status = fg_error(e, FORGE_ERR_NOT_FOUND, \"No applicable validation command was planned\");\n    bool checks_passed = status == FORGE_OK && result->applicable && result->commands > 0 &&\n                         before && after && !result->inputs_changed;\n    result->passed = checks_passed;\n    if (!result->summary) {\n        fg_buf message = {0};\n        if (status == FORGE_OK && !result->applicable)\n            fg_buf_puts(&message,\n                        \"Automatic validation not applicable: no indexed Go or Python target. \"\n                        \"No test success h"
+                },
+                {
+                    "path": "src/repo/monitor.c",
+                    "stage": "literal",
+                    "snippet": "        signal |= !fg_input_snapshot_equal(inputs, monitor->fallback_inputs);\n    }\n    if (!full && change->events) {\n        paths = calloc(change->events, sizeof(*paths));\n        if (!paths) {\n            status = fg_error(error, FORGE_ERR_MEMORY, \"Cannot allocate changed path list\");\n            goto finish;\n        }\n        for (size_t i = 0; i < change->events; i++) {\n            yyjson_val *event = yyjson_arr_get(events, i);\n            if (needs_full_path(monitor, event)) {\n                full = true;\n                break;\n            }\n            paths[i] = fg_json_str(event, \"path\");\n        }\n    }\n    if (check(monitor, error) != FORGE_OK) {\n        status = FORGE_ERR_CANCELLED;\n        goto finish;\n    }\n    if (!full && change->events) {\n        status = fg_repo_index_until(monitor->repo, paths, change->events, false, monitor->deadline,\n                                     monitor->cancelled, monitor->user, error);\n        if (status != FORGE_OK) {\n            /* Lost eligibility, replaced path/link, or a bounded delta failure\n             * must not leave the runtime using its previous source index. */\n            if (status == FORGE_ERR_MEMORY || status == FORGE_ERR_CANCELLED ||\n                check(monitor, NULL) != FORGE_OK)\n                goto finish;\n            full = true;\n        } else\n            change->delta_scan = true;\n    }\n    if (full) {\n        status = fg_repo_index_until(monitor->repo, NULL, 0, true, monitor->deadline,\n                                     monitor->cancelled, monitor->user, error);\n        if (status != FORGE_OK)\n            goto finish;\n        change->full_scan = true;\n        monitor->dirty = false;\n        if (monitor->watch) {\n            yyjson_doc *after = read_batch(monitor, 0, error);\n            if (!after) {\n                status = error && error->code ? error->code : FORGE_ERR_IO;\n                goto finish;\n            }\n            yyjson_val *observed = yyjson_doc_get_root(after);\n            monitor->after_scan_events = yyjson_arr_size(yy"
+                },
+                {
+                    "path": "tests/unit/test_semantic_state.c",
+                    "stage": "literal",
+                    "snippet": "    assert(observed && ordinary && fg_input_snapshot_equal(observed, ordinary));\n    assert(v.chunks >= 2 && v.finals == 2 && v.empty == 1 && v.bytes == 70000);\n    fg_input_snapshot_destroy(observed);\n    fg_input_snapshot_destroy(ordinary);\n    v.reject = true;\n    assert(!fg_input_snapshot_take_visit(f.root, 8, 100000, NULL, NULL, 0, visit, &v, &error));\n    assert(error.code == FORGE_ERR_POLICY);\n    finish(&f);\n}\nstatic void diagnostic_cases(void) {\n    fg_semantic_diagnostic a = {.tool = \"go-test\",\n                                .severity = \"error\",\n                                .path = \"pkg/a.go\",\n                                .code = \"assert-equal\",\n                                .symbol = \"TestBalance\",\n                                .identity = \"assert-equal:actual=1:expected=2\",\n                                .message = \"expected 2, got 1\"};\n    fg_semantic_diagnostic b = a;\n    b.message = \"balance was 1 rather than 2\";\n    b.path = \"pkg\\\\a.go\";\n    uint64_t first, second;\n    assert(fg_semantic_diagnostic_fingerprint(&a, 1, true, &first, NULL));\n    assert(fg_semantic_diagnostic_fingerprint(&b, 1, true, &second, NULL));\n    assert(first == second);\n    b.identity = \"assert-equal:actual=3:expected=2\";\n    assert(fg_semantic_diagnostic_fingerprint(&b, 1, true, &second, NULL));\n    assert(first != second);\n    b = a;\n    b.severity = \"warning\";\n    assert(fg_semantic_diagnostic_fingerprint(&b, 1, true, &second, NULL));\n    assert(first != second);\n    a.identity = b.identity = NULL;\n    a.message = \"expected 2, got 1\";\n    b = a;\n    b.message = \"  expected\\t2,  got 1\\n\";\n    assert(fg_semantic_diagnostic_fingerprint(&a, 1, true, &first, NULL));\n    assert(fg_semantic_diagnostic_fingerprint(&b, 1, true, &second, NULL));\n    assert(first == second);\n    b.message = \"expected 2, got 3\";\n    assert(fg_semantic_diagnostic_fingerprint(&b, 1, true, &second, NULL));\n    assert(first != second);\n    fg_semantic_diagnostic ordered[] = {a, b}, reversed[] = {b, a};\n    assert(fg_semantic_diagnostic_fingerp"
+                },
+                {
+                    "path": "tests/unit/test_snapshot.c",
+                    "stage": "literal",
+                    "snippet": "    assert(!fg_input_snapshot_equal(*previous, current));\n    assert(fg_input_snapshot_hash(*previous) != fg_input_snapshot_hash(current));\n    fg_input_snapshot_destroy(*previous);\n    *previous = current;\n}\n\nstatic void test_all_file_inputs_and_mutations(void) {\n    fixture f;\n    fixture_start(&f);\n    fg_input_snapshot *before = take(&f);\n    fixture_write(&f, \"testdata/input.txt\", \"first\", 5);\n    changed(&f, &before);\n    fixture_write(&f, \"testdata/input.txt\", \"other\", 5); /* Same length. */\n    changed(&f, &before);\n    fixture_write(&f, \"fixture.csv\", \"a,b\\n\", 4);\n    changed(&f, &before);\n    const unsigned char binary[] = {'a', 0, 0xff, 'z'};\n    fixture_write(&f, \"vendor/data.bin\", binary, sizeof(binary));\n    changed(&f, &before);\n    const unsigned char modified[] = {'a', 0, 0xfe, 'z'};\n    fixture_write(&f, \"vendor/data.bin\", modified, sizeof(modified));\n    changed(&f, &before);\n    fixture_write(&f, \".hidden/input\", \"hidden\", 6);\n    changed(&f, &before);\n    fixture_write(&f, \"empty\", \"\", 0);\n    changed(&f, &before);\n    fixture_write(&f, \"\\xc3\\xa9-\\xe6\\x97\\xa5\\xe6\\x9c\\xac.txt\", \"unicode\", 7);\n    changed(&f, &before);\n    fixture_remove(&f, \"fixture.csv\");\n    changed(&f, &before);\n    fg_input_snapshot *same = take(&f);\n    assert(fg_input_snapshot_equal(before, same));\n    assert(fg_input_snapshot_hash(before) == fg_input_snapshot_hash(same));\n    fg_input_snapshot_destroy(before);\n    fg_input_snapshot_destroy(same);\n    fixture_finish(&f);\n}\n\nstatic void test_stable_path_order_and_framing(void) {\n    fixture a, b;\n    fixture_start(&a);\n    fixture_start(&b);\n    fixture_write(&a, \"z/last.txt\", \"z\", 1);\n    fixture_write(&a, \"b.bin\", \"\\0x\", 2);\n    fixture_write(&a, \"a.csv\", \"a\", 1);\n    fixture_write(&b, \"a.csv\", \"a\", 1);\n    fixture_write(&b, \"b.bin\", \"\\0x\", 2);\n    fixture_write(&b, \"z/last.txt\", \"z\", 1);\n    fg_input_snapshot *left = take(&a), *right = take(&b);\n    assert(fg_input_snapshot_equal(left, right));\n    assert(fg_input_snapshot_hash(left) == fg_input_snapshot_hash(right));\n"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c8": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[8].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c9": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[9].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.11
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.56
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.11
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.95
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.2
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.12
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.11
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c8": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c9": {
+                "type": "noul",
+                "noul": 0.16
+            }
+        },
+        "usage": {
+            "input_tokens": 5932,
+            "output_tokens": 174
+        }
+    }
+}

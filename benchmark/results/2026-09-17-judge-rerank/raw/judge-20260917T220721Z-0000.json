@@ -1,0 +1,128 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T220721Z",
+    "latency_ms": 453.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_go_graph_excluded_path",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/originals/src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "#define vp_excluded fg_go_graph_excluded_path\r\n\r\ntypedef fg_go_module vp_module;\r\ntypedef fg_go_package vp_package;\r\ntypedef fg_go_edge vp_edge;\r\ntypedef struct {\r\n    char *path;\r\n    bool go, python, indexed;\r\n} vp_change;\r\ntypedef struct {\r\n    const char *code, *detail;\r\n    char *path;\r\n} vp_reason;\r\ntypedef struct {\r\n    forge_repo *repo;\r\n    forge_error *error;\r\n    fg_repo_snapshot *snapshot;\r\n    fg_go_graph *graph;\r\n    const vp_module *modules;\r\n    const vp_package *packages;\r\n    const vp_edge *edges;\r\n    vp_change *changes;\r\n    char **python_targets, **python_tests;\r\n    const char *python_executable;\r\n    bool *affected, *dependent;\r\n    size_t module_count, package_count, edge_count, change_count;\r\n    size_t python_file_count, python_syntax_count, python_test_count, python_target_count;\r\n    vp_reason reasons[32];\r\n    size_t reason_count, command_count;\r\n    bool failed, applicable, verification_ready, go_applicable, python_applicable, python_pytest;\r\n    bool python_broad_syntax;\r\n    yyjson_mut_doc *doc;\r\n} vp_graph;\r\n\r\nstatic bool vp_stopped(vp_graph *g) {\r\n    if (g->failed)\r\n        return true;\r\n    if (g->snapshot && fg_repo_snapshot_stopped(g->snapshot)) {\r\n        g->failed = true;\r\n        return true;\r\n    }\r\n    return false;\r\n}\r\nstatic bool vp_fail(vp_graph *g, forge_status status, const char *message) {\r\n    if (!g->failed)\r\n        fg_error(g->error, status, \"%s\", message);\r\n    g->failed = true;\r\n    return false;\r\n}\r\n\r\nstatic char *vp_copy(vp_graph *g, const char *s) {\r\n    char *copy = fg_strdup(s);\r\n    if (!copy)\r\n        vp_fail(g, FORGE_ERR_MEMORY, \"Validation allocation failed\");\r\n    return copy;\r\n}\r\n\r\nstatic bool vp_reason_add(vp_graph *g, const char *code, const char *path, const char *detail) {\r\n    if (vp_stopped(g))\r\n        return false;\r\n    for (size_t i = 0; i < g->reason_count; i++) {\r\n        if (!strcmp(g->reasons[i].code, code)) {\r\n            /* One deterministic example per category, not a diagnostic per file. */\r\n            if (strcmp(path, g->reasons["
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "#define vp_excluded fg_go_graph_excluded_path\r\n\r\ntypedef fg_go_module vp_module;\r\ntypedef fg_go_package vp_package;\r\ntypedef fg_go_edge vp_edge;\r\ntypedef struct {\r\n    char *path;\r\n    bool go, python, indexed;\r\n} vp_change;\r\ntypedef struct {\r\n    const char *code, *detail;\r\n    char *path;\r\n} vp_reason;\r\ntypedef struct {\r\n    forge_repo *repo;\r\n    forge_error *error;\r\n    fg_repo_snapshot *snapshot;\r\n    fg_go_graph *graph;\r\n    const vp_module *modules;\r\n    const vp_package *packages;\r\n    const vp_edge *edges;\r\n    vp_change *changes;\r\n    char **python_targets, **python_tests;\r\n    const char *python_executable;\r\n    bool *affected, *dependent;\r\n    size_t module_count, package_count, edge_count, change_count;\r\n    size_t python_file_count, python_syntax_count, python_test_count, python_target_count;\r\n    vp_reason reasons[32];\r\n    size_t reason_count, command_count;\r\n    bool failed, applicable, verification_ready, go_applicable, python_applicable, python_pytest;\r\n    bool python_broad_syntax;\r\n    yyjson_mut_doc *doc;\r\n} vp_graph;\r\n\r\nstatic bool vp_stopped(vp_graph *g) {\r\n    if (g->failed)\r\n        return true;\r\n    if (g->snapshot && fg_repo_snapshot_stopped(g->snapshot)) {\r\n        g->failed = true;\r\n        return true;\r\n    }\r\n    return false;\r\n}\r\nstatic bool vp_fail(vp_graph *g, forge_status status, const char *message) {\r\n    if (!g->failed)\r\n        fg_error(g->error, status, \"%s\", message);\r\n    g->failed = true;\r\n    return false;\r\n}\r\n\r\nstatic char *vp_copy(vp_graph *g, const char *s) {\r\n    char *copy = fg_strdup(s);\r\n    if (!copy)\r\n        vp_fail(g, FORGE_ERR_MEMORY, \"Validation allocation failed\");\r\n    return copy;\r\n}\r\n\r\nstatic bool vp_reason_add(vp_graph *g, const char *code, const char *path, const char *detail) {\r\n    if (vp_stopped(g))\r\n        return false;\r\n    for (size_t i = 0; i < g->reason_count; i++) {\r\n        if (!strcmp(g->reasons[i].code, code)) {\r\n            /* One deterministic example per category, not a diagnostic per file. */\r\n            if (strcmp(path, g->reasons["
+                },
+                {
+                    "path": "src/repo/graph.c",
+                    "stage": "literal",
+                    "snippet": "bool fg_go_graph_excluded_path(const char *path) {\n    if (!path)\n        return true;\n    while (*path) {\n        const char *end = strchr(path, '/');\n        if (!end)\n            return path[0] == '.' || path[0] == '_';\n        size_t n = (size_t)(end - path);\n        if (path[0] == '.' || path[0] == '_' || (n == 6 && !memcmp(path, \"vendor\", 6)) ||\n            (n == 8 && !memcmp(path, \"testdata\", 8)))\n            return true;\n        path = end + 1;\n    }\n    return false;\n}\n\nstatic bool gg_platform_filename(const char *path) {\n    /* Unknown future suffixes remain covered by the documented environment limitation. */\n    static const char *const suffixes[] = {\n        \"aix\",    \"android\",  \"darwin\", \"dragonfly\", \"freebsd\", \"hurd\",    \"illumos\", \"ios\",\n        \"js\",     \"linux\",    \"netbsd\", \"openbsd\",   \"plan9\",   \"solaris\", \"wasip1\",  \"windows\",\n        \"zos\",    \"386\",      \"amd64\",  \"arm\",       \"arm64\",   \"loong64\", \"mips\",    \"mipsle\",\n        \"mips64\", \"mips64le\", \"ppc64\",  \"ppc64le\",   \"riscv64\", \"s390x\",   \"wasm\"};\n    char name[FG_PATH_MAX];\n    size_t n = strlen(gg_base(path));\n    if (n < 3 || !gg_suffix(path, \".go\"))\n        return false;\n    if (n >= sizeof(name))\n        return true;\n    memcpy(name, gg_base(path), n + 1);\n    n -= gg_suffix(name, \"_test.go\") ? 8u : 3u;\n    name[n] = 0;\n    const char *suffix = strrchr(name, '_');\n    if (!suffix)\n        return false;\n    for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); i++)\n        if (!strcmp(suffix + 1, suffixes[i]))\n            return true;\n    return false;\n}\n\nstatic bool gg_load_packages(fg_go_graph *g) {\n    sqlite3_stmt *s = gg_query(g, \"SELECT f.path,g.package_name,g.is_test,g.build_constraints,\"\n                                  \"g.parse_error FROM files f LEFT JOIN go_files g ON \"\n                                  \"g.file_id=f.id WHERE f.language='go' ORDER BY f.path\");\n    if (!s)\n        return false;\n    int rc;\n    while ((rc = sqlite3_step(s)) == SQLITE_ROW) {\n        if (gg_stopped(g))\n            break;\n        co"
+                },
+                {
+                    "path": "src/repo/graph.h",
+                    "stage": "literal",
+                    "snippet": "bool fg_go_graph_excluded_path(const char *canonical_relative_file);\n\n#endif\n"
+                },
+                {
+                    "path": "src/repo/summary.c",
+                    "stage": "literal",
+                    "snippet": "               !fg_go_graph_excluded_path(path);\n    return !strcmp(path, b->input->path);\n}\nstatic bool dependency(summary_build *b, const char *kind, const char *path, const char *digest,\n                       size_t bytes) {\n    size_t limit = b->input->options.max_manifest_bytes;\n    if (b->dependencies == b->input->options.max_dependencies)\n        return fail(b, FORGE_ERR_LIMIT, \"Summary dependency count exceeds its budget\");\n    if ((b->dependencies && !put(b, &b->manifest, limit, \",\")) ||\n        !put(b, &b->manifest, limit, \"{\\\"kind\\\":\") || !string(b, &b->manifest, limit, kind) ||\n        !put(b, &b->manifest, limit, \",\\\"path\\\":\") || !string(b, &b->manifest, limit, path) ||\n        !put(b, &b->manifest, limit, \",\\\"sha256\\\":\") || !string(b, &b->manifest, limit, digest) ||\n        !put(b, &b->manifest, limit, \",\\\"bytes\\\":\") || !number(b, &b->manifest, limit, bytes) ||\n        !put(b, &b->manifest, limit, \"}\"))\n        return false;\n    b->dependencies++;\n    return true;\n}\nstatic bool imports(summary_build *b, sqlite3_int64 file) {\n    size_t limit = b->input->options.max_input_bytes;\n    if (!put(b, &b->evidence, limit, \",\\\"imports\\\":[\"))\n        return false;\n    sqlite3_stmt *s = query(b, \"SELECT path FROM imports WHERE file_id=? ORDER BY path\");\n    if (!s)\n        return false;\n    sqlite3_bind_int64(s, 1, file);\n    bool ok = true, comma = false;\n    int rc = SQLITE_DONE;\n    while (ok && !stopped(b) && (rc = sqlite3_step(s)) == SQLITE_ROW) {\n        const char *path = column(b, s, 0, FORGE_INDEX_MAX_FILE_BYTES, false);\n        ok = path && (!comma || put(b, &b->evidence, limit, \",\")) &&\n             string(b, &b->evidence, limit, path);\n        comma = true;\n    }\n    if (ok && (rc != SQLITE_DONE || stopped(b)))\n        ok = fail(b, FORGE_ERR_IO, \"Cannot read indexed imports\");\n    sqlite3_finalize(s);\n    return ok && put(b, &b->evidence, limit, \"]\");\n}\nstatic bool declaration_digest(summary_build *b, sqlite3_stmt *s, int start_col, int end_col,\n                               int hash_col, int ver"
+                },
+                {
+                    "path": "src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "#define vp_excluded fg_go_graph_excluded_path\r\n\r\ntypedef fg_go_module vp_module;\r\ntypedef fg_go_package vp_package;\r\ntypedef fg_go_edge vp_edge;\r\ntypedef struct {\r\n    char *path;\r\n    bool go, python, indexed;\r\n} vp_change;\r\ntypedef struct {\r\n    const char *code, *detail;\r\n    char *path;\r\n} vp_reason;\r\ntypedef struct {\r\n    forge_repo *repo;\r\n    forge_error *error;\r\n    fg_repo_snapshot *snapshot;\r\n    fg_go_graph *graph;\r\n    const vp_module *modules;\r\n    const vp_package *packages;\r\n    const vp_edge *edges;\r\n    vp_change *changes;\r\n    char **python_targets, **python_tests;\r\n    const char *python_executable;\r\n    bool *affected, *dependent;\r\n    size_t module_count, package_count, edge_count, change_count;\r\n    size_t python_file_count, python_syntax_count, python_test_count, python_target_count;\r\n    vp_reason reasons[32];\r\n    size_t reason_count, command_count;\r\n    bool failed, applicable, verification_ready, go_applicable, python_applicable, python_pytest;\r\n    bool python_broad_syntax;\r\n    yyjson_mut_doc *doc;\r\n} vp_graph;\r\n\r\nstatic bool vp_stopped(vp_graph *g) {\r\n    if (g->failed)\r\n        return true;\r\n    if (g->snapshot && fg_repo_snapshot_stopped(g->snapshot)) {\r\n        g->failed = true;\r\n        return true;\r\n    }\r\n    return false;\r\n}\r\nstatic bool vp_fail(vp_graph *g, forge_status status, const char *message) {\r\n    if (!g->failed)\r\n        fg_error(g->error, status, \"%s\", message);\r\n    g->failed = true;\r\n    return false;\r\n}\r\n\r\nstatic char *vp_copy(vp_graph *g, const char *s) {\r\n    char *copy = fg_strdup(s);\r\n    if (!copy)\r\n        vp_fail(g, FORGE_ERR_MEMORY, \"Validation allocation failed\");\r\n    return copy;\r\n}\r\n\r\nstatic bool vp_reason_add(vp_graph *g, const char *code, const char *path, const char *detail) {\r\n    if (vp_stopped(g))\r\n        return false;\r\n    for (size_t i = 0; i < g->reason_count; i++) {\r\n        if (!strcmp(g->reasons[i].code, code)) {\r\n            /* One deterministic example per category, not a diagnostic per file. */\r\n            if (strcmp(path, g->reasons["
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.95
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.28
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.08
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.11
+            }
+        },
+        "usage": {
+            "input_tokens": 4058,
+            "output_tokens": 106
+        }
+    }
+}

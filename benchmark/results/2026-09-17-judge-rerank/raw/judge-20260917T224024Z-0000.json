@@ -1,0 +1,298 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T224024Z",
+    "latency_ms": 437.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "where is the KV prefix anchor nominated",
+            "candidates": [
+                {
+                    "path": "docs/plans/agent-performance-avenues.md",
+                    "stage": "fts5",
+                    "snippet": " ... What was never varied is *what the model must produce*, *what the sampler is\nallowed to produce*, and *where the model's working state ... "
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "fts5",
+                    "snippet": " ... is cleared on any\n * executed edit, command, or validation. Out-of-workspace effects are not\n * observed, the same residual as sequential KV prefix reuse ... "
+                },
+                {
+                    "path": "docs/CHECKPOINTS.md",
+                    "stage": "fts5",
+                    "snippet": " ... The agent nominates the selected immutable, cacheable SYSTEM/TOOLS prefix via\n`forge_context_cache_anchor()`. It verifies that the supplied prompt is the\nactual ... "
+                },
+                {
+                    "path": "docs/SUMMARIES.md",
+                    "stage": "fts5",
+                    "snippet": " ... counter is borrowed.\nOrdinary live-prefix reuse may occur. No new automatic checkpoint anchors are\nnominated; generation may displace live agent KV state. No ... "
+                },
+                {
+                    "path": "docs/research/local-model-tooling-gaps-2026-09.md",
+                    "stage": "fts5",
+                    "snippet": " ... Forge's reusable-KV-prefix design is aimed here; the missing industry piece is the\r\nobservability and the architecture-robustness.\r\n\r\n## Gap 4 — Latency and ... "
+                },
+                {
+                    "path": "include/forge/checkpoint.h",
+                    "stage": "fts5",
+                    "snippet": " ... additional_matched_tokens subtracts the previously usable live\n     * prefix; it is not an elapsed-time or end-to-end performance claim. */\n    uint64_t tokens ... "
+                },
+                {
+                    "path": "docs/plans/differentiation-research.md",
+                    "stage": "fts5",
+                    "snippet": " ... For D2, what is the actual prefill saving of a shared-prefix KV tree versus\n   the current re-run best-of-N, measured rather ... "
+                },
+                {
+                    "path": "docs/CONFIG.md",
+                    "stage": "fts5",
+                    "snippet": " ... not enable the cache. `--no-kv-reuse` bypasses both live-prefix and\nautomatic checkpoint reuse/capture even when the manager is configured.\nExplicitly enabling ... "
+                },
+                {
+                    "path": "src/cli/main.c",
+                    "stage": "fts5",
+                    "snippet": " ... auto placement is disabled for the explicit simulated fixture\\n\");\n        return FORGE_OK;\n    }\n    if (!config->model.model_path)\n        return fg_error(e, FORGE_ERR ... "
+                },
+                {
+                    "path": "docs/DESIGN_CHECKLIST.md",
+                    "stage": "fts5",
+                    "snippet": " ... output is unconstrained until a `tool`/`memory`/`final` object triggers the action GBNF, then the host bounds, validates and normalizes the prefix. The eight ... "
+                },
+                {
+                    "path": "benchmark/results/2026-08-28/initial-kv-ablation.json",
+                    "stage": "fts5",
+                    "snippet": " ... 11094.0\r\n      }\r\n    },\r\n    {\r\n      \"task\": \"prefix\",\r\n      \"variant\": \"no-kv\",\r\n      \"returncode\": 0,\r\n      \"wall_seconds\": 22.296999999991385,\r\n      \"passed\": true,\r\n      \"tests_unchanged\": true,\r\n      \"metrics\": {\r\n        \"schema_version\": 1,\r\n        \"status\": \"ok ... "
+                },
+                {
+                    "path": "tests/unit/test_config.c",
+                    "stage": "fts5",
+                    "snippet": " ... threads == 8);\n    assert(plan.kv_estimate_available && plan.estimated_kv_bytes == GIB);\n    assert(!plan.draft_enabled && !strcmp(plan.kv_format, \"f16\"));\n    assert(plan.host ... "
+                },
+                {
+                    "path": "include/forge/context.h",
+                    "stage": "fts5",
+                    "snippet": " ... Verify that prompt is the whole current selected rendering and nominate the\n * byte endpoint after its selected system/tools prefix. Every included segment\n * must ... "
+                },
+                {
+                    "path": "benchmark/results/2026-08-28/forge.json",
+                    "stage": "fts5",
+                    "snippet": " ... 3782.0\r\n    }\r\n  },\r\n  {\r\n    \"task\": \"prefix\",\r\n    \"variant\": \"no-kv\",\r\n    \"returncode\": 0,\r\n    \"wall_seconds\": 15.25,\r\n    \"passed\": true,\r\n    \"tests_unchanged\": true,\r\n    \"metrics\": {\r\n      \"schema_version\": 1,\r\n      \"status\": \"ok ... "
+                },
+                {
+                    "path": "tests/integration/checkpoint_model.c",
+                    "stage": "fts5",
+                    "snippet": " ... for the legacy flattened physical-KV contract.\n * Full-prompt automatic anchors are specific to this protocol; native calls and\n * their eligible system-prefix anchors ... "
+                },
+                {
+                    "path": "spikes/001-parallel-decode/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... the batched path prefills once and forks the KV\ncache. If it is not ≈ N, prefix sharing via `llama_memory_seq_cp` is not ... "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c8": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[8].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c9": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[9].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c10": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[10].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c11": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[11].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c12": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[12].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c13": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[13].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c14": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[14].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c15": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[15].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.08
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.77
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.18
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.04
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c8": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c9": {
+                "type": "noul",
+                "noul": 0.12
+            },
+            "c10": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c11": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c12": {
+                "type": "noul",
+                "noul": 0.58
+            },
+            "c13": {
+                "type": "noul",
+                "noul": 0.21
+            },
+            "c14": {
+                "type": "noul",
+                "noul": 0.3
+            },
+            "c15": {
+                "type": "noul",
+                "noul": 0.21
+            }
+        },
+        "usage": {
+            "input_tokens": 3102,
+            "output_tokens": 282
+        }
+    }
+}

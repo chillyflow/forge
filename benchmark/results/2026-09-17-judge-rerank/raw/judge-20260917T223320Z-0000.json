@@ -1,0 +1,298 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T223320Z",
+    "latency_ms": 468.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "where are tool calls dispatched after policy approval",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r001/session/context/0004.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r002/session/context/0004.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r003/session/context/0004.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-native-force-all-holdout/holdout_go_lru-optimized-r001/session/context/0004.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-native-force-v3-all-holdout/holdout_go_lru-optimized-r001/session/context/0004.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-native-force-all-holdout/holdout_go_lru-optimized-r001/session/context/0005.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-native-force-all-holdout/holdout_go_lru-optimized-r001/session/context/latest.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-native-force-v3-all-holdout/holdout_go_lru-optimized-r001/session/context/0005.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-native-force-v3-all-holdout/holdout_go_lru-optimized-r001/session/context/latest.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r001/session/context/0005.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r001/session/context/latest.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r002/session/context/0005.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r002/session/context/latest.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r003/session/context/0005.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/range_sum-optimized-r003/session/context/latest.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-03-campaign-dirty/forge/go_multifile_transfer-optimized-r001/session/context/0007.json",
+                    "stage": "fts5",
+                    "snippet": " ... If a tool is denied, do not attempt an alternate way to bypass that policy. Native protocol actions are bounded: the action limit includes ... "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c8": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[8].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c9": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[9].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c10": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[10].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c11": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[11].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c12": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[12].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c13": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[13].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c14": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[14].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c15": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[15].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.06
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.04
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.04
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c8": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c9": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c10": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c11": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c12": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c13": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c14": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c15": {
+                "type": "noul",
+                "noul": 0.05
+            }
+        },
+        "usage": {
+            "input_tokens": 3279,
+            "output_tokens": 282
+        }
+    }
+}

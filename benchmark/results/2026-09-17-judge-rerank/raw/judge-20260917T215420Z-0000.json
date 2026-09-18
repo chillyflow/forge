@@ -1,0 +1,94 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T215420Z",
+    "latency_ms": 453.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_checkpoint_allocation_bytes",
+            "candidates": [
+                {
+                    "path": "src/inference/checkpoint.c",
+                    "stage": "literal",
+                    "snippet": "size_t fg_checkpoint_allocation_bytes(size_t count, size_t state_bytes) {\n    if (!count || count > 1048576 || !state_bytes ||\n        state_bytes > FORGE_CHECKPOINT_MAX_STATE_BYTES ||\n        count > (SIZE_MAX - sizeof(forge_checkpoint)) / sizeof(int32_t))\n        return 0;\n    size_t bytes = sizeof(forge_checkpoint) + count * sizeof(int32_t);\n    return state_bytes > SIZE_MAX - bytes ? 0 : bytes + state_bytes;\n}\n\nbool fg_checkpoint_matches_prefix(const forge_checkpoint *checkpoint, const int32_t *tokens,\n                                  size_t count) {\n    return checkpoint && checkpoint->info.valid && checkpoint->tokens && tokens &&\n           checkpoint->info.token_end && checkpoint->info.token_end <= 1048576 &&\n           checkpoint->info.token_end <= count &&\n           !memcmp(checkpoint->tokens, tokens, checkpoint->info.token_end * sizeof(*tokens));\n}\n\nforge_checkpoint *fg_checkpoint_capture_live(forge_model *model, const int32_t *tokens,\n                                             size_t count, size_t state_bytes,\n                                             uint64_t repo_generation, uint64_t context_hash,\n                                             forge_cancel_fn cancelled, void *userdata,\n                                             uint64_t deadline, forge_error *error) {\n    const fg_checkpoint_backend *backend = model ? model->checkpoint : NULL;\n    if (!model || !model->operation_active || !tokens ||\n        !fg_checkpoint_allocation_bytes(count, state_bytes)) {\n        fg_error(error, FORGE_ERR_ARGUMENT, \"Invalid active checkpoint capture\");\n        return NULL;\n    }\n    if (!backend || !backend->state_get || !backend->live_matches) {\n        fg_error(error, FORGE_ERR_UNSUPPORTED, \"Backend has no exact live-state capture hook\");\n        return NULL;\n    }\n    if (!model->instance_nonce[0] || !model->next_checkpoint_id) {\n        fg_error(error, FORGE_ERR_LIMIT, \"Checkpoint instance/ID is unavailable\");\n        return NULL;\n    }\n    forge_checkpoint_options options = {0};\n    options.cancelle"
+                },
+                {
+                    "path": "src/inference/checkpoint_cache.c",
+                    "stage": "literal",
+                    "snippet": "    size_t allocation = fg_checkpoint_allocation_bytes(count, state_bytes);\n    if (!allocation) {\n        count_add(state_bytes > FORGE_CHECKPOINT_MAX_STATE_BYTES ? &cache->stats.skipped_budget\n                                                                 : &cache->stats.capture_failures,\n                  1);\n        cache->stats.capture_ms += (double)(fg_now_ms() - start);\n        return FORGE_OK;\n    }\n    forge_error local = {0};\n    if (!reserve_pending(cache, allocation, &local)) {\n        count_add(&cache->stats.skipped_budget, 1);\n        cache->stats.capture_ms += (double)(fg_now_ms() - start);\n        return FORGE_OK;\n    }\n    size_t slot = 0;\n    while (slot < cache->options.max_entries && cache->entries[slot].checkpoint)\n        slot++;\n    if (slot == cache->options.max_entries) {\n        slot = least_recent(cache);\n        assert(slot != SIZE_MAX);\n        erase_entry(cache, slot, true);\n    }\n    forge_checkpoint *checkpoint = fg_checkpoint_capture_live(\n        model, operation->tokens, count, state_bytes, cache->generation, operation->context_hash,\n        operation->cancelled, operation->userdata, operation->deadline, &local);\n    release_pending(cache, allocation);\n    cache->stats.capture_ms += (double)(fg_now_ms() - start);\n    if (!checkpoint) {\n        skipped_failure(cache, local.code, &cache->stats.capture_failures);\n        if (local.code == FORGE_ERR_CANCELLED ||\n            stopped(operation->cancelled, operation->userdata, operation->deadline))\n            return cancelled(cache, error);\n        return FORGE_OK;\n    }\n    forge_checkpoint_info info;\n    bool described = forge_checkpoint_get_info(checkpoint, &info);\n    assert(described);\n    (void)described;\n    cache->entries[slot] = (cache_entry){checkpoint, allocation, count, info.id, touch(cache)};\n    cache->stats.resident_bytes += allocation;\n    cache->stats.entries++;\n    count_add(&cache->stats.captures, 1);\n    peak(cache);\n    return FORGE_OK;\n}\n"
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": "size_t fg_checkpoint_allocation_bytes(size_t tokens, size_t state_bytes);\nbool fg_checkpoint_matches_prefix(const forge_checkpoint *, const int32_t *, size_t);\nforge_checkpoint *fg_checkpoint_capture_live(forge_model *, const int32_t *, size_t, size_t,\n                                             uint64_t repo_generation, uint64_t context_hash,\n                                             forge_cancel_fn, void *, uint64_t, forge_error *);\nforge_status fg_checkpoint_restore_active(forge_model *, const forge_checkpoint *, uint64_t, size_t,\n                                          forge_cancel_fn, void *, uint64_t,\n                                          forge_checkpoint_stats *, forge_error *);\n\n/* Optional free-text reasoning allowed on every model action. It is bounded\n * both at the parser boundary and because retained ACTION segments can re-enter\n * later prompts; the cap keeps that recurring prompt cost small. */\n#define FG_THOUGHT_MAX_BYTES 2048u\n/* std::regex pattern for llama.cpp's lazy grammar sampler. The first capture\n * starts at the action object's opening brace, so earlier reasoning remains\n * unconstrained while the complete action is replayed into the GBNF state. */\n#define FG_ACTION_TRIGGER_PATTERN \"(\\\\{[ \\\\t\\\\r\\\\n]*\\\"(tool|memory|final)\\\"[ \\\\t\\\\r\\\\n]*:)\"\n/* Routed elicitation. A lazy trigger alone never elicits a prefix, because\n * nothing stops the model from opening the action object on its very first\n * token (measured: 0 prefixes in 67 routed actions). Banning '{' alone is\n * worse: parked at the end of a long prompt with its best token excluded,\n * greedy decoding falls into prompt echo and burns the whole turn budget\n * without an action (measured: 10/10 benchmark limit deaths). So routed\n * generation force-decodes this cue first, steering the continuation into\n * prose; the cue is host scaffold, streamed and recorded in the raw response\n * but stripped before the thought is bounded, validated, or counted. */\n#define FG_THOUGHT_CUE \"Thought: \"\n/* After the cue, action-opening tokens stay"
+                },
+                {
+                    "path": "tests/unit/test_checkpoint_cache.c",
+                    "stage": "literal",
+                    "snippet": "    size_t allocation = fg_checkpoint_allocation_bytes(5, 8 + 5 * sizeof(int32_t));\n    assert(allocation && !fg_checkpoint_allocation_bytes(SIZE_MAX, 8));\n    assert(!fg_checkpoint_allocation_bytes(1, SIZE_MAX));\n    options.max_bytes = base + namespaces + 2 * allocation - 1;\n    forge_error error = {0};\n    assert(forge_checkpoint_cache_configure(&f.model, &options, &error) == FORGE_OK);\n    run_ok(&f, \"AAA tail\", &request);\n    assert(stats(&f).resident_bytes == base + namespaces + allocation);\n    run_ok(&f, \"BBB tail\", &request);\n    assert(stats(&f).entries == 1 && stats(&f).evictions == 1);\n    assert(stats(&f).resident_bytes == base + namespaces + allocation);\n    assert(stats(&f).peak_bytes > stats(&f).resident_bytes); /* Probe scratch was charged. */\n    size_t resident = stats(&f).resident_bytes;\n    options.max_bytes = base - 1;\n    assert(forge_checkpoint_cache_configure(&f.model, &options, &error) == FORGE_ERR_ARGUMENT);\n    assert(stats(&f).resident_bytes == resident); /* Invalid config preserves the cache. */\n\n    options.max_bytes = base;\n    assert(forge_checkpoint_cache_configure(&f.model, &options, &error) == FORGE_OK);\n    run_ok(&f, \"AAA tail\", &request);\n    assert(stats(&f).resident_bytes == base && stats(&f).entries == 0 && stats(&f).skipped_budget);\n\n    configure(&f, 2);\n    f.extra_probe_bytes = SIZE_MAX;\n    run_ok(&f, \"AAA tail\", &request);\n    assert(stats(&f).skipped_budget && stats(&f).entries == 0);\n    f.extra_probe_bytes = 0;\n    f.size_override = FORGE_CHECKPOINT_MAX_STATE_BYTES + 1;\n    clear_live(&f.model);\n    size_t gets = f.get_calls;\n    run_ok(&f, \"AAA tail\", &request);\n    assert(f.get_calls == gets && stats(&f).entries == 0);\n    f.size_override = SIZE_MAX; /* zero reported size */\n    clear_live(&f.model);\n    run_ok(&f, \"AAA tail\", &request);\n    assert(f.get_calls == gets && stats(&f).capture_failures);\n    f.size_override = 0;\n    f.short_get = true;\n    clear_live(&f.model);\n    run_ok(&f, \"AAA tail\", &request);\n    assert(stats(&f).entries == 0 && stats(&f).resi"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.96
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.16
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.21
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.11
+            }
+        },
+        "usage": {
+            "input_tokens": 2728,
+            "output_tokens": 72
+        }
+    }
+}

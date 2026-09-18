@@ -1,0 +1,298 @@
+{
+    "schema_version": 1,
+    "utc": "20260917T223812Z",
+    "latency_ms": 422.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "where is the GBNF grammar built from the tool registry",
+            "candidates": [
+                {
+                    "path": "docs/plans/differentiation-research.md",
+                    "stage": "fts5",
+                    "snippet": " ... It is that Forge\ngenerates its GBNF from the tool registry, so the address tokens can be built\nfrom the current file's live ... "
+                },
+                {
+                    "path": "docs/DESIGN_CHECKLIST.md",
+                    "stage": "fts5",
+                    "snippet": " ... Exact contextual patches do satisfy the initial explicit-edit primitive. |\n| §11 / 4 | Generate a legal-call GBNF grammar from tool schemas, use the llama ... "
+                },
+                {
+                    "path": "README.md",
+                    "stage": "fts5",
+                    "snippet": " ... the never-triggered lazy grammar is\nswapped for an eager one, so subsequent output is immediately constrained by\nthe full tool grammar. Leading grammar ... "
+                },
+                {
+                    "path": "docs/ARCHITECTURE.md",
+                    "stage": "fts5",
+                    "snippet": " ... and execution\n\nOne declarative registry defines field types, capability, and prompt description.\nThe GBNF action grammar is generated from it. Every action envelope accepts ... "
+                },
+                {
+                    "path": "benchmark/results/2026-08-30-routed-sweep/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... cpp lazy grammar patterns, plain-text prefix\n   until a `tool`/`memory`/`final` object triggers the action GBNF) actually\n   elicit reasoning where the inline optional ... "
+                },
+                {
+                    "path": "spikes/002-grammar-mask-cost/sweep.cpp",
+                    "stage": "fts5",
+                    "snippet": " ... the current Forge chain samples from is the allowed tokens ordered\r\n     * by logit and cut to top_k, so the coverage arm needs [grammar ... "
+                },
+                {
+                    "path": "spikes/004-grammar-firstbyte-prefilter/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... That iteration's medians are quoted here from\r\nthe run console (its log was overwritten by the artifact-built rerun that is\r\nretained); the ... "
+                },
+                {
+                    "path": "docs/plans/agent-loop-fresh-design.md",
+                    "stage": "fts5",
+                    "snippet": " ... Grammar, native parsing, argument validation and capability checks need\r\nno work — the grammar is derived from the passed schemas and the validators are\r\ngeneric ... "
+                },
+                {
+                    "path": "docs/research/local-model-tooling-gaps-2026-09.md",
+                    "stage": "fts5",
+                    "snippet": " ... tool-call reliability, retries/recovery, observability, streaming,\r\n   accounting. This layer is largely *reproducible locally* and is where most of the\r\n   improvable \"feel\" lives.\r\n\r\nThe ... "
+                },
+                {
+                    "path": "docs/plans/agent-performance-implementation.md",
+                    "stage": "fts5",
+                    "snippet": " ... or invented address is **unrepresentable rather than\nrejected**. Forge already generates GBNF from the tool registry; this makes the\ngrammar data-dependent. No external ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-fresh-design/W1-IMPLEMENTATION-MAP.md",
+                    "stage": "fts5",
+                    "snippet": " ... tool schema\narray, and a flag that changes no registry leaves the six-name `candidate` set\nintact. The validator that *can* be tripped is ... "
+                },
+                {
+                    "path": "spikes/003-grammar-apply-alloc/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... The two per-candidate heap allocations in `llama_grammar_apply_impl`\r\n  are **not** where the time goes. Per the frozen rule the patch is ... "
+                },
+                {
+                    "path": "src/inference/llama_backend.c",
+                    "stage": "fts5",
+                    "snippet": " ... eager grammar over\n * the same GBNF, so the action must open under full constraint — tool\n * constraints retained, all three envelope alternatives open. The end ... "
+                },
+                {
+                    "path": "docs/plans/agent-performance-avenues.md",
+                    "stage": "fts5",
+                    "snippet": " ... GBNF grammar from the tool\nregistry and already carries SHA-256 and symbol hashes. It can make the\n**address itself grammar-legal** — build the ... "
+                },
+                {
+                    "path": "benchmark/results/2026-08-29-thought-ablation/README.md",
+                    "stage": "fts5",
+                    "snippet": " ... This is the argument for the remaining §32\n  work — routing decoding per state (thinking, tool selection, tool arguments,\n  patch, final) via lazy grammar patterns ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-02-tranche2-repair/candidate1/forge/go_multifile_registry-optimized-r001/result.json",
+                    "stage": "fts5",
+                    "snippet": " ... 10,\r\n    \"tool_calls\": 9,\r\n    \"raw_tool_bytes\": 5007,\r\n    \"visible_tool_bytes\": 3583,\r\n    \"files_modified\": 2,\r\n    \"context_evictions\": 5,\r\n    \"loop_warnings\": 0,\r\n    \"grammar_fast_tokens ... "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c8": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[8].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c9": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[9].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c10": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[10].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c11": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[11].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c12": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[12].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c13": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[13].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c14": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[14].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c15": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[15].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.63
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.45
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.1
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.69
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.08
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.35
+            },
+            "c8": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c9": {
+                "type": "noul",
+                "noul": 0.37
+            },
+            "c10": {
+                "type": "noul",
+                "noul": 0.14
+            },
+            "c11": {
+                "type": "noul",
+                "noul": 0.06
+            },
+            "c12": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c13": {
+                "type": "noul",
+                "noul": 0.34
+            },
+            "c14": {
+                "type": "noul",
+                "noul": 0.06
+            },
+            "c15": {
+                "type": "noul",
+                "noul": 0.04
+            }
+        },
+        "usage": {
+            "input_tokens": 3099,
+            "output_tokens": 282
+        }
+    }
+}
