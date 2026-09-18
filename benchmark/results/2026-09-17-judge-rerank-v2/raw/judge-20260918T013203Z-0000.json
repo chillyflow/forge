@@ -1,0 +1,298 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T013203Z",
+    "latency_ms": 594.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "where is the retrieval source digest verified",
+            "candidates": [
+                {
+                    "path": "tests/unit/test_judge.c",
+                    "stage": "literal",
+                    "snippet": "        forge_judge_rerank(judge, \"where is the retrieval source digest verified?\", 3, paths,\n                           snippets, stages, scores, &error);\n    if (status != FORGE_OK) {\n        printf(\"live probe: rerank failed: %s (%s)\\n\", forge_status_string(status), error.message);\n        forge_judge_destroy(judge);\n        return 1;\n    }\n    forge_judge_stats stats = {0};\n    forge_judge_metrics(judge, &stats);\n    printf(\"live probe ok: model=%s latency=%.0fms input_tokens=%zu output_tokens=%zu \"\n           \"scores=[%.3f, %.3f, %.3f]\\n\",\n           stats.last_model, stats.last_latency_ms, stats.input_tokens, stats.output_tokens,\n           scores[0], scores[1], scores[2]);\n    forge_judge_destroy(judge);\n    return 0;\n}\n\nint main(int argc, char **argv) {\n    if (argc > 1 && !strcmp(argv[1], \"--live\"))\n        return live_probe();\n    test_permutation();\n    test_payload_and_scores();\n    test_retry_once();\n    test_fail_open_errors();\n    test_retrieval_glue();\n    test_budget();\n    test_recording();\n    test_config_table();\n    printf(\"judge tests passed\\n\");\n    return 0;\n}"
+                },
+                {
+                    "path": "docs/SUMMARIES.md",
+                    "stage": "fts5",
+                    "snippet": " ... The default `caller` identity\nis rejected. This is a host assertion, not an automatically verified model-file\ndigest; reusing an ID for different weights ... "
+                },
+                {
+                    "path": "docs/RETRIEVAL.md",
+                    "stage": "fts5",
+                    "snippet": "# Staged indexed retrieval\n\n`forge/retrieval.h` retrieves source evidence in this order:\n\n1. Exact, case-sensitive Go declaration name.\n2. The declaration's package ... "
+                },
+                {
+                    "path": "tests/unit/test_index.c",
+                    "stage": "fts5",
+                    "snippet": " ... is documented with exact case.\\n\");\n    write_source(&f, \"docs/fts.md\", \"TARGET appears in uppercase text.\\n\");\n    full_index(&f);\n    forge_retrieval_options ... "
+                },
+                {
+                    "path": "src/repo/retrieval.c",
+                    "stage": "fts5",
+                    "snippet": " ... The stored chunk is the sole source of\n * snippets; its complete SHA-256 is checked before any candidate is published. */\n#define FILE_COLUMNS \"f ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-v1/source-post-report-audit.json",
+                    "stage": "fts5",
+                    "snippet": " ... true,\r\n    \"src/core/digest.c\": true,\r\n    \"src/core/digest.h\": true,\r\n    \"src/core/hardware.c\": true,\r\n    \"src/core/input_snapshot.c\": true,\r\n    \"src/core ... "
+                },
+                {
+                    "path": "docs/DESIGN_CHECKLIST.md",
+                    "stage": "fts5",
+                    "snippet": " ... The full design is not complete.\n\n## Staged indexed retrieval — 2026-08-28\n\nSource `608dc7c`, integrated with the published checkpoint test/evidence follow-up\nat ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-08-repair-recovery/v2/source-identity.json",
+                    "stage": "fts5",
+                    "snippet": " ... 29286\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\",\r\n      \"bytes\": 5720\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\",\r\n      \"bytes\": 815\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"sha256\": \"28717176cd83890c9c3533ff729cf2182a7d4a0295158e529e611ba26dbd700a\",\r\n      \"bytes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-08-repair-recovery/v3-gates/source-identity.json",
+                    "stage": "fts5",
+                    "snippet": " ... 29286\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\",\r\n      \"bytes\": 5720\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\",\r\n      \"bytes\": 815\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"sha256\": \"28717176cd83890c9c3533ff729cf2182a7d4a0295158e529e611ba26dbd700a\",\r\n      \"bytes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-08-repair-recovery/v3/source-identity.json",
+                    "stage": "fts5",
+                    "snippet": " ... 29286\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\",\r\n      \"bytes\": 5720\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\",\r\n      \"bytes\": 815\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"sha256\": \"28717176cd83890c9c3533ff729cf2182a7d4a0295158e529e611ba26dbd700a\",\r\n      \"bytes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-08-repair-recovery/v4/source-identity.json",
+                    "stage": "fts5",
+                    "snippet": " ... 29286\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\",\r\n      \"bytes\": 5720\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\",\r\n      \"bytes\": 815\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"sha256\": \"28717176cd83890c9c3533ff729cf2182a7d4a0295158e529e611ba26dbd700a\",\r\n      \"bytes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/starting-state/source.json",
+                    "stage": "fts5",
+                    "snippet": " ... 1603\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\",\r\n      \"bytes\": 5720\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\",\r\n      \"bytes\": 815\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"sha256\": \"28717176cd83890c9c3533ff729cf2182a7d4a0295158e529e611ba26dbd700a\",\r\n      \"bytes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/candidate-01/source-inventory.json",
+                    "stage": "fts5",
+                    "snippet": " ... 1603,\r\n      \"sha256\": \"e1616884408032915896cefb0a16d40b7e60a42aa345928a7fe25bb520cf535e\"\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"bytes\": 5720,\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\"\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"bytes\": 815,\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\"\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"bytes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/candidate-02/source-inventory.json",
+                    "stage": "fts5",
+                    "snippet": " ... 1603,\r\n      \"sha256\": \"e1616884408032915896cefb0a16d40b7e60a42aa345928a7fe25bb520cf535e\"\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"bytes\": 5720,\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\"\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"bytes\": 815,\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\"\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"bytes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-fresh-design/candidate-03-elide-noop/source-inventory.json",
+                    "stage": "fts5",
+                    "snippet": " ... 1603,\r\n      \"sha256\": \"e1616884408032915896cefb0a16d40b7e60a42aa345928a7fe25bb520cf535e\"\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"bytes\": 5720,\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\"\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"bytes\": 815,\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\"\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"bytes ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-fresh-design/candidate-04-elide-noop/source-inventory.json",
+                    "stage": "fts5",
+                    "snippet": " ... 1603,\r\n      \"sha256\": \"e1616884408032915896cefb0a16d40b7e60a42aa345928a7fe25bb520cf535e\"\r\n    },\r\n    \"src/core/digest.c\": {\r\n      \"bytes\": 5720,\r\n      \"sha256\": \"5db149238814880b6f638e86b36d87b4869a3cb428cf8318a075cb095b7ed362\"\r\n    },\r\n    \"src/core/digest.h\": {\r\n      \"bytes\": 815,\r\n      \"sha256\": \"1fe6556f7544a4323f5f772170bce8378fbab403be1031eac080fa809de26694\"\r\n    },\r\n    \"src/core/hardware.c\": {\r\n      \"bytes ... "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c8": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[8].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c9": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[9].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c10": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[10].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c11": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[11].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c12": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[12].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c13": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[13].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c14": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[14].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c15": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[15].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.08
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.69
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.08
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.1
+            },
+            "c8": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c9": {
+                "type": "noul",
+                "noul": 0.08
+            },
+            "c10": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c11": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c12": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c13": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c14": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c15": {
+                "type": "noul",
+                "noul": 0.07
+            }
+        },
+        "usage": {
+            "input_tokens": 5551,
+            "output_tokens": 282
+        }
+    }
+}

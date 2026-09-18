@@ -1,0 +1,94 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T004915Z",
+    "latency_ms": 500.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_agent_mark_independent_workspace",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "void fg_agent_mark_independent_workspace(forge_agent *a) {\n    if (a && !a->used)\n        a->independent_workspace = true;\n}\n\nstatic forge_repo *agent_repo_open(forge_agent *a, forge_error *e) {\n    forge_repo *repo = forge_repo_open(a->root, e);\n    if (repo && a->independent_workspace)\n        fg_repo_force_filesystem_index(repo);\n    return repo;\n}\ntypedef struct {\n    bool active;\n    uint64_t failed_signature;\n    size_t entered_turn;\n    char failed_tool[32];\n    char failed_path[FG_PATH_MAX];\n    char failed_hypothesis[2049];\n} recovery_mode;\ntypedef struct {\n    fg_input_snapshot *inputs;\n    char *command, *diagnostic;\n    size_t turn;\n} failed_workspace;\ntypedef struct {\n    failed_workspace entries[8];\n    size_t next, latest;\n} repair_history;\n\nstatic void failed_workspace_free(failed_workspace *entry) {\n    fg_input_snapshot_destroy(entry->inputs);\n    free(entry->command);\n    free(entry->diagnostic);\n    memset(entry, 0, sizeof(*entry));\n}\n/* Optional loop evidence must not turn an incomplete scan into equality, nor\n * consume a command's budget. Validation still owns the final correctness gate. */\nstatic fg_input_snapshot *repair_snapshot(const forge_agent *a, uint64_t deadline) {\n    return fg_input_snapshot_take(a->root, 10000, UINT64_C(64) * 1024 * 1024, a->config.cancelled,\n                                  a->config.userdata, FG_MIN(deadline, fg_now_ms() + 250), NULL);\n}\n/* Takes ownership of inputs; records only host-observed command failures. */\nstatic void repair_remember(repair_history *history, fg_input_snapshot *inputs, const char *command,\n                            const char *diagnostic, size_t turn) {\n    if (!command || !diagnostic || strlen(command) > 8192) {\n        fg_input_snapshot_destroy(inputs);\n        return;\n    }\n    char *key = fg_strdup(command);\n    char *detail = fg_compress_output(diagnostic, 2048, NULL, NULL);\n    if (!key || !detail) {\n        free(key);\n        free(detail);\n        fg_input_snapshot_destroy(inputs);\n        return;\n    }\n    history->latest = h"
+                },
+                {
+                    "path": "src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "void fg_agent_mark_independent_workspace(forge_agent *a) {\n    if (a && !a->used)\n        a->independent_workspace = true;\n}\n\nstatic forge_repo *agent_repo_open(forge_agent *a, forge_error *e) {\n    forge_repo *repo = forge_repo_open(a->root, e);\n    if (repo && a->independent_workspace)\n        fg_repo_force_filesystem_index(repo);\n    return repo;\n}\ntypedef struct {\n    bool active;\n    uint64_t failed_signature;\n    size_t entered_turn;\n    char failed_tool[32];\n    char failed_path[FG_PATH_MAX];\n    char failed_hypothesis[2049];\n} recovery_mode;\ntypedef struct {\n    fg_input_snapshot *inputs;\n    char *command, *diagnostic;\n    size_t turn;\n} failed_workspace;\ntypedef struct {\n    failed_workspace entries[8];\n    size_t next, latest;\n} repair_history;\n\nstatic void failed_workspace_free(failed_workspace *entry) {\n    fg_input_snapshot_destroy(entry->inputs);\n    free(entry->command);\n    free(entry->diagnostic);\n    memset(entry, 0, sizeof(*entry));\n}\n/* Optional loop evidence must not turn an incomplete scan into equality, nor\n * consume a command's budget. Validation still owns the final correctness gate. */\nstatic fg_input_snapshot *repair_snapshot(const forge_agent *a, uint64_t deadline) {\n    return fg_input_snapshot_take(a->root, 10000, UINT64_C(64) * 1024 * 1024, a->config.cancelled,\n                                  a->config.userdata, FG_MIN(deadline, fg_now_ms() + 250), NULL);\n}\n/* Takes ownership of inputs; records only host-observed command failures. */\nstatic void repair_remember(repair_history *history, fg_input_snapshot *inputs, const char *command,\n                            const char *diagnostic, size_t turn) {\n    if (!command || !diagnostic || strlen(command) > 8192) {\n        fg_input_snapshot_destroy(inputs);\n        return;\n    }\n    char *key = fg_strdup(command);\n    char *detail = fg_compress_output(diagnostic, 2048, NULL, NULL);\n    if (!key || !detail) {\n        free(key);\n        free(detail);\n        fg_input_snapshot_destroy(inputs);\n        return;\n    }\n    history->latest = h"
+                },
+                {
+                    "path": "src/core/candidate_search.c",
+                    "stage": "literal",
+                    "snippet": "        fg_agent_mark_independent_workspace(agent);\n        candidate_events events = {session, NULL, false};\n        forge_status run = agent ? forge_agent_run(agent, request, child_event, &events, e)\n                                 : (e ? e->code : FORGE_ERR_MEMORY);\n        if (agent)\n            add_metrics(metrics, forge_agent_metrics(agent));\n        char *child_session =\n            agent ? fg_json_string(forge_agent_session(agent)) : fg_strdup(\"null\");\n        fg_buf outcome = {0};\n        if (child_session)\n            fg_buf_printf(&outcome, \"{\\\"candidate\\\":%zu,\\\"status\\\":\\\"%s\\\",\\\"session\\\":%s}\", i + 1,\n                          forge_status_string(run), child_session);\n        free(child_session);\n        forge_agent_destroy(agent);\n        bool recorded =\n            outcome.data && fg_session_emit(session, \"candidate_generated\", outcome.data, e);\n        fg_buf_clear(&outcome);\n        if (!recorded || events.failed) {\n            free(events.final);\n            forge_conversation_destroy(trial.conversation);\n            status = FORGE_ERR_IO;\n            goto finish;\n        }\n        fg_candidate_store *candidate =\n            run == FORGE_OK && events.final\n                ? fg_candidate_store_take(root, config->cancelled, config->userdata, deadline, e)\n                : NULL;\n        bool eligible = candidate && !fg_candidate_store_equal(candidate, baseline);\n        if (eligible) {\n            if (!fg_candidate_store_apply_reserving_restore(baseline, candidate, &selection, e)) {\n                fg_candidate_store_recover(baseline, candidate, &selection, hard_deadline, e);\n                fg_candidate_store_destroy(candidate);\n                free(events.final);\n                forge_conversation_destroy(trial.conversation);\n                status = e && e->code ? e->code : FORGE_ERR_IO;\n                goto finish;\n            }\n            forge_error validation_error = {0};\n            bool passed = real_validation(&selection, metrics, &validation_error);\n            size_t cost = fg_candidat"
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": "void fg_agent_mark_independent_workspace(forge_agent *);\ntypedef struct fg_repo_monitor fg_repo_monitor;\ntypedef struct {\n    char *json;\n    bool changed, full_scan, delta_scan, reopened, native;\n    size_t events;\n    uint64_t generation;\n    double duration_ms;\n} fg_repo_change;\nfg_repo_monitor *fg_repo_monitor_create(forge_repo *, const char *, forge_cancel_fn, void *,\n                                        uint64_t deadline, bool require_native, fg_repo_change *,\n                                        forge_error *);\nforge_status fg_repo_monitor_poll(fg_repo_monitor *, uint64_t wait_ms, bool force_full,\n                                  fg_repo_change *, forge_error *);\nvoid fg_repo_change_free(fg_repo_change *);\nvoid fg_repo_monitor_destroy(fg_repo_monitor *);\n#endif\n"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.9
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.92
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.13
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.15
+            }
+        },
+        "usage": {
+            "input_tokens": 2438,
+            "output_tokens": 72
+        }
+    }
+}

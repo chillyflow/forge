@@ -1,0 +1,145 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T012356Z",
+    "latency_ms": 593.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_input_snapshot_hash",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "                  entry->turn, (unsigned long long)fg_input_snapshot_hash(entry->inputs),\n                  entry->inputs ? \"true\" : \"false\", entry->command, entry->diagnostic);\n    return fg_buf_take(&text);\n}\n/* Use the existing planner, including its zero-test-rejecting Python runner.\n * This is advice before generation, never command execution or verification. */\nstatic char *validation_guidance(forge_repo *repo) {\n    char *plan = forge_repo_validation_plan(repo, NULL, 0, NULL);\n    yyjson_doc *doc = plan ? yyjson_read(plan, strlen(plan), 0) : NULL;\n    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;\n    yyjson_val *stages = yyjson_obj_get(root, \"stages\"), *selected = NULL, *stage;\n    size_t i, n;\n    yyjson_arr_foreach(stages, i, n, stage) {\n        const char *name = fg_json_str(stage, \"name\");\n        yyjson_val *commands = yyjson_obj_get(stage, \"commands\");\n        if (name && (!strcmp(name, \"affected_tests\") || !strcmp(name, \"broad_tests\")) &&\n            yyjson_arr_size(commands)) {\n            selected = commands;\n            break;\n        }\n    }\n    fg_buf text = {0};\n    if (selected) {\n        fg_buf_puts(\n            &text, \"VALIDATION_GUIDANCE: planned test runners (cwd and argv below). \"\n                   \"Run the relevant tests before the first repair. Direct execution of a \"\n                   \"definition-only Python test file runs no tests. Use these runner arguments; \"\n                   \"the Python runners reject zero collected tests. Commands still require process \"\n                   \"authorization. This plan is not evidence that tests passed.\\n\");\n        yyjson_val *command;\n        yyjson_arr_foreach(selected, i, n, command) {\n            if (i == 3)\n                break;\n            char *json = yyjson_val_write(command, 0, NULL);\n            if (json && strlen(json) <= 2048 && text.len + strlen(json) < 4096)\n                fg_buf_printf(&text, \"%s\\n\", json);\n            free(json);\n        }\n    }\n    yyjson_doc_free(doc);\n    free(plan);\n    return fg_buf_take(&text)"
+                },
+                {
+                    "path": "docs/INPUT_SNAPSHOTS.md",
+                    "stage": "literal",
+                    "snippet": "pointers are **not equal**. `fg_input_snapshot_hash(NULL)` returns zero; a hash\nalone must not replace `fg_input_snapshot_equal` or the success checks.\n\n## What is recorded\n\nEvery regular file is included regardless of extension, size, hidden status,\nGit tracking, `.gitignore`, language support, or directory names such as `vendor`\nand `testdata`. Each record contains a relative path, exact byte length, and a\nstreamed 64-bit FNV-1a content hash. NUL and invalid UTF-8 bytes inside files are\nordinary bytes. Files are never decoded as text.\n\nRecords are sorted by relative path bytes. Paths use `/` between directory\ncomponents. Windows names are obtained through Unicode APIs and encoded as\nUTF-8 without code-page substitution; POSIX filename bytes are retained as-is.\nThe aggregate hash uses explicit length framing and little-endian integers,\nand does not contain the absolute workspace path or filesystem traversal order.\nIdentical file trees in different directories consequently compare equal.\nEquality checks every path, length, and content hash in addition to the aggregate.\nCreation, deletion, renaming, size changes, and same-length content edits change\nthe evidence. Timestamps, ownership, permissions, inode identities, and empty\ndirectories are not part of its persisted identity. Hard-linked regular files\nare included once per pathname and consume the byte budget once per pathname.\n\n### Exact exclusions\n\nOnly actual directories named `.git` and `.forge` **immediately under the\nworkspace root** are excluded with their entire contents. Matching is exact on\nPOSIX and case-insensitive on Windows. Their files do not consume the content\nor file-count budget. No excluded directory is traversed.\n\nNested `testdata/.forge/` or `vendor/.git/` directories remain inputs. A root\n`.git` **file**, such as a worktree pointer, is included. `.gitignore` and files\nit ignores are included. A symlink/reparse point named `.git` or `.forge` is\nrejected before exclusion; links within an already excluded metadata subtree\nare never visited or "
+                },
+                {
+                    "path": "src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "                  entry->turn, (unsigned long long)fg_input_snapshot_hash(entry->inputs),\n                  entry->inputs ? \"true\" : \"false\", entry->command, entry->diagnostic);\n    return fg_buf_take(&text);\n}\n/* Use the existing planner, including its zero-test-rejecting Python runner.\n * This is advice before generation, never command execution or verification. */\nstatic char *validation_guidance(forge_repo *repo) {\n    char *plan = forge_repo_validation_plan(repo, NULL, 0, NULL);\n    yyjson_doc *doc = plan ? yyjson_read(plan, strlen(plan), 0) : NULL;\n    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;\n    yyjson_val *stages = yyjson_obj_get(root, \"stages\"), *selected = NULL, *stage;\n    size_t i, n;\n    yyjson_arr_foreach(stages, i, n, stage) {\n        const char *name = fg_json_str(stage, \"name\");\n        yyjson_val *commands = yyjson_obj_get(stage, \"commands\");\n        if (name && (!strcmp(name, \"affected_tests\") || !strcmp(name, \"broad_tests\")) &&\n            yyjson_arr_size(commands)) {\n            selected = commands;\n            break;\n        }\n    }\n    fg_buf text = {0};\n    if (selected) {\n        fg_buf_puts(\n            &text, \"VALIDATION_GUIDANCE: planned test runners (cwd and argv below). \"\n                   \"Run the relevant tests before the first repair. Direct execution of a \"\n                   \"definition-only Python test file runs no tests. Use these runner arguments; \"\n                   \"the Python runners reject zero collected tests. Commands still require process \"\n                   \"authorization. This plan is not evidence that tests passed.\\n\");\n        yyjson_val *command;\n        yyjson_arr_foreach(selected, i, n, command) {\n            if (i == 3)\n                break;\n            char *json = yyjson_val_write(command, 0, NULL);\n            if (json && strlen(json) <= 2048 && text.len + strlen(json) < 4096)\n                fg_buf_printf(&text, \"%s\\n\", json);\n            free(json);\n        }\n    }\n    yyjson_doc_free(doc);\n    free(plan);\n    return fg_buf_take(&text)"
+                },
+                {
+                    "path": "src/core/input_snapshot.c",
+                    "stage": "literal",
+                    "snippet": "uint64_t fg_input_snapshot_hash(const fg_input_snapshot *snapshot) {\n    return snapshot ? snapshot->hash : 0;\n}\n\nvoid fg_input_snapshot_destroy(fg_input_snapshot *snapshot) {\n    if (snapshot) {\n        for (size_t i = 0; i < snapshot->count; i++)\n            free(snapshot->files[i].path);\n        free(snapshot->files);\n        free(snapshot);\n    }\n}\n"
+                },
+                {
+                    "path": "src/core/input_snapshot.h",
+                    "stage": "literal",
+                    "snippet": "uint64_t fg_input_snapshot_hash(const fg_input_snapshot *snapshot);\nvoid fg_input_snapshot_destroy(fg_input_snapshot *snapshot);\n#endif\n"
+                },
+                {
+                    "path": "src/core/verification.c",
+                    "stage": "literal",
+                    "snippet": "        snprintf(hash, sizeof(hash), \"%016llx\", (unsigned long long)fg_input_snapshot_hash(before));\n        yyjson_mut_obj_add_strcpy(rd, report, \"input_hash_before\", hash);\n    }\n    if (after) {\n        snprintf(hash, sizeof(hash), \"%016llx\", (unsigned long long)fg_input_snapshot_hash(after));\n        yyjson_mut_obj_add_strcpy(rd, report, \"input_hash_after\", hash);\n    }\n    yyjson_mut_obj_add_real(rd, report, \"snapshot_ms\", snapshot_ms);\n    yyjson_mut_obj_add_real(rd, report, \"duration_ms\", elapsed);\n    if (report_verdict(rd, report, result, status, checks_passed, evidence_complete, e))\n        result->json = yyjson_mut_write(rd, YYJSON_WRITE_PRETTY, NULL);\n    if (!result->json || !result->summary) {\n        result->passed = false;\n        status = fg_error(e, FORGE_ERR_MEMORY, \"Validation report allocation failed\");\n    } else {\n        char artifact[96];\n        snprintf(artifact, sizeof(artifact), \"validation/%04zu.json\", attempt);\n        forge_error save_error = {0};\n        bool saved =\n            fg_session_artifact(c->session, artifact, result->json, &save_error) &&\n            fg_session_artifact(c->session, \"validation/latest.json\", result->json, &save_error) &&\n            fg_session_emit(c->session, \"validation_result\", result->json, &save_error);\n        if (!saved) {\n            status = save_error.code ? save_error.code : FORGE_ERR_IO;\n            if (e)\n                *e = save_error;\n            result->passed = false;\n            free(result->json);\n            result->json = NULL;\n            if (report_verdict(rd, report, result, status, checks_passed, false, e))\n                result->json = yyjson_mut_write(rd, YYJSON_WRITE_PRETTY, NULL);\n            if (result->json) {\n                /* Best effort reconciliation of earlier writes. The API status\n                 * remains a failure even if these repairs succeed. */\n                fg_session_artifact(c->session, artifact, result->json, NULL);\n                fg_session_artifact(c->session, \"validation/latest.json\", result->json,"
+                },
+                {
+                    "path": "tests/unit/test_snapshot.c",
+                    "stage": "literal",
+                    "snippet": "    assert(fg_input_snapshot_hash(*previous) != fg_input_snapshot_hash(current));\n    fg_input_snapshot_destroy(*previous);\n    *previous = current;\n}\n\nstatic void test_all_file_inputs_and_mutations(void) {\n    fixture f;\n    fixture_start(&f);\n    fg_input_snapshot *before = take(&f);\n    fixture_write(&f, \"testdata/input.txt\", \"first\", 5);\n    changed(&f, &before);\n    fixture_write(&f, \"testdata/input.txt\", \"other\", 5); /* Same length. */\n    changed(&f, &before);\n    fixture_write(&f, \"fixture.csv\", \"a,b\\n\", 4);\n    changed(&f, &before);\n    const unsigned char binary[] = {'a', 0, 0xff, 'z'};\n    fixture_write(&f, \"vendor/data.bin\", binary, sizeof(binary));\n    changed(&f, &before);\n    const unsigned char modified[] = {'a', 0, 0xfe, 'z'};\n    fixture_write(&f, \"vendor/data.bin\", modified, sizeof(modified));\n    changed(&f, &before);\n    fixture_write(&f, \".hidden/input\", \"hidden\", 6);\n    changed(&f, &before);\n    fixture_write(&f, \"empty\", \"\", 0);\n    changed(&f, &before);\n    fixture_write(&f, \"\\xc3\\xa9-\\xe6\\x97\\xa5\\xe6\\x9c\\xac.txt\", \"unicode\", 7);\n    changed(&f, &before);\n    fixture_remove(&f, \"fixture.csv\");\n    changed(&f, &before);\n    fg_input_snapshot *same = take(&f);\n    assert(fg_input_snapshot_equal(before, same));\n    assert(fg_input_snapshot_hash(before) == fg_input_snapshot_hash(same));\n    fg_input_snapshot_destroy(before);\n    fg_input_snapshot_destroy(same);\n    fixture_finish(&f);\n}\n\nstatic void test_stable_path_order_and_framing(void) {\n    fixture a, b;\n    fixture_start(&a);\n    fixture_start(&b);\n    fixture_write(&a, \"z/last.txt\", \"z\", 1);\n    fixture_write(&a, \"b.bin\", \"\\0x\", 2);\n    fixture_write(&a, \"a.csv\", \"a\", 1);\n    fixture_write(&b, \"a.csv\", \"a\", 1);\n    fixture_write(&b, \"b.bin\", \"\\0x\", 2);\n    fixture_write(&b, \"z/last.txt\", \"z\", 1);\n    fg_input_snapshot *left = take(&a), *right = take(&b);\n    assert(fg_input_snapshot_equal(left, right));\n    assert(fg_input_snapshot_hash(left) == fg_input_snapshot_hash(right));\n    fixture_remove(&b, \"b.bin\");\n    fixture_write(&b, \"re"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.39
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.11
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.93
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.42
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.13
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.19
+            }
+        },
+        "usage": {
+            "input_tokens": 3871,
+            "output_tokens": 123
+        }
+    }
+}

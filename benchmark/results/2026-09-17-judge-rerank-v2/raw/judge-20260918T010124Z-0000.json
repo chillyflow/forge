@@ -1,0 +1,77 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T010124Z",
+    "latency_ms": 469.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_dedup_clear",
+            "candidates": [
+                {
+                    "path": "src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "                fg_dedup_clear(tools.dedup_slot);\n            uint64_t id = feedback ? minimal_append(ctx, FORGE_SEG_ACTION, action, 0) : 0;\n            if (!feedback || !id || !minimal_append(ctx, FORGE_SEG_RESULT, feedback, id) ||\n                !minimal_result(a, &tools, name, feedback,\n                                checkpoint.passed ? FORGE_OK : FORGE_ERR_CONFLICT,\n                                (double)(fg_now_ms() - check_start), e) ||\n                !state(a, FORGE_AGENT_TOOL_RESULT, e))\n                status = e && e->code ? e->code : FORGE_ERR_IO;\n            free(feedback);\n            if (a->config.bounded_repair && validation_only)\n                completion_due = true;\n            if (a->config.stop_loss)\n                stop_loss_streak = 0;\n        } else if (!name || (strcmp(name, \"read_file\") && strcmp(name, \"apply_patch\") &&\n                             strcmp(name, \"run_command\") && strcmp(name, \"list_directory\")))\n            status = fg_error(e, FORGE_ERR_UNSUPPORTED, \"Tool is not available in minimal agent\");\n        else {\n            tools.call_id = ++a->metrics.tool_calls;\n            if (!state(a, FORGE_AGENT_TOOL_REQUEST, e) ||\n                !fg_session_emit(&a->session, \"tool_call\", action, e) ||\n                !state(a, FORGE_AGENT_TOOL_RUNNING, e))\n                status = FORGE_ERR_IO;\n            else {\n                forge_error tool_error = {0};\n                bool changed = false;\n                uint64_t tool_start = fg_now_ms();\n                char *raw = NULL;\n                if (noedit_turn && name && !strcmp(name, \"apply_patch\"))\n                    fg_error(&tool_error, FORGE_ERR_POLICY,\n                             \"apply_patch is disabled for this turn: the previous edit was \"\n                             \"rejected because its replacement equalled the replaced text. \"\n                             \"Inspect or probe the implicated condition, then make a genuinely \"\n                             \"different edit next turn.\");\n                else\n                 "
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": "void fg_dedup_clear(fg_command_verdict *);\ntypedef struct {\n    forge_agent_config config;\n    forge_repo *repo;\n    struct fg_impact_snapshot *impact;\n    fg_session *session;\n    char root[FG_PATH_MAX];\n    size_t call_id;\n    size_t validation_id;\n    uint64_t deadline;\n    bool process_ran;\n    bool evidence_failed;      /* An edit event or prepared outcome could not be recorded. */\n    fg_process_result process; /* Metadata only; out/err pointers stay NULL. */\n    fg_command_verdict *dedup_slot; /* Borrowed verdict cache; NULL disables reuse. */\n    bool dedup_reused;              /* The last call served a stored verdict. */\n} fg_tool_context;\ntypedef struct {\n    bool applicable, passed, inputs_changed;\n    size_t commands, stages;\n    uint64_t generation;\n    char *json, *summary;\n    struct fg_input_snapshot *failed_inputs; /* Complete, stable failed validation inputs. */\n    char *failed_command;\n    uint64_t semantic_diagnostic_hash;\n    bool semantic_diagnostic_complete;\n} fg_validation_result;\nbool fg_validation_diagnostic_hash(const char *, uint64_t *);\nforge_status fg_validation_run(fg_tool_context *, const char *const *, size_t, forge_metrics *,\n                               fg_validation_result *, forge_error *);\nvoid fg_validation_result_free(fg_validation_result *);\nchar *fg_tool_execute(fg_tool_context *, const char *, yyjson_val *, bool *, forge_error *);\nchar *fg_repo_search(forge_repo *, const char *, size_t, forge_error *);\nchar *fg_repo_targets(forge_repo *, const char *, forge_error *);\n/* Stable descending permutation of candidate indices by rerank score; invalid\n * or out-of-range scores sort last. Pure; unit-tested without a repository. */\nvoid fg_rerank_permutation(const double *scores, size_t count, size_t *order);\nforge_status fg_repo_note_change(forge_repo *, forge_error *);\nforge_status fg_repo_note_change_until(forge_repo *, uint64_t deadline, forge_cancel_fn, void *,\n                                       forge_error *);\nforge_status fg_repo_index_until(forge_repo *, const char"
+                },
+                {
+                    "path": "src/tools/tools.c",
+                    "stage": "literal",
+                    "snippet": "void fg_dedup_clear(fg_command_verdict *slot) {\n    if (!slot)\n        return;\n    free(slot->argv_key);\n    free(slot->output);\n    memset(slot, 0, sizeof(*slot));\n}\n\n/* Canonical argv encoding: the JSON serialization of the argv array, so\n * element boundaries cannot collide. Returns NULL for a missing or\n * non-array argv; validation rejects such calls before any lookup. */\nstatic char *dedup_key(yyjson_val *args) {\n    yyjson_val *arr = args ? yyjson_obj_get(args, \"argv\") : NULL;\n    if (!arr || !yyjson_is_arr(arr))\n        return NULL;\n    return yyjson_val_write(arr, 0, NULL);\n}\n\n/* Serve a stored verdict for an identical command issued while no\n * host-observed mutation intervened. Policy and deadline checks already ran\n * above, so approval semantics are unchanged; only re-execution is skipped.\n * Restores the stored process metadata so every downstream observation\n * (exit code, byte counts, diagnostic hashes, validation episodes) matches\n * a fresh execution, and records the reuse as its own event. The annotation\n * states only host-observed facts: which action produced the verdict and\n * that nothing mutating ran since. Returns NULL on a miss. */\nstatic char *dedup_reuse(fg_tool_context *c, yyjson_val *args, forge_error *e) {\n    fg_command_verdict *slot = c->dedup_slot;\n    if (!slot || !slot->argv_key || !slot->output)\n        return NULL;\n    char *key = dedup_key(args);\n    if (!key)\n        return NULL;\n    bool match = !strcmp(key, slot->argv_key);\n    free(key);\n    if (!match)\n        return NULL;\n    fg_buf out = {0};\n    bool ok = fg_buf_printf(&out,\n                            \"HOST_RECORD: this exact command already ran at action %llu with \"\n                            \"no edits or commands since; its verdict is reused without \"\n                            \"re-execution.\\n--- earlier verdict ---\\n\",\n                            (unsigned long long)slot->call_id) &&\n                fg_buf_puts(&out, slot->output);\n    char *annotated = ok ? fg_buf_take(&out) : NULL;\n    if (!annotated) {\n    "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.14
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.24
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.94
+            }
+        },
+        "usage": {
+            "input_tokens": 2054,
+            "output_tokens": 55
+        }
+    }
+}

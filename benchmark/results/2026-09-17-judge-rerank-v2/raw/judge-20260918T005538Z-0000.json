@@ -1,0 +1,94 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T005538Z",
+    "latency_ms": 579.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_candidate_store_materialize",
+            "candidates": [
+                {
+                    "path": "src/core/candidate_search.c",
+                    "stage": "literal",
+                    "snippet": "            !fg_candidate_store_materialize_until(baseline, root, config->cancelled,\n                                                  config->userdata, deadline, e)) {\n            status = e && e->code ? e->code : FORGE_ERR_IO;\n            goto finish;\n        }\n        if (fg_now_ms() >= deadline) {\n            status = fg_error(e, FORGE_ERR_LIMIT, \"Candidate copy exhausted the shared deadline\");\n            goto finish;\n        }\n        uint32_t trial_seed = seed + (uint32_t)i * UINT32_C(0x9e3779b9);\n        snprintf(event, sizeof(event),\n                 \"{\\\"candidate\\\":%zu,\\\"count\\\":%zu,\\\"seed\\\":%u,\\\"max_turns\\\":%zu,\\\"independent_\"\n                 \"baseline\\\":true}\",\n                 i + 1, config->candidate_count, trial_seed, turns);\n        if (!fg_session_emit(session, \"candidate_start\", event, e)) {\n            status = FORGE_ERR_IO;\n            goto finish;\n        }\n        forge_agent_config trial = *config;\n        trial.workspace = root;\n        trial.candidate_count = 0;\n        trial.limits.max_turns = turns;\n        trial.limits.max_generated_tokens = tokens;\n        trial.limits.max_input_tokens = inputs;\n        trial.conversation =\n            config->conversation ? forge_conversation_clone(config->conversation, e) : NULL;\n        if (config->conversation && !trial.conversation) {\n            status = FORGE_ERR_MEMORY;\n            goto finish;\n        }\n        /* Event callbacks and cloning may consume the remaining time. Read\n         * the clock once after both, before unsigned subtraction; a zero child\n         * allocation must not accidentally become an unlimited/default budget. */\n        uint64_t now = fg_now_ms();\n        if (now >= deadline || (deadline - now) / (left + 1) == 0 ||\n            (config->cancelled && config->cancelled(config->userdata))) {\n            forge_conversation_destroy(trial.conversation);\n            status = fg_error(e,\n                              now >= deadline || (deadline - now) / (left + 1) == 0\n                                  ? FORGE_ERR_LIMIT\n   "
+                },
+                {
+                    "path": "src/core/candidate_store.c",
+                    "stage": "literal",
+                    "snippet": "bool fg_candidate_store_materialize_until(const fg_candidate_store *s, const char *root,\n                                          forge_cancel_fn cancel, void *user, uint64_t deadline,\n                                          forge_error *e) {\n    if (!s || !fg_mkdir(root, e))\n        return false;\n    fg_input_snapshot *empty = fg_input_snapshot_take(root, 1, 1, NULL, NULL, 0, e);\n    if (!empty)\n        return false;\n    fg_candidate_store *existing = fg_candidate_store_take(root, NULL, NULL, 0, e);\n    fg_input_snapshot_destroy(empty);\n    bool vacant = existing && !existing->count;\n    fg_candidate_store_destroy(existing);\n    if (!vacant) {\n        fg_error(e, FORGE_ERR_CONFLICT, \"Candidate destination must be empty\");\n        return false;\n    }\n    for (size_t i = 0; i < s->count; ++i) {\n        if ((cancel && cancel(user)) || (deadline && fg_now_ms() >= deadline)) {\n            fg_error(e, FORGE_ERR_CANCELLED, \"Candidate copy cancelled\");\n            return false;\n        }\n        const stored_file *file = &s->files[i];\n        char full[FG_PATH_MAX];\n        if (!parents(root, file->path, e) || !fg_safe_path(root, file->path, true, full, e))\n            return false;\n        FILE *f = fopen(full, \"wbx\");\n        if (!f) {\n            fg_error(e, FORGE_ERR_IO, \"Cannot create candidate file\");\n            return false;\n        }\n        bool ok = !file->contents.len ||\n                  fwrite(file->contents.data, 1, file->contents.len, f) == file->contents.len;\n        if (fclose(f))\n            ok = false;\n#ifdef _WIN32\n        if (ok && !SetFileAttributesA(full, (file->mode & 0200u) ? FILE_ATTRIBUTE_NORMAL\n                                                                 : FILE_ATTRIBUTE_READONLY))\n            ok = false;\n#else\n        if (ok && chmod(full, file->mode))\n            ok = false;\n#endif\n        if (!ok) {\n            fg_error(e, FORGE_ERR_IO, \"Cannot write candidate file\");\n            return false;\n        }\n    }\n    return true;\n}\nbool fg_candidate_store_materialize(const fg_candidate"
+                },
+                {
+                    "path": "src/core/candidate_store.h",
+                    "stage": "literal",
+                    "snippet": "bool fg_candidate_store_materialize(const fg_candidate_store *, const char *empty_root,\n                                    forge_error *);\nbool fg_candidate_store_materialize_until(const fg_candidate_store *, const char *empty_root,\n                                          forge_cancel_fn, void *, uint64_t, forge_error *);\n/* Refuses stale inputs before writing. Each changed file has before/after\n * content and intent/outcome evidence, and an atomic replacement or deletion.\n * Root must equal context.root. Does not restore process side effects elsewhere. */\nbool fg_candidate_store_apply(const fg_candidate_store *expected, const fg_candidate_store *desired,\n                              fg_tool_context *, forge_error *);\n/* Preflight also leaves journal capacity for desired -> expected. The reserve\n * is checked before mutation; actual journal bytes are charged as written. */\nbool fg_candidate_store_apply_reserving_restore(const fg_candidate_store *expected,\n                                                const fg_candidate_store *desired,\n                                                fg_tool_context *, forge_error *);\n/* Recovery after an unsuccessful application. Uses the cleanup deadline and\n * ignores cancellation only for restoring known complete contents. An unchanged\n * baseline is success; a complete attempted candidate may be restored; any\n * partial/unexpected workspace is refused. All writes still require policy.\n * Success leaves the original error untouched so the failed operation remains\n * failed. Failure reports why automatic recovery was refused or unsuccessful. */\nbool fg_candidate_store_recover(const fg_candidate_store *baseline,\n                                const fg_candidate_store *attempted, fg_tool_context *,\n                                uint64_t cleanup_deadline, forge_error *);\nforge_status fg_candidate_search(const forge_agent_config *, const char *, fg_session *,\n                                 forge_metrics *, forge_event_fn, void *, forge_error *);\n#endif\n"
+                },
+                {
+                    "path": "tests/unit/test_candidate_store.c",
+                    "stage": "literal",
+                    "snippet": "    assert(fg_candidate_store_materialize(baseline, candidate.root, NULL));\n    remember(&candidate, \"dirty.c\");\n    remember(&candidate, \"untracked.bin\");\n    remember(&candidate, \"empty\");\n    fg_candidate_store *copy = take(&candidate);\n    assert(fg_candidate_store_equal(baseline, copy));\n    assert(!fg_candidate_store_cost(baseline, copy));\n    fg_candidate_store_destroy(copy);\n    write_text(&candidate, \"dirty.c\", \"candidate repair\\n\");\n    write_bytes(&candidate, \"untracked.bin\", binary + 1, sizeof(binary) - 1);\n    remove_file(&candidate, \"empty\");\n    write_text(&candidate, \"created.txt\", \"new input\\n\");\n    remember(&original, \"created.txt\");\n    fg_candidate_store *desired = take(&candidate);\n    assert(fg_candidate_store_cost(baseline, desired) > 0);\n    fg_tool_context tools;\n    fg_session session;\n    context(&tools, &session, &original, &journal);\n    forge_error error = {0};\n    assert(fg_candidate_store_apply(baseline, desired, &tools, &error));\n    fg_candidate_store *changed = take(&original);\n    assert(fg_candidate_store_equal(changed, desired));\n    fg_candidate_store_destroy(changed);\n    assert(fg_candidate_store_apply(desired, baseline, &tools, &error));\n    fg_candidate_store *restored = take(&original);\n    assert(fg_candidate_store_equal(restored, baseline));\n    contents(&original, \"dirty.c\", \"user work already in progress\\n\", 30);\n    contents(&original, \"untracked.bin\", binary, sizeof(binary));\n    contents(&original, \"empty\", \"\", 0);\n    contents(&original, \".git/user-metadata\", \"must remain untouched\\n\", 22);\n    assert(session.sequence >= 8 && session.edit_bytes_reserved > 0);\n    close_context(&tools, &journal);\n    fg_candidate_store_destroy(restored);\n    fg_candidate_store_destroy(baseline);\n    fg_candidate_store_destroy(desired);\n    finish(&journal);\n    finish(&candidate);\n    finish(&original);\n}\ntypedef struct {\n    size_t calls;\n} policy_state;\nstatic bool deny_second(const char *tool, forge_capability cap, const char *arguments, void *user) {\n    policy_state *state "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.17
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.87
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.56
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.11
+            }
+        },
+        "usage": {
+            "input_tokens": 2607,
+            "output_tokens": 72
+        }
+    }
+}

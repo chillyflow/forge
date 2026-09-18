@@ -1,0 +1,77 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T012846Z",
+    "latency_ms": 500.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_llama_init",
+            "candidates": [
+                {
+                    "path": "src/inference/inference.c",
+                    "stage": "literal",
+                    "snippet": "    if (!fg_llama_init(m, e)) {\n        forge_model_destroy(m);\n        return NULL;\n    }\n    return m;\n#else\n    free(m);\n    fg_error(e, FORGE_ERR_MODEL,\n             \"This build has no inference backend. Rebuild with FORGE_WITH_LLAMA=ON; --script is \"\n             \"only for tests.\");\n    return NULL;\n#endif\n}\n\n/* The agent needs to know where host control may be placed, because a template\n * that rejects a user turn after a tool message cannot receive it as a separate\n * trailing message. Answering it here keeps the llama backend out of agent.c\n * and keeps the FORGE_WITH_LLAMA=OFF build linkable. */\nbool forge_model_rejects_user_after_tool(const forge_model *model) {\n#ifdef FORGE_WITH_LLAMA\n    return fg_llama_rejects_user_after_tool(model);\n#else\n    (void)model;\n    return false;\n#endif\n}\n\nforge_status fg_model_parse_native(forge_model *model, const char *response, char **message,\n                                   forge_error *error) {\n    if (!model || !response || !message || model->config.prompt_protocol != FORGE_PROMPT_NATIVE)\n        return fg_error(error, FORGE_ERR_ARGUMENT, \"Invalid native response parse request\");\n    *message = NULL;\n    if (!model->parse_native)\n        return fg_error(error, FORGE_ERR_UNSUPPORTED,\n                        \"The selected backend cannot parse native tool calls\");\n    return model->parse_native(model, response, message, error);\n}\nvoid forge_model_destroy(forge_model *m) {\n    if (m) {\n        fg_checkpoint_cache_destroy(m->cache);\n        if (m->destroy)\n            m->destroy(m);\n        if (m->script)\n            yyjson_doc_free(m->script);\n        free(m->previous_prompt);\n        free(m);\n    }\n}\nstatic void cache_metrics(forge_metrics *metrics, const forge_checkpoint_cache_stats *before,\n                          const forge_checkpoint_cache_stats *after) {\n#define CACHE_COUNT(field, source)                                                                 \\\n    do {                                                                                           \\\n     "
+                },
+                {
+                    "path": "src/inference/llama_backend.c",
+                    "stage": "literal",
+                    "snippet": "bool fg_llama_init(forge_model *m, forge_error *e) {\n    uint64_t start = fg_now_ms();\n    llama_state *s = calloc(1, sizeof(*s));\n    if (!s) {\n        fg_error(e, FORGE_ERR_MEMORY, \"Backend allocation failed\");\n        return false;\n    }\n    m->backend = s;\n    m->destroy = llama_destroy;\n    /* Backend registration is owned by llama.cpp. Forge has no mutable global session state. */\n    ggml_backend_load_all();\n    llama_backend_init();\n    struct llama_model_params mp = llama_model_default_params();\n    mp.n_gpu_layers = m->config.gpu_layers;\n    s->model = llama_model_load_from_file(m->config.model_path, mp);\n    if (!s->model) {\n        fg_error(e, FORGE_ERR_MODEL, \"Failed to load GGUF model\");\n        return false;\n    }\n    s->vocab = llama_model_get_vocab(s->model);\n    struct llama_context_params cp = llama_context_default_params();\n    cp.n_ctx = (uint32_t)m->config.context_tokens;\n    cp.n_batch = 512;\n    cp.n_ubatch = 256;\n    if (m->config.threads > 0) {\n        cp.n_threads = m->config.threads;\n        cp.n_threads_batch = m->config.threads;\n    }\n    s->ctx = llama_init_from_model(s->model, cp);\n    if (!s->ctx) {\n        fg_error(e, FORGE_ERR_MODEL,\n                 \"Failed to allocate inference context; reduce --context or --gpu-layers\");\n        return false;\n    }\n    s->capacity = llama_n_ctx(s->ctx);\n    s->tokens = malloc(s->capacity * sizeof(*s->tokens));\n    /* Largest reduced rung the ladder can use: it surrenders to the full array\n     * before a rung can reach the vocabulary size, so this is well under it. */\n    int32_t rung = FG_REDUCED_START_K;\n    for (int32_t next = fg_reduced_next_k(rung, llama_vocab_n_tokens(s->vocab)); next > 0;\n         next = fg_reduced_next_k(rung, llama_vocab_n_tokens(s->vocab)))\n        rung = next;\n    s->reduce_capacity = rung;\n    s->reduce_ids = malloc(sizeof(*s->reduce_ids) * (size_t)rung);\n    s->reduce_data = malloc(sizeof(*s->reduce_data) * (size_t)rung);\n    const char *tmpl = m->config.chat_template ? m->config.chat_template\n                   "
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": "bool fg_llama_init(forge_model *, forge_error *);\nbool fg_llama_rejects_user_after_tool(const forge_model *);\nbool forge_model_rejects_user_after_tool(const forge_model *);\nforge_status fg_model_generate(forge_model *, const char *, const char *, size_t, forge_token_fn,\n                               void *, char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,\n                               forge_error *);\nforge_status fg_model_generate_with_cache(forge_model *, const char *, const char *, size_t,\n                                          forge_token_fn, void *, char **, forge_metrics *,\n                                          forge_cancel_fn, void *, uint64_t,\n                                          const forge_checkpoint_cache_request *, forge_error *);\nforge_status fg_model_generate_routed_with_cache(forge_model *, const char *, const char *,\n                                                 const struct fg_decode_policy *, size_t,\n                                                 forge_token_fn, void *, char **, forge_metrics *,\n                                                 forge_cancel_fn, void *, uint64_t,\n                                                 const forge_checkpoint_cache_request *,\n                                                 forge_error *);\n/* For compound operations that already own operation_active. Does not release\n * the guard. No automatic checkpoint request is nominated. */\nforge_status fg_model_generate_active(forge_model *, const char *, size_t, forge_token_fn, void *,\n                                      char **, forge_metrics *, forge_cancel_fn, void *, uint64_t,\n                                      forge_error *);\n/* Parse a template-native assistant response into an OpenAI-compatible message.\n * The caller then normalizes that message through fg_native_action_normalize. */\nforge_status fg_model_parse_native(forge_model *, const char *, char **, forge_error *);\n\n/* Internal cache operations run under the generation operation guard. */\nforge_status fg_checkpoint_cac"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.12
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.96
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.22
+            }
+        },
+        "usage": {
+            "input_tokens": 2000,
+            "output_tokens": 55
+        }
+    }
+}

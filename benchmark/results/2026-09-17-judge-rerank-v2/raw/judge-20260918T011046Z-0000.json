@@ -1,0 +1,162 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T011046Z",
+    "latency_ms": 641.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_go_graph_find_package",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/originals/src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    return fg_go_graph_find_package(g->graph, directory);\r\n}\r\nstatic size_t vp_module_for(vp_graph *g, const char *directory) {\r\n    return fg_go_graph_module_for(g->graph, directory);\r\n}\r\nstatic bool vp_mark_changes(vp_graph *g) {\r\n    sqlite3_stmt *s = vp_query(g, \"SELECT language FROM files WHERE path=?\");\r\n    if (!s)\r\n        return false;\r\n    for (size_t i = 0; i < g->change_count; i++) {\r\n        vp_change *c = &g->changes[i];\r\n        sqlite3_bind_text(s, 1, c->path, -1, SQLITE_TRANSIENT);\r\n        int rc = sqlite3_step(s);\r\n        c->indexed = rc == SQLITE_ROW;\r\n        if (rc != SQLITE_ROW && rc != SQLITE_DONE) {\r\n            sqlite3_finalize(s);\r\n            return vp_fail(g, FORGE_ERR_IO, \"Cannot resolve changed path in the index\");\r\n        }\r\n        sqlite3_reset(s);\r\n        sqlite3_clear_bindings(s);\r\n        char directory[FG_PATH_MAX];\r\n        vp_directory(c->path, directory);\r\n        size_t package = vp_package_find(g, directory, NULL);\r\n        if (package != VP_NONE)\r\n            g->affected[package] = true;\r\n        if (c->go && !c->indexed)\r\n            vp_reason_add(\r\n                g, \"unindexed_or_deleted_path\", c->path,\r\n                \"The changed Go file is absent from the index; it may be deleted, skipped, \"\r\n                \"or newer than the index. It cannot be included in the formatting check.\");\r\n        if (g->failed) {\r\n            sqlite3_finalize(s);\r\n            return false;\r\n        }\r\n    }\r\n    sqlite3_finalize(s);\r\n    return true;\r\n}\r\n\r\nstatic bool vp_configuration_changes(vp_graph *g) {\r\n    if (!g->change_count) {\r\n        vp_reason_add(g, \"no_changed_paths\", \"\",\r\n                      \"No changed-file set was supplied; compile, test and vet all indexed \"\r\n                      \"packages before final module verification.\");\r\n        for (size_t i = 0; i < g->package_count; i++)\r\n            g->affected[i] = true;\r\n    }\r\n    for (size_t i = 0; i < g->change_count; i++) {\r\n        const char *path = g->changes[i].path, *base = vp_base(path);\r\n        bool works"
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    return fg_go_graph_find_package(g->graph, directory);\r\n}\r\nstatic size_t vp_module_for(vp_graph *g, const char *directory) {\r\n    return fg_go_graph_module_for(g->graph, directory);\r\n}\r\nstatic bool vp_mark_changes(vp_graph *g) {\r\n    sqlite3_stmt *s = vp_query(g, \"SELECT language FROM files WHERE path=?\");\r\n    if (!s)\r\n        return false;\r\n    for (size_t i = 0; i < g->change_count; i++) {\r\n        vp_change *c = &g->changes[i];\r\n        sqlite3_bind_text(s, 1, c->path, -1, SQLITE_TRANSIENT);\r\n        int rc = sqlite3_step(s);\r\n        c->indexed = rc == SQLITE_ROW;\r\n        if (rc != SQLITE_ROW && rc != SQLITE_DONE) {\r\n            sqlite3_finalize(s);\r\n            return vp_fail(g, FORGE_ERR_IO, \"Cannot resolve changed path in the index\");\r\n        }\r\n        sqlite3_reset(s);\r\n        sqlite3_clear_bindings(s);\r\n        char directory[FG_PATH_MAX];\r\n        vp_directory(c->path, directory);\r\n        size_t package = vp_package_find(g, directory, NULL);\r\n        if (package != VP_NONE)\r\n            g->affected[package] = true;\r\n        if (c->go && !c->indexed)\r\n            vp_reason_add(\r\n                g, \"unindexed_or_deleted_path\", c->path,\r\n                \"The changed Go file is absent from the index; it may be deleted, skipped, \"\r\n                \"or newer than the index. It cannot be included in the formatting check.\");\r\n        if (g->failed) {\r\n            sqlite3_finalize(s);\r\n            return false;\r\n        }\r\n    }\r\n    sqlite3_finalize(s);\r\n    return true;\r\n}\r\n\r\nstatic bool vp_configuration_changes(vp_graph *g) {\r\n    if (!g->change_count) {\r\n        vp_reason_add(g, \"no_changed_paths\", \"\",\r\n                      \"No changed-file set was supplied; compile, test and vet all indexed \"\r\n                      \"packages before final module verification.\");\r\n        for (size_t i = 0; i < g->package_count; i++)\r\n            g->affected[i] = true;\r\n    }\r\n    for (size_t i = 0; i < g->change_count; i++) {\r\n        const char *path = g->changes[i].path, *base = vp_base(path);\r\n        bool works"
+                },
+                {
+                    "path": "src/repo/graph.c",
+                    "stage": "literal",
+                    "snippet": "size_t fg_go_graph_find_package(const fg_go_graph *g, const char *directory) {\n    if (!g || !directory)\n        return GG_NONE;\n    size_t lo = 0, hi = g->package_count;\n    while (lo < hi) {\n        size_t mid = lo + (hi - lo) / 2;\n        if (strcmp(g->packages[mid].directory, directory) < 0)\n            lo = mid + 1;\n        else\n            hi = mid;\n    }\n    return lo < g->package_count && !strcmp(g->packages[lo].directory, directory) ? lo : GG_NONE;\n}\nsize_t fg_go_graph_module_for(const fg_go_graph *g, const char *directory) {\n    return g && directory ? gg_module_for(g, directory) : GG_NONE;\n}\n"
+                },
+                {
+                    "path": "src/repo/graph.h",
+                    "stage": "literal",
+                    "snippet": "size_t fg_go_graph_find_package(const fg_go_graph *, const char *directory);\nsize_t fg_go_graph_module_for(const fg_go_graph *, const char *directory);\nbool fg_go_graph_excluded_path(const char *canonical_relative_file);\n\n#endif\n"
+                },
+                {
+                    "path": "src/repo/impact.c",
+                    "stage": "literal",
+                    "snippet": "        size_t at = fg_go_graph_find_package(graph, directory);\n        if (at == FG_GO_GRAPH_NONE)\n            im_reason(w, \"unresolved_package\", f->path,\n                      \"Changed package is absent from the indexed graph.\");\n        else\n            affected[at] = true;\n    }\n    /* Package-level names can collide across files, including mutually\n     * exclusive build variants. Never guess which declaration a caller means. */\n    for (size_t i = 0; i < after->symbol_count; i++) {\n        const im_symbol *a = &after->symbols[i];\n        const im_file *af = &after->files[a->file];\n        if (!a->affected || !af->go)\n            continue;\n        char ad[FG_PATH_MAX];\n        im_dir(af->path, ad);\n        for (size_t j = 0; j < after->symbol_count; j++) {\n            if (!im_step(w))\n                goto done;\n            const im_symbol *b = &after->symbols[j];\n            if (i == j || strcmp(a->name, b->name) || strcmp(a->kind, b->kind))\n                continue;\n            char bd[FG_PATH_MAX];\n            im_dir(after->files[b->file].path, bd);\n            if (!strcmp(ad, bd))\n                im_reason(w, \"ambiguous_symbol\", af->path,\n                          \"Multiple declarations share a package/name/kind identity; references \"\n                          \"are unresolved.\");\n        }\n    }\n    bool progress = true;\n    while (progress && !w->failed) {\n        progress = false;\n        for (size_t i = 0; i < ne; i++) {\n            if (!im_step(w))\n                goto done;\n            if ((affected[edges[i].to] || dependent[edges[i].to]) && !affected[edges[i].from] &&\n                !dependent[edges[i].from]) {\n                dependent[edges[i].from] = true;\n                progress = true;\n            }\n        }\n    }\n    for (size_t i = 0; i < np; i++)\n        if (dependent[i])\n            im_json(w, yyjson_mut_arr_add_strcpy(w->doc, w->dependents, packages[i].directory));\n    for (size_t i = 0; i < after->file_count; i++) {\n        const im_file *f = &after->files[i];\n        bool python_selec"
+                },
+                {
+                    "path": "src/repo/retrieval.c",
+                    "stage": "literal",
+                    "snippet": "        size_t index = fg_go_graph_find_package(graph, dir);\n        if (index != FG_GO_GRAPH_NONE && distances[index] == SIZE_MAX) {\n            distances[index] = 0;\n            queue[tail++] = index;\n        }\n    }\n    if (!tail)\n        b->trace[GRAPH].reason = \"no_go_package_seed\";\n    while (ok && head < tail) {\n        if (stopped(b)) {\n            ok = false;\n            break;\n        }\n        size_t index = queue[head++];\n        if (distances[index] >= b->options.graph_depth)\n            continue;\n        for (unsigned direction = 0; direction < (b->options.include_dependents ? 2u : 1u);\n             direction++) {\n            size_t edge = direction ? packages[index].to_head : packages[index].from_head;\n            while (edge != FG_GO_GRAPH_NONE) {\n                size_t next = direction ? edges[edge].from : edges[edge].to;\n                if (distances[next] == SIZE_MAX) {\n                    distances[next] = distances[index] + 1;\n                    queue[tail++] = next;\n                }\n                edge = direction ? edges[edge].next_to : edges[edge].next_from;\n            }\n        }\n    }\n    /* Graph package order is canonical. Distance first then directory provides\n     * deterministic ties without using volatile SQLite row IDs. */\n    for (size_t depth = 0; ok && !b->halt && depth <= b->options.graph_depth; depth++)\n        for (size_t i = 0; ok && !b->halt && i < count; i++) {\n            if (distances[i] != depth || !packages[i].present)\n                continue;\n            char prefix[FG_PATH_MAX];\n            if (!strcmp(packages[i].directory, \".\"))\n                prefix[0] = 0;\n            else {\n                int n = snprintf(prefix, sizeof(prefix), \"%s/\", packages[i].directory);\n                if (n < 0 || (size_t)n >= sizeof(prefix)) {\n                    ok = fail(b, FORGE_ERR_LIMIT, \"Retrieval graph directory is too long\");\n                    break;\n                }\n            }\n            ok = rows(b, GRAPH,\n                      \"SELECT \" FILE_COLUMNS \"NULL,NULL,0"
+                },
+                {
+                    "path": "src/repo/summary.c",
+                    "stage": "literal",
+                    "snippet": "        b->package = fg_go_graph_find_package(b->graph, b->input->path);\n        if (b->package == FG_GO_GRAPH_NONE || !packages[b->package].present)\n            return fail(b, FORGE_ERR_NOT_FOUND, \"No indexed Go package at the requested directory\");\n        b->module = packages[b->package].module;\n    }\n    if (!put(b, out, limit, \"\\\"modules\\\":[\"))\n        return false;\n    bool comma = false;\n    for (size_t i = 0; i < module_count; i++) {\n        if (stopped(b))\n            return false;\n        if (b->input->target.scope != FORGE_SUMMARY_REPOSITORY && i != b->module)\n            continue;\n        if ((comma && !put(b, out, limit, \",\")) || !put(b, out, limit, \"{\\\"directory\\\":\") ||\n            !string(b, out, limit, modules[i].directory) || !put(b, out, limit, \",\\\"path\\\":\") ||\n            !string(b, out, limit, modules[i].path) || !put(b, out, limit, \",\\\"synthetic\\\":\") ||\n            !put(b, out, limit, modules[i].synthetic ? \"true}\" : \"false}\"))\n            return false;\n        comma = true;\n    }\n    if (!put(b, out, limit, \"],\\\"packages\\\":[\"))\n        return false;\n    comma = false;\n    for (size_t i = 0; i < package_count; i++) {\n        if (stopped(b))\n            return false;\n        if (!selected_package(b, packages, i))\n            continue;\n        if ((comma && !put(b, out, limit, \",\")) || !put(b, out, limit, \"{\\\"directory\\\":\") ||\n            !string(b, out, limit, packages[i].directory) || !put(b, out, limit, \",\\\"path\\\":\") ||\n            !string(b, out, limit, packages[i].path) || !put(b, out, limit, \",\\\"name\\\":\") ||\n            !string(b, out, limit, packages[i].name) || !put(b, out, limit, \",\\\"tests\\\":\") ||\n            !put(b, out, limit, packages[i].tests ? \"true}\" : \"false}\"))\n            return false;\n        comma = true;\n    }\n    if (!put(b, out, limit, \"],\\\"imports\\\":[\"))\n        return false;\n    comma = false;\n    for (size_t i = 0; i < edge_count; i++) {\n        if (stopped(b))\n            return false;\n        if (edges[i].from >= package_count || edges[i].to >= package_count)\n       "
+                },
+                {
+                    "path": "src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    return fg_go_graph_find_package(g->graph, directory);\r\n}\r\nstatic size_t vp_module_for(vp_graph *g, const char *directory) {\r\n    return fg_go_graph_module_for(g->graph, directory);\r\n}\r\nstatic bool vp_mark_changes(vp_graph *g) {\r\n    sqlite3_stmt *s = vp_query(g, \"SELECT language FROM files WHERE path=?\");\r\n    if (!s)\r\n        return false;\r\n    for (size_t i = 0; i < g->change_count; i++) {\r\n        vp_change *c = &g->changes[i];\r\n        sqlite3_bind_text(s, 1, c->path, -1, SQLITE_TRANSIENT);\r\n        int rc = sqlite3_step(s);\r\n        c->indexed = rc == SQLITE_ROW;\r\n        if (rc != SQLITE_ROW && rc != SQLITE_DONE) {\r\n            sqlite3_finalize(s);\r\n            return vp_fail(g, FORGE_ERR_IO, \"Cannot resolve changed path in the index\");\r\n        }\r\n        sqlite3_reset(s);\r\n        sqlite3_clear_bindings(s);\r\n        char directory[FG_PATH_MAX];\r\n        vp_directory(c->path, directory);\r\n        size_t package = vp_package_find(g, directory, NULL);\r\n        if (package != VP_NONE)\r\n            g->affected[package] = true;\r\n        if (c->go && !c->indexed)\r\n            vp_reason_add(\r\n                g, \"unindexed_or_deleted_path\", c->path,\r\n                \"The changed Go file is absent from the index; it may be deleted, skipped, \"\r\n                \"or newer than the index. It cannot be included in the formatting check.\");\r\n        if (g->failed) {\r\n            sqlite3_finalize(s);\r\n            return false;\r\n        }\r\n    }\r\n    sqlite3_finalize(s);\r\n    return true;\r\n}\r\n\r\nstatic bool vp_configuration_changes(vp_graph *g) {\r\n    if (!g->change_count) {\r\n        vp_reason_add(g, \"no_changed_paths\", \"\",\r\n                      \"No changed-file set was supplied; compile, test and vet all indexed \"\r\n                      \"packages before final module verification.\");\r\n        for (size_t i = 0; i < g->package_count; i++)\r\n            g->affected[i] = true;\r\n    }\r\n    for (size_t i = 0; i < g->change_count; i++) {\r\n        const char *path = g->changes[i].path, *base = vp_base(path);\r\n        bool works"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.12
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.1
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.95
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.34
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.14
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.15
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.12
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.13
+            }
+        },
+        "usage": {
+            "input_tokens": 4780,
+            "output_tokens": 140
+        }
+    }
+}

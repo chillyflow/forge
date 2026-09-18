@@ -1,0 +1,94 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T005226Z",
+    "latency_ms": 547.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_candidate_store_destroy",
+            "candidates": [
+                {
+                    "path": "src/core/candidate_search.c",
+                    "stage": "literal",
+                    "snippet": "                fg_candidate_store_destroy(candidate);\n                free(events.final);\n                forge_conversation_destroy(trial.conversation);\n                status = e && e->code ? e->code : FORGE_ERR_IO;\n                goto finish;\n            }\n            forge_error validation_error = {0};\n            bool passed = real_validation(&selection, metrics, &validation_error);\n            size_t cost = fg_candidate_store_cost(baseline, candidate);\n            snprintf(event, sizeof(event),\n                     \"{\\\"candidate\\\":%zu,\\\"real_workspace\\\":true,\\\"passed\\\":%s,\\\"changed_content_\"\n                     \"cost\\\":%zu}\",\n                     i + 1, passed ? \"true\" : \"false\", cost);\n            bool evidence = fg_session_emit(session, \"candidate_selection\", event, e);\n            /* Refuse to overwrite unexpected mutation by validation or an\n             * external writer. Initial content remains in trial workspaces and\n             * the before/after selection journal for explicit recovery. */\n            if (!restore_baseline(candidate, baseline, &selection, hard_deadline, e)) {\n                fg_candidate_store_destroy(candidate);\n                free(events.final);\n                forge_conversation_destroy(trial.conversation);\n                status = e && e->code ? e->code : FORGE_ERR_IO;\n                goto finish;\n            }\n            if (!evidence) {\n                fg_candidate_store_destroy(candidate);\n                free(events.final);\n                forge_conversation_destroy(trial.conversation);\n                status = FORGE_ERR_IO;\n                goto finish;\n            }\n            if (passed && cost < best_cost) {\n                fg_candidate_store_destroy(best);\n                best = candidate;\n                candidate = NULL;\n                free(best_final);\n                best_final = events.final;\n                events.final = NULL;\n                forge_conversation_destroy(best_conversation);\n                best_conversation = trial.conversation;\n            "
+                },
+                {
+                    "path": "src/core/candidate_store.c",
+                    "stage": "literal",
+                    "snippet": "    fg_candidate_store_destroy(s);\n    return NULL;\n}\nvoid fg_candidate_store_destroy(fg_candidate_store *s) {\n    if (!s)\n        return;\n    for (size_t i = 0; i < s->count; ++i) {\n        free(s->files[i].path);\n        fg_buf_clear(&s->files[i].contents);\n    }\n    free(s->files);\n    fg_input_snapshot_destroy(s->inputs);\n    free(s);\n}\nstatic const stored_file *lookup(const fg_candidate_store *s, const char *path) {\n    stored_file key = {0};\n    key.path = (char *)path;\n    return bsearch(&key, s->files, s->count, sizeof(*s->files), compare_file);\n}\nstatic bool same(const stored_file *a, const stored_file *b) {\n    return a && b && a->contents.len == b->contents.len && a->mode == b->mode &&\n           (!a->contents.len || !memcmp(a->contents.data, b->contents.data, a->contents.len));\n}\nbool fg_candidate_store_equal(const fg_candidate_store *a, const fg_candidate_store *b) {\n    if (!a || !b || a->count != b->count)\n        return false;\n    for (size_t i = 0; i < a->count; ++i)\n        if (strcmp(a->files[i].path, b->files[i].path) || !same(&a->files[i], &b->files[i]))\n            return false;\n    return true;\n}\nsize_t fg_candidate_store_cost(const fg_candidate_store *base, const fg_candidate_store *next) {\n    size_t cost = 0;\n    for (size_t i = 0; i < next->count; ++i) {\n        const stored_file *old = lookup(base, next->files[i].path);\n        if (!same(old, &next->files[i]))\n            cost += 1 + next->files[i].contents.len + (old ? old->contents.len : 0);\n    }\n    for (size_t i = 0; i < base->count; ++i)\n        if (!lookup(next, base->files[i].path))\n            cost += 1 + base->files[i].contents.len;\n    return cost;\n}\nstatic bool parents(const char *root, const char *relative, forge_error *e) {\n    char path[FG_PATH_MAX], part[FG_PATH_MAX];\n    if (!fg_relative_path(relative, part, e))\n        return false;\n    for (char *p = part; *p; ++p) {\n        if (*p != '/')\n            continue;\n        *p = 0;\n        bool ok = fg_safe_path(root, part, true, path, e) && fg_mkdir(path, e);\n        *p "
+                },
+                {
+                    "path": "src/core/candidate_store.h",
+                    "stage": "literal",
+                    "snippet": "void fg_candidate_store_destroy(fg_candidate_store *);\nbool fg_candidate_store_equal(const fg_candidate_store *, const fg_candidate_store *);\nsize_t fg_candidate_store_cost(const fg_candidate_store *, const fg_candidate_store *);\nbool fg_candidate_store_materialize(const fg_candidate_store *, const char *empty_root,\n                                    forge_error *);\nbool fg_candidate_store_materialize_until(const fg_candidate_store *, const char *empty_root,\n                                          forge_cancel_fn, void *, uint64_t, forge_error *);\n/* Refuses stale inputs before writing. Each changed file has before/after\n * content and intent/outcome evidence, and an atomic replacement or deletion.\n * Root must equal context.root. Does not restore process side effects elsewhere. */\nbool fg_candidate_store_apply(const fg_candidate_store *expected, const fg_candidate_store *desired,\n                              fg_tool_context *, forge_error *);\n/* Preflight also leaves journal capacity for desired -> expected. The reserve\n * is checked before mutation; actual journal bytes are charged as written. */\nbool fg_candidate_store_apply_reserving_restore(const fg_candidate_store *expected,\n                                                const fg_candidate_store *desired,\n                                                fg_tool_context *, forge_error *);\n/* Recovery after an unsuccessful application. Uses the cleanup deadline and\n * ignores cancellation only for restoring known complete contents. An unchanged\n * baseline is success; a complete attempted candidate may be restored; any\n * partial/unexpected workspace is refused. All writes still require policy.\n * Success leaves the original error untouched so the failed operation remains\n * failed. Failure reports why automatic recovery was refused or unsuccessful. */\nbool fg_candidate_store_recover(const fg_candidate_store *baseline,\n                                const fg_candidate_store *attempted, fg_tool_context *,\n                                uint64_t cleanup_d"
+                },
+                {
+                    "path": "tests/unit/test_candidate_store.c",
+                    "stage": "literal",
+                    "snippet": "    fg_candidate_store_destroy(copy);\n    write_text(&candidate, \"dirty.c\", \"candidate repair\\n\");\n    write_bytes(&candidate, \"untracked.bin\", binary + 1, sizeof(binary) - 1);\n    remove_file(&candidate, \"empty\");\n    write_text(&candidate, \"created.txt\", \"new input\\n\");\n    remember(&original, \"created.txt\");\n    fg_candidate_store *desired = take(&candidate);\n    assert(fg_candidate_store_cost(baseline, desired) > 0);\n    fg_tool_context tools;\n    fg_session session;\n    context(&tools, &session, &original, &journal);\n    forge_error error = {0};\n    assert(fg_candidate_store_apply(baseline, desired, &tools, &error));\n    fg_candidate_store *changed = take(&original);\n    assert(fg_candidate_store_equal(changed, desired));\n    fg_candidate_store_destroy(changed);\n    assert(fg_candidate_store_apply(desired, baseline, &tools, &error));\n    fg_candidate_store *restored = take(&original);\n    assert(fg_candidate_store_equal(restored, baseline));\n    contents(&original, \"dirty.c\", \"user work already in progress\\n\", 30);\n    contents(&original, \"untracked.bin\", binary, sizeof(binary));\n    contents(&original, \"empty\", \"\", 0);\n    contents(&original, \".git/user-metadata\", \"must remain untouched\\n\", 22);\n    assert(session.sequence >= 8 && session.edit_bytes_reserved > 0);\n    close_context(&tools, &journal);\n    fg_candidate_store_destroy(restored);\n    fg_candidate_store_destroy(baseline);\n    fg_candidate_store_destroy(desired);\n    finish(&journal);\n    finish(&candidate);\n    finish(&original);\n}\ntypedef struct {\n    size_t calls;\n} policy_state;\nstatic bool deny_second(const char *tool, forge_capability cap, const char *arguments, void *user) {\n    policy_state *state = user;\n    assert(!strcmp(tool, \"candidate_restore\") && cap == FORGE_CAP_WRITE && arguments);\n    return ++state->calls < 2;\n}\nstatic void refusal_cases(void) {\n    fixture original, candidate, journal;\n    start(&original);\n    start(&candidate);\n    start(&journal);\n    write_text(&original, \"a\", \"original a\");\n    write_text(&original, \"z\", \""
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.17
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.95
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.41
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.11
+            }
+        },
+        "usage": {
+            "input_tokens": 2617,
+            "output_tokens": 72
+        }
+    }
+}

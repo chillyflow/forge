@@ -1,0 +1,128 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T004204Z",
+    "latency_ms": 516.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "forge_judge_budget_ms",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-17-judge-rerank-v2/PREREGISTRATION.md",
+                    "stage": "literal",
+                    "snippet": "  deadline still caps it); callers pass `forge_judge_budget_ms()` — two attempts\n  at the configured timeout plus the retry backoff, 4,500 ms at the frozen\n  2,000 ms timeout. Without a rerank callback the deadline math is unchanged.\n  Scoring, reorder direction and output shape are unchanged from v1; judge-off\n  output remains byte-identical to the pre-judge build.\n- Change-set effect on the population: the fix's files include 4 of the 40\n  target files (id12, cq03, cq06 → `src/tools/tools.c`; cq01 →\n  `src/repo/retrieval.c`). Every frozen target substring was verified present in\n  the current files at freeze time. Baseline ranks may differ slightly from v1;\n  this screen is read standalone against its own bar.\n\n## Integration under test (identity)\n\n- `--judge` CLI grant plus the `[judge]` configuration table. The judge scores\n  every pre-trim candidate with one batched Noul request (one question per\n  candidate); retrieval reorders by descending score — stable, reorder-only:\n  candidates are never added or dropped. Any judge failure keeps the\n  deterministic order and is reported in the output's `rerank` object.\n- Frozen judge question, verbatim from `src/judge/judge.c`:\n  - instruction: \"Does the excerpt in `candidates[N].snippet` contain the\n    definition, implementation, or explanation that best answers the query in\n    `state.query`?\"\n  - criteria true: \"The excerpt contains the specific code, definition, or\n    explanation the query asks for.\"\n  - criteria false: \"The excerpt is unrelated to the query, only shares\n    incidental words, or is clearly less useful than a direct answer.\"\n- Endpoint `https://api.typesafe.ai`, model pinned `jev-1.13.0`; the response's\n  returned model id is recorded per call. Raw request/response pairs are\n  recorded under `.forge/judge-raw-v2/judge` (excluded from the workspace\n  index) and archived with the results. The API key is read from\n  `TYPESAFE_API_KEY` and never written to configuration or artifacts.\n- Binary `build-gpu/Release/forge.exe` sha256\n  `4cc9df308e"
+                },
+                {
+                    "path": "include/forge/judge.h",
+                    "stage": "literal",
+                    "snippet": "size_t forge_judge_budget_ms(const forge_judge *);\n\ntypedef struct {\n    size_t calls, failures, candidates_scored, input_tokens, output_tokens;\n    double last_latency_ms, total_latency_ms;\n    char last_model[64]; /* Versioned id reported by the most recent successful response. */\n} forge_judge_stats;\nvoid forge_judge_metrics(const forge_judge *, forge_judge_stats *);\n\n#ifdef __cplusplus\n}\n#endif\n#endif\n"
+                },
+                {
+                    "path": "src/cli/main.c",
+                    "stage": "literal",
+                    "snippet": "                options.rerank_budget_ms = forge_judge_budget_ms(judge);\n            }\n            text = forge_repo_retrieve(r, argument, &options, NULL, &error);\n            forge_judge_destroy(judge);\n        } else\n            text = fg_repo_search(r, argument, 50, &error);\n        if (text) {\n            puts(text);\n            free(text);\n        }\n        forge_repo_close(r);\n        return error.code ? failed(&error) : 0;\n    }\n    if (strcmp(command, \"run\") && strcmp(command, \"complete\") && strcmp(command, \"bench\") &&\n        strcmp(command, \"summarize\") && strcmp(command, \"chat\")) {\n        fg_error(&error, FORGE_ERR_ARGUMENT, \"Unknown command: %s\", command);\n        return failed(&error);\n    }\n    if (!argument && strcmp(command, \"chat\")) {\n        usage();\n        return 2;\n    }\n    yyjson_doc *benchmark = NULL;\n    yyjson_val *verify = NULL;\n    if (!strcmp(command, \"bench\")) {\n        if (!ac.allow_exec) {\n            fg_error(&error, FORGE_ERR_POLICY,\n                     \"Bench verification executes code; --allow-exec is required\");\n            return failed(&error);\n        }\n        char *text = fg_read_file(argument, 1024 * 1024, NULL, &error);\n        if (!text)\n            return failed(&error);\n        benchmark = yyjson_read(text, strlen(text), 0);\n        free(text);\n        yyjson_val *o = benchmark ? yyjson_doc_get_root(benchmark) : NULL;\n        argument = fg_json_str(o, \"prompt\");\n        verify = yyjson_obj_get(o, \"verify\");\n        if (!argument || !yyjson_is_arr(verify) || yyjson_arr_size(verify) < 1 ||\n            yyjson_arr_size(verify) > 64) {\n            yyjson_doc_free(benchmark);\n            fg_error(&error, FORGE_ERR_PARSE, \"Task manifest requires prompt and verify argv\");\n            return failed(&error);\n        }\n        size_t i, n;\n        yyjson_val *item;\n        yyjson_arr_foreach(verify, i, n,\n                           item) if (!yyjson_is_str(item) ||\n                                     yyjson_get_len(item) != strlen(yyjson_get_str(item))) {\n            yyjson_"
+                },
+                {
+                    "path": "src/judge/judge.c",
+                    "stage": "literal",
+                    "snippet": "size_t forge_judge_budget_ms(const forge_judge *j) {\n    return j ? 2 * j->timeout_ms + JUDGE_RETRY_BACKOFF_MS : 0;\n}\n\nvoid forge_judge_metrics(const forge_judge *j, forge_judge_stats *out) {\n    if (!out)\n        return;\n    memset(out, 0, sizeof(*out));\n    if (!j)\n        return;\n    out->calls = j->calls;\n    out->failures = j->failures;\n    out->candidates_scored = j->candidates_scored;\n    out->input_tokens = j->input_tokens;\n    out->output_tokens = j->output_tokens;\n    out->last_latency_ms = j->last_latency_ms;\n    out->total_latency_ms = j->total_latency_ms;\n    snprintf(out->last_model, sizeof(out->last_model), \"%s\", j->last_model);\n}\n\n/* Build the batched request: {state:{query,candidates[]}, model, questions}.\n * One Noul per candidate, keyed c0..cN; keys never reach the model. */\nstatic char *build_request(const forge_judge *j, const char *query, size_t count,\n                           const char *const *paths, const char *const *snippets,\n                           const char *const *stages, forge_error *e) {\n    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);\n    yyjson_mut_val *root = doc ? yyjson_mut_obj(doc) : NULL;\n    bool ok = root != NULL;\n    if (ok) {\n        yyjson_mut_doc_set_root(doc, root);\n        yyjson_mut_val *state = yyjson_mut_obj(doc), *cands = yyjson_mut_arr(doc),\n                       *questions = yyjson_mut_obj(doc);\n        ok = state && cands && questions && yyjson_mut_obj_add_str(doc, state, \"query\", query) &&\n             yyjson_mut_obj_add_val(doc, root, \"state\", state) &&\n             yyjson_mut_obj_add_str(doc, root, \"model\", j->model) &&\n             yyjson_mut_obj_add_val(doc, root, \"questions\", questions);\n        for (size_t i = 0; ok && i < count; i++) {\n            yyjson_mut_val *c = yyjson_mut_obj(doc);\n            ok = c && yyjson_mut_obj_add_str(doc, c, \"path\", paths[i] ? paths[i] : \"\") &&\n                 yyjson_mut_obj_add_str(doc, c, \"stage\", stages[i] ? stages[i] : \"\") &&\n                 yyjson_mut_obj_add_str(doc, c, \"snippet\", snippets[i] ? snippets"
+                },
+                {
+                    "path": "src/tools/tools.c",
+                    "stage": "literal",
+                    "snippet": "            options.rerank_budget_ms = forge_judge_budget_ms(c->config.judge);\n        }\n        return forge_repo_retrieve(c->repo, fg_json_str(args, \"query\"), &options, NULL, e);\n    }\n    if (!strcmp(name, \"list_directory\"))\n        return c->config.minimal_agent ? minimal_list_directory(c, e)\n                                       : forge_repo_summary(c->repo, e);\n    if (!strcmp(name, \"expand_output\")) {\n        size_t id, offset;\n        fg_json_uint(args, \"id\", &id, 0);\n        fg_json_uint(args, \"offset\", &offset, 0);\n        if (!id || id >= c->call_id) {\n            fg_error(e, FORGE_ERR_ARGUMENT, \"Unknown prior tool output id\");\n            return NULL;\n        }\n        char file[64], path[FG_PATH_MAX];\n        snprintf(file, sizeof(file), \"tool/%06zu.raw\", id);\n        fg_path_join(path, c->session->dir, file);\n        size_t len;\n        char *raw = fg_read_file(path, c->config.limits.max_tool_bytes * 8 + 1024, &len, e);\n        if (!raw)\n            return NULL;\n        if (memchr(raw, 0, len) || !fg_utf8_valid(raw, len)) {\n            free(raw);\n            fg_error(e, FORGE_ERR_PARSE,\n                     \"Recorded output is not valid UTF-8 text; inspect the exact stream artifacts\");\n            return NULL;\n        }\n        if (offset > len) {\n            free(raw);\n            fg_error(e, FORGE_ERR_ARGUMENT, \"Output offset out of range\");\n            return NULL;\n        }\n        fg_buf b = {0};\n        offset = fg_utf8_forward(raw, len, offset);\n        size_t take = fg_utf8_prefix(raw + offset, len - offset, 8192);\n        fg_buf_add(&b, raw + offset, take);\n        free(raw);\n        return fg_buf_take(&b);\n    }\n    if (!strcmp(name, \"git_diff\")) {\n        const char *v[] = {\n            \"git\", \"-c\", \"core.fsmonitor=false\", \"diff\", \"--no-ext-diff\", \"--no-textconv\",\n            \"--\",  NULL};\n        char *result = run(c, v, e);\n        /* Configured filters can execute: a spawned inspection may have\n         * changed state, so a stored verdict is no longer clean. */\n        if (c->dedup_s"
+                },
+                {
+                    "path": "tests/unit/test_judge.c",
+                    "stage": "literal",
+                    "snippet": "    assert(forge_judge_budget_ms(judge) == 1500);\n    assert(forge_judge_budget_ms(NULL) == 0);\n    forge_judge_destroy(judge);\n    forge_judge_options options = {0};\n    options.timeout_ms = FORGE_JUDGE_DEFAULT_TIMEOUT_MS;\n    forge_error error = {0};\n    judge = forge_judge_create(&options, &error);\n    assert(judge && error.code == FORGE_OK);\n    assert(forge_judge_budget_ms(judge) == 2 * FORGE_JUDGE_DEFAULT_TIMEOUT_MS + 500);\n    forge_judge_destroy(judge);\n}\n\nstatic void create_test_directory(char directory[TEST_PATH]) {\n#ifdef _WIN32\n    char temporary[TEST_PATH];\n    DWORD n = GetTempPathA(sizeof(temporary), temporary);\n    assert(n > 0 && n < sizeof(temporary));\n    assert(GetTempFileNameA(temporary, \"fgj\", 0, directory));\n    assert(DeleteFileA(directory));\n    assert(_mkdir(directory) == 0);\n#else\n    strcpy(directory, \"/tmp/forge-judge-test-XXXXXX\");\n    assert(mkdtemp(directory));\n#endif\n}\n\nstatic size_t scan_records(const char *directory, bool remove_files) {\n    size_t count = 0;\n#ifdef _WIN32\n    char pattern[TEST_PATH];\n    snprintf(pattern, sizeof(pattern), \"%s\\\\judge-*.json\", directory);\n    WIN32_FIND_DATAA data;\n    HANDLE handle = FindFirstFileA(pattern, &data);\n    if (handle == INVALID_HANDLE_VALUE)\n        return 0;\n    do {\n        count++;\n        if (remove_files) {\n            char path[TEST_PATH];\n            snprintf(path, sizeof(path), \"%s\\\\%s\", directory, data.cFileName);\n            (void)DeleteFileA(path);\n        }\n    } while (FindNextFileA(handle, &data));\n    FindClose(handle);\n#else\n    DIR *dir = opendir(directory);\n    if (!dir)\n        return 0;\n    struct dirent *entry;\n    while ((entry = readdir(dir))) {\n        if (strncmp(entry->d_name, \"judge-\", 6) || !strstr(entry->d_name, \".json\"))\n            continue;\n        count++;\n        if (remove_files) {\n            char path[TEST_PATH];\n            snprintf(path, sizeof(path), \"%s/%s\", directory, entry->d_name);\n            (void)remove(path);\n        }\n    }\n    closedir(dir);\n#endif\n    return count;\n}\n\nstatic void te"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.57
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.27
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.14
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.58
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.29
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.35
+            }
+        },
+        "usage": {
+            "input_tokens": 3906,
+            "output_tokens": 106
+        }
+    }
+}

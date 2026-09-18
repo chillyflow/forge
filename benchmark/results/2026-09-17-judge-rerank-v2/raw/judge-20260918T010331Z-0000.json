@@ -1,0 +1,145 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T010331Z",
+    "latency_ms": 594.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_diagnostic_hash",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "    *diagnostic_hash = fg_diagnostic_hash(combined);\n    free(combined);\n    if (feedback)\n        *feedback = fg_strdup(summary);\n    fg_validation_result_free(&verification);\n    if (feedback && !*feedback) {\n        fg_error(e, FORGE_ERR_MEMORY, \"Cannot retain post-edit validation feedback\");\n        return false;\n    }\n    if (verified != FORGE_OK && verified != FORGE_ERR_CONFLICT && verified != FORGE_ERR_NOT_FOUND &&\n        verified != FORGE_ERR_POLICY) {\n        if (e)\n            *e = verify_error;\n        if (!e || !e->code)\n            fg_error(e, verified, \"Automatic stall validation could not complete\");\n        return false;\n    }\n    return true;\n}\nstatic bool record_change(forge_agent *a, forge_repo *repo, forge_context *ctx,\n                          uint64_t repo_segment, uint64_t memory_id, size_t turn,\n                          const fg_repo_change *change, bool *unknown_changes, forge_error *e) {\n    a->metrics.repo_full_scans += change->full_scan ? 1u : 0u;\n    a->metrics.repo_delta_scans += change->delta_scan ? 1u : 0u;\n    a->metrics.filesystem_events += change->events;\n    a->metrics.watch_reopens += change->reopened ? 1u : 0u;\n    a->metrics.index_ms += change->duration_ms;\n    if (!change->native && !a->watch_warned) {\n        if (!fg_session_emit(&a->session, \"watch_warning\", change->json, e))\n            return false;\n        a->watch_warned = true;\n    }\n    if ((change->changed || change->full_scan || change->delta_scan) &&\n        !fg_session_emit(&a->session, change->changed ? \"file_change\" : \"repository_scan\",\n                         change->json, e))\n        return false;\n    if (!change->changed || !ctx)\n        return true;\n    *unknown_changes = true;\n    /* Native paths are change signals, not portable file identities. Case-folded\n     * volumes and hard-link aliases may use another spelling than a tool call.\n     * All observed batches invalidate bound source views conservatively,\n     * as do known mutations below. */\n    forge_context_invalidate(ctx, 0, change->generation"
+                },
+                {
+                    "path": "docs/DIAGNOSTICS.md",
+                    "stage": "literal",
+                    "snippet": "The internal `fg_compress_output` and `fg_diagnostic_hash` signatures remain\nunchanged. Named multi-record output uses the normalized pipeline. The existing\nsmall generic-output contract, generic tail view, and single Go output-event\nclipping behavior remain for callers that depend on them. Those legacy views\ndo not expose all new JSON metadata; use the length-taking API for structured\nconsumers and raw byte streams.\n\nThe hash ignores ordinary output records and Go envelope timing/order. Textual\ntiming, addresses, and arbitrary application log fields are not universally\nnormalized. Treat it only as a loop-detection hint, never a security identifier,\na command outcome, or evidence that a test ran.\n\n`tests/unit/test_diagnostics.c` is offline and requires no Go, Rust, Python,\ncompiler subprocess, model, or GPU. It exercises the supported fixture formats,\ninterleaved Go fragments, explicit versus unknown metadata, duplicate counts,\nranking, malformed schemas, invalid coordinates, NUL/invalid UTF-8, color\nremoval, resource limits, renderer byte boundaries, deterministic malformed\nbyte cases, and the older compressor/hash contracts. Integration with actual\ntool invocations is a separate runtime test responsibility.\n"
+                },
+                {
+                    "path": "src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "    *diagnostic_hash = fg_diagnostic_hash(combined);\n    free(combined);\n    if (feedback)\n        *feedback = fg_strdup(summary);\n    fg_validation_result_free(&verification);\n    if (feedback && !*feedback) {\n        fg_error(e, FORGE_ERR_MEMORY, \"Cannot retain post-edit validation feedback\");\n        return false;\n    }\n    if (verified != FORGE_OK && verified != FORGE_ERR_CONFLICT && verified != FORGE_ERR_NOT_FOUND &&\n        verified != FORGE_ERR_POLICY) {\n        if (e)\n            *e = verify_error;\n        if (!e || !e->code)\n            fg_error(e, verified, \"Automatic stall validation could not complete\");\n        return false;\n    }\n    return true;\n}\nstatic bool record_change(forge_agent *a, forge_repo *repo, forge_context *ctx,\n                          uint64_t repo_segment, uint64_t memory_id, size_t turn,\n                          const fg_repo_change *change, bool *unknown_changes, forge_error *e) {\n    a->metrics.repo_full_scans += change->full_scan ? 1u : 0u;\n    a->metrics.repo_delta_scans += change->delta_scan ? 1u : 0u;\n    a->metrics.filesystem_events += change->events;\n    a->metrics.watch_reopens += change->reopened ? 1u : 0u;\n    a->metrics.index_ms += change->duration_ms;\n    if (!change->native && !a->watch_warned) {\n        if (!fg_session_emit(&a->session, \"watch_warning\", change->json, e))\n            return false;\n        a->watch_warned = true;\n    }\n    if ((change->changed || change->full_scan || change->delta_scan) &&\n        !fg_session_emit(&a->session, change->changed ? \"file_change\" : \"repository_scan\",\n                         change->json, e))\n        return false;\n    if (!change->changed || !ctx)\n        return true;\n    *unknown_changes = true;\n    /* Native paths are change signals, not portable file identities. Case-folded\n     * volumes and hard-link aliases may use another spelling than a tool call.\n     * All observed batches invalidate bound source views conservatively,\n     * as do known mutations below. */\n    forge_context_invalidate(ctx, 0, change->generation"
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": "uint64_t fg_diagnostic_hash(const char *);\n\n/* Internal checkpoint I/O seam. Real backends provide physical sequence state;\n * unit fixtures may substitute deterministic bytes, never model evidence. */\ntypedef struct {\n    void *userdata;\n    void *(*allocate)(void *, size_t, forge_error *);\n    void (*release)(void *, void *, size_t);\n} fg_checkpoint_allocator;\ntypedef struct {\n    forge_status (*supported)(forge_model *, forge_error *);\n    forge_status (*prefill)(forge_model *, const char *, int32_t **, size_t *, forge_metrics *,\n                            forge_cancel_fn, void *, uint64_t, forge_error *);\n    size_t (*state_size)(forge_model *);\n    size_t (*state_get)(forge_model *, uint8_t *, size_t);\n    size_t (*state_set)(forge_model *, const uint8_t *, size_t);\n    bool (*accept_tokens)(forge_model *, const int32_t *, size_t);\n    void (*clear)(forge_model *);\n    /* Optional automatic-cache hooks. probe_prefix performs only template/\n     * token work, allocates all extra buffers through the supplied allocator,\n     * and reports LCP(full tokens, separately templated raw prefix tokens).\n     * live_prefix includes a matching final token; callers subtract it when\n     * logits need recomputation. live_matches requires EXACT sequence coverage. */\n    forge_status (*probe_prefix)(forge_model *, const char *, size_t, const int32_t *, size_t,\n                                 size_t *, const fg_checkpoint_allocator *, forge_cancel_fn, void *,\n                                 uint64_t, forge_error *);\n    size_t (*live_prefix)(forge_model *, const int32_t *, size_t);\n    bool (*live_matches)(forge_model *, const int32_t *, size_t);\n} fg_checkpoint_backend;\n\ntypedef struct fg_checkpoint_cache fg_checkpoint_cache;\ntypedef struct {\n    fg_checkpoint_cache *cache;\n    const int32_t *tokens;\n    size_t token_count, anchors[FORGE_CHECKPOINT_CACHE_MAX_ANCHORS], anchor_count;\n    size_t capture_attempts, restored_tokens, previous_live_prefix;\n    uint64_t context_hash, deadline;\n    forge_cancel_fn cancelled;\n    vo"
+                },
+                {
+                    "path": "src/tools/diagnostics.c",
+                    "stage": "literal",
+                    "snippet": "uint64_t fg_diagnostic_hash(const char *raw) {\n    if (!raw)\n        return legacy_diagnostic_hash(NULL);\n    forge_diagnostic_options options = forge_diagnostics_default_options();\n    options.max_diagnostics = 512;\n    char *json = forge_diagnostics_parse(raw, strlen(raw), &options, NULL);\n    yyjson_doc *doc = json ? yyjson_read(json, strlen(json), 0) : NULL;\n    if (!doc) {\n        free(json);\n        return legacy_diagnostic_hash(raw);\n    }\n    uint64_t hashes[512];\n    size_t n = 0, i, count;\n    yyjson_val *record;\n    yyjson_arr_foreach(yyjson_obj_get(yyjson_doc_get_root(doc), \"diagnostics\"), i, count, record) {\n        const char *kind = dg_tag(record, \"kind\"), *fingerprint = dg_tag(record, \"fingerprint\");\n        if (kind && fingerprint && strcmp(kind, \"output\") && n < 512)\n            hashes[n++] = fg_hash(fingerprint, strlen(fingerprint));\n    }\n    qsort(hashes, n, sizeof(*hashes), compare_hashes);\n    size_t unique = 0;\n    for (size_t j = 0; j < n; j++)\n        if (!j || hashes[j] != hashes[j - 1])\n            hashes[unique++] = hashes[j];\n    uint64_t result = fg_hash(hashes, unique * sizeof(*hashes));\n    yyjson_doc_free(doc);\n    free(json);\n    return result;\n}\n\nchar *fg_compress_output(const char *raw, size_t budget, size_t *visible, forge_error *error) {\n    if (!raw || budget < 64) {\n        fg_error(error, FORGE_ERR_ARGUMENT, \"Invalid output budget\");\n        return NULL;\n    }\n    char *json = forge_diagnostics_parse(raw, strlen(raw), NULL, error);\n    if (!json)\n        return NULL;\n    yyjson_doc *doc = yyjson_read(json, strlen(json), 0);\n    yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;\n    yyjson_val *adapters = yyjson_obj_get(root, \"adapters\"),\n               *summary = yyjson_obj_get(root, \"summary\");\n    bool go_only = yyjson_arr_size(adapters) == 1 &&\n                   !strcmp(yyjson_get_str(yyjson_arr_get_first(adapters)), \"go_test\");\n    bool generic_only = yyjson_arr_size(adapters) == 0 ||\n                        (yyjson_arr_size(adapters) == 1 &&\n                 "
+                },
+                {
+                    "path": "tests/unit/test_core.c",
+                    "stage": "literal",
+                    "snippet": "    assert(fg_diagnostic_hash(nul_json) !=\n           fg_diagnostic_hash(\"{\\\"Action\\\":\\\"output\\\",\\\"Output\\\":\\\"before\\\\u0000x.go:9: \"\n                              \"error different after NUL \\\\u03a9\\\\n\\\"}\\n\"));\n    compressed = fg_compress_output(\"error invalid \\xff\"\n                                    \" and control \\x01\"\n                                    \"after\",\n                                    256, NULL, &error);\n    assert(compressed && strstr(compressed, \"\\\\xff and control \\\\x01after\"));\n    assert(fg_utf8_valid(compressed, strlen(compressed)));\n    free(compressed);\n}\n\nstatic void test_native_tool_schema_and_normalization(void) {\n    char *schema = fg_tool_native_schema();\n    assert(schema);\n    yyjson_doc *document = yyjson_read(schema, strlen(schema), 0);\n    yyjson_val *tools = document ? yyjson_doc_get_root(document) : NULL;\n    size_t tool_count = 0;\n    fg_tools(&tool_count);\n    assert(yyjson_is_arr(tools) && yyjson_arr_size(tools) == tool_count + 2);\n    bool final = false, memory = false, hunk_newline = false, hunk_structure = false,\n         hunk_hash = false, patch_minimal = false, patch_hash = false;\n    size_t index, maximum;\n    yyjson_val *tool;\n    yyjson_arr_foreach(tools, index, maximum, tool) {\n        assert(!strcmp(fg_json_str(tool, \"type\"), \"function\"));\n        yyjson_val *function = yyjson_obj_get(tool, \"function\");\n        const char *name = fg_json_str(function, \"name\");\n        yyjson_val *parameters = yyjson_obj_get(function, \"parameters\");\n        const char *description = fg_json_str(function, \"description\");\n        assert(name && description && yyjson_is_obj(parameters));\n        assert(yyjson_is_false(yyjson_obj_get(parameters, \"additionalProperties\")));\n        final |= !strcmp(name, \"final\") && strstr(description, \"trigger required host validation\");\n        memory |= !strcmp(name, \"memory\") && strstr(description, \"not a completion action\");\n        hunk_newline |=\n            !strcmp(name, \"apply_hunk\") && strstr(description, \"host preserves that line ending\");\n     "
+                },
+                {
+                    "path": "tests/unit/test_diagnostics.c",
+                    "stage": "literal",
+                    "snippet": "    assert(fg_diagnostic_hash(a) == fg_diagnostic_hash(b));\n    assert(fg_diagnostic_hash(\"x.c:1: error: one\\n\") != fg_diagnostic_hash(\"x.c:1: error: two\\n\"));\n    assert(fg_diagnostic_hash(one) == fg_diagnostic_hash(one));\n}\n\nstatic void test_pytest(void) {\n    const char *text = \"================ FAILURES ================\\n\"\n                       \"________________ test_sum _________________\\n\"\n                       \"    def test_sum():\\n\"\n                       \">       assert total == 4\\n\"\n                       \"E       assert 3 == 4\\n\"\n                       \"tests/test_math.py:8: AssertionError\\n\"\n                       \"FAILED tests/test_math.py::test_sum - assert 3 == 4\\n\";\n    yyjson_doc *doc = parse(text, FORGE_DIAGNOSTICS_AUTO);\n    yyjson_val *record = find_record(doc, \"test\", \"test_sum\");\n    assert(!strcmp(string_at(record, \"adapter\"), \"pytest\"));\n    assert(!strcmp(string_at(record, \"message\"), \"assert 3 == 4\"));\n    assert(yyjson_is_null(yyjson_obj_get(record, \"expected\")));\n    assert(yyjson_is_null(yyjson_obj_get(record, \"actual\")));\n    assert(yyjson_arr_size(yyjson_obj_get(record, \"stack\")) == 1);\n    assert(!strcmp(string_at(yyjson_obj_get(record, \"location\"), \"path\"), \"tests/test_math.py\"));\n    assert(!strcmp(string_at(find_record(doc, \"test\", \"tests/test_math.py::test_sum\"), \"format\"),\n                   \"pytest_summary\"));\n    yyjson_doc_free(doc);\n\n    doc = parse(\"Traceback (most recent call last):\\n\"\n                \"  File \\\"tests/test_math.py\\\", line 8, in test_sum\\n\"\n                \"AssertionError: expected four\\n\",\n                FORGE_DIAGNOSTICS_PYTEST);\n    record = record_at(doc, 0);\n    assert(!strcmp(string_at(record, \"message\"), \"AssertionError: expected four\"));\n    assert(!strcmp(string_at(record, \"severity\"), \"error\"));\n    assert(yyjson_arr_size(yyjson_obj_get(record, \"stack\")) == 1);\n    assert(yyjson_is_null(yyjson_obj_get(record, \"test\")));\n    yyjson_doc_free(doc);\n}\n\nstatic void test_generic_malformed_and_binary(void) {\n    const char *unknown = \"{\\n  \\\"Action\\\""
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.53
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.08
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.3
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.94
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.13
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.13
+            }
+        },
+        "usage": {
+            "input_tokens": 4570,
+            "output_tokens": 123
+        }
+    }
+}

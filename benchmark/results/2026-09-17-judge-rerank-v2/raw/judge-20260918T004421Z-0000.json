@@ -1,0 +1,96 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T004421Z",
+    "latency_ms": 8016.0,
+    "status": "error",
+    "error": "WinHttpSendRequest failed (12002)",
+    "request": {
+        "state": {
+            "query": "fg_action_begin",
+            "candidates": [
+                {
+                    "path": "docs/DESIGN_CHECKLIST.md",
+                    "stage": "literal",
+                    "snippet": "lama-3.1-8B burned the full 2048-token budget at turn 1 on 10 of 20 routed fixtures without opening an action. Phase 2 (this revision) makes the decode states explicit and bounded in [the backend][llama] with pure predicates in `src/inference/routing.c` (`fg_action_begin`, `fg_action_complete`, `fg_think_bounds`, unit-tested in `tests/unit/test_core.c`): the reasoning phase ends at a think budget (`--thought-budget`, default half the turn budget, a chosen unmeasured fraction; `--no-thought-budget` is the unbounded ablation, `thought-routed-unbounded-decode-only` the arm) by swapping the never-triggered lazy grammar for an eager one (tool constraints retained, all three envelope alternatives open, `forced_actions` counted); every grammar arm now ends generation at the token that completes the action object, scanned from the recorded action offset (`action_stops`); the routed prefix over 2048 bytes is truncated at a UTF-8 boundary instead of failing the run; a cue that cannot be force-decoded fails loudly instead of silently arming the bans; and `--thought-cue` replaces the scaffold (empty drops the `{`-ban window with it) for natively-thinking models — CLI/host validation in `src/cli/main.c`, `src/core/config.c`, `src/core/agent.c`, integration cases in `tests/integration/test_cli.py`. Every published sweep predates this mechanism and every grammar arm — baselines included, early stop changes them too — needs re-measuring on a phase-2 binary. Thinking versus action is now an explicit bounded decode-state machine with per-state sampler configuration, but tool selection, tool arguments, patch, and final-response decoding still share one undifferentiated action grammar with no per-state sampler policy, and no measurement yet motivates routing them separately — §32 remains Partial. |\n| §33 / 26 | Seed source-aware drafts from active files, nearby code, repository symbols, and previous patches; verify proposed n-gram continuations with the target model. | Missing | No source-token lookup cache, seeded draft g"
+                },
+                {
+                    "path": "docs/plans/phase2-per-state-routing.md",
+                    "stage": "literal",
+                    "snippet": "`internal.h`, unit-tested without a model): `fg_action_begin` (returns the\nmatch position so the backend can record the action offset),\n`fg_action_complete`, `fg_think_bounds` (min/cap arithmetic incl. clamping).\nThe llama backend consumes these; only sampler surgery stays backend-side.\n\n### Configuration surface (CLI-only, like the rest of the reasoning channel)\n\n- `--thought-budget N` — max sampled reasoning tokens before the action grammar\n  is enforced (routed mode). N in [1, 2147483647]; 0 is rejected (it is the\n  unset sentinel, and a zero budget with `--thought-required` is a guaranteed\n  first-turn death — contradictory arms fail loudly). Default when absent:\n  **half the per-call token budget** (`max_tokens/2`, where max_tokens =\n  `FG_MIN(output_reserve, remaining global budget)`), a chosen, unmeasured\n  fraction recorded as such — it mirrors the existing `max_tokens/4` suppress\n  scaling, and it shrinks near the global budget end, which makes\n  `think_tokens` a per-turn-varying bound (disclosed metrics confound).\n- `--no-thought-budget` — unbounded reasoning (phase-1 behavior, ablation).\n  Combined with `--thought-budget N`: last flag wins (checkpoint-cache flag\n  precedent). Represented as a separate bool, NOT a SIZE_MAX sentinel (review:\n  the CLI number parser accepts 18446744073709551615, which would silently\n  alias the sentinel).\n- `--thought-cue TEXT` — replace the forced `Thought: ` cue; empty string\n  disables the cue (groundwork for natively-thinking models whose reasoning\n  opens with their own markers; on non-thinking models an empty cue is an\n  elicitation ablation — the brace-ban window is dropped with it, see above,\n  so the refuted death configuration cannot be re-created). A cue containing\n  `{` is rejected at config validation (byte level) and again at the backend\n  (token-piece level).\n- All three require `--thought-routed`, enforced at all three established\n  sites: CLI diagnostics, `forge_config_validate`, and `forge_agent_create`\n  (review: the third site keeps library"
+                },
+                {
+                    "path": "src/inference/llama_backend.c",
+                    "stage": "literal",
+                    "snippet": "            const char *opened = fg_action_begin(out.data ? out.data : \"\");\n            if (opened) {\n                if (awaiting_action) {\n                    llama_sampler_free(llama_sampler_chain_remove(sampler, 0));\n                    awaiting_action = false;\n                }\n                action_open = true;\n                action_offset = (size_t)(opened - out.data);\n                stats->action_select_tokens++;\n            } else\n                stats->think_tokens++;\n        }\n        if (native) {\n            size_t safe_length = out.len;\n            bool stopped = false;\n            fg_chat_render_scan_stop(native_render, out.data, out.len, native_emitted, &safe_length,\n                                     &stopped);\n            if (safe_length > native_emitted && cb &&\n                !cb(out.data + native_emitted, safe_length - native_emitted, u)) {\n                if (piece != small)\n                    free(piece);\n                status = fg_error(e, FORGE_ERR_CANCELLED, \"Token callback cancelled\");\n                break;\n            }\n            native_emitted = safe_length;\n            if (stopped) {\n                out.len = safe_length;\n                out.data[out.len] = 0;\n                if (piece != small)\n                    free(piece);\n                ended = true;\n                break;\n            }\n        } else if (cb && !cb(piece, (size_t)length, u)) {\n            if (piece != small)\n                free(piece);\n            status = fg_error(e, FORGE_ERR_CANCELLED, \"Token callback cancelled\");\n            break;\n        }\n        if (piece != small)\n            free(piece);\n        /* End at completion: after the action object closes, the grammar\n         * still keeps whitespace legal (root ends in ws), so waiting for an\n         * end token can burn the rest of the budget. Objects can only close\n         * on a '}' piece, and the scan starts at the constrained region. */\n        if (!native && active_grammar && action_open && closing &&\n            fg_action_complete(out.d"
+                },
+                {
+                    "path": "src/inference/routing.c",
+                    "stage": "literal",
+                    "snippet": "const char *fg_action_begin(const char *text) {\n    for (const char *candidate = strchr(text, '{'); candidate;\n         candidate = strchr(candidate + 1, '{')) {\n        const char *cursor = candidate + 1;\n        while (*cursor == ' ' || *cursor == '\\t' || *cursor == '\\r' || *cursor == '\\n')\n            cursor++;\n        if (*cursor != '\"')\n            continue;\n        cursor++;\n        static const char *const keys[] = {\"tool\", \"memory\", \"final\"};\n        for (size_t i = 0; i < sizeof(keys) / sizeof(*keys); i++) {\n            size_t length = strlen(keys[i]);\n            if (strncmp(cursor, keys[i], length) || cursor[length] != '\"')\n                continue;\n            const char *colon = cursor + length + 1;\n            while (*colon == ' ' || *colon == '\\t' || *colon == '\\r' || *colon == '\\n')\n                colon++;\n            if (*colon == ':')\n                return candidate;\n        }\n    }\n    return NULL;\n}\nbool fg_action_complete(const char *text) {\n    for (const char *candidate = strchr(text, '{'); candidate;\n         candidate = strchr(candidate + 1, '{')) {\n        yyjson_doc *doc = yyjson_read(candidate, strlen(candidate), 0);\n        yyjson_val *root = doc ? yyjson_doc_get_root(doc) : NULL;\n        bool complete = yyjson_is_obj(root) &&\n                        (yyjson_obj_get(root, \"tool\") || yyjson_obj_get(root, \"memory\") ||\n                         yyjson_obj_get(root, \"final\"));\n        yyjson_doc_free(doc);\n        if (complete)\n            return true;\n    }\n    return false;\n}\nbool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens) {\n    size_t cap = enabled ? FG_MAX((size_t)1, FG_MIN((size_t)256, max_tokens / 2)) : 0;\n    return enabled && !action_begun && generated < max_tokens && generated == cap;\n}\nbool fg_json_whitespace_only(const char *text, size_t length) {\n    if (!text || !length)\n        return false;\n    for (size_t i = 0; i < length; i++)\n        if (text[i] != ' ' && text[i] != '\\t' && text[i] != '\\r' && text[i] != '\\n')\n            r"
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": " * model. fg_action_begin mirrors FG_ACTION_TRIGGER_PATTERN and returns the\n * opening brace of the first action-object start, or NULL. fg_action_complete\n * reports whether some '{' suffix of `text` parses to completion as a\n * tool/memory/final object; callers scope `text` to the action-begin offset\n * so unconstrained reasoning prose can never satisfy it. fg_think_bounds\n * derives the suppress window and think cap for one generation. */\nconst char *fg_action_begin(const char *text);\nbool fg_action_complete(const char *text);\nvoid fg_think_bounds(const fg_decode_policy *, size_t max_tokens, size_t *min_think,\n                     size_t *think_cap);\nfg_action_phase fg_action_decode_phase(const char *text);\nbool fg_json_whitespace_only(const char *text, size_t length);\n/* Reduced-candidate sampling ladder for the constrained path. The grammar mask\n * costs time per candidate in the array it is applied to, and a decoder that\n * still draws from a full distribution needs several acceptable candidates,\n * while greedy needs only the first acceptable one in rank order. Callers mask a\n * raw top-K prefix and walk this ladder instead of paying for the whole\n * vocabulary. fg_reduced_next_k returns the next rung, or 0 when the next one\n * would reach the vocabulary - which means \"use the full array\", so the full\n * vocabulary stays the exact last resort. */\n#define FG_REDUCED_START_K 64\nint fg_reduced_next_k(int current_k, int vocab_size);\nbool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens);\ntypedef struct {\n    const char *name, *description, *fields, *grammar;\n    forge_capability capability;\n} fg_tool_def;\nconst fg_tool_def *fg_tools(size_t *);\n/* `thought` selects whether reasoning is offered, `required` whether it may be\n * empty, and `routed` whether it is a plain-text prefix outside the action JSON.\n * Routed mode leaves the action constrained and uses a lazy grammar trigger. */\nchar *fg_tool_schema(bool thought, bool required, bool routed);\nchar *fg_tool_native_schema"
+                },
+                {
+                    "path": "tests/unit/test_core.c",
+                    "stage": "literal",
+                    "snippet": "    /* §32 decode-state routing predicates. fg_action_begin mirrors the lazy\n     * trigger: an envelope key must open the object, so reasoning prose and\n     * embedded non-action objects never mark the constrained region. */\n    const char *begun = fg_action_begin(\"Thought: adding first {\\\"tool\\\":\\\"read_file\\\"\");\n    assert(begun && !strncmp(begun, \"{\\\"tool\\\"\", 7));\n    begun = fg_action_begin(\"x { \\\"final\\\" : \\\"done\\\"}\");\n    assert(begun && !strncmp(begun, \"{ \\\"final\\\"\", 9));\n    assert(!fg_action_begin(\"no action here\"));\n    assert(!fg_action_begin(\"{\\\"thought\\\":\\\"only\\\"}\"));\n    assert(!fg_action_begin(\"{\\\"x\\\":1,\\\"tool\\\":\\\"late key\\\"}\"));\n    /* §47 reduced-candidate ladder: each rung is a strict prefix of the next, and\n     * the ladder surrenders to the full array before a rung can reach the\n     * vocabulary size, which keeps the full vocabulary the exact last resort. */\n    assert(fg_reduced_next_k(64, 151936) == 256);\n    assert(fg_reduced_next_k(256, 151936) == 1024);\n    assert(fg_reduced_next_k(65536, 151936) == 0);\n    assert(fg_reduced_next_k(64, 256) == 0);\n    assert(fg_reduced_next_k(64, 100) == 0);\n    assert(fg_reduced_next_k(64, 0) == 0);\n    assert(fg_reduced_next_k(0, 151936) == 0);\n    assert(fg_reduced_next_k(-4, 151936) == 0);\n    /* Completion requires a full parse to the end of the text: an unclosed\n     * object, or a '}' inside a string, must not end generation early. */\n    assert(fg_action_complete(\"{\\\"tool\\\":\\\"list_files\\\",\\\"args\\\":{\\\"path\\\":\\\".\\\"}}\"));\n    assert(fg_action_complete(\"prose then {\\\"final\\\":\\\"done\\\"} \\n\"));\n    assert(!fg_action_complete(\"{\\\"tool\\\":\\\"list_files\\\",\\\"args\\\":{\\\"path\\\":\\\".\\\"}\"));\n    assert(!fg_action_complete(\"{\\\"final\\\":\\\"a brace } inside\"));\n    assert(!fg_action_complete(\"nothing\"));\n    assert(fg_json_whitespace_only(\" \\t\\r\\n\", 4));\n    assert(!fg_json_whitespace_only(\"\", 0));\n    assert(!fg_json_whitespace_only(\" \\n{\", 3));\n    assert(!fg_native_force_due(false, false, 0, 2048));\n    assert(!fg_native_force_due(true, false, 0, 0));\n    assert("
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": ""
+}

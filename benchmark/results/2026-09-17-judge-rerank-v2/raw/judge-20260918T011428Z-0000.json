@@ -1,0 +1,145 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T011428Z",
+    "latency_ms": 656.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_go_graph_modules",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/originals/src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    g.modules = fg_go_graph_modules(g.graph, &g.module_count);\r\n    g.packages = fg_go_graph_packages(g.graph, &g.package_count);\r\n    g.edges = fg_go_graph_edges(g.graph, &g.edge_count);\r\n    g.go_applicable = fg_go_graph_applicable(g.graph);\r\n    size_t slots = g.package_count ? g.package_count : 1;\r\n    g.affected = calloc(slots, sizeof(*g.affected));\r\n    g.dependent = calloc(slots, sizeof(*g.dependent));\r\n    if (!g.affected || !g.dependent) {\r\n        vp_fail(&g, FORGE_ERR_MEMORY, \"Validation selection allocation failed\");\r\n        goto done;\r\n    }\r\n    size_t reason_count = 0;\r\n    const fg_go_reason *reasons = fg_go_graph_reasons(g.graph, &reason_count);\r\n    for (size_t i = 0; i < reason_count; i++)\r\n        if (!vp_reason_add(&g, reasons[i].code, reasons[i].path, reasons[i].detail))\r\n            goto done;\r\n    if (!vp_mark_changes(&g))\r\n        goto done;\r\n    if (!vp_python_discover(&g))\r\n        goto done;\r\n    g.applicable = g.go_applicable || g.python_applicable;\r\n    g.verification_ready =\r\n        g.applicable &&\r\n        (!g.python_applicable || (g.python_executable != NULL && g.python_file_count != 0 &&\r\n                                  (g.python_test_count != 0 || g.python_pytest)));\r\n    if (g.go_applicable && (!vp_configuration_changes(&g) || !vp_reachability(&g)))\r\n        goto done;\r\n    out = vp_serialize(&g);\r\ndone:\r\n    if (snapshot.internal && fg_repo_snapshot_end(&snapshot, out != NULL, error) != FORGE_OK) {\r\n        free(out);\r\n        out = NULL;\r\n    }\r\n    vp_free(&g);\r\n    return out;\r\n}\r\n\r\n/* Preliminary symbol tests reuse the command executor and its ordinary policy,\n * snapshots and\r\n * stop-on-failure behavior. This never replaces broad_tests. */\r\nstatic bool vp_impact_commands(vp_graph *g, yyjson_mut_val *commands, yyjson_val *tests,\r\n                               bool dependent) {\r\n    size_t index, total;\r\n    yyjson_val *test;\r\n    const char *directories[VP_MAX_COMMANDS];\r\n    size_t directory_count = 0;\r\n    yyjson_arr_foreach(tests, index, total, test) {\r\n        co"
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    g.modules = fg_go_graph_modules(g.graph, &g.module_count);\r\n    g.packages = fg_go_graph_packages(g.graph, &g.package_count);\r\n    g.edges = fg_go_graph_edges(g.graph, &g.edge_count);\r\n    g.go_applicable = fg_go_graph_applicable(g.graph);\r\n    size_t slots = g.package_count ? g.package_count : 1;\r\n    g.affected = calloc(slots, sizeof(*g.affected));\r\n    g.dependent = calloc(slots, sizeof(*g.dependent));\r\n    if (!g.affected || !g.dependent) {\r\n        vp_fail(&g, FORGE_ERR_MEMORY, \"Validation selection allocation failed\");\r\n        goto done;\r\n    }\r\n    size_t reason_count = 0;\r\n    const fg_go_reason *reasons = fg_go_graph_reasons(g.graph, &reason_count);\r\n    for (size_t i = 0; i < reason_count; i++)\r\n        if (!vp_reason_add(&g, reasons[i].code, reasons[i].path, reasons[i].detail))\r\n            goto done;\r\n    if (!vp_mark_changes(&g))\r\n        goto done;\r\n    if (!vp_python_discover(&g))\r\n        goto done;\r\n    g.applicable = g.go_applicable || g.python_applicable;\r\n    g.verification_ready =\r\n        g.applicable &&\r\n        (!g.python_applicable || (g.python_executable != NULL && g.python_file_count != 0 &&\r\n                                  (g.python_test_count != 0 || g.python_pytest)));\r\n    if (g.go_applicable && (!vp_configuration_changes(&g) || !vp_reachability(&g)))\r\n        goto done;\r\n    out = vp_serialize(&g);\r\ndone:\r\n    if (snapshot.internal && fg_repo_snapshot_end(&snapshot, out != NULL, error) != FORGE_OK) {\r\n        free(out);\r\n        out = NULL;\r\n    }\r\n    vp_free(&g);\r\n    return out;\r\n}\r\n\r\n/* Preliminary symbol tests reuse the command executor and its ordinary policy,\n * snapshots and\r\n * stop-on-failure behavior. This never replaces broad_tests. */\r\nstatic bool vp_impact_commands(vp_graph *g, yyjson_mut_val *commands, yyjson_val *tests,\r\n                               bool dependent) {\r\n    size_t index, total;\r\n    yyjson_val *test;\r\n    const char *directories[VP_MAX_COMMANDS];\r\n    size_t directory_count = 0;\r\n    yyjson_arr_foreach(tests, index, total, test) {\r\n        co"
+                },
+                {
+                    "path": "src/repo/graph.c",
+                    "stage": "literal",
+                    "snippet": "const fg_go_module *fg_go_graph_modules(const fg_go_graph *g, size_t *count) {\n    if (count)\n        *count = g ? g->module_count : 0;\n    return g ? g->modules : NULL;\n}\nconst fg_go_package *fg_go_graph_packages(const fg_go_graph *g, size_t *count) {\n    if (count)\n        *count = g ? g->package_count : 0;\n    return g ? g->packages : NULL;\n}\nconst fg_go_edge *fg_go_graph_edges(const fg_go_graph *g, size_t *count) {\n    if (count)\n        *count = g ? g->edge_count : 0;\n    return g ? g->edges : NULL;\n}\nconst fg_go_reason *fg_go_graph_reasons(const fg_go_graph *g, size_t *count) {\n    if (count)\n        *count = g ? g->reason_count : 0;\n    return g ? g->reasons : NULL;\n}\nsize_t fg_go_graph_find_package(const fg_go_graph *g, const char *directory) {\n    if (!g || !directory)\n        return GG_NONE;\n    size_t lo = 0, hi = g->package_count;\n    while (lo < hi) {\n        size_t mid = lo + (hi - lo) / 2;\n        if (strcmp(g->packages[mid].directory, directory) < 0)\n            lo = mid + 1;\n        else\n            hi = mid;\n    }\n    return lo < g->package_count && !strcmp(g->packages[lo].directory, directory) ? lo : GG_NONE;\n}\nsize_t fg_go_graph_module_for(const fg_go_graph *g, const char *directory) {\n    return g && directory ? gg_module_for(g, directory) : GG_NONE;\n}\n"
+                },
+                {
+                    "path": "src/repo/graph.h",
+                    "stage": "literal",
+                    "snippet": "const fg_go_module *fg_go_graph_modules(const fg_go_graph *, size_t *count);\nconst fg_go_package *fg_go_graph_packages(const fg_go_graph *, size_t *count);\nconst fg_go_edge *fg_go_graph_edges(const fg_go_graph *, size_t *count);\nconst fg_go_reason *fg_go_graph_reasons(const fg_go_graph *, size_t *count);\nsize_t fg_go_graph_find_package(const fg_go_graph *, const char *directory);\nsize_t fg_go_graph_module_for(const fg_go_graph *, const char *directory);\nbool fg_go_graph_excluded_path(const char *canonical_relative_file);\n\n#endif\n"
+                },
+                {
+                    "path": "src/repo/impact.c",
+                    "stage": "literal",
+                    "snippet": "    const fg_go_module *modules = fg_go_graph_modules(graph, &nm);\n    const fg_go_edge *edges = fg_go_graph_edges(graph, &ne);\n    const fg_go_reason *reasons = fg_go_graph_reasons(graph, &nr);\n    for (size_t i = 0; i < nr; i++)\n        im_reason(w, reasons[i].code, reasons[i].path, reasons[i].detail);\n    affected = calloc(np ? np : 1, sizeof(*affected));\n    dependent = calloc(np ? np : 1, sizeof(*dependent));\n    if (!affected || !dependent) {\n        im_fail(w, FORGE_ERR_MEMORY, \"Structural impact graph allocation failed\");\n        goto done;\n    }\n    for (size_t i = 0; i < after->file_count; i++) {\n        const im_file *f = &after->files[i];\n        if (!im_step(w))\n            goto done;\n        if (f->go && (strstr(f->source, \"\\\"reflect\\\"\") || strstr(f->source, \"`reflect`\") ||\n                      strstr(f->source, \"\\\"unsafe\\\"\") || strstr(f->source, \"`unsafe`\") ||\n                      strstr(f->source, \"\\\"plugin\\\"\") || strstr(f->source, \"`plugin`\") ||\n                      strstr(f->source, \"//go:embed\") || strstr(f->source, \"//go:generate\") ||\n                      im_occurs(f->source, f->bytes, \"interface\")))\n            im_reason(w, \"go_dynamic_or_generated_behavior\", f->path,\n                      \"Reflection, interfaces, unsafe/plugin behavior and generated or embedded \"\n                      \"inputs require broad fallback.\");\n        if (f->python && (strstr(f->source, \"getattr(\") || strstr(f->source, \"eval(\") ||\n                          strstr(f->source, \"exec(\") || strstr(f->source, \"importlib\") ||\n                          strstr(f->source, \"__import__\") || strstr(f->source, \"setattr(\")))\n            im_reason(w, \"python_dynamic_behavior\", f->path,\n                      \"Dynamic Python names or imports require full-suite fallback.\");\n        if (!f->go || !f->changed)\n            continue;\n        char directory[FG_PATH_MAX];\n        im_dir(f->path, directory);\n        size_t at = fg_go_graph_find_package(graph, directory);\n        if (at == FG_GO_GRAPH_NONE)\n            im_reason(w, \"unres"
+                },
+                {
+                    "path": "src/repo/summary.c",
+                    "stage": "literal",
+                    "snippet": "    const fg_go_module *modules = fg_go_graph_modules(b->graph, &module_count);\n    const fg_go_package *packages = fg_go_graph_packages(b->graph, &package_count);\n    const fg_go_edge *edges = fg_go_graph_edges(b->graph, &edge_count);\n    const fg_go_reason *reasons = fg_go_graph_reasons(b->graph, &reason_count);\n    b->module = b->package = FG_GO_GRAPH_NONE;\n    if (b->input->target.scope == FORGE_SUMMARY_MODULE) {\n        for (size_t i = 0; i < module_count; i++)\n            if (!modules[i].synthetic && !strcmp(modules[i].directory, b->input->path))\n                b->module = i;\n        if (b->module == FG_GO_GRAPH_NONE)\n            return fail(b, FORGE_ERR_NOT_FOUND, \"No indexed Go module at the requested directory\");\n    } else if (b->input->target.scope == FORGE_SUMMARY_PACKAGE) {\n        b->package = fg_go_graph_find_package(b->graph, b->input->path);\n        if (b->package == FG_GO_GRAPH_NONE || !packages[b->package].present)\n            return fail(b, FORGE_ERR_NOT_FOUND, \"No indexed Go package at the requested directory\");\n        b->module = packages[b->package].module;\n    }\n    if (!put(b, out, limit, \"\\\"modules\\\":[\"))\n        return false;\n    bool comma = false;\n    for (size_t i = 0; i < module_count; i++) {\n        if (stopped(b))\n            return false;\n        if (b->input->target.scope != FORGE_SUMMARY_REPOSITORY && i != b->module)\n            continue;\n        if ((comma && !put(b, out, limit, \",\")) || !put(b, out, limit, \"{\\\"directory\\\":\") ||\n            !string(b, out, limit, modules[i].directory) || !put(b, out, limit, \",\\\"path\\\":\") ||\n            !string(b, out, limit, modules[i].path) || !put(b, out, limit, \",\\\"synthetic\\\":\") ||\n            !put(b, out, limit, modules[i].synthetic ? \"true}\" : \"false}\"))\n            return false;\n        comma = true;\n    }\n    if (!put(b, out, limit, \"],\\\"packages\\\":[\"))\n        return false;\n    comma = false;\n    for (size_t i = 0; i < package_count; i++) {\n        if (stopped(b))\n            return false;\n        if (!selected_package(b, packages, "
+                },
+                {
+                    "path": "src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    g.modules = fg_go_graph_modules(g.graph, &g.module_count);\r\n    g.packages = fg_go_graph_packages(g.graph, &g.package_count);\r\n    g.edges = fg_go_graph_edges(g.graph, &g.edge_count);\r\n    g.go_applicable = fg_go_graph_applicable(g.graph);\r\n    size_t slots = g.package_count ? g.package_count : 1;\r\n    g.affected = calloc(slots, sizeof(*g.affected));\r\n    g.dependent = calloc(slots, sizeof(*g.dependent));\r\n    if (!g.affected || !g.dependent) {\r\n        vp_fail(&g, FORGE_ERR_MEMORY, \"Validation selection allocation failed\");\r\n        goto done;\r\n    }\r\n    size_t reason_count = 0;\r\n    const fg_go_reason *reasons = fg_go_graph_reasons(g.graph, &reason_count);\r\n    for (size_t i = 0; i < reason_count; i++)\r\n        if (!vp_reason_add(&g, reasons[i].code, reasons[i].path, reasons[i].detail))\r\n            goto done;\r\n    if (!vp_mark_changes(&g))\r\n        goto done;\r\n    if (!vp_python_discover(&g))\r\n        goto done;\r\n    g.applicable = g.go_applicable || g.python_applicable;\r\n    g.verification_ready =\r\n        g.applicable &&\r\n        (!g.python_applicable || (g.python_executable != NULL && g.python_file_count != 0 &&\r\n                                  (g.python_test_count != 0 || g.python_pytest)));\r\n    if (g.go_applicable && (!vp_configuration_changes(&g) || !vp_reachability(&g)))\r\n        goto done;\r\n    out = vp_serialize(&g);\r\ndone:\r\n    if (snapshot.internal && fg_repo_snapshot_end(&snapshot, out != NULL, error) != FORGE_OK) {\r\n        free(out);\r\n        out = NULL;\r\n    }\r\n    vp_free(&g);\r\n    return out;\r\n}\r\n\r\n/* Preliminary symbol tests reuse the command executor and its ordinary policy,\r\n * snapshots and\r\n * stop-on-failure behavior. This never replaces broad_tests. */\r\nstatic bool vp_impact_commands(vp_graph *g, yyjson_mut_val *commands, yyjson_val *tests,\r\n                               bool dependent) {\r\n    size_t index, total;\r\n    yyjson_val *test;\r\n    const char *directories[VP_MAX_COMMANDS];\r\n    size_t directory_count = 0;\r\n    yyjson_arr_foreach(tests, index, total, test) {\r\n        c"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.17
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.15
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.94
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.49
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.15
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.2
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.16
+            }
+        },
+        "usage": {
+            "input_tokens": 4534,
+            "output_tokens": 123
+        }
+    }
+}

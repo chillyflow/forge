@@ -1,0 +1,298 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T013340Z",
+    "latency_ms": 531.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "where does the context planner score candidate segments",
+            "candidates": [
+                {
+                    "path": "docs/CONTEXT.md",
+                    "stage": "fts5",
+                    "snippet": " ... Stale segments are unpinned and unselected; attempts\nto pin them are ignored. Callers remain responsible for notifying the context\nwhen source data changes.\n\nText ... "
+                },
+                {
+                    "path": "docs/VALIDATION.md",
+                    "stage": "fts5",
+                    "snippet": " ... planner supplies a bounded `VALIDATION_GUIDANCE` context with test\nrunner commands. This includes the Python runner that rejects zero collected\ntests. Planning does not ... "
+                },
+                {
+                    "path": "docs/plans/agent-performance-implementation.md",
+                    "stage": "fts5",
+                    "snippet": " ... default preservation; refusal of non-fp16 KV\n  without flash attention; planner arithmetic at the measured KV bytes/token;\n  and a context figure the planner ... "
+                },
+                {
+                    "path": "docs/CONFIG.md",
+                    "stage": "fts5",
+                    "snippet": " ... The hardware command may initialize backend discovery/driver queries but\ndoes not create an inference context or load tensor data. RPC devices are ignored ... "
+                },
+                {
+                    "path": "docs/DESIGN_CHECKLIST.md",
+                    "stage": "fts5",
+                    "snippet": " ... pack context, and favor reusable prefixes. | Partial | [Planner][context] selects pinned segments and parent bundles using priority/recency per token, checks the fully rendered ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-08-repair-recovery/README.md",
+                    "stage": "fts5",
+                    "snippet": "# Failed repair recovery development — September 8, 2026\n\nThe retained recovery candidate passed **7/10**, but lost the baseline's\nparaphrased retraction pass. It does ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/DESIGN_REVIEW.md",
+                    "stage": "fts5",
+                    "snippet": " ... by this\ncandidate, not a benefit.\n\n**The stale-diagnostic hypothesis is refuted as a cause.** The \"already assessed\"\nfeedback does omit the failing assertion ... "
+                },
+                {
+                    "path": "include/forge/context.h",
+                    "stage": "fts5",
+                    "snippet": " ... The ordinary priority planner above is unchanged. */\nchar *forge_context_plan_bounded(forge_context *, size_t input_budget, size_t *tokens,\n                                 size_t *evicted ... "
+                },
+                {
+                    "path": "include/forge/config.h",
+                    "stage": "fts5",
+                    "snippet": " ... Configuration never grants judge\n     * use; the CLI --judge flag does. NULL strings mean \"use the judge module's\n     * default\" (endpoint, model alias, key environment ... "
+                },
+                {
+                    "path": "docs/plans/agent-loop-fresh-design.md",
+                    "stage": "fts5",
+                    "snippet": " ... A prior does exist at the historical profile and points the other way:\r\n`2026-09-08-candidate-checkpoint-v3` reports checkpoint 9/18 against ... "
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-fresh-design/W2-CHANGES.md",
+                    "stage": "fts5",
+                    "snippet": " ... Per the plan, this does **not** discriminate: all six candidate-2 failures and\nboth passes issued at least one such command. Whether the model ... "
+                },
+                {
+                    "path": "docs/plans/beat-opencode-reliability.md",
+                    "stage": "fts5",
+                    "snippet": " ... The [repair and holdout report](../../benchmark/results/2026-09-02-tranche2-repair/README.md)\nrecords the final candidate at clean revision `5222616`. Rendered-context ... "
+                },
+                {
+                    "path": "tests/unit/test_config.c",
+                    "stage": "fts5",
+                    "snippet": " ... the whole inheritance chain, allowing the\n     * child to replace a parent's context while retaining its reserve. */\n    write_document(\"relations-base.toml\", \"model.context ... "
+                },
+                {
+                    "path": "docs/ARCHITECTURE.md",
+                    "stage": "fts5",
+                    "snippet": " ... context\n\nSegments have stable IDs, kind, generation, content fingerprint, priority, token\ncost, and dependencies. System/tool/task/working-state segments are pinned.\nThe latest ... "
+                },
+                {
+                    "path": "src/core/verification.c",
+                    "stage": "fts5",
+                    "snippet": " ... result->summary));\n}\n\n/* A blocked plan already contains the planner's best explanation. Preserve it\n * in the model-visible result instead of replacing it with ... "
+                },
+                {
+                    "path": "docs/SUMMARIES.md",
+                    "stage": "fts5",
+                    "snippet": " ... This command does not yet select summaries for\nthe agent's context planner.\n\nThe top-level `model_load_ms` reports each CLI load even ... "
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c8": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[8].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c9": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[9].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c10": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[10].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c11": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[11].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c12": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[12].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c13": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[13].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c14": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[14].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c15": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[15].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.06
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.11
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.53
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.04
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.14
+            },
+            "c8": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c9": {
+                "type": "noul",
+                "noul": 0.03
+            },
+            "c10": {
+                "type": "noul",
+                "noul": 0.04
+            },
+            "c11": {
+                "type": "noul",
+                "noul": 0.04
+            },
+            "c12": {
+                "type": "noul",
+                "noul": 0.06
+            },
+            "c13": {
+                "type": "noul",
+                "noul": 0.26
+            },
+            "c14": {
+                "type": "noul",
+                "noul": 0.05
+            },
+            "c15": {
+                "type": "noul",
+                "noul": 0.06
+            }
+        },
+        "usage": {
+            "input_tokens": 2990,
+            "output_tokens": 282
+        }
+    }
+}

@@ -1,0 +1,111 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T011840Z",
+    "latency_ms": 500.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_impact_snapshot_destroy",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "    fg_impact_snapshot_destroy(tools.impact);\n    fg_input_snapshot_destroy(checkpoint.initial);\n    fg_input_snapshot_destroy(checkpoint.assessed);\n    fg_input_snapshot_destroy(checkpoint.passed);\n    free(checkpoint.latest_feedback);\n    free(checkpoint.failed_command);\n    free(checkpoint.incomplete_feedback);\n    free(checkpoint.last_delta);\n    for (size_t i = 0; i < 8; ++i)\n        fg_semantic_state_destroy(checkpoint.failed_states[i]);\n    for (size_t i = 0; i < modified_count; i++)\n        free(modified[i]);\n    return status;\n}\n\nforge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn cb, void *user,\n                             forge_error *e) {\n    if (!a || !request || !*request || a->used)\n        return fg_error(e, FORGE_ERR_ARGUMENT,\n                        \"Agent requires a nonempty request and may be run once\");\n    a->used = true;\n    if (a->config.candidate_count > 1)\n        return fg_candidate_search(&a->config, request, &a->session, &a->metrics, cb, user, e);\n    if (a->config.minimal_agent)\n        return minimal_run(a, request, cb, user, e);\n    if (!fg_session_start(&a->session, a->root, cb, user, e))\n        return e ? e->code : FORGE_ERR_IO;\n    uint64_t start = fg_now_ms();\n    uint64_t deadline = a->config.limits.wall_timeout_ms > UINT64_MAX - start\n                            ? UINT64_MAX\n                            : start + a->config.limits.wall_timeout_ms;\n    forge_status status = FORGE_OK;\n    forge_repo *repo = NULL;\n    fg_impact_snapshot *impact = NULL;\n    fg_repo_monitor *monitor = NULL;\n    forge_context *ctx = NULL;\n    char *schema = NULL, *grammar = NULL, *summary = NULL, *native_system = NULL;\n    size_t conversation_start = 0;\n    bool conversation_started = false;\n    char *changed_paths[1024] = {0};\n    char *last_patch_path = NULL, *last_patch_old = NULL, *last_patch_new = NULL;\n    char *last_edit_diff = NULL;\n    char *broken_path = NULL, *broken_detail = NULL;\n    char last_diagnostic[4097] = \"\";\n    recovery_mode recovery = {0};\n    rep"
+                },
+                {
+                    "path": "src/core/agent.c",
+                    "stage": "literal",
+                    "snippet": "    fg_impact_snapshot_destroy(tools.impact);\n    fg_input_snapshot_destroy(checkpoint.initial);\n    fg_input_snapshot_destroy(checkpoint.assessed);\n    fg_input_snapshot_destroy(checkpoint.passed);\n    free(checkpoint.latest_feedback);\n    free(checkpoint.failed_command);\n    free(checkpoint.incomplete_feedback);\n    free(checkpoint.last_delta);\n    for (size_t i = 0; i < 8; ++i)\n        fg_semantic_state_destroy(checkpoint.failed_states[i]);\n    for (size_t i = 0; i < modified_count; i++)\n        free(modified[i]);\n    fg_dedup_clear(&dedup);\n    return status;\n}\n\nforge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn cb, void *user,\n                             forge_error *e) {\n    if (!a || !request || !*request || a->used)\n        return fg_error(e, FORGE_ERR_ARGUMENT,\n                        \"Agent requires a nonempty request and may be run once\");\n    a->used = true;\n    if (a->config.candidate_count > 1)\n        return fg_candidate_search(&a->config, request, &a->session, &a->metrics, cb, user, e);\n    if (a->config.minimal_agent)\n        return minimal_run(a, request, cb, user, e);\n    if (!fg_session_start(&a->session, a->root, cb, user, e))\n        return e ? e->code : FORGE_ERR_IO;\n    uint64_t start = fg_now_ms();\n    uint64_t deadline = a->config.limits.wall_timeout_ms > UINT64_MAX - start\n                            ? UINT64_MAX\n                            : start + a->config.limits.wall_timeout_ms;\n    forge_status status = FORGE_OK;\n    forge_repo *repo = NULL;\n    fg_impact_snapshot *impact = NULL;\n    fg_repo_monitor *monitor = NULL;\n    forge_context *ctx = NULL;\n    char *schema = NULL, *grammar = NULL, *summary = NULL, *native_system = NULL;\n    size_t conversation_start = 0;\n    bool conversation_started = false;\n    char *changed_paths[1024] = {0};\n    char *last_patch_path = NULL, *last_patch_old = NULL, *last_patch_new = NULL;\n    char *last_edit_diff = NULL;\n    char *broken_path = NULL, *broken_detail = NULL;\n    char last_diagnostic[4097] = \"\";\n    recovery_"
+                },
+                {
+                    "path": "src/repo/impact.c",
+                    "stage": "literal",
+                    "snippet": "void fg_impact_snapshot_destroy(fg_impact_snapshot *s) {\n    if (!s)\n        return;\n    for (size_t i = 0; i < s->file_count; i++) {\n        free(s->files[i].path);\n        free(s->files[i].source);\n    }\n    for (size_t i = 0; i < s->symbol_count; i++) {\n        free(s->symbols[i].name);\n        free(s->symbols[i].kind);\n    }\n    free(s->files);\n    free(s->symbols);\n    free(s);\n}\nfg_impact_snapshot *fg_impact_snapshot_take(forge_repo *repo, uint64_t deadline,\n                                            forge_cancel_fn cancel, void *user,\n                                            forge_error *error) {\n    forge_error local = {0};\n    if (!error)\n        error = &local;\n    memset(error, 0, sizeof(*error));\n    im_work w = {.deadline = deadline, .cancel = cancel, .user = user, .error = error};\n    if (!repo) {\n        im_fail(&w, FORGE_ERR_ARGUMENT, \"Structural impact requires a repository\");\n        return NULL;\n    }\n    fg_impact_snapshot *out = calloc(1, sizeof(*out));\n    if (!out) {\n        im_fail(&w, FORGE_ERR_MEMORY, \"Structural impact snapshot allocation failed\");\n        return NULL;\n    }\n    strcpy(out->root, repo->root);\n    out->files = calloc(IM_MAX_FILES, sizeof(*out->files));\n    out->symbols = calloc(IM_MAX_SYMBOLS, sizeof(*out->symbols));\n    fg_repo_snapshot scope = {0};\n    sqlite3_stmt *files = NULL, *symbols = NULL;\n    if (!out->files || !out->symbols) {\n        im_fail(&w, FORGE_ERR_MEMORY, \"Structural impact snapshot allocation failed\");\n        goto done;\n    }\n    if (fg_repo_snapshot_begin(repo, &scope, false, deadline, cancel, user, UINT64_C(100000000),\n                               error) != FORGE_OK) {\n        w.failed = true;\n        goto done;\n    }\n    out->generation = scope.generation;\n    if (sqlite3_prepare_v2(\n            repo->db,\n            \"SELECT f.id,f.path,c.content FROM files f JOIN chunks c ON c.rowid=f.id \"\n            \"ORDER BY f.path\",\n            -1, &files, NULL) != SQLITE_OK ||\n        sqlite3_prepare_v2(repo->db,\n                           \"SELECT nam"
+                },
+                {
+                    "path": "src/repo/impact.h",
+                    "stage": "literal",
+                    "snippet": "void fg_impact_snapshot_destroy(fg_impact_snapshot *);\n\n/* Compare with the current indexed workspace, returning an owned JSON report.\n * Go declaration changes are exact byte-range comparisons. Caller candidates\n * are syntactic identifier occurrences, never resolved calls or test coverage.\n * Unknown, deleted, ambiguous, dynamic and unsupported changes force fallback.\n * All preliminary selections still require the existing broad final tests. */\nchar *fg_impact_analyze(forge_repo *, const fg_impact_snapshot *, uint64_t deadline,\n                        forge_cancel_fn, void *, forge_error *);\n\n/* NULL baseline is exactly the ordinary broad planner. With a baseline, add\n * impact evidence and replace preliminary test stages when analysis permits it.\n * The broad_tests stage is preserved; targeted success is never final evidence. */\nchar *fg_repo_validation_plan_impact(forge_repo *, const fg_impact_snapshot *, uint64_t deadline,\n                                     forge_cancel_fn, void *, forge_error *);\n#endif\n"
+                },
+                {
+                    "path": "tests/unit/test_impact.c",
+                    "stage": "literal",
+                    "snippet": "    fg_impact_snapshot_destroy(baseline);\n    finish(&f);\n}\nstatic void test_renamed_deleted_and_external_changes(void) {\n    fixture f;\n    start(&f);\n    go_fixture(&f);\n    fg_impact_snapshot *baseline = capture(&f);\n    write_file(&f, \"lib/value.go\", \"package lib\\nfunc Renamed() int { return 2 }\\n\");\n    yyjson_doc *doc = analyze(&f, baseline, true);\n    yyjson_val *impact = yyjson_obj_get(yyjson_doc_get_root(doc), \"structural_impact\");\n    assert(reason(impact, \"removed_or_renamed_symbol\"));\n    yyjson_val *removed = named(yyjson_obj_get(impact, \"changed_symbols\"), \"name\", \"Value\");\n    assert(!strcmp(fg_json_str(removed, \"change\"), \"removed\"));\n    assert(named(yyjson_obj_get(impact, \"caller_candidates\"), \"resolution\",\n                 \"possible_broken_reference_to_removed_name\"));\n    yyjson_doc_free(doc);\n    char path[FG_PATH_MAX];\n    assert(fg_path_join(path, f.root, \"lib/value.go\"));\n    assert(remove(path) == 0);\n    doc = analyze(&f, baseline, false);\n    assert(reason(yyjson_doc_get_root(doc), \"deleted_file\"));\n    yyjson_doc_free(doc);\n    write_file(&f, \"lib/value.go\",\n               \"package lib\\nimport \\\"fmt\\\"\\nfunc Value() int { fmt.Println(2); return 2 }\\n\");\n    doc = analyze(&f, baseline, false);\n    assert(reason(yyjson_doc_get_root(doc), \"outside_declaration_change\"));\n    yyjson_doc_free(doc);\n    write_file(&f, \"lib/value.go\", \"package lib\\nfunc Value() int { return 2 }\\n\");\n    write_file(&f, \"README.md\", \"changed input\\n\");\n    doc = analyze(&f, baseline, false);\n    assert(reason(yyjson_doc_get_root(doc), \"unsupported_change\"));\n    yyjson_doc_free(doc);\n    fg_impact_snapshot_destroy(baseline);\n    finish(&f);\n}\nstatic void test_python_candidates_and_dynamic_fallback(void) {\n    fixture f;\n    start(&f);\n    write_file(&f, \"calc.py\", \"def calculate():\\n    return 1\\n\");\n    write_file(&f, \"caller.py\",\n               \"from calc import calculate\\ndef wrapped():\\n    return calculate()\\n\");\n    write_file(&f, \"test_feature.py\",\n               \"from caller import wrapped\\nimport unittes"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.19
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.19
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.93
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.37
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.14
+            }
+        },
+        "usage": {
+            "input_tokens": 3342,
+            "output_tokens": 89
+        }
+    }
+}

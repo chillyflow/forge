@@ -1,0 +1,94 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T004738Z",
+    "latency_ms": 453.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_action_decode_phase",
+            "candidates": [
+                {
+                    "path": "src/inference/llama_backend.c",
+                    "stage": "literal",
+                    "snippet": "            action_open ? fg_action_decode_phase(out.data ? out.data + action_offset : \"\")\n                        : FG_ACTION_SELECT;\n        bool structured =\n            native || (action_open && (phase == FG_ACTION_SELECT || phase == FG_ACTION_ARGUMENTS));\n        llama_token token = sample_token(\n            s, sampler, grammar_sampler,\n            !braces_armed && !awaiting_action && !progress_armed && m->config.grammar_fast_path &&\n                (m->config.temperature <= 0 || (!native && structured)),\n            /* The reduced prefix is selected on raw logits, so it is only valid\n             * where no repetition penalty reshapes the ranking. */\n            m->config.temperature <= 0 &&\n                !(m->config.repetition_last_n > 0 && m->config.repetition_penalty > 0 &&\n                  m->config.repetition_penalty != 1.0f),\n            stats);\n        stats->sampling_ms += (double)(fg_now_ms() - sampling_start);\n        if (llama_vocab_is_eog(s->vocab, token)) {\n            ended = true;\n            break;\n        }\n        int32_t cap = 128;\n        char small[128], *piece = small;\n        bool render_special =\n            native && native_token_is_preserved(token, preserved_tokens, preserved_count);\n        int32_t length = llama_token_to_piece(s->vocab, token, piece, cap, 0, render_special);\n        if (length < 0) {\n            cap = -length;\n            piece = malloc((size_t)cap);\n            if (!piece) {\n                status = FORGE_ERR_MEMORY;\n                break;\n            }\n            length = llama_token_to_piece(s->vocab, token, piece, cap, 0, render_special);\n        }\n        if (length < 0 || !fg_buf_add(&out, piece, (size_t)FG_MAX(length, 0))) {\n            if (piece != small)\n                free(piece);\n            status = fg_error(e, FORGE_ERR_MEMORY, \"Token output failed\");\n            break;\n        }\n        if (native && !native_action_begun) {\n            if (fg_chat_render_action_started(native_render, out.data)) {\n                native_action_begun = true;\n    "
+                },
+                {
+                    "path": "src/inference/routing.c",
+                    "stage": "literal",
+                    "snippet": "fg_action_phase fg_action_decode_phase(const char *text) {\n    const char *action = text;\n    while (action && (*action == ' ' || *action == '\\t' || *action == '\\r' || *action == '\\n'))\n        action++;\n    if (!action || *action != '{')\n        action = text ? fg_action_begin(text) : NULL;\n    if (!action)\n        return FG_ACTION_SELECT;\n    if (top_level_value(action, \"final\"))\n        return FG_ACTION_FINAL;\n    if (top_level_value(action, \"memory\"))\n        return FG_ACTION_MEMORY;\n    const char *cursor = top_level_value(action, \"tool\");\n    if (!cursor)\n        return FG_ACTION_SELECT;\n    if (*cursor++ != '\"')\n        return FG_ACTION_SELECT;\n    const char *name = cursor;\n    while (*cursor && *cursor != '\"')\n        cursor++;\n    if (*cursor != '\"')\n        return FG_ACTION_SELECT;\n    return (size_t)(cursor - name) == strlen(\"apply_patch\") &&\n                   !strncmp(name, \"apply_patch\", strlen(\"apply_patch\"))\n               ? FG_ACTION_PATCH\n               : FG_ACTION_ARGUMENTS;\n}\nvoid fg_think_bounds(const fg_decode_policy *policy, size_t max_tokens, size_t *min_think,\n                     size_t *think_cap) {\n    /* The suppress window exists only when a cue is force-decoded: banning the\n     * model's action opener without steering text is the measured prompt-echo\n     * death configuration. */\n    bool cued = !policy->native_thinking && (!policy->cue || policy->cue[0]);\n    size_t window = cued ? FG_MIN(FG_THOUGHT_MIN_PREFIX_TOKENS, max_tokens / 4) : 0;\n    /* Calibration on the reasoning-gated suite found equal success from 256\n     * through unbounded, with 256 the cheapest bounded arm. Near exhaustion,\n     * retain half-turn scaling so the action keeps at least half. */\n    size_t cap = (policy->native_thinking || policy->think_unbounded) ? SIZE_MAX\n                 : policy->think_budget  ? policy->think_budget\n                                         : FG_MIN(FG_THOUGHT_DEFAULT_BUDGET, max_tokens / 2);\n    *min_think = FG_MIN(window, cap);\n    *think_cap = cap;\n}\nint fg_reduced_next_k(in"
+                },
+                {
+                    "path": "src/internal.h",
+                    "stage": "literal",
+                    "snippet": "fg_action_phase fg_action_decode_phase(const char *text);\nbool fg_json_whitespace_only(const char *text, size_t length);\n/* Reduced-candidate sampling ladder for the constrained path. The grammar mask\n * costs time per candidate in the array it is applied to, and a decoder that\n * still draws from a full distribution needs several acceptable candidates,\n * while greedy needs only the first acceptable one in rank order. Callers mask a\n * raw top-K prefix and walk this ladder instead of paying for the whole\n * vocabulary. fg_reduced_next_k returns the next rung, or 0 when the next one\n * would reach the vocabulary - which means \"use the full array\", so the full\n * vocabulary stays the exact last resort. */\n#define FG_REDUCED_START_K 64\nint fg_reduced_next_k(int current_k, int vocab_size);\nbool fg_native_force_due(bool enabled, bool action_begun, size_t generated, size_t max_tokens);\ntypedef struct {\n    const char *name, *description, *fields, *grammar;\n    forge_capability capability;\n} fg_tool_def;\nconst fg_tool_def *fg_tools(size_t *);\n/* `thought` selects whether reasoning is offered, `required` whether it may be\n * empty, and `routed` whether it is a plain-text prefix outside the action JSON.\n * Routed mode leaves the action constrained and uses a lazy grammar trigger. */\nchar *fg_tool_schema(bool thought, bool required, bool routed);\nchar *fg_tool_native_schema(void);\nchar *fg_tool_minimal_native_schema(void);\nchar *fg_tool_candidate_schema(bool validation_only);\nchar *fg_tool_noedit_schema(void);\nchar *fg_tool_native_extensions(const char *base, bool ask_user, bool reflection_only);\nchar *fg_tool_native_final_schema(void);\nchar *fg_tool_grammar(bool thought, bool required, bool routed);\nforge_status fg_native_action_normalize(const char *, bool include_thought, char **, forge_error *);\nbool fg_tool_validate(const char *, yyjson_val *, forge_error *);\nuint64_t fg_tool_signature(const char *, yyjson_val *, uint64_t generation,\n                           uint64_t diagnostic_hash);\n/* Single-slot verdict cache f"
+                },
+                {
+                    "path": "tests/unit/test_core.c",
+                    "stage": "literal",
+                    "snippet": "    assert(fg_action_decode_phase(\"\") == FG_ACTION_SELECT);\n    assert(fg_action_decode_phase(\"{\\\"tool\\\":\\\"read_file\\\",\\\"args\\\":{\") == FG_ACTION_ARGUMENTS);\n    assert(fg_action_decode_phase(\"{\\\"tool\\\":\\\"apply_patch\\\",\\\"args\\\":{\") == FG_ACTION_PATCH);\n    assert(fg_action_decode_phase(\"{\\\"thought\\\":\\\"use { tool carefully\\\",\"\n                                  \"\\\"tool\\\":\\\"apply_patch\\\",\\\"args\\\":{\") == FG_ACTION_PATCH);\n    assert(fg_action_decode_phase(\"{\\\"thought\\\":\\\"the key \\\\\\\"tool\\\\\\\" is quoted\\\"\") ==\n           FG_ACTION_SELECT);\n    assert(fg_action_decode_phase(\"{\\\"final\\\":\\\"\") == FG_ACTION_FINAL);\n    assert(fg_action_decode_phase(\"{\\\"memory\\\":{\") == FG_ACTION_MEMORY);\n    /* Think bounds: the suppress window stays a quarter capped at 32; the cap\n     * defaults to a measured 256 ceiling (half-turn when smaller); a configured\n     * budget clamps the window; the unbounded ablation removes the cap; and an\n     * empty cue removes the window (banning the opener without steering text is\n     * the measured prompt-echo death configuration). */\n    fg_decode_policy policy = {FG_ACTION_TRIGGER_PATTERN, NULL, 0, false, false};\n    size_t min_think = 0, think_cap = 0;\n    fg_think_bounds(&policy, 2048, &min_think, &think_cap);\n    assert(min_think == 32 && think_cap == 256);\n    fg_think_bounds(&policy, 64, &min_think, &think_cap);\n    assert(min_think == 16 && think_cap == 32);\n    policy.think_budget = 8;\n    fg_think_bounds(&policy, 2048, &min_think, &think_cap);\n    assert(min_think == 8 && think_cap == 8);\n    policy.think_budget = 0;\n    policy.think_unbounded = true;\n    fg_think_bounds(&policy, 2048, &min_think, &think_cap);\n    assert(min_think == 32 && think_cap == SIZE_MAX);\n    policy.think_unbounded = false;\n    policy.cue = \"\";\n    fg_think_bounds(&policy, 2048, &min_think, &think_cap);\n    assert(min_think == 0 && think_cap == 256);\n    policy.native_thinking = true;\n    fg_think_bounds(&policy, 2048, &min_think, &think_cap);\n    assert(min_think == 0 && think_cap == SIZE_MAX);\n    /* A budget-forced"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.09
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.96
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.21
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.18
+            }
+        },
+        "usage": {
+            "input_tokens": 2820,
+            "output_tokens": 72
+        }
+    }
+}

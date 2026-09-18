@@ -1,0 +1,162 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T010638Z",
+    "latency_ms": 547.0,
+    "status": "ok",
+    "error": "",
+    "request": {
+        "state": {
+            "query": "fg_go_graph_destroy",
+            "candidates": [
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/originals/src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    fg_go_graph_destroy(g->graph);\r\n    if (g->doc)\r\n        yyjson_mut_doc_free(g->doc);\r\n}\r\nchar *forge_repo_validation_plan(forge_repo *repo, const char *const *paths, size_t count,\r\n                                 forge_error *error) {\r\n    forge_error local = {0};\r\n    if (!error)\r\n        error = &local;\r\n    memset(error, 0, sizeof(*error));\r\n    if (!repo || (count && !paths)) {\r\n        fg_error(error, FORGE_ERR_ARGUMENT, \"Repository and changed-path list are required\");\r\n        return NULL;\r\n    }\r\n    if (count > VP_MAX_CHANGES) {\r\n        fg_error(error, FORGE_ERR_LIMIT, \"Validation accepts at most 1024 changed paths\");\r\n        return NULL;\r\n    }\r\n    vp_graph g = {0};\r\n    g.repo = repo;\r\n    g.error = error;\r\n    char *out = NULL;\r\n    fg_repo_snapshot snapshot = {0};\r\n    if (!vp_changes(&g, paths, count))\r\n        goto done;\r\n    if (fg_repo_snapshot_begin(repo, &snapshot, false, 0, NULL, NULL, VP_MAX_VM_STEPS, error) !=\r\n        FORGE_OK)\r\n        goto done;\r\n    g.snapshot = &snapshot;\r\n    const char *extra[VP_MAX_CHANGES];\r\n    for (size_t i = 0; i < g.change_count; i++)\r\n        extra[i] = g.changes[i].path;\r\n    g.graph = fg_go_graph_load(&snapshot, extra, g.change_count, error);\r\n    if (!g.graph)\r\n        goto done;\r\n    g.modules = fg_go_graph_modules(g.graph, &g.module_count);\r\n    g.packages = fg_go_graph_packages(g.graph, &g.package_count);\r\n    g.edges = fg_go_graph_edges(g.graph, &g.edge_count);\r\n    g.go_applicable = fg_go_graph_applicable(g.graph);\r\n    size_t slots = g.package_count ? g.package_count : 1;\r\n    g.affected = calloc(slots, sizeof(*g.affected));\r\n    g.dependent = calloc(slots, sizeof(*g.dependent));\r\n    if (!g.affected || !g.dependent) {\r\n        vp_fail(&g, FORGE_ERR_MEMORY, \"Validation selection allocation failed\");\r\n        goto done;\r\n    }\r\n    size_t reason_count = 0;\r\n    const fg_go_reason *reasons = fg_go_graph_reasons(g.graph, &reason_count);\r\n    for (size_t i = 0; i < reason_count; i++)\r\n        if (!vp_reason_add(&g, reasons[i].code, reasons[i].path"
+                },
+                {
+                    "path": "benchmark/results/2026-09-09-agent-loop-all-green/proposed-candidate-03/src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    fg_go_graph_destroy(g->graph);\r\n    if (g->doc)\r\n        yyjson_mut_doc_free(g->doc);\r\n}\r\nchar *forge_repo_validation_plan(forge_repo *repo, const char *const *paths, size_t count,\r\n                                 forge_error *error) {\r\n    forge_error local = {0};\r\n    if (!error)\r\n        error = &local;\r\n    memset(error, 0, sizeof(*error));\r\n    if (!repo || (count && !paths)) {\r\n        fg_error(error, FORGE_ERR_ARGUMENT, \"Repository and changed-path list are required\");\r\n        return NULL;\r\n    }\r\n    if (count > VP_MAX_CHANGES) {\r\n        fg_error(error, FORGE_ERR_LIMIT, \"Validation accepts at most 1024 changed paths\");\r\n        return NULL;\r\n    }\r\n    vp_graph g = {0};\r\n    g.repo = repo;\r\n    g.error = error;\r\n    char *out = NULL;\r\n    fg_repo_snapshot snapshot = {0};\r\n    if (!vp_changes(&g, paths, count))\r\n        goto done;\r\n    if (fg_repo_snapshot_begin(repo, &snapshot, false, 0, NULL, NULL, VP_MAX_VM_STEPS, error) !=\r\n        FORGE_OK)\r\n        goto done;\r\n    g.snapshot = &snapshot;\r\n    const char *extra[VP_MAX_CHANGES];\r\n    for (size_t i = 0; i < g.change_count; i++)\r\n        extra[i] = g.changes[i].path;\r\n    g.graph = fg_go_graph_load(&snapshot, extra, g.change_count, error);\r\n    if (!g.graph)\r\n        goto done;\r\n    g.modules = fg_go_graph_modules(g.graph, &g.module_count);\r\n    g.packages = fg_go_graph_packages(g.graph, &g.package_count);\r\n    g.edges = fg_go_graph_edges(g.graph, &g.edge_count);\r\n    g.go_applicable = fg_go_graph_applicable(g.graph);\r\n    size_t slots = g.package_count ? g.package_count : 1;\r\n    g.affected = calloc(slots, sizeof(*g.affected));\r\n    g.dependent = calloc(slots, sizeof(*g.dependent));\r\n    if (!g.affected || !g.dependent) {\r\n        vp_fail(&g, FORGE_ERR_MEMORY, \"Validation selection allocation failed\");\r\n        goto done;\r\n    }\r\n    size_t reason_count = 0;\r\n    const fg_go_reason *reasons = fg_go_graph_reasons(g.graph, &reason_count);\r\n    for (size_t i = 0; i < reason_count; i++)\r\n        if (!vp_reason_add(&g, reasons[i].code, reasons[i].path"
+                },
+                {
+                    "path": "src/repo/graph.c",
+                    "stage": "literal",
+                    "snippet": "    fg_go_graph_destroy(g);\n    return NULL;\n}\n\nvoid fg_go_graph_destroy(fg_go_graph *g) {\n    if (!g)\n        return;\n    for (size_t i = 0; i < g->module_count; i++) {\n        free((void *)g->modules[i].directory);\n        free((void *)g->modules[i].path);\n    }\n    for (size_t i = 0; i < g->package_count; i++) {\n        free((void *)g->packages[i].directory);\n        free((void *)g->packages[i].path);\n        free((void *)g->packages[i].name);\n    }\n    for (size_t i = 0; i < g->reason_count; i++)\n        free((void *)g->reasons[i].path);\n    free(g->modules);\n    free(g->packages);\n    free(g->edges);\n    free(g);\n}\n\nuint64_t fg_go_graph_generation(const fg_go_graph *g) {\n    return g ? g->generation : 0;\n}\nbool fg_go_graph_applicable(const fg_go_graph *g) {\n    return g && g->applicable;\n}\nconst fg_go_module *fg_go_graph_modules(const fg_go_graph *g, size_t *count) {\n    if (count)\n        *count = g ? g->module_count : 0;\n    return g ? g->modules : NULL;\n}\nconst fg_go_package *fg_go_graph_packages(const fg_go_graph *g, size_t *count) {\n    if (count)\n        *count = g ? g->package_count : 0;\n    return g ? g->packages : NULL;\n}\nconst fg_go_edge *fg_go_graph_edges(const fg_go_graph *g, size_t *count) {\n    if (count)\n        *count = g ? g->edge_count : 0;\n    return g ? g->edges : NULL;\n}\nconst fg_go_reason *fg_go_graph_reasons(const fg_go_graph *g, size_t *count) {\n    if (count)\n        *count = g ? g->reason_count : 0;\n    return g ? g->reasons : NULL;\n}\nsize_t fg_go_graph_find_package(const fg_go_graph *g, const char *directory) {\n    if (!g || !directory)\n        return GG_NONE;\n    size_t lo = 0, hi = g->package_count;\n    while (lo < hi) {\n        size_t mid = lo + (hi - lo) / 2;\n        if (strcmp(g->packages[mid].directory, directory) < 0)\n            lo = mid + 1;\n        else\n            hi = mid;\n    }\n    return lo < g->package_count && !strcmp(g->packages[lo].directory, directory) ? lo : GG_NONE;\n}\nsize_t fg_go_graph_module_for(const fg_go_graph *g, const char *directory) {\n    return g && d"
+                },
+                {
+                    "path": "src/repo/graph.h",
+                    "stage": "literal",
+                    "snippet": "void fg_go_graph_destroy(fg_go_graph *);\nuint64_t fg_go_graph_generation(const fg_go_graph *);\nbool fg_go_graph_applicable(const fg_go_graph *);\nconst fg_go_module *fg_go_graph_modules(const fg_go_graph *, size_t *count);\nconst fg_go_package *fg_go_graph_packages(const fg_go_graph *, size_t *count);\nconst fg_go_edge *fg_go_graph_edges(const fg_go_graph *, size_t *count);\nconst fg_go_reason *fg_go_graph_reasons(const fg_go_graph *, size_t *count);\nsize_t fg_go_graph_find_package(const fg_go_graph *, const char *directory);\nsize_t fg_go_graph_module_for(const fg_go_graph *, const char *directory);\nbool fg_go_graph_excluded_path(const char *canonical_relative_file);\n\n#endif\n"
+                },
+                {
+                    "path": "src/repo/impact.c",
+                    "stage": "literal",
+                    "snippet": "    fg_go_graph_destroy(graph);\n    if (fg_repo_snapshot_end(&scope, !w->failed, w->error) != FORGE_OK)\n        w->failed = true;\n    return !w->failed;\n}\nchar *fg_impact_analyze(forge_repo *repo, const fg_impact_snapshot *before, uint64_t deadline,\n                        forge_cancel_fn cancel, void *user, forge_error *error) {\n    forge_error local = {0};\n    if (!error)\n        error = &local;\n    memset(error, 0, sizeof(*error));\n    im_work w = {.deadline = deadline, .cancel = cancel, .user = user, .error = error};\n    if (!repo || !before || strcmp(repo->root, before->root)) {\n        im_fail(&w, FORGE_ERR_ARGUMENT, \"Structural impact baseline must belong to this workspace\");\n        return NULL;\n    }\n    fg_impact_snapshot *after = fg_impact_snapshot_take(repo, deadline, cancel, user, error);\n    if (!after)\n        return NULL;\n    w.doc = yyjson_mut_doc_new(NULL);\n    w.root = w.doc ? yyjson_mut_obj(w.doc) : NULL;\n    if (!w.root) {\n        im_fail(&w, FORGE_ERR_MEMORY, \"Structural impact report allocation failed\");\n        goto done;\n    }\n    yyjson_mut_doc_set_root(w.doc, w.root);\n    w.reasons = yyjson_mut_obj_add_arr(w.doc, w.root, \"fallback_reasons\");\n    w.changes = yyjson_mut_obj_add_arr(w.doc, w.root, \"changed_paths\");\n    w.symbols = yyjson_mut_obj_add_arr(w.doc, w.root, \"changed_symbols\");\n    w.callers = yyjson_mut_obj_add_arr(w.doc, w.root, \"caller_candidates\");\n    w.tests = yyjson_mut_obj_add_arr(w.doc, w.root, \"targeted_tests\");\n    w.dependents = yyjson_mut_obj_add_arr(w.doc, w.root, \"reverse_dependents\");\n    if (!im_json(&w, w.reasons && w.changes && w.symbols && w.callers && w.tests && w.dependents))\n        goto done;\n    im_json(&w, yyjson_mut_obj_add_uint(w.doc, w.root, \"schema_version\", 1));\n    im_json(&w, yyjson_mut_obj_add_uint(w.doc, w.root, \"baseline_generation\", before->generation));\n    im_json(&w, yyjson_mut_obj_add_uint(w.doc, w.root, \"generation\", after->generation));\n    im_json(&w, yyjson_mut_obj_add_bool(w.doc, w.root, \"sound\", false));\n    im_json(&w, yyjson_mut_ob"
+                },
+                {
+                    "path": "src/repo/retrieval.c",
+                    "stage": "literal",
+                    "snippet": "    fg_go_graph_destroy(graph);\n    return ok;\n}\n\n/* Extract at most 32 literal terms. Non-ASCII UTF-8 bytes remain together;\n * SQLite's tokenizer decides their search semantics. Query operators, quotes,\n * punctuation and column selectors never enter MATCH as syntax. */\nstatic char *fts_terms(const char *query, forge_error *error) {\n    fg_buf terms = {0};\n    size_t count = 0, start = 0, length = strlen(query);\n    for (size_t i = 0; i <= length; i++) {\n        unsigned char c = (unsigned char)query[i];\n        bool word = c >= 128 || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||\n                    (c >= '0' && c <= '9') || c == '_';\n        if (word)\n            continue;\n        if (i > start) {\n            if (count == 32) {\n                fg_buf_clear(&terms);\n                fg_error(error, FORGE_ERR_LIMIT, \"Retrieval query exceeds 32 FTS terms\");\n                return NULL;\n            }\n            if ((count && !fg_buf_puts(&terms, \" OR \")) || !fg_buf_puts(&terms, \"\\\"\") ||\n                !fg_buf_add(&terms, query + start, i - start) || !fg_buf_puts(&terms, \"\\\"\")) {\n                fg_buf_clear(&terms);\n                fg_error(error, FORGE_ERR_MEMORY, \"Cannot allocate quoted retrieval query\");\n                return NULL;\n            }\n            count++;\n        }\n        start = i + 1;\n    }\n    if (!terms.data && !fg_buf_puts(&terms, \"\")) {\n        fg_error(error, FORGE_ERR_MEMORY, \"Cannot allocate empty retrieval query\");\n        return NULL;\n    }\n    return fg_buf_take(&terms);\n}\n\nvoid fg_rerank_permutation(const double *scores, size_t count, size_t *order) {\n    for (size_t i = 0; i < count; i++)\n        order[i] = i;\n    for (size_t i = 1; i < count; i++) {\n        size_t index = order[i];\n        double key = scores[index] >= 0.0 && scores[index] <= 1.0 ? scores[index] : -1.0;\n        size_t j = i;\n        while (j > 0) {\n            size_t previous = order[j - 1];\n            double value =\n                scores[previous] >= 0.0 && scores[previous] <= 1.0 ? scores[previous] : -1.0"
+                },
+                {
+                    "path": "src/repo/summary.c",
+                    "stage": "literal",
+                    "snippet": "    fg_go_graph_destroy(b->graph);\n    fg_buf_clear(&b->facts);\n    fg_buf_clear(&b->manifest);\n    fg_buf_clear(&b->evidence);\n}\n/* Cache corruption is recoverable without accepting the damaged text. Indexed\n * source corruption is different: preparation must fail before a cache lookup. */\nstatic const char *cache_column(sqlite3_stmt *s, int col, size_t maximum) {\n    if (sqlite3_column_type(s, col) != SQLITE_TEXT)\n        return NULL;\n    int bytes = sqlite3_column_bytes(s, col);\n    if (bytes < 0 || (size_t)bytes > maximum)\n        return NULL;\n    const char *text = (const char *)sqlite3_column_text(s, col);\n    if (!text || memchr(text, 0, (size_t)bytes) || !fg_utf8_valid(text, (size_t)bytes))\n        return NULL;\n    return text;\n}\nstatic bool cache_read(summary_build *b) {\n    forge_summary_input *input = b->input;\n    sqlite3_stmt *s = query(\n        b, \"SELECT version,recipe_hash,dependency_hash,created_generation,validated_generation,\"\n           \"content_hash,length(CAST(content AS BLOB)),length(CAST(manifest AS BLOB)),\"\n           \"CASE WHEN length(CAST(content AS BLOB))<=? THEN content END,\"\n           \"CASE WHEN length(CAST(manifest AS BLOB))<=? THEN manifest END \"\n           \"FROM summary_cache WHERE cache_key=?\");\n    if (!s)\n        return false;\n    sqlite3_bind_int64(s, 1, (sqlite3_int64)input->options.max_summary_bytes);\n    sqlite3_bind_int64(s, 2, (sqlite3_int64)input->options.max_manifest_bytes);\n    sqlite3_bind_text(s, 3, input->cache_key, -1, SQLITE_TRANSIENT);\n    int rc = sqlite3_step(s);\n    bool ok = true;\n    if (rc == SQLITE_ROW) {\n        const char *recipe = cache_column(s, 1, 64), *dependency_hash = cache_column(s, 2, 64);\n        const char *content_hash = cache_column(s, 5, 64);\n        const char *content = cache_column(s, 8, input->options.max_summary_bytes);\n        const char *manifest = cache_column(s, 9, input->options.max_manifest_bytes);\n        sqlite3_int64 created = sqlite3_column_int64(s, 3), validated = sqlite3_column_int64(s, 4);\n        sqlite3_int64 length = sq"
+                },
+                {
+                    "path": "src/repo/validation.c",
+                    "stage": "literal",
+                    "snippet": "    fg_go_graph_destroy(g->graph);\r\n    if (g->doc)\r\n        yyjson_mut_doc_free(g->doc);\r\n}\r\nchar *forge_repo_validation_plan(forge_repo *repo, const char *const *paths, size_t count,\r\n                                 forge_error *error) {\r\n    forge_error local = {0};\r\n    if (!error)\r\n        error = &local;\r\n    memset(error, 0, sizeof(*error));\r\n    if (!repo || (count && !paths)) {\r\n        fg_error(error, FORGE_ERR_ARGUMENT, \"Repository and changed-path list are required\");\r\n        return NULL;\r\n    }\r\n    if (count > VP_MAX_CHANGES) {\r\n        fg_error(error, FORGE_ERR_LIMIT, \"Validation accepts at most 1024 changed paths\");\r\n        return NULL;\r\n    }\r\n    vp_graph g = {0};\r\n    g.repo = repo;\r\n    g.error = error;\r\n    char *out = NULL;\r\n    fg_repo_snapshot snapshot = {0};\r\n    if (!vp_changes(&g, paths, count))\r\n        goto done;\r\n    if (fg_repo_snapshot_begin(repo, &snapshot, false, 0, NULL, NULL, VP_MAX_VM_STEPS, error) !=\r\n        FORGE_OK)\r\n        goto done;\r\n    g.snapshot = &snapshot;\r\n    const char *extra[VP_MAX_CHANGES];\r\n    for (size_t i = 0; i < g.change_count; i++)\r\n        extra[i] = g.changes[i].path;\r\n    g.graph = fg_go_graph_load(&snapshot, extra, g.change_count, error);\r\n    if (!g.graph)\r\n        goto done;\r\n    g.modules = fg_go_graph_modules(g.graph, &g.module_count);\r\n    g.packages = fg_go_graph_packages(g.graph, &g.package_count);\r\n    g.edges = fg_go_graph_edges(g.graph, &g.edge_count);\r\n    g.go_applicable = fg_go_graph_applicable(g.graph);\r\n    size_t slots = g.package_count ? g.package_count : 1;\r\n    g.affected = calloc(slots, sizeof(*g.affected));\r\n    g.dependent = calloc(slots, sizeof(*g.dependent));\r\n    if (!g.affected || !g.dependent) {\r\n        vp_fail(&g, FORGE_ERR_MEMORY, \"Validation selection allocation failed\");\r\n        goto done;\r\n    }\r\n    size_t reason_count = 0;\r\n    const fg_go_reason *reasons = fg_go_graph_reasons(g.graph, &reason_count);\r\n    for (size_t i = 0; i < reason_count; i++)\r\n        if (!vp_reason_add(&g, reasons[i].code, reasons[i].path"
+                }
+            ]
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "c0": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[0].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c1": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[1].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c2": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[2].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c3": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[3].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c4": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[4].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c5": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[5].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c6": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[6].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            },
+            "c7": {
+                "type": "noul",
+                "instructions": "Does the excerpt in `candidates[7].snippet` contain the definition, implementation, or explanation that best answers the query in `state.query`?",
+                "criteria": {
+                    "true": "The excerpt contains the specific code, definition, or explanation the query asks for.",
+                    "false": "The excerpt is unrelated to the query, only shares incidental words, or is clearly less useful than a direct answer."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "c0": {
+                "type": "noul",
+                "noul": 0.13
+            },
+            "c1": {
+                "type": "noul",
+                "noul": 0.11
+            },
+            "c2": {
+                "type": "noul",
+                "noul": 0.96
+            },
+            "c3": {
+                "type": "noul",
+                "noul": 0.31
+            },
+            "c4": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c5": {
+                "type": "noul",
+                "noul": 0.07
+            },
+            "c6": {
+                "type": "noul",
+                "noul": 0.08
+            },
+            "c7": {
+                "type": "noul",
+                "noul": 0.12
+            }
+        },
+        "usage": {
+            "input_tokens": 5641,
+            "output_tokens": 140
+        }
+    }
+}
