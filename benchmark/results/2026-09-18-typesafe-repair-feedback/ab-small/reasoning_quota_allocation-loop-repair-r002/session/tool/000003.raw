@@ -1,0 +1,30 @@
+file_sha256:1a91e8b1333f29531635944ee06f339110e8c0a8b2adfcdf11fc6b2980759330
+1: package repair
+2: 
+3: import (
+4: 	"reflect"
+5: 	"testing"
+6: )
+7: 
+8: func TestAllocateQuota(t *testing.T) {
+9: 	requests := []Request{{"a", 1, 10, 1}, {"b", 1, 10, 2}, {"c", 0, 10, 1}}
+10: 	if got, ok := AllocateQuota(10, requests); !ok || !reflect.DeepEqual(got, map[string]int{"a": 3, "b": 5, "c": 2}) {
+11: 		t.Fatalf("weighted=%v ok=%v", got, ok)
+12: 	}
+13: 	capped := []Request{{"a", 0, 1, 100}, {"b", 0, 9, 1}}
+14: 	if got, ok := AllocateQuota(5, capped); !ok || !reflect.DeepEqual(got, map[string]int{"a": 1, "b": 4}) {
+15: 		t.Fatalf("capped=%v ok=%v", got, ok)
+16: 	}
+17: 	tied := []Request{{"b", 0, 2, 1}, {"a", 0, 2, 1}}
+18: 	if got, ok := AllocateQuota(1, tied); !ok || got["a"] != 1 {
+19: 		t.Fatalf("tie=%v ok=%v", got, ok)
+20: 	}
+21: 	for _, bad := range [][]Request{{{"x", 2, 1, 1}}, {{"x", 0, 1, 0}}, {{"x", 0, 1, 1}, {"x", 0, 1, 1}}} {
+22: 		if got, ok := AllocateQuota(1, bad); ok || got != nil {
+23: 			t.Fatalf("accepted %v: %v", bad, got)
+24: 		}
+25: 	}
+26: 	if _, ok := AllocateQuota(3, []Request{{"x", 1, 2, 1}}); ok {
+27: 		t.Fatal("infeasible capacity accepted")
+28: 	}
+29: }

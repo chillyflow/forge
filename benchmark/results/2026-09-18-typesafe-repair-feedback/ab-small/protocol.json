@@ -1,0 +1,222 @@
+{
+  "ab": {
+    "arms": {
+      "loop-repair": {
+        "flags": [
+          "--minimal-agent",
+          "--thought-history",
+          "--candidate-checkpoint",
+          "--bounded-repair"
+        ]
+      },
+      "loop-repair-judge": {
+        "flags": [
+          "--minimal-agent",
+          "--thought-history",
+          "--candidate-checkpoint",
+          "--bounded-repair",
+          "--judge",
+          "--config",
+          "C:/Users/flowc/dev/forge/benchmark/results/2026-09-18-typesafe-repair-feedback/judge.toml"
+        ]
+      }
+    },
+    "decision_rule": {
+      "continue_to_larger_campaign": "Only if treatment pass_count >= control pass_count, treatment has nonzero TypeSafe feedback engagement, and no new protected-file violations or harness errors appear. If tied on pass_count, require at least 20 percent lower mean turns or end-to-end seconds on comparable completed cells.",
+      "primary": "Report pass counts by arm over all scheduled cells; all failures, aborts, timeouts, and protected-file violations count against denominator.",
+      "stop_condition": "If feedback engagement is zero, or treatment loses pass_count, do not continue without redesign."
+    },
+    "output": "benchmark/results/2026-09-18-typesafe-repair-feedback/ab-small",
+    "population": [
+      "reasoning_event_replay",
+      "reasoning_quota_allocation"
+    ],
+    "schedule": [
+      {
+        "order_index": 1,
+        "repetition": 1,
+        "run_id": "reasoning_quota_allocation-loop-repair-judge-r001",
+        "task": "reasoning_quota_allocation",
+        "variant": "loop-repair-judge"
+      },
+      {
+        "order_index": 2,
+        "repetition": 2,
+        "run_id": "reasoning_event_replay-loop-repair-judge-r002",
+        "task": "reasoning_event_replay",
+        "variant": "loop-repair-judge"
+      },
+      {
+        "order_index": 3,
+        "repetition": 1,
+        "run_id": "reasoning_quota_allocation-loop-repair-r001",
+        "task": "reasoning_quota_allocation",
+        "variant": "loop-repair"
+      },
+      {
+        "order_index": 4,
+        "repetition": 1,
+        "run_id": "reasoning_event_replay-loop-repair-r001",
+        "task": "reasoning_event_replay",
+        "variant": "loop-repair"
+      },
+      {
+        "order_index": 5,
+        "repetition": 2,
+        "run_id": "reasoning_quota_allocation-loop-repair-judge-r002",
+        "task": "reasoning_quota_allocation",
+        "variant": "loop-repair-judge"
+      },
+      {
+        "order_index": 6,
+        "repetition": 1,
+        "run_id": "reasoning_event_replay-loop-repair-judge-r001",
+        "task": "reasoning_event_replay",
+        "variant": "loop-repair-judge"
+      },
+      {
+        "order_index": 7,
+        "repetition": 2,
+        "run_id": "reasoning_quota_allocation-loop-repair-r002",
+        "task": "reasoning_quota_allocation",
+        "variant": "loop-repair"
+      },
+      {
+        "order_index": 8,
+        "repetition": 2,
+        "run_id": "reasoning_event_replay-loop-repair-r002",
+        "task": "reasoning_event_replay",
+        "variant": "loop-repair"
+      }
+    ],
+    "settings": {
+      "context": 16384,
+      "forge": "build-gpu/Release/forge.exe",
+      "gpu_layers": "-1",
+      "max_turns": 32,
+      "model": "C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "order_seed": 20260918,
+      "output_reserve": 2048,
+      "prompt_protocol": "native",
+      "repetitions": 2,
+      "retain_terminal": true,
+      "seed": 42,
+      "suite": "reasoning-gated",
+      "task_dir": "benchmark/tasks",
+      "tasks": [
+        "reasoning_event_replay",
+        "reasoning_quota_allocation"
+      ],
+      "temperature": 0.0,
+      "timeout_seconds_per_run": 600,
+      "variants": [
+        "loop-repair",
+        "loop-repair-judge"
+      ],
+      "verification_timeout_seconds": 120
+    }
+  },
+  "commands": {
+    "ab": [
+      "python",
+      "benchmark/run.py",
+      "--forge",
+      "build-gpu/Release/forge.exe",
+      "--model",
+      "C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "--output",
+      "benchmark/results/2026-09-18-typesafe-repair-feedback/ab-small",
+      "--suite",
+      "reasoning-gated",
+      "--tasks",
+      "reasoning_event_replay",
+      "reasoning_quota_allocation",
+      "--variants",
+      "loop-repair",
+      "loop-repair-judge",
+      "--repetitions",
+      "2",
+      "--order-seed",
+      "20260918",
+      "--max-turns",
+      "32",
+      "--timeout",
+      "600",
+      "--verification-timeout",
+      "120",
+      "--retain-terminal"
+    ],
+    "preflight": [
+      "python",
+      "benchmark/run.py",
+      "--forge",
+      "build-gpu/Release/forge.exe",
+      "--model",
+      "C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "--output",
+      "benchmark/results/2026-09-18-typesafe-repair-feedback/preflight-engagement",
+      "--suite",
+      "reasoning-gated",
+      "--tasks",
+      "reasoning_event_replay",
+      "--variants",
+      "loop-repair-judge",
+      "--repetitions",
+      "1",
+      "--order-seed",
+      "20260918",
+      "--max-turns",
+      "32",
+      "--timeout",
+      "600",
+      "--verification-timeout",
+      "120",
+      "--retain-terminal"
+    ]
+  },
+  "experiment": "typesafe-repair-feedback-ab-small",
+  "frozen_utc": "2026-09-18T15:49:53+00:00",
+  "hypothesis": "Advisory TypeSafe feedback after failed bounded-repair candidate validation reduces wasted repair turns or improves pass rate without changing deterministic validation authority.",
+  "identity": {
+    "forge_sha256": "d5984028c9b0a063cdc38cac8ed430de19fff3890aeac3cf3342f9e49ed5ae29",
+    "judge_config_sha256": "92e2e8446a65d5aeacb761f64788827fee66ec2f7a9fea5f535f9d0a4757b66f",
+    "model_sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+    "source_head": "0624acb42946f00b111ce787202042e81e0ba635",
+    "source_status_short": "?? benchmark/results/2026-09-13-nvidia-llamacpp-support/\n?? benchmark/results/2026-09-18-typesafe-repair-feedback/ab-small/\n?? docs/research/\n",
+    "task_hashes": {
+      "reasoning_event_replay": "086a19b56e861c7ee44fc810be5c6aa540d82e7f2f9a1108a07b55ec43f56d60",
+      "reasoning_quota_allocation": "0d4e9a203bfe00734a88be734af6cabd937da077e968c4e4d9d913ff0254727f"
+    },
+    "typesafe_key_present": true,
+    "typesafe_key_present_source": "verified in terminal shell immediately before launch; execute_code kernel does not inherit Hermes Bitwarden startup secrets",
+    "variant_flags": {
+      "loop-repair": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ],
+      "loop-repair-judge": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair",
+        "--judge",
+        "--config",
+        "C:/Users/flowc/dev/forge/benchmark/results/2026-09-18-typesafe-repair-feedback/judge.toml"
+      ]
+    }
+  },
+  "non_goals": [
+    "No promotion claim from this screen.",
+    "No hard-gating tools from TypeSafe feedback."
+  ],
+  "preflight_engagement": {
+    "materiality_bar": "At least one judge_feedback session event or retained raw TypeSafe feedback record must be observed before reading the A/B as evidence.",
+    "output": "benchmark/results/2026-09-18-typesafe-repair-feedback/preflight-engagement",
+    "task": "reasoning_event_replay",
+    "variant": "loop-repair-judge"
+  },
+  "protocol_sha256_without_self": "16b39cafcf8ce97ea21bd942dc62240cb3c95e48122aeb4815d1959eb4a74155",
+  "schema_version": 1
+}

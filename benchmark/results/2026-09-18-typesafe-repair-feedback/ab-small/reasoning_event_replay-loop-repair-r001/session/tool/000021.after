@@ -1,0 +1,18 @@
+package main
+
+import (
+	"fmt"
+	"./repair"
+)
+
+func main() {
+	events := []repair.Event{{1, "a", "Add", "x", 3}, {2, "b", "Add", "x", -1}, {2, "b", "Add", "x", -1}, {3, "c", "Delete", "x", 0}, {4, "d", "Add", "y", 5}}
+	fmt.Printf("Events: %+v\n", events)
+	result, ok := repair.ReplayEvents(events)
+	fmt.Printf("Result: %v, ok: %v\n", result, ok)
+	
+	// Let's also test the invalid cases to understand the expected behavior
+	invalid1 := []repair.Event{{2, "a", "Add", "x", 1}}
+	result2, ok2 := repair.ReplayEvents(invalid1)
+	fmt.Printf("Invalid case 1 result: %v, ok: %v\n", result2, ok2)
+}

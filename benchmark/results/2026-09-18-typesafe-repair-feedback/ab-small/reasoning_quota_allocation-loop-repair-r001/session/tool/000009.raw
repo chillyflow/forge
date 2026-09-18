@@ -1,0 +1,5 @@
+file_sha256:1a91e8b1333f29531635944ee06f339110e8c0a8b2adfcdf11fc6b2980759330
+17: 	tied := []Request{{"b", 0, 2, 1}, {"a", 0, 2, 1}}
+18: 	if got, ok := AllocateQuota(1, tied); !ok || got["a"] != 1 {
+19: 		t.Fatalf("tie=%v ok=%v", got, ok)
+20: 	}

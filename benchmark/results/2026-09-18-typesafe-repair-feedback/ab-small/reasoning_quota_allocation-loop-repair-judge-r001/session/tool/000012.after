@@ -1,0 +1,27 @@
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type Request struct {
+	ID               string
+	Min, Max, Weight int
+}
+
+func main() {
+	// Test the specific failing case
+	tied := []Request{{"b", 0, 2, 1}, {"a", 0, 2, 1}}
+	fmt.Printf("Testing tied case: %+v\n", tied)
+	
+	// Let's manually trace what should happen
+	fmt.Println("Expected result: a gets 1, b gets 0 (because 'a' < 'b' lexicographically)")
+	
+	// Let's also test the working cases to make sure they work
+	requests := []Request{{"a", 1, 10, 1}, {"b", 1, 10, 2}, {"c", 0, 10, 1}}
+	fmt.Printf("Testing weighted case: %+v\n", requests)
+	
+	capped := []Request{{"a", 0, 1, 100}, {"b", 0, 9, 1}}
+	fmt.Printf("Testing capped case: %+v\n", capped)
+}

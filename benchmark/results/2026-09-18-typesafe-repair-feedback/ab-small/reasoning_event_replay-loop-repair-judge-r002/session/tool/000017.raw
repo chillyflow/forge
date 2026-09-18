@@ -1,0 +1,5 @@
+file_sha256:ab1e43fe924705301696fa3bb0ed80b26c2c0345c1775ccb62041ac1904e01c1
+10: 	events := []Event{{1, "a", "Add", "x", 3}, {2, "b", "Add", "x", -1}, {2, "b", "Add", "x", -1}, {3, "c", "Delete", "x", 0}, {4, "d", "Add", "y", 5}}
+11: 	if got, ok := ReplayEvents(events); !ok || !reflect.DeepEqual(got, map[string]int{"y": 5}) {
+12: 		t.Fatalf("state=%v ok=%v", got, ok)
+13: 	}

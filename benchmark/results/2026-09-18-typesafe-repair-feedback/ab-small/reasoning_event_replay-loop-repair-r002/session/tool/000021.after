@@ -1,0 +1,13 @@
+package main
+
+import (
+	"fmt"
+	"./"
+)
+
+func main() {
+	events := []repair.Event{{1, "a", "Add", "x", 3}, {2, "b", "Add", "x", -1}, {2, "b", "Add", "x", -1}, {3, "c", "Delete", "x", 0}, {4, "d", "Add", "y", 5}}
+	fmt.Printf("Events: %+v\n", events)
+	result, ok := repair.ReplayEvents(events)
+	fmt.Printf("Result: %v, ok: %v\n", result, ok)
+}
