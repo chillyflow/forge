@@ -17,8 +17,10 @@ extern "C" {
  * transport failures. The API key is read from an environment variable at call
  * time and never stored in configuration files or session artifacts. Raw
  * request/response pairs are recorded only when a record directory is
- * configured. Non-Windows builds have no network transport: every call fails
- * with FORGE_ERR_UNSUPPORTED, which is a fail-open outcome. */
+ * configured, together with the server-issued request id and date response
+ * headers when the transport provides them. Non-Windows builds have no
+ * network transport: every call fails with FORGE_ERR_UNSUPPORTED, which is a
+ * fail-open outcome. */
 
 #define FORGE_JUDGE_DEFAULT_ENDPOINT "https://api.typesafe.ai"
 #define FORGE_JUDGE_DEFAULT_MODEL "jev-latest"

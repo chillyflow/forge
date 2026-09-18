@@ -314,6 +314,41 @@ static size_t scan_records(const char *directory, bool remove_files) {
     return count;
 }
 
+static bool read_first_record(const char *directory, char *out, size_t capacity) {
+#ifdef _WIN32
+    char pattern[TEST_PATH], path[TEST_PATH];
+    snprintf(pattern, sizeof(pattern), "%s\\judge-*.json", directory);
+    WIN32_FIND_DATAA data;
+    HANDLE handle = FindFirstFileA(pattern, &data);
+    if (handle == INVALID_HANDLE_VALUE)
+        return false;
+    snprintf(path, sizeof(path), "%s\\%s", directory, data.cFileName);
+    FindClose(handle);
+#else
+    char path[TEST_PATH] = {0};
+    DIR *dir = opendir(directory);
+    if (!dir)
+        return false;
+    struct dirent *entry;
+    while ((entry = readdir(dir))) {
+        if (strncmp(entry->d_name, "judge-", 6) || !strstr(entry->d_name, ".json"))
+            continue;
+        snprintf(path, sizeof(path), "%s/%s", directory, entry->d_name);
+        break;
+    }
+    closedir(dir);
+    if (!path[0])
+        return false;
+#endif
+    FILE *file = fopen(path, "rb");
+    if (!file)
+        return false;
+    size_t n = fread(out, 1, capacity - 1, file);
+    out[n] = 0;
+    fclose(file);
+    return true;
+}
+
 static void test_recording(void) {
     char directory[TEST_PATH];
     create_test_directory(directory);
@@ -337,6 +372,10 @@ static void test_recording(void) {
            FORGE_ERR_PARSE);
     forge_judge_destroy(judge);
     assert(scan_records(directory, false) == 2); /* Success and failure both archived. */
+    char record[8192];
+    assert(read_first_record(directory, record, sizeof(record)));
+    assert(strstr(record, "\"request_id\": \"\""));
+    assert(strstr(record, "\"response_date\": \"\""));
     assert(scan_records(directory, true) == 2);
 #ifdef _WIN32
     assert(_rmdir(directory) == 0);

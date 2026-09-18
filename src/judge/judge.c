@@ -33,6 +33,9 @@ struct forge_judge {
     double last_latency_ms, total_latency_ms;
     char last_model[64];
     unsigned record_seq;
+    /* Server-issued reconciliation headers from the most recent response;
+     * empty when the transport cannot provide them (stub, failures). */
+    char record_request_id[80], record_response_date[48];
 #ifdef _WIN32
     HINTERNET session; /* Lazily opened; NULL until the first call. */
 #endif
@@ -264,7 +267,9 @@ static void record_run(forge_judge *j, const char *request, const char *response
              yyjson_mut_obj_add_str(doc, root, "utc", utc) &&
              yyjson_mut_obj_add_real(doc, root, "latency_ms", latency_ms) &&
              yyjson_mut_obj_add_str(doc, root, "status", status == FORGE_OK ? "ok" : "error") &&
-             yyjson_mut_obj_add_str(doc, root, "error", error_message ? error_message : "");
+             yyjson_mut_obj_add_str(doc, root, "error", error_message ? error_message : "") &&
+             yyjson_mut_obj_add_str(doc, root, "request_id", j->record_request_id) &&
+             yyjson_mut_obj_add_str(doc, root, "response_date", j->record_response_date);
         yyjson_doc *request_doc = ok ? yyjson_read(request, strlen(request), 0) : NULL;
         yyjson_val *request_val = request_doc ? yyjson_doc_get_root(request_doc) : NULL;
         yyjson_mut_val *request_copy =
@@ -300,10 +305,35 @@ static void record_run(forge_judge *j, const char *request, const char *response
 }
 
 #ifdef _WIN32
+/* Best-effort response-header capture for the raw records: the server-issued
+ * request id makes every call reconcilable against the provider's console.
+ * Absent headers leave empty strings; this never fails the call. */
+static void capture_response_headers(forge_judge *j, HINTERNET req) {
+    wchar_t value[128];
+    j->record_request_id[0] = 0;
+    j->record_response_date[0] = 0;
+    DWORD size = sizeof(value);
+    if (WinHttpQueryHeaders(req, WINHTTP_QUERY_CUSTOM, L"x-typesafe-request-id", value, &size,
+                            WINHTTP_NO_HEADER_INDEX)) {
+        int n = WideCharToMultiByte(CP_UTF8, 0, value, -1, j->record_request_id,
+                                    (int)sizeof(j->record_request_id), NULL, NULL);
+        if (n <= 0)
+            j->record_request_id[0] = 0;
+    }
+    size = sizeof(value);
+    if (WinHttpQueryHeaders(req, WINHTTP_QUERY_DATE, WINHTTP_HEADER_NAME_BY_INDEX, value, &size,
+                            WINHTTP_NO_HEADER_INDEX)) {
+        int n = WideCharToMultiByte(CP_UTF8, 0, value, -1, j->record_response_date,
+                                    (int)sizeof(j->record_response_date), NULL, NULL);
+        if (n <= 0)
+            j->record_response_date[0] = 0;
+    }
+}
+
 /* HTTPS JSON POST via WinHTTP (Schannel TLS, system certificate store, no new
  * dependency). Returns IO for transient failures (network errors, 408/429/529
  * and 5xx) so the caller can retry once; POLICY/PARSE/ARGUMENT are final. */
-static forge_status http_transport(const forge_judge *j, const char *request, size_t request_len,
+static forge_status http_transport(forge_judge *j, const char *request, size_t request_len,
                                    char **response, size_t *response_len, forge_error *e) {
     const char *key = getenv(j->key_env);
     if (!key || !*key)
@@ -378,6 +408,7 @@ static forge_status http_transport(const forge_judge *j, const char *request, si
         }
     }
     if (status == FORGE_OK) {
+        capture_response_headers(j, req);
         DWORD code = 0, size = sizeof(code);
         if (!WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                                  WINHTTP_HEADER_NAME_BY_INDEX, &code, &size,
@@ -458,7 +489,7 @@ static forge_status http_transport(const forge_judge *j, const char *request, si
 }
 #endif
 
-static forge_status judge_transport(const forge_judge *j, const char *request, size_t request_len,
+static forge_status judge_transport(forge_judge *j, const char *request, size_t request_len,
                                     char **response, size_t *response_len, forge_error *e) {
     if (j->options.transport)
         return j->options.transport(request, request_len, response, response_len,
@@ -491,6 +522,8 @@ forge_status forge_judge_rerank(forge_judge *j, const char *query, size_t count,
     forge_status status = FORGE_OK;
     uint64_t start = fg_now_ms();
     for (unsigned attempt = 0;; attempt++) {
+        j->record_request_id[0] = 0; /* Headers belong to the last attempt only. */
+        j->record_response_date[0] = 0;
         status = judge_transport(j, body, strlen(body), &response, &response_len, e);
         if (status == FORGE_OK || attempt > 0 || status != FORGE_ERR_IO)
             break;
