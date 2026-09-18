@@ -58,7 +58,10 @@ does not prove that every chosen excerpt is relevant to a natural-language task.
 When the optional hosted judge is explicitly granted, it reorders candidates by
 its relevance scores before trimming, and the output carries a `rerank` object
 (`applied`, `reason`, `model`, `scored`, `latency_ms`, `input_tokens`,
-`output_tokens`) recording the outcome.
+`output_tokens`) recording the outcome. The snapshot's relative timeout is
+extended by the judge's bounded call budget (two attempts plus backoff) so
+hosted latency cannot consume the retrieval deadline; an absolute deadline
+still caps the extension.
 
 | Default | Meaning |
 | --- | --- |

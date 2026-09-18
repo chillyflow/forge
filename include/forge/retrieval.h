@@ -11,6 +11,7 @@ extern "C" {
 #define FORGE_RETRIEVAL_MAX_SNIPPET_BYTES ((size_t)8192)
 #define FORGE_RETRIEVAL_MAX_CANDIDATES ((size_t)4096)
 #define FORGE_RETRIEVAL_MAX_SOURCE_BYTES ((size_t)256 * 1024 * 1024)
+#define FORGE_RETRIEVAL_MAX_RERANK_BUDGET_MS ((size_t)120000)
 
 /* Optional semantic rerank of the collected candidate list, applied before the
  * output-budget trim. The callback fills scores[count] in [0,1] (higher first)
@@ -44,6 +45,9 @@ typedef struct {
     void *userdata;
     forge_rerank_fn rerank;
     void *rerank_userdata;
+    /* With a rerank callback, extends the snapshot's relative timeout by this
+     * many milliseconds; the absolute deadline_ms still caps the result. */
+    size_t rerank_budget_ms;
 } forge_retrieval_options;
 
 typedef struct {
@@ -69,7 +73,10 @@ forge_retrieval_options forge_default_retrieval_options(void);
  * that exact JSON, not added per result. Low-priority tail results are omitted
  * until budgets fit. A configured rerank callback may reorder candidates before
  * trimming; a callback failure keeps the deterministic order and is reported in
- * the `rerank` object, and reordering never adds or drops candidates. A budget
+ * the `rerank` object, and reordering never adds or drops candidates. A
+ * configured rerank budget extends the snapshot's relative timeout by that
+ * amount (an absolute deadline still caps it), so callback latency cannot
+ * consume the retrieval budget. A budget
  * too small for metadata returns LIMIT. Excerpts
  * and limited stages are marked; candidate counts are not total-match counts.
  * Cancellation/SQL/corrupt observed metadata failures return no partial output.

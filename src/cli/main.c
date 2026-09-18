@@ -1215,6 +1215,7 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             if (judge) {
                 options.rerank = forge_judge_rerank_retrieval;
                 options.rerank_userdata = judge;
+                options.rerank_budget_ms = forge_judge_budget_ms(judge);
             }
             text = forge_repo_retrieve(r, argument, &options, NULL, &error);
             forge_judge_destroy(judge);

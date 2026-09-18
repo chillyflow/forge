@@ -247,6 +247,21 @@ static void test_retrieval_glue(void) {
     forge_judge_destroy(judge);
 }
 
+static void test_budget(void) {
+    stub_state stub = {0};
+    forge_judge *judge = make_judge(&stub, NULL, 0); /* timeout_ms 500. */
+    assert(forge_judge_budget_ms(judge) == 1500);
+    assert(forge_judge_budget_ms(NULL) == 0);
+    forge_judge_destroy(judge);
+    forge_judge_options options = {0};
+    options.timeout_ms = FORGE_JUDGE_DEFAULT_TIMEOUT_MS;
+    forge_error error = {0};
+    judge = forge_judge_create(&options, &error);
+    assert(judge && error.code == FORGE_OK);
+    assert(forge_judge_budget_ms(judge) == 2 * FORGE_JUDGE_DEFAULT_TIMEOUT_MS + 500);
+    forge_judge_destroy(judge);
+}
+
 static void create_test_directory(char directory[TEST_PATH]) {
 #ifdef _WIN32
     char temporary[TEST_PATH];
@@ -408,6 +423,7 @@ int main(int argc, char **argv) {
     test_retry_once();
     test_fail_open_errors();
     test_retrieval_glue();
+    test_budget();
     test_recording();
     test_config_table();
     printf("judge tests passed\n");

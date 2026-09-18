@@ -588,9 +588,11 @@ char *forge_repo_retrieve(forge_repo *repo, const char *query,
     if (stats)
         memset(stats, 0, sizeof(*stats));
     forge_retrieval_options o = requested ? *requested : forge_default_retrieval_options();
-    uint64_t now = fg_now_ms(), deadline = o.deadline_ms;
-    if (o.timeout_ms) {
-        uint64_t until = o.timeout_ms > UINT64_MAX - now ? UINT64_MAX : now + o.timeout_ms;
+    uint64_t now = fg_now_ms(), deadline = o.deadline_ms, window = o.timeout_ms;
+    if (o.rerank && o.rerank_budget_ms && window <= UINT64_MAX - o.rerank_budget_ms)
+        window += o.rerank_budget_ms; /* Callback latency is not retrieval work. */
+    if (window) {
+        uint64_t until = window > UINT64_MAX - now ? UINT64_MAX : now + window;
         if (!deadline || until < deadline)
             deadline = until;
     }
@@ -604,7 +606,8 @@ char *forge_repo_retrieve(forge_repo *repo, const char *query,
         o.max_snippet_bytes > FORGE_RETRIEVAL_MAX_SNIPPET_BYTES || !o.max_candidates ||
         o.max_candidates > FORGE_RETRIEVAL_MAX_CANDIDATES || !o.max_source_bytes ||
         o.max_source_bytes > FORGE_RETRIEVAL_MAX_SOURCE_BYTES || o.graph_depth > 8 ||
-        !o.max_vm_steps || o.max_vm_steps > UINT64_C(1000000000) || o.timeout_ms > 600000) {
+        !o.max_vm_steps || o.max_vm_steps > UINT64_C(1000000000) || o.timeout_ms > 600000 ||
+        o.rerank_budget_ms > FORGE_RETRIEVAL_MAX_RERANK_BUDGET_MS) {
         fg_error(error, FORGE_ERR_LIMIT, "Retrieval options exceed supported limits");
         return NULL;
     }

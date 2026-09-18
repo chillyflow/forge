@@ -124,6 +124,10 @@ void forge_judge_destroy(forge_judge *j) {
     free(j);
 }
 
+size_t forge_judge_budget_ms(const forge_judge *j) {
+    return j ? 2 * j->timeout_ms + JUDGE_RETRY_BACKOFF_MS : 0;
+}
+
 void forge_judge_metrics(const forge_judge *j, forge_judge_stats *out) {
     if (!out)
         return;

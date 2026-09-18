@@ -1823,6 +1823,7 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
         if (c->config.judge) {
             options.rerank = forge_judge_rerank_retrieval;
             options.rerank_userdata = c->config.judge;
+            options.rerank_budget_ms = forge_judge_budget_ms(c->config.judge);
         }
         return forge_repo_retrieve(c->repo, fg_json_str(args, "query"), &options, NULL, e);
     }

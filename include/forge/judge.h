@@ -66,6 +66,11 @@ forge_status forge_judge_rerank_retrieval(void *userdata, const char *query, siz
                                           const char *const *stages, double *scores,
                                           forge_rerank_info *info, forge_error *);
 
+/* Worst-case wall time of one rerank call: two attempts at the configured
+ * timeout plus the retry backoff. Callers pass this as the retrieval options'
+ * rerank_budget_ms so callback latency cannot consume the snapshot timeout. */
+size_t forge_judge_budget_ms(const forge_judge *);
+
 typedef struct {
     size_t calls, failures, candidates_scored, input_tokens, output_tokens;
     double last_latency_ms, total_latency_ms;

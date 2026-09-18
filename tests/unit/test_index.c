@@ -986,6 +986,50 @@ static void test_retrieval_budgets_and_errors(void) {
     yyjson_doc_free(doc); /* Failed calls restore the handle's snapshot callbacks. */
     fixture_finish(&f);
 }
+static forge_status slow_rerank(void *userdata, const char *query, size_t count,
+                                const char *const *paths, const char *const *snippets,
+                                const char *const *stages, double *scores,
+                                forge_rerank_info *info, forge_error *error) {
+    (void)query;
+    (void)paths;
+    (void)snippets;
+    (void)stages;
+    (void)error;
+    const uint64_t *until = userdata;
+    while (fg_now_ms() < *until) {
+        /* Wall-clock burn standing in for hosted call latency. */
+    }
+    for (size_t i = 0; i < count; i++)
+        scores[i] = (double)(count - i);
+    info->reported = true;
+    info->model = "stub";
+    return FORGE_OK;
+}
+static void test_retrieval_rerank_budget(void) {
+    fixture f;
+    fixture_start(&f);
+    write_source(&f, "a.go", "package p\nfunc Target() {}\n");
+    write_source(&f, "b.go", "package p\nfunc Target() {}\n");
+    full_index(&f);
+    forge_retrieval_options o = forge_default_retrieval_options();
+    o.graph_depth = 0;
+    o.rerank = slow_rerank;
+    o.timeout_ms = 100;
+    uint64_t burn_until = fg_now_ms() + 300;
+    o.rerank_userdata = &burn_until;
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_LIMIT); /* Callback latency consumed the timeout. */
+    forge_retrieval_stats value = {0};
+    o.rerank_budget_ms = 2000;
+    burn_until = fg_now_ms() + 300;
+    char *json = forge_repo_retrieve(f.repo, "Target", &o, &value, &f.error);
+    assert(json && value.reranked && value.rerank_scored == 2);
+    free(json);
+    o.rerank_budget_ms = FORGE_RETRIEVAL_MAX_RERANK_BUDGET_MS + 1;
+    assert(!forge_repo_retrieve(f.repo, "Target", &o, NULL, &f.error));
+    assert(f.error.code == FORGE_ERR_LIMIT);
+    fixture_finish(&f);
+}
 static void test_retrieval_corrupt_metadata(void) {
     fixture f;
     fixture_start(&f);
@@ -1078,6 +1122,7 @@ int main(void) {
     test_git_delta_eligibility();
     test_retrieval_stages();
     test_retrieval_budgets_and_errors();
+    test_retrieval_rerank_budget();
     test_retrieval_corrupt_metadata();
     test_retrieval_snapshot_consistency();
     puts("Incremental repository index tests passed");
