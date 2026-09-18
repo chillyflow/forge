@@ -1,0 +1,65 @@
+diff --git "a/web/query.py" "b/web/query.py"
+--- "a/web/query.py"
++++ "b/web/query.py"
+@@ -1,30 +1,31 @@
+-from urllib.parse import parse_qs
+-
+-def parse_query(value):
+-    # Parse the query string with keep_blank_values=True to keep empty values
+-    parsed = parse_qs(value, keep_blank_values=True)
+-    
+-    # Check for malformed percent escapes manually
+-    for key, values in parsed.items():
+-        for val in values:
+-            # Try to decode the value to check for malformed percent escapes
+-            try:
+-                # This will raise ValueError if there's a malformed percent escape
+-                bytes.fromhex(val.replace('%', '').replace(' ', ''))
+-            except ValueError:
+-                # Check if it's a malformed percent escape pattern
+-                if '%' in val:
+-                    # Check if there's an incomplete percent escape (like %Z or %)
+-                    if val.count('%') > 0:
+-                        # Look for patterns like %XX where XX is not valid hex
+-                        import re
+-                        if re.search(r'%[0-9a-fA-F]{0,1}', val) and not re.match(r'%[0-9a-fA-F]{2}', val):
+-                            raise ValueError("Invalid percent escape")
+-    
+-    # Return the last value for repeated keys
+-    result = {}
+-    for key, values in parsed.items():
+-        # Use the last value for repeated keys
+-        result[key] = values[-1]
+-    
+-    return result
++from urllib.parse import parse_qs
++
++def parse_query(value):
++    # Parse the query string with keep_blank_values=True to keep empty values
++    parsed = parse_qs(value, keep_blank_values=True)
++    
++    # Check for malformed percent escapes by attempting to parse each value
++    for key, values in parsed.items():
++        for val in values:
++            # Check if the value contains malformed percent escapes
++            # A malformed percent escape is one that starts with % but isn't followed by two hex digits
++            if '%' in val:
++                # Find all percent escape patterns
++                import re
++                # Pattern to match % followed by non-hex characters or incomplete hex
++                percent_matches = re.findall(r'%[0-9a-fA-F]?[0-9a-fA-F]?', val)
++                for match in percent_matches:
++                    if match != '%' and len(match) == 3:  # %XX pattern - valid
++                        continue
++                    elif match != '%' and len(match) == 2:  # %X pattern - invalid
++                        raise ValueError("Invalid percent escape")
++                    elif match == '%':  # % alone - invalid
++                        raise ValueError("Invalid percent escape")
++    
++    # Return the last value for repeated keys
++    result = {}
++    for key, values in parsed.items():
++        # Use the last value for repeated keys
++        result[key] = values[-1]
++    
++    return result

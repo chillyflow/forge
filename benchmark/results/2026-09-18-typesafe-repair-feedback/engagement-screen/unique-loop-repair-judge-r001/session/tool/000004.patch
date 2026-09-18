@@ -1,0 +1,30 @@
+diff --git "a/repair.go" "b/repair.go"
+--- "a/repair.go"
++++ "b/repair.go"
+@@ -1,13 +1,13 @@
+-package repair
+-
+-func Unique(xs []int) []int {
+-	out := []int{}
+-	seen := map[int]bool{}
+-	for _, v := range xs {
+-		if seen[v] {
+-			out = append(out, v)
+-		}
+-		seen[v] = true
+-	}
+-	return out
+-}
++package repair
++
++func Unique(xs []int) []int {
++	out := []int{}
++	seen := map[int]bool{}
++	for _, v := range xs {
++		if !seen[v] {
++			out = append(out, v)
++		}
++		seen[v] = true
++	}
++	return out
++}

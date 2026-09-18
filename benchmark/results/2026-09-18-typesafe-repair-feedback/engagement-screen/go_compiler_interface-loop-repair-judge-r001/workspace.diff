@@ -1,0 +1,12 @@
+diff --git a/store/store.go b/store/store.go
+index 41e0086..dc9447e 100644
+--- a/store/store.go
++++ b/store/store.go
+@@ -14,6 +14,6 @@ func New(records []Record) *Memory {
+ 	}
+ 	return m
+ }
+-func (m *Memory) Get(id int) (Record, bool) { r, ok := m.records[id]; return r, ok }
++func (m *Memory) Get(id string) (Record, bool) { r, ok := m.records[id]; return r, ok }
+ 
+ var _ Store = (*Memory)(nil)

@@ -1,0 +1,6 @@
+class MemoryRepository:
+    def __init__(self, users):
+        self.users = {user["id"]: user for user in users}
+
+    def find(self, user_id):
+        return self.users.get(user_id)

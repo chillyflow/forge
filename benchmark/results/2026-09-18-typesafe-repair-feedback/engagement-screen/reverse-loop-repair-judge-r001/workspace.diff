@@ -1,0 +1,13 @@
+diff --git a/repair.go b/repair.go
+index 47e9c1c..d581341 100644
+--- a/repair.go
++++ b/repair.go
+@@ -2,7 +2,6 @@ package repair
+ 
+ func Reverse(xs []int) {
+ 	for i, j := 0, len(xs)-1; i < j; i, j = i+1, j-1 {
+-		xs[i] = xs[j]
+-		xs[j] = xs[i]
++		xs[i], xs[j] = xs[j], xs[i]
+ 	}
+ }

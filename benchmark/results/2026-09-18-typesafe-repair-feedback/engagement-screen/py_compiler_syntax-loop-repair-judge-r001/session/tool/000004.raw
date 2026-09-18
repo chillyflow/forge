@@ -1,0 +1,9 @@
+file_sha256:260fe0c1c49a496ae524012a64296ff753b13520c293212185cc35c3c736d6b4
+1: import unittest
+2: from expr.evaluate import evaluate
+3: 
+4: class EvaluateTests(unittest.TestCase):
+5:     def test_addition_only(self):
+6:         self.assertEqual(evaluate("2 + 5"), 7)
+7:         with self.assertRaises(ValueError): evaluate("2 * 5")
+8:         with self.assertRaises(ValueError): evaluate("'a' + 'b'")

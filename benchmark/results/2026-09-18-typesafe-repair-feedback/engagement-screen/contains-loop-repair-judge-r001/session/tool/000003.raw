@@ -1,0 +1,10 @@
+file_sha256:99a40baf805851bfd8b4b83e2ca4a440458a39f936fa127db85d077d3ed2e00a
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	if !Contains([]int{1, 2, 3}, 3) || !Contains([]int{7}, 7) || Contains(nil, 1) || Contains([]int{1}, 2) {
+7: 		t.Fatal("membership failed")
+8: 	}
+9: }

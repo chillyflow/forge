@@ -1,0 +1,26 @@
+diff --git "a/repair.go" "b/repair.go"
+--- "a/repair.go"
++++ "b/repair.go"
+@@ -1,11 +1,11 @@
+-package repair
+-
+-func Clamp(x, lo, hi int) int {
+-	if x < lo {
+-		return hi
+-	}
+-	if x > hi {
+-		return lo
+-	}
+-	return x
+-}
++package repair
++
++func Clamp(x, lo, hi int) int {
++	if x < lo {
++		return lo
++	}
++	if x > hi {
++		return hi
++	}
++	return x
++}

@@ -1,0 +1,34 @@
+diff --git "a/config/merge.go" "b/config/merge.go"
+--- "a/config/merge.go"
++++ "b/config/merge.go"
+@@ -1,15 +1,15 @@
+-package config
+-
+-func Resolve(defaults, file, overrides Values) Values {
+-	out := Values{}
+-	for k, v := range overrides {
+-		out[k] = v
+-	}
+-	for k, v := range file {
+-		out[k] = v
+-	}
+-	for k, v := range defaults {
+-		out[k] = v
+-	}
+-	return out
+-}
++package config
++
++func Resolve(defaults, file, overrides Values) Values {
++	out := Values{}
++	for k, v := range defaults {
++		out[k] = v
++	}
++	for k, v := range file {
++		out[k] = v
++	}
++	for k, v := range overrides {
++		out[k] = v
++	}
++	return out
++}

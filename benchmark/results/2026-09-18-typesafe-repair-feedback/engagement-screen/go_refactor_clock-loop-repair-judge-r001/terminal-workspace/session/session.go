@@ -1,0 +1,11 @@
+package session
+
+import "time"
+
+type Session struct {
+	ExpiresAt time.Time
+	clock     Clock
+}
+
+func New(expires time.Time, clock Clock) Session { return Session{ExpiresAt: expires, clock: clock} }
+func (s Session) Expired() bool                  { return s.clock.Now().After(s.ExpiresAt) }

@@ -1,0 +1,20 @@
+diff --git a/config/merge.go b/config/merge.go
+index af807f3..8dcb3c2 100644
+--- a/config/merge.go
++++ b/config/merge.go
+@@ -2,13 +2,13 @@ package config
+ 
+ func Resolve(defaults, file, overrides Values) Values {
+ 	out := Values{}
+-	for k, v := range overrides {
++	for k, v := range defaults {
+ 		out[k] = v
+ 	}
+ 	for k, v := range file {
+ 		out[k] = v
+ 	}
+-	for k, v := range defaults {
++	for k, v := range overrides {
+ 		out[k] = v
+ 	}
+ 	return out

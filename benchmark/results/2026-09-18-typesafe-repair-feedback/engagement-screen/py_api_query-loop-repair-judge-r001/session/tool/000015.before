@@ -1,0 +1,30 @@
+from urllib.parse import parse_qs
+
+def parse_query(value):
+    # Parse the query string with keep_blank_values=True to keep empty values
+    parsed = parse_qs(value, keep_blank_values=True)
+    
+    # Check for malformed percent escapes manually
+    for key, values in parsed.items():
+        for val in values:
+            # Try to decode the value to check for malformed percent escapes
+            try:
+                # This will raise ValueError if there's a malformed percent escape
+                bytes.fromhex(val.replace('%', '').replace(' ', ''))
+            except ValueError:
+                # Check if it's a malformed percent escape pattern
+                if '%' in val:
+                    # Check if there's an incomplete percent escape (like %Z or %)
+                    if val.count('%') > 0:
+                        # Look for patterns like %XX where XX is not valid hex
+                        import re
+                        if re.search(r'%[0-9a-fA-F]{0,1}', val) and not re.match(r'%[0-9a-fA-F]{2}', val):
+                            raise ValueError("Invalid percent escape")
+    
+    # Return the last value for repeated keys
+    result = {}
+    for key, values in parsed.items():
+        # Use the last value for repeated keys
+        result[key] = values[-1]
+    
+    return result

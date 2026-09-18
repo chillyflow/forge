@@ -1,0 +1,126 @@
+{
+    "schema_version": 1,
+    "utc": "20260918T171044Z",
+    "latency_ms": 515.0,
+    "status": "ok",
+    "error": "",
+    "request_id": "req_01a0b57fc5547774bb776d3d8adf0e0c",
+    "response_date": "Fri, 18 Sep 2026 17:10:44 GMT",
+    "request": {
+        "state": {
+            "task": "OrderBuild must return a deterministic dependency-respecting build order. Dependencies name prerequisites, lexical order breaks ties, and duplicate task/dependency declarations, unknown prerequisites, or cycles are invalid. Inspect the implementation, repair it, and run go test -json ./... without modifying tests.",
+            "validation": {
+                "summary": "Automatic validation stopped at format: Validation stage format failed (exit_code=0, files need formatting)\nexit_code=0 timeout=false cancelled=false truncated=false\nstdout:\n./repair.go\n\nstderr:\n\nThe listed files need gofmt formatting. Format only files you are authorized to edit (for example with gofmt -w), then try validation again. A zero formatter exit code alone does not pass this check.\n",
+                "failed_command": "{\"cwd\":\".\",\"argv\":[\"gofmt\",\"-l\",\"./repair.go\",\"./repair_test.go\"]}"
+            },
+            "current": {
+                "path": "repair.go",
+                "source": "package repair\n\nimport \"sort\"\n\nfunc OrderBuild(tasks []string, deps map[string][]string) ([]string, bool) {\n\t// Check for duplicate tasks\n\tknown := map[string]bool{}\n\tfor _, task := range tasks {\n\t\tif known[task] {\n\t\t\treturn nil, false\n\t\t}\n\t\tknown[task] = true\n\t}\n\t\n\t// Build dependency graph\n\tindegree := map[string]int{}\n\tnext := map[string][]string{}\n\t\n\t// Initialize all tasks with 0 indegree\n\tfor _, task := range tasks {\n\t\tindegree[task] = 0\n\t}\n\t\n\t// Process dependencies\n\tfor task, requirements := range deps {\n\t\t// Check if task exists\n\t\tif !known[task] {\n\t\t\treturn nil, false\n\t\t}\n\t\t\n\t\t// Check for duplicate dependencies and unknown prerequisites\n\t\tseen := map[string]bool{}\n\t\tfor _, requirement := range requirements {\n\t\t\t// Check if requirement exists\n\t\t\tif !known[requirement] {\n\t\t\t\treturn nil, false\n\t\t\t}\n\t\t\t// Check for duplicate dependencies\n\t\t\tif seen[requirement] {\n\t\t\t\treturn nil, false\n\t\t\t}\n\t\t\tseen[requirement] = true\n\t\t\t\n\t\t\t// Update dependency graph\n\t\t\tindegree[task]++\n\t\t\tnext[requirement] = append(next[requirement], task)\n\t\t}\n\t}\n\t\n\t// Find all tasks with no dependencies (indegree = 0)\n\tready := []string{}\n\tfor task, n := range indegree {\n\t\tif n == 0 {\n\t\t\tready = append(ready, task)\n\t\t}\n\t}\n\t\n\t// Sort lexicographically to ensure deterministic order\n\tsort.Strings(ready)\n\t\n\t// Topological sort\n\tout := []string{}\n\tfor len(ready) > 0 {\n\t\t// Take the first task (lexicographically smallest)\n\t\ttask := ready[0]\n\t\tready = ready[1:]\n\t\tout = append(out, task)\n\t\t\n\t\t// Remove this task and update dependencies\n\t\tfor _, dependent := range next[task] {\n\t\t\tindegree[dependent]--\n\t\t\tif indegree[dependent] == 0 {\n\t\t\t\tready = append(ready, dependent)\n\t\t\t}\n\t\t}\n\t}\n\t\n\t// Check if all tasks were processed (no cycles)\n\tif len(out) != len(tasks) {\n\t\treturn nil, false\n\t}\n\t\n\treturn out, true\n}\n"
+            },
+            "last_delta": "{\"tool\":\"apply_patch\",\"args\":{\"path\":\"repair.go\",\"old_text\":\"\\treturn out, true\\n}\\n}\",\"new_text\":\"\\treturn out, true\\n}\"}}",
+            "loop": {
+                "remaining_actions": 17,
+                "candidate_attempts": 1,
+                "input_hash": 5862240421543081779,
+                "initial_hash": 14513111898895485554,
+                "repeated_failure": false,
+                "bounded_repair": true
+            }
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "failure_family": {
+                "type": "choice",
+                "instructions": "Classify the primary cause of the failed validation in `validation.summary` given `task`, `current.source`, `last_delta`, and `loop`.",
+                "criteria": {
+                    "code_defect": "The failure most likely comes from incorrect implementation logic in `current.source` or related code.",
+                    "test_or_requirement_mismatch": "The observed tests, task, or inferred requirement appear inconsistent or incomplete.",
+                    "environment_or_dependency": "The failure most likely comes from missing dependencies, filesystem state, interpreter/toolchain differences, or another environment condition.",
+                    "missing_evidence": "The state does not yet contain enough inspected source or validation evidence to choose a safe repair.",
+                    "unknown": "None of the supplied categories is clearly supported by the state."
+                }
+            },
+            "evidence_gap": {
+                "type": "noul",
+                "instructions": "Does this state lack enough direct source or validation evidence to choose a safe next repair action?",
+                "criteria": {
+                    "true": "More inspection is needed before editing or accepting the candidate.",
+                    "false": "The supplied task, validation summary, current source, and previous delta are sufficient for a concrete next step."
+                }
+            },
+            "repair_readiness": {
+                "type": "score",
+                "instructions": "How ready is this failed repair episode for an implementation patch?",
+                "criteria": [
+                    "No actionable signal; the next step should not edit code.",
+                    "Needs more inspection before a repair can be selected.",
+                    "A concrete suspect is visible, but the exact repair may still need confirmation.",
+                    "An actionable repair is likely from the supplied validation, source, and delta."
+                ]
+            },
+            "next_action": {
+                "type": "choice",
+                "instructions": "What should the coding agent do next, if host code acts conservatively on low confidence?",
+                "criteria": {
+                    "inspect_source": "Inspect current or related source before editing.",
+                    "patch_code": "Patch implementation code; enough evidence identifies a likely fix.",
+                    "run_validation": "Run host validation; the current candidate may already satisfy the observed failure.",
+                    "defer": "Do not act on this judgment because the evidence is missing, contradictory, unsafe, or low confidence."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "failure_family": {
+                "type": "choice",
+                "choice": "environment_or_dependency",
+                "confidence": 0.27,
+                "probabilities": {
+                    "unknown": 0.38,
+                    "environment_or_dependency": 0.42,
+                    "missing_evidence": 0.02,
+                    "code_defect": 0.09,
+                    "test_or_requirement_mismatch": 0.09
+                }
+            },
+            "evidence_gap": {
+                "type": "noul",
+                "noul": 0.18
+            },
+            "repair_readiness": {
+                "type": "score",
+                "score": 2.22,
+                "confidence": 0.22,
+                "legend": {
+                    "0": "No actionable signal; the next step should not edit code.",
+                    "1": "Needs more inspection before a repair can be selected.",
+                    "2": "A concrete suspect is visible, but the exact repair may still need confirmation.",
+                    "3": "An actionable repair is likely from the supplied validation, source, and delta."
+                },
+                "probabilities": {
+                    "0": 0.22,
+                    "1": 0.02,
+                    "2": 0.06,
+                    "3": 0.7
+                }
+            },
+            "next_action": {
+                "type": "choice",
+                "choice": "defer",
+                "confidence": 0.22,
+                "probabilities": {
+                    "run_validation": 0.21,
+                    "defer": 0.42,
+                    "inspect_source": 0.12,
+                    "patch_code": 0.25
+                }
+            }
+        },
+        "usage": {
+            "input_tokens": 1667,
+            "output_tokens": 153
+        }
+    }
+}

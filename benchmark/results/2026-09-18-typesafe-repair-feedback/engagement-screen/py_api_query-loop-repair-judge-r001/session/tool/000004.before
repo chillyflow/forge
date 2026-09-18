@@ -1,0 +1,5 @@
+from urllib.parse import parse_qs
+
+def parse_query(value):
+    parsed = parse_qs(value)
+    return {key: values[0] for key, values in parsed.items()}

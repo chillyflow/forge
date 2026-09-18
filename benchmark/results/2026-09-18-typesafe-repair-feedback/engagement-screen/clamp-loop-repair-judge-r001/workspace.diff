@@ -1,0 +1,17 @@
+diff --git a/repair.go b/repair.go
+index 9dea3af..a633139 100644
+--- a/repair.go
++++ b/repair.go
+@@ -2,10 +2,10 @@ package repair
+ 
+ func Clamp(x, lo, hi int) int {
+ 	if x < lo {
+-		return hi
++		return lo
+ 	}
+ 	if x > hi {
+-		return lo
++		return hi
+ 	}
+ 	return x
+ }

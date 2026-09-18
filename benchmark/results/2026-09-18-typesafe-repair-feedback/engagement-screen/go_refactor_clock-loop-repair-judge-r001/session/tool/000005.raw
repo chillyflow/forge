@@ -1,0 +1,12 @@
+file_sha256:06762688a8b3cadd130f77aa3e8d9e2387b232aea46537fac8125406030760c0
+1: package session
+2: 
+3: import "time"
+4: 
+5: type Session struct {
+6: 	ExpiresAt time.Time
+7: 	clock     Clock
+8: }
+9: 
+10: func New(expires time.Time, clock Clock) Session { return Session{ExpiresAt: expires, clock: clock} }
+11: func (s Session) Expired() bool                  { return time.Now().After(s.ExpiresAt) }

@@ -119,3 +119,15 @@ an engagement screen to select the population (tasks that actually produce
 failed candidate validations under bounded repair) so full-length cells are
 spent where the mechanism can fire, keeping one inert task as a
 harm-when-dormant control.
+
+## Follow-up: engagement screen + population manifest (2026-09-18)
+
+Executed. All 29 fixtures screened once under `loop-repair-judge`
+(`engagement-screen/`): 6 engaged (`ceil_div`, `go_api_pagination`,
+`go_multifile_registry`, `reasoning_dependency_order`,
+`reasoning_interval_union`, `reasoning_route_specificity`), 2 inert controls
+selected (`range_sum`, `prefix`), 21 excluded; branch `four_plus_engaged` → the
+larger campaign is eligible. The frozen population is
+[`population-manifest.json`](population-manifest.json) (sha `f0661378…`);
+details and caveats (engagement is stochastic at one repetition) in
+[`engagement-screen/README.md`](engagement-screen/README.md).

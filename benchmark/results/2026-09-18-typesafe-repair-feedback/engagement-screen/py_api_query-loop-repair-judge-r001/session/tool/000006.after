@@ -1,0 +1,17 @@
+from urllib.parse import parse_qs
+
+def parse_query(value):
+    # Parse the query string with keep_blank_values=True to keep empty values
+    try:
+        parsed = parse_qs(value, keep_blank_values=True)
+    except ValueError:
+        # If parse_qs raises ValueError, it's likely due to malformed percent escapes
+        raise ValueError("Invalid percent escape")
+    
+    # Return the last value for repeated keys
+    result = {}
+    for key, values in parsed.items():
+        # Use the last value for repeated keys
+        result[key] = values[-1]
+    
+    return result

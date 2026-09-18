@@ -1,0 +1,12 @@
+file_sha256:bfe98b01d0e38462ac82d19a7fafcd6bae71d80584c524ee23fd1b0fb308ba7c
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	for _, c := range [][4]int{{-1, 0, 10, 0}, {11, 0, 10, 10}, {5, 0, 10, 5}, {0, 0, 10, 0}} {
+7: 		if got := Clamp(c[0], c[1], c[2]); got != c[3] {
+8: 			t.Fatalf("%v: got %d", c, got)
+9: 		}
+10: 	}
+11: }

@@ -1,0 +1,41 @@
+diff --git "a/web/query.py" "b/web/query.py"
+--- "a/web/query.py"
++++ "b/web/query.py"
+@@ -1,20 +1,17 @@
+-from urllib.parse import parse_qs, urlparse
+-
+-def parse_query(value):
+-    # Parse the query string
+-    parsed = parse_qs(value, keep_blank_values=True)
+-    
+-    # Return the last value for repeated keys and check for malformed percent escapes
+-    result = {}
+-    for key, values in parsed.items():
+-        # Check if any of the values have malformed percent escapes
+-        for val in values:
+-            try:
+-                # This will raise ValueError if there's a malformed percent escape
+-                urlparse(f"http://example.com?{key}={val}")
+-            except ValueError:
+-                raise ValueError("Invalid percent escape")
+-        # Use the last value for repeated keys
+-        result[key] = values[-1]
+-    
+-    return result
++from urllib.parse import parse_qs
++
++def parse_query(value):
++    # Parse the query string with keep_blank_values=True to keep empty values
++    try:
++        parsed = parse_qs(value, keep_blank_values=True)
++    except ValueError:
++        # If parse_qs raises ValueError, it's likely due to malformed percent escapes
++        raise ValueError("Invalid percent escape")
++    
++    # Return the last value for repeated keys
++    result = {}
++    for key, values in parsed.items():
++        # Use the last value for repeated keys
++        result[key] = values[-1]
++    
++    return result

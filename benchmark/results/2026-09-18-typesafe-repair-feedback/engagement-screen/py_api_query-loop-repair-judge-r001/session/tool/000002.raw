@@ -1,0 +1,6 @@
+file_sha256:9106e0cc4922b75c5751e85190a28a0404856f8ac642a95baed52f96dfeb5262
+1: from urllib.parse import parse_qs
+2: 
+3: def parse_query(value):
+4:     parsed = parse_qs(value)
+5:     return {key: values[0] for key, values in parsed.items()}

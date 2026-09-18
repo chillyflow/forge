@@ -1,0 +1,13 @@
+file_sha256:9e07797a3e61aa24c6e168a68c0df18b7843e8422ed4968449b1fc60cbbd2075
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	if got := Add(2, 3); got != 5 {
+7: 		t.Fatalf("expected 5, got %d", got)
+8: 	}
+9: 	if Add(-2, 3) != 1 {
+10: 		t.Fatal("negative operands")
+11: 	}
+12: }

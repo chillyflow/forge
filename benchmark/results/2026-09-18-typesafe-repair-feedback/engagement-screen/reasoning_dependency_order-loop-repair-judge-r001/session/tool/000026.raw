@@ -1,0 +1,85 @@
+file_sha256:50e22e89cef78ca24305b3697928f1e62d1d1b31b9fc25818bab2bbace8258e9
+1: package repair
+2: 
+3: import "sort"
+4: 
+5: func OrderBuild(tasks []string, deps map[string][]string) ([]string, bool) {
+6: 	// Check for duplicate tasks
+7: 	known := map[string]bool{}
+8: 	for _, task := range tasks {
+9: 		if known[task] {
+10: 			return nil, false
+11: 		}
+12: 		known[task] = true
+13: 	}
+14: 
+15: 	// Build dependency graph
+16: 	indegree := map[string]int{}
+17: 	next := map[string][]string{}
+18: 
+19: 	// Initialize all tasks with 0 indegree
+20: 	for _, task := range tasks {
+21: 		indegree[task] = 0
+22: 	}
+23: 
+24: 	// Process dependencies
+25: 	for task, requirements := range deps {
+26: 		// Check if task exists
+27: 		if !known[task] {
+28: 			return nil, false
+29: 		}
+30: 
+31: 		// Check for duplicate dependencies and unknown prerequisites
+32: 		seen := map[string]bool{}
+33: 		for _, requirement := range requirements {
+34: 			// Check if requirement exists
+35: 			if !known[requirement] {
+36: 				return nil, false
+37: 			}
+38: 			// Check for duplicate dependencies
+39: 			if seen[requirement] {
+40: 				return nil, false
+41: 			}
+42: 			seen[requirement] = true
+43: 
+44: 			// Update dependency graph
+45: 			indegree[task]++
+46: 			next[requirement] = append(next[requirement], task)
+47: 		}
+48: 	}
+49: 
+50: 	// Find all tasks with no dependencies (indegree = 0)
+51: 	ready := []string{}
+52: 	for task, n := range indegree {
+53: 		if n == 0 {
+54: 			ready = append(ready, task)
+55: 		}
+56: 	}
+57: 
+58: 	// Sort lexicographically to ensure deterministic order
+59: 	sort.Strings(ready)
+60: 
+61: 	// Topological sort
+62: 	out := []string{}
+63: 	for len(ready) > 0 {
+64: 		// Take the first task (lexicographically smallest)
+65: 		task := ready[0]
+66: 		ready = ready[1:]
+67: 		out = append(out, task)
+68: 
+69: 		// Remove this task and update dependencies
+70: 		for _, dependent := range next[task] {
+71: 			indegree[dependent]--
+72: 			if indegree[dependent] == 0 {
+73: 				ready = append(ready, dependent)
+74: 			}
+75: 		}
+76: 	}
+77: 
+78: 	// Check if all tasks were processed (no cycles)
+79: 	if len(out) != len(tasks) {
+80: 		return nil, false
+81: 	}
+82: 
+83: 	return out, true
+84: }

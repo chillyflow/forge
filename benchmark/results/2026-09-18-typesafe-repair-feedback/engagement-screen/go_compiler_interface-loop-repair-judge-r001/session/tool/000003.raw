@@ -1,0 +1,12 @@
+file_sha256:a4efc8e2815d5a5c4c8f04a80133ca08cd3bf250d573478d2983f7baa9df3865
+1: package store
+2: 
+3: import "testing"
+4: 
+5: func TestMemory(t *testing.T) {
+6: 	var s Store = New([]Record{{ID: "x", Value: 9}})
+7: 	got, ok := s.Get("x")
+8: 	if !ok || got.Value != 9 {
+9: 		t.Fatalf("got %v %v", got, ok)
+10: 	}
+11: }

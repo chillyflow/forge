@@ -1,0 +1,14 @@
+file_sha256:1c1256a90ebd441eb24120bd357e7e1255be874013f397fea83337001a10ee5c
+1: from abc import ABC, abstractmethod
+2: 
+3: class UserRepository(ABC):
+4:     @abstractmethod
+5:     def find(self, user_id):
+6:         pass
+7: 
+8: class MemoryRepository(UserRepository):
+9:     def __init__(self, users):
+10:         self.users = {user["id"]: user for user in users}
+11: 
+12:     def find(self, user_id):
+13:         return self.users.get(user_id)

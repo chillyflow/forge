@@ -1,0 +1,15 @@
+file_sha256:1fc653ea5fd6a7c57e99aa9e933b73f1ceb6b58270fcb3463e954a9c1ffc3e31
+1: package ledger
+2: 
+3: import "testing"
+4: 
+5: func TestTransfer(t *testing.T) {
+6: 	a, b := &Ledger{10}, &Ledger{2}
+7: 	if err := Transfer(a, b, 10); err != nil || a.Balance != 0 || b.Balance != 12 {
+8: 		t.Fatalf("exact: %v %d %d", err, a.Balance, b.Balance)
+9: 	}
+10: 	c, d := &Ledger{3}, &Ledger{4}
+11: 	if err := Transfer(c, d, 5); err == nil || c.Balance != 3 || d.Balance != 4 {
+12: 		t.Fatalf("atomic: %v %d %d", err, c.Balance, d.Balance)
+13: 	}
+14: }

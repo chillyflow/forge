@@ -1,0 +1,8 @@
+file_sha256:93cf3c6fb777926ac35281984b0d414ba1987ac49edebdbbbdf6613666779c77
+1: import unittest
+2: from billing.invoice import total
+3: 
+4: class InvoiceTests(unittest.TestCase):
+5:     def test_order_and_rounding(self):
+6:         self.assertEqual(total(10.05, 0.10, 2.00), 11.05)
+7:         self.assertEqual(total(1.26, 0, 0), 1.26)

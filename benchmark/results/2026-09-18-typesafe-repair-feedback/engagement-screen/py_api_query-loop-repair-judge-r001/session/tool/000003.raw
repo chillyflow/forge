@@ -1,0 +1,9 @@
+file_sha256:49f1ae4fd5cb3c708a91e4842cf93f50bc56a44f5748f1cc3ccb0c01a1f84643
+1: import unittest
+2: from web.query import parse_query
+3: 
+4: class QueryTests(unittest.TestCase):
+5:     def test_contract(self):
+6:         self.assertEqual(parse_query("a=1&a=2&empty="), {"a": "2", "empty": ""})
+7:         with self.assertRaises(ValueError):
+8:             parse_query("bad=%ZZ")
