@@ -271,7 +271,20 @@ def execute(parser, args, tasks, forge, model, cache_prefix):
             print(f'{run_id}: skipped (complete result retained)', flush=True)
             continue
         if decision == 'rerun':
-            output.rename(aside)
+            # Windows can hold transient handles on a just-killed cell's files
+            # (the interrupted process tree closing down, indexers). Retry the
+            # rename instead of losing the batch to a transient lock.
+            rename_error = None
+            for _ in range(10):
+                try:
+                    output.rename(aside)
+                    rename_error = None
+                    break
+                except OSError as error:
+                    rename_error = error
+                    time.sleep(1.0)
+            if rename_error is not None:
+                parser.error(f'Could not move the interrupted cell {output} aside: {rename_error}')
             print(f'{run_id}: interrupted cell preserved as {aside.name}; re-running', flush=True)
         output.mkdir(parents=True)
         with tempfile.TemporaryDirectory(prefix='forge-bench-') as temporary:
