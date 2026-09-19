@@ -1,0 +1,79 @@
+diff --git "a/debug.go" "b/debug.go"
+new file mode 100644
+--- /dev/null
++++ "b/debug.go"
+@@ -0,0 +1,73 @@
++package main
++
++import (
++	"fmt"
++	"sort"
++)
++
++type Interval struct{ Lo, Hi int }
++
++func debugUnionIntervals(in []Interval) []Interval {
++	if len(in) == 0 {
++		return []Interval{}
++	}
++	
++	// Create a copy to avoid mutating the input
++	out := make([]Interval, len(in))
++	for i, interval := range in {
++		if interval.Lo > interval.Hi {
++			out[i].Lo, out[i].Hi = interval.Hi, interval.Lo
++		} else {
++			out[i].Lo, out[i].Hi = interval.Lo, interval.Hi
++		}
++	}
++	
++	fmt.Printf("After normalization: %v\n", out)
++	
++	// Sort intervals
++	sort.Slice(out, func(i, j int) bool {
++		if out[i].Lo == out[j].Lo {
++			return out[i].Hi < out[j].Hi
++		}
++		return out[i].Lo < out[j].Lo
++	})
++	
++	fmt.Printf("After sorting: %v\n", out)
++	
++	// Merge overlapping and adjacent intervals
++	merged := make([]Interval, 0, len(out))
++	for _, current := range out {
++		if len(merged) == 0 {
++			merged = append(merged, current)
++			fmt.Printf("Added first interval: %v\n", current)
++			continue
++		}
++		
++		// Check if current interval overlaps or is adjacent to the last merged interval
++		last := &merged[len(merged)-1]
++		fmt.Printf("Comparing %v with last merged %v\n", current, *last)
++		if current.Lo <= last.Hi {
++			fmt.Printf("  Overlapping/adjacent, merging\n")
++			// Overlapping or adjacent - merge them
++			if current.Hi > last.Hi {
++				last.Hi = current.Hi
++				fmt.Printf("  Updated last interval to: %v\n", *last)
++			}
++		} else {
++			fmt.Printf("  Non-overlapping, adding as new\n")
++			// Non-overlapping - add as new interval
++			merged = append(merged, current)
++			fmt.Printf("  Added new interval: %v\n", current)
++		}
++	}
++	
++	fmt.Printf("Final result: %v\n", merged)
++	return merged
++}
++
++func main() {
++	in := []Interval{{8, 6}, {1, 2}, {4, 5}, {2, 3}, {20, 20}, {21, 22}}
++	result := debugUnionIntervals(in)
++	fmt.Printf("Expected: [{1 8} {20 22}]\n")
++	fmt.Printf("Got:      %v\n", result)
++}
+\ No newline at end of file

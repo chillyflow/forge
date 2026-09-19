@@ -1,0 +1,14 @@
+file_sha256:e8e58300a85c0e3263a1c34152dc3a5dcacbc3f0c1ec6c776c9eca46cb217b40
+1: package registry
+2: 
+3: import "testing"
+4: 
+5: func TestNormalizedNames(t *testing.T) {
+6: 	r := New()
+7: 	r.Put("  Alpha ", 7)
+8: 	for _, key := range []string{"alpha", " ALPHA ", "Alpha"} {
+9: 		if got, ok := r.Get(key); !ok || got != 7 {
+10: 			t.Fatalf("%q=(%d,%v)", key, got, ok)
+11: 		}
+12: 	}
+13: }

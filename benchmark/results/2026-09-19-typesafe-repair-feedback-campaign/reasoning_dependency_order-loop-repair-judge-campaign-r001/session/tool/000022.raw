@@ -1,0 +1,22 @@
+exit_code=0 timeout=false cancelled=false truncated=false
+stdout:
+indegree: map[compile:1 generate:0 lint:0 package:1]
+next: map[compile:[package] generate:[compile]]
+ready before sort: [generate lint]
+ready after sort: [generate lint]
+Processing task: generate, ready now: [lint]
+  compile depends on generate, decreased indegree to 0
+  compile now ready
+After processing generate, ready: [lint compile]
+Processing task: lint, ready now: [compile]
+After processing lint, ready: [compile]
+Processing task: compile, ready now: []
+  package depends on compile, decreased indegree to 0
+  package now ready
+After processing compile, ready: [package]
+Processing task: package, ready now: []
+After processing package, ready: []
+Final output: [generate lint compile package]
+Result: [generate lint compile package], ok: true
+
+stderr:

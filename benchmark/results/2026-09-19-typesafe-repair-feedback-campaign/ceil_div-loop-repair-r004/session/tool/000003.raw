@@ -1,0 +1,12 @@
+file_sha256:84832db884c6301ff3b0f2cce96f53470bdc2f0d247e2cc32f72ca97c3953a16
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	for _, c := range [][3]int{{0, 3, 0}, {1, 3, 1}, {6, 3, 2}, {7, 3, 3}} {
+7: 		if CeilDiv(c[0], c[1]) != c[2] {
+8: 			t.Fatalf("%v", c)
+9: 		}
+10: 	}
+11: }

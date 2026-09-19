@@ -1,0 +1,9 @@
+package registry
+
+import "campaign.test/fixture/names"
+
+type Registry struct{ values map[string]int }
+
+func New() *Registry                            { return &Registry{values: map[string]int{}} }
+func (r *Registry) Put(name string, value int)  { r.values[names.Normalize(name)] = value }
+func (r *Registry) Get(name string) (int, bool) { value, ok := r.values[name]; return value, ok }

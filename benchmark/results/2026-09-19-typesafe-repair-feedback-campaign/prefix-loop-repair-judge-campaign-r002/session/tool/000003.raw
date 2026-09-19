@@ -1,0 +1,10 @@
+file_sha256:0dd40c748eb09f5442ec5272d2738f8dd11aa352a11f4ae0a2c4ff46a1aea222
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	if TrimPrefix("abab", "ab") != "ab" || TrimPrefix("zab", "ab") != "zab" || TrimPrefix("abc", "") != "abc" {
+7: 		t.Fatal("prefix semantics failed")
+8: 	}
+9: }

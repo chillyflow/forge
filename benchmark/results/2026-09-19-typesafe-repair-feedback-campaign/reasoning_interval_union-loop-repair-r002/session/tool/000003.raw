@@ -1,0 +1,22 @@
+file_sha256:a71312124784abc37b70db679c04d3555695332a50a476540f6cca57b3c9526b
+1: package repair
+2: 
+3: import (
+4: 	"reflect"
+5: 	"testing"
+6: )
+7: 
+8: func TestUnionIntervals(t *testing.T) {
+9: 	in := []Interval{{8, 6}, {1, 2}, {4, 5}, {2, 3}, {20, 20}, {21, 22}}
+10: 	saved := append([]Interval(nil), in...)
+11: 	want := []Interval{{1, 8}, {20, 22}}
+12: 	if got := UnionIntervals(in); !reflect.DeepEqual(got, want) {
+13: 		t.Fatalf("got %v", got)
+14: 	}
+15: 	if !reflect.DeepEqual(in, saved) {
+16: 		t.Fatalf("mutated input: %v", in)
+17: 	}
+18: 	if got := UnionIntervals(nil); got == nil || len(got) != 0 {
+19: 		t.Fatalf("empty=%v", got)
+20: 	}
+21: }

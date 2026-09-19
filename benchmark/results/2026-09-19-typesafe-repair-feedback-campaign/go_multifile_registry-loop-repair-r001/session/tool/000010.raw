@@ -1,0 +1,13 @@
+file_sha256:3b56e860fa05865246c8f4a38ca2346c046702931648527a42569e52c28d58a7
+1: package registry
+2: 
+3: import "campaign.test/fixture/names"
+4: 
+5: type Registry struct{ values map[string]int }
+6: 
+7: func New() *Registry                           { return &Registry{values: map[string]int{}} }
+8: func (r *Registry) Put(name string, value int) { r.values[names.Normalize(name)] = value }
+9: func (r *Registry) Get(name string) (int, bool) {
+10: 	value, ok := r.values[names.Normalize(name)]
+11: 	return value, ok
+12: }

@@ -1,0 +1,126 @@
+{
+    "schema_version": 1,
+    "utc": "20260919T231753Z",
+    "latency_ms": 578.0,
+    "status": "ok",
+    "error": "",
+    "request_id": "req_01a0bbf643a97feca50b91e2a8df8b2d",
+    "response_date": "Sat, 19 Sep 2026 23:17:52 GMT",
+    "request": {
+        "state": {
+            "task": "Registry names are case-insensitive and ignore surrounding whitespace for both writes and reads. Repair the implementation across the repository and run go test -json ./... without modifying tests.",
+            "validation": {
+                "summary": "Automatic validation stopped at format: Validation stage format failed (exit_code=0, files need formatting)\nexit_code=0 timeout=false cancelled=false truncated=false\nstdout:\n./registry/registry.go\n\nstderr:\n\nThe listed files need gofmt formatting. Format only files you are authorized to edit (for example with gofmt -w), then try validation again. A zero formatter exit code alone does not pass this check.\n",
+                "failed_command": "{\"cwd\":\".\",\"argv\":[\"gofmt\",\"-l\",\"./names/normalize.go\",\"./registry/registry.go\",\"./registry/registry_test.go\"]}"
+            },
+            "current": {
+                "path": "registry/registry.go",
+                "source": "package registry\n\nimport \"campaign.test/fixture/names\"\n\ntype Registry struct{ values map[string]int }\n\nfunc New() *Registry                            { return &Registry{values: map[string]int{}} }\nfunc (r *Registry) Put(name string, value int)  { r.values[names.Normalize(name)] = value }\nfunc (r *Registry) Get(name string) (int, bool) { value, ok := r.values[names.Normalize(name)]; return value, ok }\n"
+            },
+            "last_delta": "{\"tool\":\"apply_patch\",\"args\":{\"path\":\"registry/registry.go\",\"old_text\":\"package registry\\n\\nimport \\\"campaign.test/fixture/names\\\"\\n\\ntype Registry struct{ values map[string]int }\\n\\nfunc New() *Registry                            { return &Registry{values: map[string]int{}} }\\nfunc (r *Registry) Put(name string, value int)  { r.values[names.Normalize(name)] = value }\\nfunc (r *Registry) Get(name string) (int, bool) { value, ok := r.values[name]; return value, ok }\",\"new_text\":\"package registry\\n\\nimport \\\"campaign.test/fixture/names\\\"\\n\\ntype Registry struct{ values map[string]int }\\n\\nfunc New() *Registry                            { return &Registry{values: map[string]int{}} }\\nfunc (r *Registry) Put(name string, value int)  { r.values[names.Normalize(name)] = value }\\nfunc (r *Registry) Get(name string) (int, bool) { value, ok := r.values[names.Normalize(name)]; return value, ok }\"}}",
+            "loop": {
+                "remaining_actions": 24,
+                "candidate_attempts": 1,
+                "input_hash": 10611831432872367678,
+                "initial_hash": 4568540224404734346,
+                "repeated_failure": false,
+                "bounded_repair": true
+            }
+        },
+        "model": "jev-1.13.0",
+        "questions": {
+            "failure_family": {
+                "type": "choice",
+                "instructions": "Classify the primary cause of the failed validation in `validation.summary` given `task`, `current.source`, `last_delta`, and `loop`.",
+                "criteria": {
+                    "code_defect": "The failure most likely comes from incorrect implementation logic in `current.source` or related code.",
+                    "test_or_requirement_mismatch": "The observed tests, task, or inferred requirement appear inconsistent or incomplete.",
+                    "environment_or_dependency": "The failure most likely comes from missing dependencies, filesystem state, interpreter/toolchain differences, or another environment condition.",
+                    "missing_evidence": "The state does not yet contain enough inspected source or validation evidence to choose a safe repair.",
+                    "unknown": "None of the supplied categories is clearly supported by the state."
+                }
+            },
+            "evidence_gap": {
+                "type": "noul",
+                "instructions": "Does this state lack enough direct source or validation evidence to choose a safe next repair action?",
+                "criteria": {
+                    "true": "More inspection is needed before editing or accepting the candidate.",
+                    "false": "The supplied task, validation summary, current source, and previous delta are sufficient for a concrete next step."
+                }
+            },
+            "repair_readiness": {
+                "type": "score",
+                "instructions": "How ready is this failed repair episode for an implementation patch?",
+                "criteria": [
+                    "No actionable signal; the next step should not edit code.",
+                    "Needs more inspection before a repair can be selected.",
+                    "A concrete suspect is visible, but the exact repair may still need confirmation.",
+                    "An actionable repair is likely from the supplied validation, source, and delta."
+                ]
+            },
+            "next_action": {
+                "type": "choice",
+                "instructions": "What should the coding agent do next, if host code acts conservatively on low confidence?",
+                "criteria": {
+                    "inspect_source": "Inspect current or related source before editing.",
+                    "patch_code": "Patch implementation code; enough evidence identifies a likely fix.",
+                    "run_validation": "Run host validation; the current candidate may already satisfy the observed failure.",
+                    "defer": "Do not act on this judgment because the evidence is missing, contradictory, unsafe, or low confidence."
+                }
+            }
+        }
+    },
+    "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+            "failure_family": {
+                "type": "choice",
+                "choice": "unknown",
+                "confidence": 0.24,
+                "probabilities": {
+                    "unknown": 0.4,
+                    "environment_or_dependency": 0.35,
+                    "missing_evidence": 0.02,
+                    "code_defect": 0.15,
+                    "test_or_requirement_mismatch": 0.08
+                }
+            },
+            "evidence_gap": {
+                "type": "noul",
+                "noul": 0.19
+            },
+            "repair_readiness": {
+                "type": "score",
+                "score": 2.27,
+                "confidence": 0.27,
+                "legend": {
+                    "0": "No actionable signal; the next step should not edit code.",
+                    "1": "Needs more inspection before a repair can be selected.",
+                    "2": "A concrete suspect is visible, but the exact repair may still need confirmation.",
+                    "3": "An actionable repair is likely from the supplied validation, source, and delta."
+                },
+                "probabilities": {
+                    "0": 0.21,
+                    "1": 0.02,
+                    "2": 0.05,
+                    "3": 0.72
+                }
+            },
+            "next_action": {
+                "type": "choice",
+                "choice": "defer",
+                "confidence": 0.08,
+                "probabilities": {
+                    "patch_code": 0.26,
+                    "defer": 0.31,
+                    "run_validation": 0.29,
+                    "inspect_source": 0.14
+                }
+            }
+        },
+        "usage": {
+            "input_tokens": 1417,
+            "output_tokens": 151
+        }
+    }
+}

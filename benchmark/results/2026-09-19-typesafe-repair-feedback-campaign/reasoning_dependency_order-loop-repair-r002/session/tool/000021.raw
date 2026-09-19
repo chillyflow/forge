@@ -1,0 +1,21 @@
+file_sha256:96fde9ac0875b67fb419f4d97c8a58a238571aabac0be46abafc50d244895e39
+1: package repair
+2: 
+3: import (
+4: 	"reflect"
+5: 	"testing"
+6: )
+7: 
+8: func TestOrderBuild(t *testing.T) {
+9: 	tasks := []string{"package", "compile", "generate", "lint"}
+10: 	deps := map[string][]string{"package": {"compile"}, "compile": {"generate"}}
+11: 	if got, ok := OrderBuild(tasks, deps); !ok || !reflect.DeepEqual(got, []string{"generate", "compile", "lint", "package"}) {
+12: 		t.Fatalf("order=%v ok=%v", got, ok)
+13: 	}
+14: 	if _, ok := OrderBuild([]string{"a"}, map[string][]string{"a": {"missing"}}); ok {
+15: 		t.Fatal("unknown dependency accepted")
+16: 	}
+17: 	if _, ok := OrderBuild([]string{"a", "b"}, map[string][]string{"a": {"b"}, "b": {"a"}}); ok {
+18: 		t.Fatal("cycle accepted")
+19: 	}
+20: }

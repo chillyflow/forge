@@ -1,0 +1,17 @@
+package main
+
+import (
+	"fmt"
+	"repair"
+)
+
+func main() {
+	tasks := []string{"package", "compile", "generate", "lint"}
+	deps := map[string][]string{"package": {"compile"}, "compile": {"generate"}}
+	
+	result, ok := repair.OrderBuild(tasks, deps)
+	fmt.Printf("Result: %v, OK: %v\n", result, ok)
+	
+	// Expected: ["generate", "compile", "lint", "package"]
+	// This means generate must come before compile, compile must come before package
+}

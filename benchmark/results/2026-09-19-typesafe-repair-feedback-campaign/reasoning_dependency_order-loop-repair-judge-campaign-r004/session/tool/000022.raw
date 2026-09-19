@@ -1,0 +1,51 @@
+file_sha256:50e22e89cef78ca24305b3697928f1e62d1d1b31b9fc25818bab2bbace8258e9
+1: package repair
+2: 
+3: import "sort"
+4: 
+5: func OrderBuild(tasks []string, deps map[string][]string) ([]string, bool) {
+6: 	// Check for duplicate tasks
+7: 	known := map[string]bool{}
+8: 	for _, task := range tasks {
+9: 		if known[task] {
+10: 			return nil, false
+11: 		}
+12: 		known[task] = true
+13: 	}
+14: 
+15: 	// Build dependency graph
+16: 	indegree := map[string]int{}
+17: 	next := map[string][]string{}
+18: 
+19: 	// Initialize all tasks with 0 indegree
+20: 	for _, task := range tasks {
+21: 		indegree[task] = 0
+22: 	}
+23: 
+24: 	// Process dependencies
+25: 	for task, requirements := range deps {
+26: 		// Check if task exists
+27: 		if !known[task] {
+28: 			return nil, false
+29: 		}
+30: 
+31: 		// Check for duplicate dependencies and unknown prerequisites
+32: 		seen := map[string]bool{}
+33: 		for _, requirement := range requirements {
+34: 			// Check if requirement exists
+35: 			if !known[requirement] {
+36: 				return nil, false
+37: 			}
+38: 			// Check for duplicate dependencies
+39: 			if seen[requirement] {
+40: 				return nil, false
+41: 			}
+42: 			seen[requirement] = true
+43: 
+44: 			// Update dependency graph
+45: 			indegree[task]++
+46: 			next[requirement] = append(next[requirement], task)
+47: 		}
+48: 	}
+49: 
+50: 	// Find all tasks with no dependencies (indegree = 0)

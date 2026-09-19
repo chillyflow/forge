@@ -1,0 +1,12 @@
+diff ./registry/registry.go.orig ./registry/registry.go
+--- ./registry/registry.go.orig
++++ ./registry/registry.go
+@@ -6,4 +6,7 @@
+ 
+ func New() *Registry                           { return &Registry{values: map[string]int{}} }
+ func (r *Registry) Put(name string, value int) { r.values[names.Normalize(name)] = value }
+-func (r *Registry) Get(name string) (int, bool) { value, ok := r.values[names.Normalize(name)]; return value, ok }
++func (r *Registry) Get(name string) (int, bool) {
++	value, ok := r.values[names.Normalize(name)]
++	return value, ok
++}

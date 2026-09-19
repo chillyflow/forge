@@ -1,0 +1,22 @@
+diff --git "a/names/normalize.go" "b/names/normalize.go"
+--- "a/names/normalize.go"
++++ "b/names/normalize.go"
+@@ -1,5 +1,13 @@
+-package names
+-
+-import "strings"
+-
+-func Normalize(value string) string { return strings.TrimSpace(value) }
++package names
++
++import (
++	"strings"
++	"unicode"
++)
++
++func Normalize(value string) string {
++	// Trim whitespace
++	value = strings.TrimSpace(value)
++	// Convert to lowercase
++	return strings.Map(unicode.ToLower, value)
++}

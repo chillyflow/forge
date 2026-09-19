@@ -1,0 +1,14 @@
+file_sha256:f671e61b84bc91b793c5473efc753829588dfa8d9ac6991f73c25e90dd71e424
+1: package names
+2: 
+3: import (
+4: 	"strings"
+5: 	"unicode"
+6: )
+7: 
+8: func Normalize(value string) string {
+9: 	// Trim whitespace
+10: 	value = strings.TrimSpace(value)
+11: 	// Convert to lowercase
+12: 	return strings.Map(unicode.ToLower, value)
+13: }

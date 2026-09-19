@@ -1,0 +1,27 @@
+file_sha256:2efeb431cbe33cceaa038712a82d8e42410b1140591073728b0db5c02cdad4f8
+1: package api
+2: 
+3: import (
+4: 	"encoding/json"
+5: 	"net/http/httptest"
+6: 	"reflect"
+7: 	"testing"
+8: )
+9: 
+10: func TestPagination(t *testing.T) {
+11: 	h := ListHandler([]string{"a", "b", "c", "d", "e"})
+12: 	r := httptest.NewRequest("GET", "/?page=2&size=2", nil)
+13: 	w := httptest.NewRecorder()
+14: 	h(w, r)
+15: 	var got []string
+16: 	json.Unmarshal(w.Body.Bytes(), &got)
+17: 	if !reflect.DeepEqual(got, []string{"c", "d"}) {
+18: 		t.Fatalf("got %v", got)
+19: 	}
+20: 	bad := httptest.NewRequest("GET", "/?page=1&size=nope", nil)
+21: 	bw := httptest.NewRecorder()
+22: 	h(bw, bad)
+23: 	if bw.Code != 400 {
+24: 		t.Fatalf("bad status %d", bw.Code)
+25: 	}
+26: }

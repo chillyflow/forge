@@ -1,0 +1,48 @@
+diff --git a/repair.go b/repair.go
+index 26b0008..7bceda0 100644
+--- a/repair.go
++++ b/repair.go
+@@ -29,10 +29,19 @@ func MatchRoute(method, path string, routes []Route) (string, map[string]string,
+ 		literals, wildcards := 0, 0
+ 		pi, ai := 0, 0
+ 		ok := true
+-		for pi < len(pattern) {
++		for pi < len(pattern) && ai < len(actual) {
+ 			part := pattern[pi]
+ 			if part == "*" {
+-				if pi != len(pattern)-1 || ai >= len(actual) {
++				if pi != len(pattern)-1 {
++					ok = false
++					break
++				}
++				if ai >= len(actual) {
++					ok = false
++					break
++				}
++				// Check that the wildcard is not empty
++				if len(actual[ai:]) == 0 {
+ 					ok = false
+ 					break
+ 				}
+@@ -58,6 +67,7 @@ func MatchRoute(method, path string, routes []Route) (string, map[string]string,
+ 			pi++
+ 			ai++
+ 		}
++		// Check if we've consumed all pattern and all actual segments
+ 		if !ok || pi != len(pattern) || ai != len(actual) {
+ 			continue
+ 		}
+@@ -66,7 +76,12 @@ func MatchRoute(method, path string, routes []Route) (string, map[string]string,
+ 			exact = 1
+ 		}
+ 		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+-		if !found || candidate.literals > best.literals {
++		// Prefer more literal segments, then exact method over *, then fewer wildcards, preserving declaration order
++		if !found ||
++			candidate.literals > best.literals ||
++			(candidate.literals == best.literals && candidate.methodExact > best.methodExact) ||
++			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards < best.wildcards) ||
++			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards == best.wildcards && candidate.index < best.index) {
+ 			best = candidate
+ 			found = true
+ 		}

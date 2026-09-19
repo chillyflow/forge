@@ -1,0 +1,89 @@
+file_sha256:90d95d658cf22c89bf224b450a83fd1f358927e8932f6a41721ad520d03cf82e
+1: package repair
+2: 
+3: import "strings"
+4: 
+5: type Route struct{ Method, Pattern, Name string }
+6: type routeMatch struct {
+7: 	name                                    string
+8: 	params                                  map[string]string
+9: 	literals, methodExact, wildcards, index int
+10: }
+11: 
+12: func routeSegments(value string) []string {
+13: 	value = strings.Trim(value, "/")
+14: 	if value == "" {
+15: 		return nil
+16: 	}
+17: 	return strings.Split(value, "/")
+18: }
+19: func MatchRoute(method, path string, routes []Route) (string, map[string]string, bool) {
+20: 	actual := routeSegments(path)
+21: 	var best routeMatch
+22: 	found := false
+23: 	for index, route := range routes {
+24: 		if route.Method != "*" && route.Method != method {
+25: 			continue
+26: 		}
+27: 		pattern := routeSegments(route.Pattern)
+28: 		params := map[string]string{}
+29: 		literals, wildcards := 0, 0
+30: 		pi, ai := 0, 0
+31: 		ok := true
+32: 		for pi < len(pattern) {
+33: 			if ai >= len(actual) {
+34: 				ok = false
+35: 				break
+36: 			}
+37: 			part := pattern[pi]
+38: 			if part == "*" {
+39: 				if pi != len(pattern)-1 {
+40: 					ok = false
+41: 					break
+42: 				}
+43: 				// Check if there's content for the wildcard (non-empty suffix)
+44: 				if len(actual[ai:]) == 0 {
+45: 					ok = false
+46: 					break
+47: 				}
+48: 				params["*"] = strings.Join(actual[ai:], "/")
+49: 				wildcards++
+50: 				ai = len(actual)
+51: 				pi++
+52: 				break
+53: 			}
+54: 			if strings.HasPrefix(part, ":") && len(part) > 1 {
+55: 				params[part[1:]] = actual[ai]
+56: 				wildcards++
+57: 			} else if part == actual[ai] {
+58: 				literals++
+59: 			} else {
+60: 				ok = false
+61: 				break
+62: 			}
+63: 			pi++
+64: 			ai++
+65: 		}
+66: 		if !ok || pi != len(pattern) || ai != len(actual) {
+67: 			continue
+68: 		}
+69: 		exact := 0
+70: 		if route.Method == method {
+71: 			exact = 1
+72: 		}
+73: 		candidate := routeMatch{route.Name, params, literals, exact, wildcards, index}
+74: 		// Prefer: more literals, then exact method, then fewer wildcards, then earlier declaration
+75: 		if !found ||
+76: 			candidate.literals > best.literals ||
+77: 			(candidate.literals == best.literals && candidate.methodExact > best.methodExact) ||
+78: 			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards < best.wildcards) ||
+79: 			(candidate.literals == best.literals && candidate.methodExact == best.methodExact && candidate.wildcards == best.wildcards && candidate.index < best.index) {
+80: 			best = candidate
+81: 			found = true
+82: 		}
+83: 	}
+84: 	if !found {
+85: 		return "", nil, false
+86: 	}
+87: 	return best.name, best.params, true
+88: }

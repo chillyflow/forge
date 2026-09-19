@@ -1,0 +1,10 @@
+file_sha256:c47ebefea3227c3d0b100056401ee2b1fb59805c07e5a72133dd89f7d0dcf416
+1: package repair
+2: 
+3: import "testing"
+4: 
+5: func TestRepair(t *testing.T) {
+6: 	if RangeSum(1, 3) != 6 || RangeSum(5, 5) != 5 || RangeSum(3, 1) != 0 || RangeSum(-2, 2) != 0 {
+7: 		t.Fatal("inclusive sum failed")
+8: 	}
+9: }

@@ -1,0 +1,36 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+)
+
+func ListHandler(values []string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pageStr := r.URL.Query().Get("page")
+		sizeStr := r.URL.Query().Get("size")
+
+		page, err := strconv.Atoi(pageStr)
+		if err != nil || page < 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		size, err := strconv.Atoi(sizeStr)
+		if err != nil || size < 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		start := (page - 1) * size
+		if start >= len(values) {
+			start = len(values)
+		}
+		end := start + size
+		if end > len(values) {
+			end = len(values)
+		}
+		json.NewEncoder(w).Encode(values[start:end])
+	}
+}
