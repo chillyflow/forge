@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "forge/judge.h"
 bool fg_session_start(fg_session *s, const char *root, forge_event_fn cb, void *user,
                       forge_error *e) {
     memset(s, 0, sizeof(*s));
@@ -75,7 +76,12 @@ bool fg_session_artifact_bytes(fg_session *s, const char *name, const char *byte
     }
     return fg_write_file(path, bytes, length, e);
 }
-char *fg_metrics_json(const forge_metrics *m, forge_status status) {
+/* The judge object is appended last and only when a judge was attached to the
+ * run; the judge-free output is byte-identical to the pre-instrumentation
+ * shape. Counters are read at write time, so the artifact reflects the whole
+ * run. */
+static char *metrics_json(const forge_metrics *m, forge_status status,
+                          const forge_judge *judge) {
     yyjson_mut_doc *d = yyjson_mut_doc_new(NULL);
     if (!d)
         return NULL;
@@ -147,12 +153,36 @@ char *fg_metrics_json(const forge_metrics *m, forge_status status) {
     R(checkpoint_restore_ms);
 #undef U
 #undef R
+    if (judge) {
+        forge_judge_stats stats = {0};
+        forge_judge_metrics(judge, &stats);
+        yyjson_mut_val *j = yyjson_mut_obj(d);
+        if (!j || !yyjson_mut_obj_add_uint(d, j, "calls", stats.calls) ||
+            !yyjson_mut_obj_add_uint(d, j, "failures", stats.failures) ||
+            !yyjson_mut_obj_add_uint(d, j, "candidates_scored", stats.candidates_scored) ||
+            !yyjson_mut_obj_add_uint(d, j, "input_tokens", stats.input_tokens) ||
+            !yyjson_mut_obj_add_uint(d, j, "output_tokens", stats.output_tokens) ||
+            !yyjson_mut_obj_add_real(d, j, "last_latency_ms", stats.last_latency_ms) ||
+            !yyjson_mut_obj_add_real(d, j, "total_latency_ms", stats.total_latency_ms) ||
+            !yyjson_mut_obj_add_str(d, j, "last_model", stats.last_model) ||
+            !yyjson_mut_obj_add_val(d, o, "judge", j)) {
+            yyjson_mut_doc_free(d);
+            return NULL;
+        }
+    }
     char *json = yyjson_mut_write(d, YYJSON_WRITE_PRETTY, NULL);
     yyjson_mut_doc_free(d);
     return json;
 }
+char *fg_metrics_json(const forge_metrics *m, forge_status status) {
+    return metrics_json(m, status, NULL);
+}
+void fg_session_attach_judge(fg_session *s, const forge_judge *judge) {
+    if (s)
+        s->judge = judge;
+}
 bool fg_session_finish(fg_session *s, const forge_metrics *m, forge_status status, forge_error *e) {
-    char *json = fg_metrics_json(m, status);
+    char *json = metrics_json(m, status, s ? s->judge : NULL);
     bool ok = json != NULL;
     if (!json)
         fg_error(e, FORGE_ERR_MEMORY, "Metrics allocation failed");

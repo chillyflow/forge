@@ -79,11 +79,18 @@ typedef struct {
     forge_event_fn callback;
     void *userdata;
     size_t edit_bytes_reserved, edit_bytes_limit;
+    /* Record-only judge instrumentation. Borrowed, never owned; NULL when the
+     * run has no judge. When attached before fg_session_finish, metrics.json
+     * carries a `judge` object with the counters forge_judge_metrics reports at
+     * write time, and the done/error event data matches the file. Attaching a
+     * judge changes no control flow and no other field. */
+    const forge_judge *judge;
 } fg_session;
 bool fg_session_start(fg_session *, const char *, forge_event_fn, void *, forge_error *);
 bool fg_session_emit(fg_session *, const char *, const char *, forge_error *);
 bool fg_session_artifact(fg_session *, const char *, const char *, forge_error *);
 bool fg_session_artifact_bytes(fg_session *, const char *, const char *, size_t, forge_error *);
+void fg_session_attach_judge(fg_session *, const forge_judge *);
 bool fg_session_finish(fg_session *, const forge_metrics *, forge_status, forge_error *);
 char *fg_metrics_json(const forge_metrics *, forge_status);
 char *fg_compress_output(const char *, size_t, size_t *, forge_error *);

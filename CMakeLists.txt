@@ -176,6 +176,22 @@ if(FORGE_BUILD_TESTS)
   set_tests_properties(watch agent_watch monitor agent_changes PROPERTIES TIMEOUT 90)
   set_tests_properties(checkpoint_cache context PROPERTIES TIMEOUT 90)
   set_tests_properties(agent_watch PROPERTIES SKIP_RETURN_CODE 77)
+  # Judge instrumentation: a scripted run must record the judge counters and
+  # link its feedback event, and a judge-free run must be unchanged. The
+  # validation interpreter is the deterministic stub, so no language toolchain
+  # is required.
+  add_executable(forge_validation_stub tests/support/validation_stub.c)
+  if(MSVC)
+    target_compile_definitions(forge_validation_stub PRIVATE _CRT_SECURE_NO_WARNINGS)
+  endif()
+  add_executable(forge_judge_instrumentation_unit tests/unit/test_judge_instrumentation.c)
+  target_include_directories(forge_judge_instrumentation_unit PRIVATE src)
+  target_link_libraries(forge_judge_instrumentation_unit PRIVATE Forge::forge forge_json)
+  if(MSVC)
+    target_compile_definitions(forge_judge_instrumentation_unit PRIVATE _CRT_SECURE_NO_WARNINGS)
+  endif()
+  add_test(NAME judge_instrumentation COMMAND forge_judge_instrumentation_unit $<TARGET_FILE:forge_validation_stub>)
+  set_tests_properties(judge_instrumentation PROPERTIES TIMEOUT 90)
   add_test(NAME integration COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_cli.py $<TARGET_FILE:forge> --fallback-forge $<TARGET_FILE:forge_fallback_fixture>)
   add_test(NAME config_integration COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_config_cli.py $<TARGET_FILE:forge> --fallback-forge $<TARGET_FILE:forge_fallback_fixture>)
   add_test(NAME output_integration COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_output.py $<TARGET_FILE:forge>)

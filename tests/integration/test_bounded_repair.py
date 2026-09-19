@@ -377,6 +377,18 @@ class BoundedRepairTests(unittest.TestCase):
         self.assertEqual(requests[0]["state"]["current"]["path"], "value.py")
         self.assertIn("return 0", requests[0]["state"]["current"]["source"])
         self.assert_verified_repair(events)
+        # Record-only judge instrumentation: the event links to its episode and
+        # metrics.json carries the counters forge_judge_metrics reports.
+        self.assertEqual(feedback[0]["turn"], 2)
+        self.assertEqual(feedback[0]["candidate_attempts"], 1)
+        self.assertEqual(feedback[0]["validation_id"], 1)
+        metrics = json.loads((session / "metrics.json").read_text(encoding="utf-8"))
+        self.assertEqual(metrics["judge"]["calls"], 1)
+        self.assertEqual(metrics["judge"]["failures"], 0)
+        self.assertEqual(metrics["judge"]["input_tokens"], 222)
+        self.assertEqual(metrics["judge"]["last_model"], "jev-feedback-test")
+        self.assertGreaterEqual(metrics["judge"]["total_latency_ms"],
+                                metrics["judge"]["last_latency_ms"])
 
     def test_bounded_repair_requires_checkpoint(self):
         result = subprocess.run(self.command([final()], checkpoint=False), capture_output=True,

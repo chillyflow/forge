@@ -322,6 +322,9 @@ forge_status fg_candidate_search(const forge_agent_config *config, const char *r
 finish:
     config->model->config.seed = seed;
     metrics->duration_ms = (double)(fg_now_ms() - start);
+    /* Record-only judge instrumentation: expose the run's judge counters in
+     * metrics.json. No control flow depends on this. */
+    fg_session_attach_judge(session, config->judge);
     if (!fg_session_finish(session, metrics, status, status == FORGE_OK ? e : NULL) &&
         status == FORGE_OK)
         status = FORGE_ERR_IO;

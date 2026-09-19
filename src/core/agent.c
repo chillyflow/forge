@@ -1038,7 +1038,8 @@ static char *candidate_feedback_source(const forge_agent *a, const candidate_che
     return fg_buf_take(&out);
 }
 
-static void emit_judge_feedback(forge_agent *a, const forge_judge_feedback_result *r) {
+static void emit_judge_feedback(forge_agent *a, const forge_judge_feedback_result *r,
+                                size_t turn, size_t candidate_attempts, size_t validation_id) {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = doc ? yyjson_mut_obj(doc) : NULL;
     bool ok = root != NULL;
@@ -1056,7 +1057,13 @@ static void emit_judge_feedback(forge_agent *a, const forge_judge_feedback_resul
                                      r->next_action_confidence) &&
              yyjson_mut_obj_add_uint(doc, root, "input_tokens", r->input_tokens) &&
              yyjson_mut_obj_add_uint(doc, root, "output_tokens", r->output_tokens) &&
-             yyjson_mut_obj_add_real(doc, root, "latency_ms", r->latency_ms);
+             yyjson_mut_obj_add_real(doc, root, "latency_ms", r->latency_ms) &&
+             /* Episode linkage, appended after the existing fields: the turn
+              * that produced the advisory, the candidate attempt it assessed
+              * and the validation attempt in scope. */
+             yyjson_mut_obj_add_uint(doc, root, "turn", turn) &&
+             yyjson_mut_obj_add_uint(doc, root, "candidate_attempts", candidate_attempts) &&
+             yyjson_mut_obj_add_uint(doc, root, "validation_id", validation_id);
     }
     char *json = ok ? yyjson_mut_write(doc, 0, NULL) : NULL;
     if (json)
@@ -1069,8 +1076,8 @@ static void emit_judge_feedback(forge_agent *a, const forge_judge_feedback_resul
 static void append_judge_feedback(forge_agent *a, candidate_checkpoint *cp,
                                   const fg_validation_result *validation,
                                   const char *task, uint64_t input_hash, bool validated,
-                                  bool passed, size_t turn, uint64_t deadline,
-                                  fg_buf *feedback) {
+                                  bool passed, size_t turn, size_t validation_id,
+                                  uint64_t deadline, fg_buf *feedback) {
     if (!a->config.judge || !a->config.bounded_repair || !validated || passed || !validation->summary)
         return;
     uint64_t now = fg_now_ms(), budget = forge_judge_budget_ms(a->config.judge);
@@ -1096,7 +1103,7 @@ static void append_judge_feedback(forge_agent *a, candidate_checkpoint *cp,
     free(source);
     if (status != FORGE_OK || !result.available)
         return;
-    emit_judge_feedback(a, &result);
+    emit_judge_feedback(a, &result, turn, cp->attempts, validation_id);
     fg_buf_printf(feedback,
                   "JUDGE_FEEDBACK: failure_family=%s confidence=%.2f evidence_gap=%.2f "
                   "repair_readiness=%.2f readiness_confidence=%.2f next_action=%s "
@@ -1264,7 +1271,7 @@ static char *candidate_validate(forge_agent *a, fg_tool_context *tools, candidat
                     "Change the implicated logic before validating again. This is loop evidence, "
                     "not a proof of program equivalence.\n");
     append_judge_feedback(a, cp, &result, task, input_hash, validated, passed, turn,
-                          tools->deadline, &feedback);
+                          tools->validation_id, tools->deadline, &feedback);
     if (a->config.bounded_repair && !validated && !passed && result.summary) {
         char *detail = fg_compress_output(result.summary, 2048, NULL, NULL);
         if (!detail) {
@@ -2205,6 +2212,9 @@ finish:
                status == FORGE_OK ? e : NULL) &&
         status == FORGE_OK)
         status = FORGE_ERR_IO;
+    /* Record-only judge instrumentation: expose the run's judge counters in
+     * metrics.json. No control flow depends on this. */
+    fg_session_attach_judge(&a->session, a->config.judge);
     if (!fg_session_finish(&a->session, &a->metrics, status, status == FORGE_OK ? e : NULL) &&
         status == FORGE_OK)
         status = FORGE_ERR_IO;
@@ -3839,6 +3849,9 @@ finish:
                    status == FORGE_OK ? e : NULL) &&
             status == FORGE_OK)
             status = FORGE_ERR_IO;
+        /* Record-only judge instrumentation: expose the run's judge counters in
+         * metrics.json. No control flow depends on this. */
+        fg_session_attach_judge(&a->session, a->config.judge);
         if (!fg_session_finish(&a->session, &a->metrics, status, status == FORGE_OK ? e : NULL) &&
             status == FORGE_OK)
             status = FORGE_ERR_IO;
