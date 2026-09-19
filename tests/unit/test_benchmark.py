@@ -692,5 +692,32 @@ class VerificationBytecodeCacheTests(unittest.TestCase):
         self.assertEqual(self.observed(safe), '3')
 
 
+
+class ResumeDecisionTests(unittest.TestCase):
+    def test_cell_decision_runs_skips_and_preserves_interrupted_cells(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = pathlib.Path(temporary) / 'task-variant-r001'
+            self.assertEqual(BENCH.cell_decision(output, False), ('run', None))
+            output.mkdir()
+            self.assertEqual(BENCH.cell_decision(output, False), ('error', None))
+            decision, aside = BENCH.cell_decision(output, True)
+            self.assertEqual(decision, 'rerun')
+            self.assertEqual(aside.parent, output.parent)
+            self.assertTrue(aside.name.startswith('task-variant-r001.interrupted-'))
+            (output / 'result.json').write_text('{}', encoding='utf-8')
+            self.assertEqual(BENCH.cell_decision(output, True), ('skip', None))
+
+    def test_resumed_records_carry_prior_completed_cells(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = pathlib.Path(temporary)
+            self.assertEqual(BENCH.resumed_records(output, False), [])
+            self.assertEqual(BENCH.resumed_records(output, True), [])
+            (output / 'results.json').write_text(
+                json.dumps([{'run_id': 'a', 'order_index': 2}]), encoding='utf-8')
+            self.assertEqual(BENCH.resumed_records(output, False), [])
+            self.assertEqual(BENCH.resumed_records(output, True),
+                             [{'run_id': 'a', 'order_index': 2}])
+
+
 if __name__ == '__main__':
     unittest.main()

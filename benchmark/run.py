@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import (FIXTURE_PREPARATION, check_tools, digest, initialize_git, load_tasks,
@@ -113,6 +114,38 @@ VARIANTS = {
 }
 PROMPT_PROTOCOLS = ('flattened', 'native')
 
+
+def cell_decision(output, skip_existing):
+    """Decide what to do with one scheduled cell's output directory.
+
+    Returns one of:
+      ('run', None)    - no directory yet; run the cell normally
+      ('error', None)  - directory exists and --skip-existing is off
+      ('skip', None)   - directory holds a complete result.json; never re-run
+      ('rerun', aside) - directory exists without result.json (interrupted);
+                         preserve it at ``aside`` and re-run the cell
+    """
+    if not output.exists():
+        return ('run', None)
+    if not skip_existing:
+        return ('error', None)
+    if (output / 'result.json').exists():
+        return ('skip', None)
+    aside = output.parent / '{}.interrupted-{}'.format(
+        output.name, time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()))
+    return ('rerun', aside)
+
+
+def resumed_records(output, skip_existing):
+    """Prior results to carry forward when resuming a batch; else empty."""
+    if not skip_existing:
+        return []
+    path = output / 'results.json'
+    if not path.exists():
+        return []
+    return json.loads(path.read_text(encoding='utf-8'))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--forge', type=Path, required=True)
@@ -144,6 +177,10 @@ def main():
     parser.add_argument('--repetitions', type=int, default=1)
     parser.add_argument('--order-seed', type=int, default=20260831)
     parser.add_argument('--no-randomize', action='store_true')
+    parser.add_argument('--skip-existing', action='store_true',
+                        help='resume a batch: skip cells whose output directory already holds a '
+                             'complete result.json; move an interrupted cell (directory without '
+                             'result.json) aside for the record and re-run it')
     parser.add_argument('--retain-terminal', action='store_true',
                         help='retain all terminal workspaces and full verifier metadata')
     parser.add_argument('--gpu-index', type=int, default=0)
@@ -192,7 +229,7 @@ def main():
 
 
 def execute(parser, args, tasks, forge, model, cache_prefix):
-    records = []
+    records = resumed_records(args.output, args.skip_existing)
     metadata = {'schema_version': 2, 'harness': 'forge',
                 'model_file': model.name, 'model_sha256': digest(model), 'gpu_layers': args.gpu_layers,
                 'chat_template': args.chat_template or 'embedded',
@@ -223,8 +260,15 @@ def execute(parser, args, tasks, forge, model, cache_prefix):
         policy = VARIANTS[variant]
         run_id = f'{task["id"]}-{variant}-r{repetition:03d}'
         output = args.output / run_id
-        if output.exists():
+        decision, aside = cell_decision(output, args.skip_existing)
+        if decision == 'error':
             parser.error(f'Run output already exists: {output}')
+        if decision == 'skip':
+            print(f'{run_id}: skipped (complete result retained)', flush=True)
+            continue
+        if decision == 'rerun':
+            output.rename(aside)
+            print(f'{run_id}: interrupted cell preserved as {aside.name}; re-running', flush=True)
         output.mkdir(parents=True)
         with tempfile.TemporaryDirectory(prefix='forge-bench-') as temporary:
             root = Path(temporary).resolve()
@@ -316,6 +360,7 @@ def execute(parser, args, tasks, forge, model, cache_prefix):
                               verification_inputs_unchanged=before_verification_inputs == after_verification_inputs,
                               protected_before_verification=before_verification == before_protected)
             records.append(record)
+            records.sort(key=lambda item: item.get('order_index', 0))
             write_json(output / 'result.json', record)
             write_json(args.output / 'results.json', records)
             print(f'{run_id}: {"PASS" if passed else "FAIL"} ({end_to_end:.1f}s e2e)',
