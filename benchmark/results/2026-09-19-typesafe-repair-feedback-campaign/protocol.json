@@ -107,14 +107,15 @@
   "frozen_utc": "2026-09-19T21:38:00+00:00",
   "hypothesis": "Advisory TypeSafe feedback after failed bounded-repair candidate validation improves independent task completion, or materially reduces complete-task latency at equal completion, on the frozen engaged population, without changing deterministic validation authority.",
   "identity": {
-    "forge_sha256": "a50dc51cf8265559eefab2479df905b6c48ffccda9b998b3d918c868b76eae86",
+    "forge_sha256": "f977c623137aa92a70d61002e4ae28e651fbefe4b670b2114ca5c0a35576e1f6",
     "harness_common_py_sha256": "bb646ded4567a04601e40dc8b790d1a1bad80b5540f9cd643333c57e6c8aed4d",
     "harness_run_py_sha256": "1e95b1b6908bf30d02e748fde4e09e7fb0216bad6f7a42988e7dcfd852eb2b57",
     "judge_config_sha256": "f35fa3993897fc722ea57aed840213a75da1f23cdbc3e64ddb13f74425717bd7",
     "model_sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
     "source_head": "61694349161c67e53d9592938709351215b27a8b",
     "source_status_short": "",
-    "typesafe_key_present_source": "verified in the launching terminal shell; execute_code kernel does not inherit Hermes secrets"
+    "typesafe_key_present_source": "verified in the launching terminal shell; execute_code kernel does not inherit Hermes secrets",
+    "binary_revision_note": "Binary rebuilt from the identical source revision after a diagnostic experiment (llama_backend.c temporarily reverted to d16e6736 to bisect an apparent 15x slowdown; the slowdown was traced to VRAM oversubscription by desktop GPU applications, not to Forge). PE timestamps make the rebuild hash differ from the freeze-time hash (a50dc51c...); source revision, flags, model and judge configuration are unchanged. Amended before the first campaign cell ran."
   },
   "non_goals": [
     "No promotion claim beyond this population and profile.",
@@ -173,7 +174,7 @@
     "task": "reasoning_dependency_order",
     "variant": "loop-repair-judge-campaign"
   },
-  "protocol_sha256_without_self": "e9ac146677df36309ebbab402d65e4fc2b8bb42df93f66c13cedd9606e0f8520",
+  "protocol_sha256_without_self": "6c5ce3880dce487af341eff17a15ed20c0eb0970340c55e6118537d456b1f7c3",
   "schedule": [
     {
       "order_index": 1,
@@ -661,5 +662,6 @@
     "artifact": "benchmark/results/2026-09-18-judge-shadow-replay/README.md",
     "finding": "Jev answers are stochastic at N=4 (0/15 episodes reproduced; 5/15 with a choice flip; sample-vs-shipped agreement 57/60 failure_family, 52/60 next_action); the shipped consumption thresholds are saturated (uncertain in 60/60 replays, so the rendered guidance is the constant inspect branch). The campaign tests the arm as shipped: a stochastic advisory inspect-hint plus evidence-gap signal.",
     "implication": "Judge output is a per-cell stochastic advisory input; no cell is stratified by judge answers; mechanism accounting uses judge_feedback events and metrics.json judge counters only."
-  }
+  },
+  "amended_utc": "2026-09-19T22:30:00Z"
 }
