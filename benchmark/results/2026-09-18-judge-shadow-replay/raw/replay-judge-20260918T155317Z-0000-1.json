@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "kind": "judge-shadow-replay",
+  "record": "judge-20260918T155317Z-0000",
+  "source_record": "benchmark/results/2026-09-18-typesafe-repair-feedback/raw/judge-20260918T155317Z-0000.json",
+  "sample": 1,
+  "utc": "20260919T211045Z",
+  "endpoint": "https://api.typesafe.ai/v1/systemone",
+  "model_requested": "jev-1.13.0",
+  "request_sha256": "b900e0784de5d4dacee80ef8b251213db0b897712ba35ae139b63e11a76cffdb",
+  "http_status": 200,
+  "latency_ms": 467.1,
+  "error": "",
+  "attempts": [
+    {
+      "attempt": 1,
+      "http_status": 200,
+      "latency_ms": 467.1,
+      "transport_error": null
+    }
+  ],
+  "request_id": "req_01a0bb81dcfc72bdabee402c307ee7c8",
+  "response_date": "Sat, 19 Sep 2026 21:10:44 GMT",
+  "response": {
+    "model": "jev-1.13.0",
+    "answers": {
+      "failure_family": {
+        "type": "choice",
+        "choice": "code_defect",
+        "confidence": 0.65,
+        "probabilities": {
+          "unknown": 0.01,
+          "code_defect": 0.72,
+          "environment_or_dependency": 0.08,
+          "missing_evidence": 0.12,
+          "test_or_requirement_mismatch": 0.07
+        }
+      },
+      "evidence_gap": {
+        "type": "noul",
+        "noul": 0.54
+      },
+      "repair_readiness": {
+        "type": "score",
+        "score": 2.26,
+        "confidence": 0.26,
+        "legend": {
+          "0": "No actionable signal; the next step should not edit code.",
+          "1": "Needs more inspection before a repair can be selected.",
+          "2": "A concrete suspect is visible, but the exact repair may still need confirmation.",
+          "3": "An actionable repair is likely from the supplied validation, source, and delta."
+        },
+        "probabilities": {
+          "0": 0.03,
+          "1": 0.21,
+          "2": 0.22,
+          "3": 0.54
+        }
+      },
+      "next_action": {
+        "type": "choice",
+        "choice": "run_validation",
+        "confidence": 0.24,
+        "probabilities": {
+          "inspect_source": 0.22,
+          "patch_code": 0.06,
+          "run_validation": 0.42,
+          "defer": 0.3
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 2044,
+      "output_tokens": 153
+    }
+  },
+  "usage": {
+    "input_tokens": 2044,
+    "output_tokens": 153
+  },
+  "response_sha256": "67b5c4de70f67490836172d143ad89265fb42061069345424dad17b98c735642"
+}
