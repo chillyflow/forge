@@ -94,6 +94,19 @@ typedef enum {
     FORGE_THINKING_DISABLED
 } forge_thinking_mode;
 typedef enum { FORGE_PROMPT_FLATTENED = 0, FORGE_PROMPT_NATIVE } forge_prompt_protocol;
+/* KV cache element types. f16 is the pinned llama.cpp default; the quantized
+ * types are only honored together with flash attention (see forge_flash_attn). */
+typedef enum {
+    FORGE_KV_F16 = 0,
+    FORGE_KV_Q8_0,
+    FORGE_KV_Q4_0,
+    FORGE_KV_Q5_0
+} forge_kv_type;
+typedef enum {
+    FORGE_FLASH_ATTN_AUTO = 0, /* The backend decides; the pinned default. */
+    FORGE_FLASH_ATTN_ENABLED,
+    FORGE_FLASH_ATTN_DISABLED
+} forge_flash_attn;
 typedef struct {
     const char *model_path;
     const char *script_path;   /* Explicit deterministic test fixture; never auto-selected. */
@@ -106,6 +119,14 @@ typedef struct {
     float repetition_penalty;
     int repetition_last_n;
     bool reuse_prefix, grammar_fast_path;
+    /* KV cache element types, flash-attention control and KQV offload. The
+     * defaults (f16/f16, AUTO, true) reproduce the pinned llama.cpp defaults, so
+     * an unconfigured load is unchanged. llama.cpp ignores quantized KV cache
+     * types unless flash attention is enabled, so non-f16 types are refused
+     * unless flash_attn is FORGE_FLASH_ATTN_ENABLED. */
+    forge_kv_type cache_type_k, cache_type_v;
+    forge_flash_attn flash_attn;
+    bool offload_kqv;
     forge_thinking_mode thinking; /* Jinja enable_thinking control; AUTO preserves legacy. */
     /* NATIVE is selected by forge_default_model_config() and renders structured roles and
      * function schemas through llama.cpp. FLATTENED preserves the original single-user-message

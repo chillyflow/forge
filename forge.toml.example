@@ -12,6 +12,15 @@ gpu_layers = "auto"
 temperature = 0.0
 seed = 42
 speculative = false # true is rejected: speculative decoding is not implemented.
+# KV cache controls. Defaults are the pinned llama.cpp defaults (f16/f16 KV,
+# flash attention auto, KQV offload on), so omitting them changes nothing.
+# Quantized cache types require flash attention: cache_type_k/cache_type_v
+# other than "f16" without flash_attn = "on" is refused, because llama.cpp
+# ignores quantized KV otherwise.
+# cache_type_k = "f16" # f16 (default) | q8_0 | q4_0 | q5_0
+# cache_type_v = "f16"
+# flash_attn = "auto" # "auto" (default) | "on" | "off"; true/false also accepted
+# offload_kqv = true # offload KQV ops, including the KV cache, to the GPU
 
 [inference.checkpoints]
 enabled = false # Explicit opt-in; retained only in this model process.

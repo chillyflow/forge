@@ -501,7 +501,9 @@ static void planner_tests(void) {
 
     hardware.ram_available_bytes = 6 * GIB;
     assert(forge_hardware_plan(&hardware, &requirements, 16384, 2048, &plan, &error) == FORGE_OK);
-    assert(plan.context_reduced && plan.context_tokens == 4096);
+    /* The interval search finds the largest fitting 128-token step (7,168);
+     * the previous halving walk stopped at the first fit, 4,096. */
+    assert(plan.context_reduced && plan.context_tokens == 7168);
     assert(plan.fit == FORGE_FIT_ESTIMATED);
     hardware.ram_available_bytes = 0;
     assert(forge_hardware_plan(&hardware, &requirements, 8192, 256, &plan, &error) == FORGE_OK);
@@ -599,6 +601,160 @@ static void planner_tests(void) {
            FORGE_ERR_ARGUMENT);
 }
 
+static void planner_kv_tests(void) {
+    forge_error error = {0};
+    forge_hardware_plan_result plan;
+    /* Retained campaign measurements for qwen3moe (the 2026-09-11-capability
+     * environment.json records): 17.28 GiB of tensors, 98,304 f16 KV bytes per
+     * token, 22.61 GiB free VRAM, 21.89 GiB free RAM, 31.43 GiB total RAM. */
+    forge_hardware hardware = {0};
+    hardware.logical_cpus = 24;
+    hardware.ram_total_bytes = 31 * GIB + GIB * 43 / 100;
+    hardware.ram_available_bytes = 21 * GIB + GIB * 89 / 100;
+    hardware.ram_total_known = hardware.ram_available_known = true;
+    hardware.gpu_detection_available = true;
+    hardware.gpu_count = 1;
+    hardware.gpus[0] = (forge_gpu_info){"campaign GPU", 23 * GIB + GIB * 89 / 100,
+                                        22 * GIB + GIB * 61 / 100, true, false, false};
+    forge_model_requirements requirements = {0};
+    requirements.model_bytes = 17 * GIB + GIB * 28 / 100;
+    requirements.model_bytes_known = true;
+    requirements.kv_bytes_per_token = 98304; /* measured f16 K+V payload per token */
+    requirements.kv_bytes_known = true;
+    requirements.layer_count = 48;
+    requirements.training_context = 262144;
+
+    /* f16: the largest fitting 128-token step below the requested context. The
+     * old halving walk stopped at 8,192; the interval search raises it to 8,704
+     * because the GPU budget covers it. */
+    assert(forge_hardware_plan(&hardware, &requirements, 16384, 2048, &plan, &error) == FORGE_OK);
+    assert(plan.context_tokens == 8704 && plan.context_tokens > 8192);
+    assert(plan.context_reduced && plan.fit == FORGE_FIT_ESTIMATED);
+    assert(plan.gpu_layers == -1 && plan.gpu_index == 0 && !strcmp(plan.kv_format, "f16"));
+    assert(plan.estimated_kv_bytes == UINT64_C(98304) * 8704);
+    assert(plan.gpu_headroom_bytes > 0 && plan.gpu_headroom_bytes < 256 * 1024 * 1024);
+
+    /* q8_0 packs 32 elements into 34 bytes (2-byte f16 scale + 32 int8 quants),
+     * so the measured f16 payload scales by 34/64 - derived from the pinned ggml
+     * block layout, never assumed to be half. */
+    uint32_t numerator = 0, denominator = 0;
+    assert(forge_kv_type_bytes_ratio(FORGE_KV_Q8_0, &numerator, &denominator));
+    assert(numerator == 34 && denominator == 32);
+    uint64_t q8_bytes_per_token = ((uint64_t)98304 / 2) * numerator / denominator;
+    assert(q8_bytes_per_token == 52224);
+    requirements.kv_type = FORGE_KV_Q8_0;
+    assert(forge_hardware_plan(&hardware, &requirements, 16384, 2048, &plan, &error) == FORGE_OK);
+    assert(!plan.context_reduced && plan.context_tokens == 16384);
+    assert(!strcmp(plan.kv_format, "q8_0"));
+    assert(plan.estimated_kv_bytes == q8_bytes_per_token * 16384); /* 855,638,016 */
+
+    /* q4_0 must fit at least as much context as q8_0 on the same host. */
+    requirements.kv_type = FORGE_KV_Q4_0;
+    assert(forge_hardware_plan(&hardware, &requirements, 16384, 2048, &plan, &error) == FORGE_OK);
+    assert(!plan.context_reduced && plan.context_tokens == 16384);
+    assert(!strcmp(plan.kv_format, "q4_0"));
+
+    /* When K and V differ, the planner sizes against the larger-cost type. */
+    assert(forge_kv_type_max(FORGE_KV_Q4_0, FORGE_KV_Q8_0) == FORGE_KV_Q8_0);
+    assert(forge_kv_type_max(FORGE_KV_Q8_0, FORGE_KV_Q4_0) == FORGE_KV_Q8_0);
+    assert(forge_kv_type_max(FORGE_KV_F16, FORGE_KV_Q5_0) == FORGE_KV_F16);
+
+    /* An out-of-range type is refused, not silently planned as f16. */
+    requirements.kv_type = (forge_kv_type)99;
+    assert(forge_hardware_plan(&hardware, &requirements, 16384, 2048, &plan, &error) ==
+           FORGE_ERR_ARGUMENT);
+}
+
+static void kv_control_tests(void) {
+    /* Defaults are unchanged: f16 K and V, flash attention AUTO, KQV offload on,
+     * and an f16 plan when no key or flag is given. */
+    forge_config config;
+    forge_config_init(&config);
+    forge_error error = {0};
+    assert(config.model.cache_type_k == FORGE_KV_F16 && config.model.cache_type_v == FORGE_KV_F16);
+    assert(config.model.flash_attn == FORGE_FLASH_ATTN_AUTO && config.model.offload_kqv);
+    assert(forge_config_validate(&config, &error) == FORGE_OK);
+
+    forge_kv_type type = (forge_kv_type)99;
+    assert(forge_kv_type_from_name("f16", &type) && type == FORGE_KV_F16);
+    assert(forge_kv_type_from_name("q8_0", &type) && type == FORGE_KV_Q8_0);
+    assert(forge_kv_type_from_name("q4_0", &type) && type == FORGE_KV_Q4_0);
+    assert(forge_kv_type_from_name("q5_0", &type) && type == FORGE_KV_Q5_0);
+    assert(!forge_kv_type_from_name("q6_k", &type) && type == FORGE_KV_Q5_0);
+    assert(!forge_kv_type_from_name("", &type));
+    assert(!forge_kv_type_from_name("F16", &type));
+    assert(!strcmp(forge_kv_type_name(FORGE_KV_Q8_0), "q8_0"));
+    assert(!strcmp(forge_kv_type_name(FORGE_KV_F16), "f16"));
+    uint32_t numerator = 0, denominator = 0;
+    assert(forge_kv_type_bytes_ratio(FORGE_KV_F16, &numerator, &denominator));
+    assert(numerator == 2 && denominator == 1);
+    assert(forge_kv_type_bytes_ratio(FORGE_KV_Q4_0, &numerator, &denominator));
+    assert(numerator == 18 && denominator == 32);
+    assert(forge_kv_type_bytes_ratio(FORGE_KV_Q5_0, &numerator, &denominator));
+    assert(numerator == 22 && denominator == 32);
+    assert(!forge_kv_type_bytes_ratio((forge_kv_type)99, &numerator, &denominator));
+    forge_flash_attn mode = (forge_flash_attn)99;
+    assert(forge_flash_attn_from_name("auto", &mode) && mode == FORGE_FLASH_ATTN_AUTO);
+    assert(forge_flash_attn_from_name("on", &mode) && mode == FORGE_FLASH_ATTN_ENABLED);
+    assert(forge_flash_attn_from_name("off", &mode) && mode == FORGE_FLASH_ATTN_DISABLED);
+    assert(!forge_flash_attn_from_name("enabled", &mode) && mode == FORGE_FLASH_ATTN_DISABLED);
+
+    /* The keys parse, validate and round-trip through a profile document. */
+    assert(parse(&config,
+                 "[inference]\ncache_type_k = \"q8_0\"\ncache_type_v = \"q4_0\"\n"
+                 "flash_attn = \"on\"\noffload_kqv = false\n",
+                 &error) == FORGE_OK);
+    assert(config.model.cache_type_k == FORGE_KV_Q8_0 &&
+           config.model.cache_type_v == FORGE_KV_Q4_0);
+    assert(config.model.flash_attn == FORGE_FLASH_ATTN_ENABLED && !config.model.offload_kqv);
+    assert(forge_config_validate(&config, &error) == FORGE_OK);
+    assert(parse(&config, "inference.flash_attn = true\n", &error) == FORGE_OK);
+    assert(config.model.flash_attn == FORGE_FLASH_ATTN_ENABLED);
+    /* Dropping back to AUTO while a quantized type is selected is refused: the
+     * dependency holds on every path, including a later overlay. */
+    assert(parse(&config, "inference.flash_attn = \"auto\"\n", &error) == FORGE_ERR_ARGUMENT);
+    assert(strstr(error.message, "flash_attn"));
+    assert(config.model.flash_attn == FORGE_FLASH_ATTN_ENABLED);
+    assert(parse(&config, "inference.cache_type_k = \"f16\"\n", &error) == FORGE_OK);
+    assert(parse(&config, "inference.cache_type_v = \"f16\"\n", &error) == FORGE_OK);
+    assert(parse(&config, "inference.flash_attn = \"auto\"\n", &error) == FORGE_OK);
+    assert(config.model.flash_attn == FORGE_FLASH_ATTN_AUTO);
+    assert(parse(&config, "inference.offload_kqv = true\n", &error) == FORGE_OK);
+    assert(config.model.offload_kqv);
+    forge_config_destroy(&config);
+
+    /* Non-f16 KV without explicit flash attention is refused, with the reason
+     * named. A silently ignored flag would be measured as "no effect". */
+    rejected("inference.cache_type_k = \"q8_0\"", "flash_attn");
+    rejected("inference.cache_type_v = \"q4_0\"", "flash_attn");
+    rejected("inference.cache_type_k = \"q5_0\"\ninference.flash_attn = false", "flash_attn");
+    rejected("inference.cache_type_k = \"q8_0\"\ninference.flash_attn = \"off\"", "flash_attn");
+    rejected("inference.cache_type_k = \"q7_0\"", "cache_type_k");
+    rejected("inference.cache_type_k = \"F16\"", "cache_type_k");
+    rejected("inference.cache_type_k = 8", "cache_type_k");
+    rejected("inference.cache_type_k = \"\"", "cache_type_k");
+    rejected("inference.cache_type_v = \"f32\"", "cache_type_v");
+    rejected("inference.flash_attn = \"maybe\"", "flash_attn");
+    rejected("inference.flash_attn = 1", "flash_attn");
+    rejected("inference.offload_kqv = \"true\"", "offload_kqv");
+
+    /* The refusal also holds when values are set directly (library callers). */
+    forge_config_init(&config);
+    config.model.cache_type_k = FORGE_KV_Q8_0;
+    assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
+    assert(strstr(error.message, "flash_attn"));
+    config.model.flash_attn = FORGE_FLASH_ATTN_ENABLED;
+    assert(forge_config_validate(&config, &error) == FORGE_OK);
+    config.model.cache_type_k = FORGE_KV_F16;
+    config.model.cache_type_v = (forge_kv_type)99;
+    assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
+    assert(strstr(error.message, "cache_type"));
+    config.model.cache_type_v = FORGE_KV_F16;
+    config.model.flash_attn = (forge_flash_attn)99;
+    assert(forge_config_validate(&config, &error) == FORGE_ERR_ARGUMENT);
+    forge_config_destroy(&config);
+}
+
 static void metadata_errors(void) {
     char path[TEST_PATH];
     path_for("not-a-model.txt", path);
@@ -618,7 +774,9 @@ int main(int argc, char **argv) {
     config_rejections();
     inheritance_and_ownership();
     final_override_validation();
+    kv_control_tests();
     planner_tests();
+    planner_kv_tests();
     metadata_errors();
     remove_test_directory();
     /* Optional metadata-only smoke probe of an already-installed model. CTest

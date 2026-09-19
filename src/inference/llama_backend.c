@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "forge/config.h"
 #include "chat_template.h"
 #include "llama.h"
 #include <ctype.h>
@@ -31,7 +32,60 @@ typedef struct {
     llama_token *reduce_ids;
     llama_token_data *reduce_data;
     int32_t reduce_capacity;
+    /* Reusable decode scratch, allocated once at load and refilled per call
+     * instead of a per-call llama_batch_init/llama_batch_free pair on the
+     * decode path (including every single-token decode). Sized to the logical
+     * batch, which bounds every decode this backend submits. */
+    struct llama_batch batch;
+    int32_t batch_capacity;
+    /* Preserved-marker token ids, resolved once per marker set. The preserved
+     * strings are template constants, not per-render values; the key is a
+     * fingerprint over the strings themselves, so any change to the list
+     * invalidates the cache. */
+    uint64_t preserved_key;
+    bool preserved_ready;
+    llama_token preserved_tokens[64];
+    size_t preserved_count;
 } llama_state;
+
+/* Map a validated KV cache type to the pinned ggml type. The planner scales the
+ * f16 payload by forge_kv_type_bytes_ratio; kv_type_matches_ggml verifies that
+ * table against the pinned ggml block layout at load so a mismatch refuses
+ * instead of mis-sizing. */
+static enum ggml_type kv_cache_ggml_type(forge_kv_type type) {
+    switch (type) {
+    case FORGE_KV_F16:
+        return GGML_TYPE_F16;
+    case FORGE_KV_Q8_0:
+        return GGML_TYPE_Q8_0;
+    case FORGE_KV_Q4_0:
+        return GGML_TYPE_Q4_0;
+    case FORGE_KV_Q5_0:
+        return GGML_TYPE_Q5_0;
+    }
+    return GGML_TYPE_F16;
+}
+
+static bool kv_type_matches_ggml(forge_kv_type type) {
+    uint32_t numerator = 0, denominator = 0;
+    if (!forge_kv_type_bytes_ratio(type, &numerator, &denominator))
+        return false;
+    enum ggml_type ggml = kv_cache_ggml_type(type);
+    return (uint64_t)numerator * (uint64_t)ggml_blck_size(ggml) ==
+           (uint64_t)ggml_type_size(ggml) * (uint64_t)denominator;
+}
+
+static enum llama_flash_attn_type kv_cache_flash_attn(forge_flash_attn mode) {
+    switch (mode) {
+    case FORGE_FLASH_ATTN_ENABLED:
+        return LLAMA_FLASH_ATTN_TYPE_ENABLED;
+    case FORGE_FLASH_ATTN_DISABLED:
+        return LLAMA_FLASH_ATTN_TYPE_DISABLED;
+    case FORGE_FLASH_ATTN_AUTO:
+        break;
+    }
+    return LLAMA_FLASH_ATTN_TYPE_AUTO;
+}
 
 /* Greedy sampling under a live grammar: mask a raw top-K prefix instead of the
  * whole vocabulary and take its highest-ranked acceptable candidate.
@@ -217,24 +271,27 @@ static llama_token *tokenize_text_allocated(llama_state *s, const char *text, in
         fg_error(error, FORGE_ERR_LIMIT, "Templated prompt is too large");
         return NULL;
     }
-    int32_t n = llama_tokenize(s->vocab, text, (int32_t)len, NULL, 0, true, true);
-    if (n >= 0 || n == INT32_MIN) {
-        fg_error(error, FORGE_ERR_MODEL, "Cannot size prompt tokens");
-        return NULL;
-    }
-    n = -n;
-    if (n > 1048576) {
-        fg_error(error, FORGE_ERR_LIMIT, "Prompt token count exceeds the runtime bound");
-        return NULL;
-    }
-    *allocated = (size_t)n * sizeof(llama_token);
+    /* Single pass: every token covers at least one byte of the (possibly
+     * space-prefixed) text, and add_special can add a leading BOS plus a
+     * trailing EOS/SEP. len+4 is therefore a true upper bound and the sizing
+     * walk with a NULL output is unnecessary. The 1M-token guard stays as a
+     * post-check on the actual count and bounds the allocation for very large
+     * prompts. */
+    size_t bound = len + 4;
+    if (bound > 1048576)
+        bound = 1048576;
+    *allocated = bound * sizeof(llama_token);
     llama_token *tokens = token_allocate(allocator, *allocated, error);
     if (!tokens)
         return NULL;
-    *count = llama_tokenize(s->vocab, text, (int32_t)len, tokens, n, true, true);
-    if (*count < 0 || *count > n) {
+    *count = llama_tokenize(s->vocab, text, (int32_t)len, tokens, (int32_t)bound, true, true);
+    if (*count < 0) {
+        int64_t required = -(int64_t)*count;
         token_release(allocator, tokens, *allocated);
-        fg_error(error, FORGE_ERR_MODEL, "Cannot tokenize the complete prompt");
+        if (required > 1048576)
+            fg_error(error, FORGE_ERR_LIMIT, "Prompt token count exceeds the runtime bound");
+        else
+            fg_error(error, FORGE_ERR_MODEL, "Cannot tokenize the complete prompt");
         return NULL;
     }
     return tokens;
@@ -351,6 +408,20 @@ static forge_status native_grammar_prefill(llama_state *s, struct llama_sampler 
     return FORGE_OK;
 }
 
+/* Fingerprint over the preserved marker strings. The strings are template
+ * constants (chat-format metadata), so a stable fingerprint means the resolved
+ * token ids are still valid; any change to the list invalidates the cache. */
+static uint64_t preserved_fingerprint(const fg_chat_render *render, size_t strings) {
+    uint64_t hash = UINT64_C(1469598103934665603);
+    for (size_t i = 0; i < strings; i++) {
+        const char *text = fg_chat_render_preserved(render, i);
+        for (const unsigned char *p = (const unsigned char *)(text ? text : ""); *p; p++)
+            hash = (hash ^ *p) * UINT64_C(1099511628211);
+        hash = (hash ^ 0xffu) * UINT64_C(1099511628211); /* Separator between strings. */
+    }
+    return (hash ^ (uint64_t)strings) * UINT64_C(1099511628211);
+}
+
 static forge_status native_preserved_tokens(llama_state *s, const fg_chat_render *render,
                                             llama_token *tokens, size_t capacity, size_t *count,
                                             forge_error *error) {
@@ -359,6 +430,15 @@ static forge_status native_preserved_tokens(llama_state *s, const fg_chat_render
     if (strings > capacity)
         return fg_error(error, FORGE_ERR_LIMIT,
                         "Native template returned too many preserved tokens");
+    uint64_t key = preserved_fingerprint(render, strings);
+    if (s->preserved_ready && s->preserved_key == key) {
+        if (s->preserved_count > capacity)
+            return fg_error(error, FORGE_ERR_LIMIT,
+                            "Native template returned too many preserved tokens");
+        memcpy(tokens, s->preserved_tokens, s->preserved_count * sizeof(*tokens));
+        *count = s->preserved_count;
+        return FORGE_OK;
+    }
     for (size_t i = 0; i < strings; i++) {
         const char *text = fg_chat_render_preserved(render, i);
         llama_token token = LLAMA_TOKEN_NULL;
@@ -373,6 +453,10 @@ static forge_status native_preserved_tokens(llama_state *s, const fg_chat_render
         if (!duplicate)
             tokens[(*count)++] = token;
     }
+    memcpy(s->preserved_tokens, tokens, *count * sizeof(*tokens));
+    s->preserved_count = *count;
+    s->preserved_key = key;
+    s->preserved_ready = true;
     return FORGE_OK;
 }
 
@@ -385,19 +469,18 @@ static bool native_token_is_preserved(llama_token token, const llama_token *pres
 }
 static forge_status decode_batch(llama_state *s, const llama_token *tokens, size_t count,
                                  size_t pos, forge_error *e) {
-    struct llama_batch b = llama_batch_init((int32_t)count, 0, 1);
-    if (!b.token)
-        return fg_error(e, FORGE_ERR_MEMORY, "llama batch allocation failed");
-    b.n_tokens = (int32_t)count;
+    struct llama_batch *b = &s->batch;
+    if (!b->token || !s->batch_capacity || count > (size_t)s->batch_capacity)
+        return fg_error(e, FORGE_ERR_LIMIT, "llama batch exceeds its configured capacity");
+    b->n_tokens = (int32_t)count;
     for (size_t i = 0; i < count; i++) {
-        b.token[i] = tokens[i];
-        b.pos[i] = (llama_pos)(pos + i);
-        b.n_seq_id[i] = 1;
-        b.seq_id[i][0] = 0;
-        b.logits[i] = (int8_t)(i + 1 == count);
+        b->token[i] = tokens[i];
+        b->pos[i] = (llama_pos)(pos + i);
+        b->n_seq_id[i] = 1;
+        b->seq_id[i][0] = 0;
+        b->logits[i] = (int8_t)(i + 1 == count);
     }
-    int rc = llama_decode(s->ctx, b);
-    llama_batch_free(b);
+    int rc = llama_decode(s->ctx, *b);
     if (rc)
         return fg_error(e, FORGE_ERR_MODEL, "llama_decode failed (%d)", rc);
     return FORGE_OK;
@@ -1335,6 +1418,7 @@ static void llama_destroy(forge_model *m) {
             llama_free(s->ctx);
         if (s->model)
             llama_model_free(s->model);
+        llama_batch_free(s->batch);
         free(s->tokens);
         free(s->reduce_ids);
         free(s->reduce_data);
@@ -1410,6 +1494,29 @@ bool fg_llama_rejects_user_after_tool(const forge_model *m) {
 
 bool fg_llama_init(forge_model *m, forge_error *e) {
     uint64_t start = fg_now_ms();
+    /* Enforce, do not document, the llama.cpp dependency before touching the
+     * model file: quantized KV cache types are ignored (or rejected) unless
+     * flash attention is enabled, and a silently ignored flag would be measured
+     * as "no effect". */
+    if ((unsigned)m->config.cache_type_k > FORGE_KV_Q5_0 ||
+        (unsigned)m->config.cache_type_v > FORGE_KV_Q5_0 ||
+        (unsigned)m->config.flash_attn > FORGE_FLASH_ATTN_DISABLED) {
+        fg_error(e, FORGE_ERR_ARGUMENT, "Invalid KV cache type or flash-attention mode");
+        return false;
+    }
+    if ((m->config.cache_type_k != FORGE_KV_F16 || m->config.cache_type_v != FORGE_KV_F16) &&
+        m->config.flash_attn != FORGE_FLASH_ATTN_ENABLED) {
+        fg_error(e, FORGE_ERR_ARGUMENT,
+                 "Non-f16 KV cache types require flash attention; set "
+                 "inference.flash_attn = on (llama.cpp ignores quantized KV without it)");
+        return false;
+    }
+    if (!kv_type_matches_ggml(m->config.cache_type_k) ||
+        !kv_type_matches_ggml(m->config.cache_type_v)) {
+        fg_error(e, FORGE_ERR_MODEL,
+                 "KV cache type element size disagrees with the pinned ggml block layout");
+        return false;
+    }
     llama_state *s = calloc(1, sizeof(*s));
     if (!s) {
         fg_error(e, FORGE_ERR_MEMORY, "Backend allocation failed");
@@ -1436,6 +1543,13 @@ bool fg_llama_init(forge_model *m, forge_error *e) {
         cp.n_threads = m->config.threads;
         cp.n_threads_batch = m->config.threads;
     }
+    /* The defaults (f16/f16, AUTO, true) reproduce llama_context_default_params
+     * exactly, so an unconfigured load is unchanged. The refusal above guarantees
+     * quantized types only reach llama.cpp with flash attention enabled. */
+    cp.type_k = kv_cache_ggml_type(m->config.cache_type_k);
+    cp.type_v = kv_cache_ggml_type(m->config.cache_type_v);
+    cp.flash_attn_type = kv_cache_flash_attn(m->config.flash_attn);
+    cp.offload_kqv = m->config.offload_kqv;
     s->ctx = llama_init_from_model(s->model, cp);
     if (!s->ctx) {
         fg_error(e, FORGE_ERR_MODEL,
@@ -1444,6 +1558,17 @@ bool fg_llama_init(forge_model *m, forge_error *e) {
     }
     s->capacity = llama_n_ctx(s->ctx);
     s->tokens = malloc(s->capacity * sizeof(*s->tokens));
+    /* One reusable decode scratch batch, sized to the context's logical batch
+     * (every decode this backend submits is bounded by it: prefill chunks are
+     * capped at 512 and single-token decodes use one entry). */
+    uint32_t batch = llama_n_batch(s->ctx);
+    s->batch_capacity = batch && batch <= INT32_MAX ? (int32_t)batch : 512;
+    s->batch = llama_batch_init(s->batch_capacity, 0, 1);
+    if (!s->batch.token || !s->batch.pos || !s->batch.n_seq_id || !s->batch.seq_id ||
+        !s->batch.logits) {
+        fg_error(e, FORGE_ERR_MEMORY, "Inference batch allocation failed");
+        return false;
+    }
     /* Largest reduced rung the ladder can use: it surrenders to the full array
      * before a rung can reach the vocabulary size, so this is well under it. */
     int32_t rung = FG_REDUCED_START_K;

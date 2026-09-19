@@ -163,6 +163,9 @@ class ConfigCliTests(unittest.TestCase):
             (("hardware-plan", "--context", "-1"), "Invalid numeric"),
             (("hardware-plan", "--gpu-layers", "AUTO"), "Invalid numeric"),
             (("hardware-plan", "--threads", "1025"), "inference.threads"),
+            (("hardware-plan", "--cache-type-k", "q7_0"), "--cache-type-k"),
+            (("hardware-plan", "--cache-type-v", "f32"), "--cache-type-v"),
+            (("hardware-plan", "--flash-attn", "maybe"), "--flash-attn"),
             (("hardware-plan", "--profile", "a", "--profile", "b"), "only one"),
             (("hardware-plan", "--config", "a", "--config", "b"), "only one"),
             (("hardware-plan", "model.gguf"), "positional argument"),
@@ -174,6 +177,49 @@ class ConfigCliTests(unittest.TestCase):
         # implicit --no-config permission/discovery override in the first pass.
         self.write(self.workspace / "--no-config", "model.context=2048\nagent.output_reserve=512\n")
         self.assertEqual(self.plan("--profile", "--no-config")["plan"]["context_tokens"], 2048)
+
+    def test_kv_cache_type_requires_flash_attention(self):
+        # Non-f16 KV cache types are only meaningful with flash attention;
+        # llama.cpp ignores quantized KV otherwise, so the host refuses the
+        # combination with an explicit error and a nonzero exit instead of
+        # letting a configuration error be measured as "no effect".
+        refused = self.cli("hardware-plan", "--no-config", "--cache-type-k", "q8_0",
+                           success=False)
+        self.assertIn("flash_attn", refused.stderr)
+        refused = self.cli("hardware-plan", "--no-config", "--cache-type-v", "q4_0",
+                           success=False)
+        self.assertIn("flash_attn", refused.stderr)
+        refused = self.cli("hardware-plan", "--no-config", "--cache-type-k", "q8_0",
+                           "--flash-attn", "off", success=False)
+        self.assertIn("flash_attn", refused.stderr)
+        # The accepted combination parses, validates and reports the type that
+        # the planner sizes against. When K and V differ, that is the larger-cost
+        # type, so a plan never under-estimates the payload.
+        report = self.plan("--no-config", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0",
+                           "--flash-attn", "on")
+        self.assertEqual(report["plan"]["kv_format"], "q8_0")
+        report = self.plan("--no-config", "--cache-type-k", "q8_0", "--cache-type-v", "q4_0",
+                           "--flash-attn", "on")
+        self.assertEqual(report["plan"]["kv_format"], "q8_0")
+        report = self.plan("--no-config", "--cache-type-k", "q8_0", "--flash-attn", "on")
+        self.assertEqual(report["plan"]["kv_format"], "f16")  # f16 V costs more.
+        report = self.plan("--no-config", "--cache-type-v", "q4_0", "--flash-attn", "on")
+        self.assertEqual(report["plan"]["kv_format"], "f16")  # f16 K costs more.
+        # Defaults are unchanged when no KV control is given.
+        self.assertEqual(self.plan("--no-config")["plan"]["kv_format"], "f16")
+        # The same refusal and round-trip come through the TOML profile.
+        self.write(self.workspace / "forge.toml", "inference.cache_type_k = \"q8_0\"\n")
+        self.assertIn("flash_attn", self.cli("hardware-plan", success=False).stderr)
+        self.write(self.workspace / "forge.toml",
+                   "[inference]\ncache_type_k = \"q8_0\"\ncache_type_v = \"q8_0\"\n"
+                   "flash_attn = \"on\"\noffload_kqv = false\n")
+        self.assertEqual(self.plan()["plan"]["kv_format"], "q8_0")
+        # The offload ablation is accepted on the deterministic scripted path,
+        # which never loads a real model.
+        fixture = self.fixture([{"final": "done"}])
+        completed = self.cli("complete", "prompt", "--script", fixture, "--no-config",
+                             "--no-offload-kqv")
+        self.assertEqual(json.loads(completed.stdout), {"final": "done"})
 
     def test_configuration_does_not_grant_tool_permissions(self):
         config_path = self.workspace / "forge.toml"

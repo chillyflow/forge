@@ -51,6 +51,17 @@ typedef struct {
 void forge_config_init(forge_config *);
 void forge_config_destroy(forge_config *);
 
+/* KV cache element types. Names are the pinned ggml type names; f16 is the
+ * default and the only type llama.cpp honors without flash attention. */
+const char *forge_kv_type_name(forge_kv_type);
+bool forge_kv_type_from_name(const char *, forge_kv_type *);
+/* Bytes per element as an exact fraction: bytes = elements * numerator /
+ * denominator. Derived from the pinned ggml block layout, not assumed. */
+bool forge_kv_type_bytes_ratio(forge_kv_type, uint32_t *, uint32_t *);
+/* The larger-cost type of two, for sizing when K and V differ. */
+forge_kv_type forge_kv_type_max(forge_kv_type, forge_kv_type);
+bool forge_flash_attn_from_name(const char *, forge_flash_attn *);
+
 /* Transactional overlays: on failure the previous configuration is unchanged.
  * Missing keys inherit their current values. Each file may extend one other file;
  * its parent is applied first. Relative paths are based on the file defining them,
@@ -104,6 +115,9 @@ typedef struct {
     uint64_t file_bytes, model_bytes, kv_bytes_per_token;
     size_t layer_count, training_context;
     bool model_bytes_known, tensor_bytes_known, kv_bytes_known, metadata_available;
+    /* Selected KV cache type the planner must size against. Zero-initialized
+     * values (FORGE_KV_F16) preserve the f16 default. */
+    forge_kv_type kv_type;
     char architecture[64], note[256];
 } forge_model_requirements;
 
@@ -136,10 +150,14 @@ forge_status forge_hardware_detect(forge_hardware *, forge_error *);
 forge_status forge_hardware_model_file(const char *, forge_model_requirements *, forge_error *);
 
 /* Pure, deterministic recommendations; injected measurements make tests portable.
- * f16 KV applies to one sequence and scalar, conventional attention geometry.
- * Margins are heuristics, not guarantees. Only GPU 0 is budgeted; device memories
- * are never added together. Unknown KV geometry never enables automatic offload.
- * Callers decide whether to apply recommendations or retain explicit settings. */
+ * The f16 KV payload applies to one sequence and scalar, conventional attention
+ * geometry; a selected quantized cache type (requirements->kv_type) scales it by
+ * the pinned ggml block layout. Margins are heuristics, not guarantees. Only GPU 0
+ * is budgeted; device memories are never added together. Unknown KV geometry never
+ * enables automatic offload. The recommended context is the largest fitting
+ * 128-token step between the minimum valid context and the requested one; it is
+ * never raised above the requested value. Callers decide whether to apply
+ * recommendations or retain explicit settings. */
 forge_status forge_hardware_plan(const forge_hardware *, const forge_model_requirements *,
                                  size_t requested_context, size_t output_reserve,
                                  forge_hardware_plan_result *, forge_error *);

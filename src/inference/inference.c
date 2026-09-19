@@ -11,6 +11,12 @@ forge_model_config forge_default_model_config(void) {
     config.repetition_last_n = 0;
     config.reuse_prefix = true;
     config.grammar_fast_path = true;
+    /* Pinned llama.cpp defaults: f16 KV, flash attention AUTO, KQV offload on.
+     * These preserve byte-identical behaviour when no flag or key is given. */
+    config.cache_type_k = FORGE_KV_F16;
+    config.cache_type_v = FORGE_KV_F16;
+    config.flash_attn = FORGE_FLASH_ATTN_AUTO;
+    config.offload_kqv = true;
     config.thinking = FORGE_THINKING_DISABLED;
     config.prompt_protocol = FORGE_PROMPT_NATIVE;
     return config;

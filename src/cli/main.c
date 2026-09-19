@@ -44,6 +44,11 @@ static void usage(void) {
          "  --model PATH         local GGUF; never downloaded by the runtime\n"
          "  --gpu-layers N|auto  offloaded layers, -1 for all (default 0); auto estimates fit\n"
          "  --context N          context capacity (default 16384)\n"
+         "  --cache-type-k TYPE  KV cache K element type: f16 (default), q8_0, q4_0, q5_0\n"
+         "  --cache-type-v TYPE  KV cache V element type: f16 (default), q8_0, q4_0, q5_0\n"
+         "  --flash-attn MODE    auto (default), on or off; non-f16 KV requires on\n"
+         "  --offload-kqv        offload KQV ops, including the KV cache (default)\n"
+         "  --no-offload-kqv     keep KQV operations on the host\n"
          "  --output-reserve N   per-turn generation budget (default 2048)\n"
          "  --max-turns N        hard agent turn limit (default 32)\n"
          "  --minimal-agent      experimental basic native tool loop; no automatic validation\n"
@@ -157,6 +162,8 @@ static int option_arity(const char *option) {
                                         "--no-thought-budget",
                                         "--enable-thinking",
                                         "--disable-thinking",
+                                        "--offload-kqv",
+                                        "--no-offload-kqv",
                                         "--no-auto-validation",
                                         "--summary-full-source",
                                         "--no-config"};
@@ -195,7 +202,10 @@ static int option_arity(const char *option) {
                                          "--checkpoint-cache-bytes",
                                          "--checkpoint-cache-entries",
                                          "--checkpoint-cache-min-tokens",
-                                         "--checkpoint-cache-captures"};
+                                         "--checkpoint-cache-captures",
+                                         "--cache-type-k",
+                                         "--cache-type-v",
+                                         "--flash-attn"};
     for (size_t i = 0; i < sizeof(flags) / sizeof(flags[0]); i++)
         if (!strcmp(option, flags[i]))
             return 0;
@@ -315,6 +325,10 @@ static forge_status hardware_report(const forge_config *config, bool json, forge
                  "No model was selected; "
                  "model and KV memory requirements are unknown.");
     }
+    /* Size context against the KV type the load will actually allocate; when K
+     * and V differ, plan against the larger-cost type. */
+    requirements.kv_type =
+        forge_kv_type_max(config->model.cache_type_k, config->model.cache_type_v);
     status = forge_hardware_plan(&hardware, &requirements, config->model.context_tokens,
                                  config->limits.output_reserve, &plan, e);
     if (status != FORGE_OK)
@@ -352,7 +366,7 @@ static forge_status hardware_report(const forge_config *config, bool json, forge
         printf("Recommendation: context=%zu gpu_layers=%d threads=%d fit=%s\n", plan.context_tokens,
                plan.gpu_layers, plan.threads, fit_name(plan.fit));
         if (plan.kv_estimate_available)
-            printf("Estimated f16 KV payload: %.2f GiB\n",
+            printf("Estimated %s KV payload: %.2f GiB\n", plan.kv_format,
                    (double)plan.estimated_kv_bytes / 1073741824.0);
         else
             puts("KV payload: unknown");
@@ -456,15 +470,19 @@ static forge_status auto_hardware(forge_config *config, forge_error *e) {
     forge_status status = forge_hardware_detect(&hardware, e);
     if (status == FORGE_OK)
         status = forge_hardware_model_file(config->model.model_path, &requirements, e);
-    if (status == FORGE_OK)
+    if (status == FORGE_OK) {
+        requirements.kv_type =
+            forge_kv_type_max(config->model.cache_type_k, config->model.cache_type_v);
         status = forge_hardware_plan(&hardware, &requirements, config->model.context_tokens,
                                      config->limits.output_reserve, &plan, e);
+    }
     if (status != FORGE_OK)
         return status;
-    fprintf(stderr, "forge: hardware auto: context=%zu gpu_layers=%d threads=%d fit=%s\n%s\n%s\n",
+    fprintf(stderr,
+            "forge: hardware auto: context=%zu gpu_layers=%d threads=%d fit=%s kv=%s\n%s\n%s\n",
             plan.context_tokens, plan.gpu_layers,
             config->model.threads ? config->model.threads : plan.threads, fit_name(plan.fit),
-            requirements.note, plan.assumptions);
+            plan.kv_format, requirements.note, plan.assumptions);
     if (plan.context_reduced)
         fprintf(stderr, "forge: hardware planner reduced context from %zu to %zu tokens\n",
                 config->model.context_tokens, plan.context_tokens);
@@ -853,6 +871,14 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             ac.thought_native = false;
             continue;
         }
+        if (!strcmp(a, "--offload-kqv")) {
+            mc.offload_kqv = true;
+            continue;
+        }
+        if (!strcmp(a, "--no-offload-kqv")) {
+            mc.offload_kqv = false;
+            continue;
+        }
         if (i + 1 >= argc) {
             fg_error(&error, FORGE_ERR_ARGUMENT, "Missing value for %s", a);
             return failed(&error);
@@ -895,6 +921,22 @@ static int cli_main(int argc, char **argv, forge_config *config) {
             else {
                 fg_error(&error, FORGE_ERR_ARGUMENT,
                          "--prompt-protocol must be flattened or native");
+                return failed(&error);
+            }
+        } else if (!strcmp(a, "--cache-type-k") || !strcmp(a, "--cache-type-v")) {
+            forge_kv_type type;
+            if (!forge_kv_type_from_name(value, &type)) {
+                fg_error(&error, FORGE_ERR_ARGUMENT,
+                         "%s must be f16, q8_0, q4_0 or q5_0", a);
+                return failed(&error);
+            }
+            if (!strcmp(a, "--cache-type-v"))
+                mc.cache_type_v = type;
+            else
+                mc.cache_type_k = type;
+        } else if (!strcmp(a, "--flash-attn")) {
+            if (!forge_flash_attn_from_name(value, &mc.flash_attn)) {
+                fg_error(&error, FORGE_ERR_ARGUMENT, "--flash-attn must be auto, on or off");
                 return failed(&error);
             }
         } else if (!strcmp(a, "--thought-cue")) {

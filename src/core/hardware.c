@@ -475,9 +475,18 @@ static uint64_t memory_reserve(uint64_t available) {
     return ten_percent > GIB ? ten_percent : GIB;
 }
 
-static size_t next_context(size_t current, size_t minimum) {
-    size_t half = (current / 2 / 128) * 128;
-    return half < minimum ? minimum : half;
+/* Estimated model+KV total for one context. Fits when the host or GPU 0 budget
+ * covers it; the same arithmetic drives the search and the final report. */
+static bool context_fits(uint64_t weights, uint64_t kv_per_token, size_t context,
+                         uint64_t host_budget, bool host_known, uint64_t gpu_budget, bool gpu_known,
+                         bool gpu_host_ready, uint64_t *total_out) {
+    uint64_t kv = with_margin(saturating_multiply(kv_per_token, (uint64_t)context));
+    uint64_t total = saturating_add(weights, kv);
+    if (total_out)
+        *total_out = total;
+    bool host_fits = host_known && total != UINT64_MAX && total <= host_budget;
+    bool gpu_fits = gpu_known && gpu_host_ready && total != UINT64_MAX && total <= gpu_budget;
+    return host_fits || gpu_fits;
 }
 
 forge_status forge_hardware_plan(const forge_hardware *hardware,
@@ -487,6 +496,7 @@ forge_status forge_hardware_plan(const forge_hardware *hardware,
     if (!hardware || !requirements || !plan || requested_context < 128 ||
         requested_context > 1048576 || !output_reserve || output_reserve >= requested_context ||
         hardware->gpu_count > FORGE_HARDWARE_MAX_GPUS ||
+        (unsigned)requirements->kv_type > FORGE_KV_Q5_0 ||
         (requirements->kv_bytes_known && !requirements->kv_bytes_per_token) ||
         (requirements->model_bytes_known && !requirements->model_bytes))
         return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid hardware-planning input or context budget");
@@ -505,7 +515,8 @@ forge_status forge_hardware_plan(const forge_hardware *hardware,
     if (cpus > 2)
         cpus--; /* Leave one logical CPU available to the rest of the application. */
     plan->threads = (int)(cpus > 8 ? 8 : cpus);
-    strcpy(plan->kv_format, "f16");
+    snprintf(plan->kv_format, sizeof(plan->kv_format), "%s",
+             forge_kv_type_name(requirements->kv_type));
     plan->estimated_model_bytes = requirements->model_bytes;
     if (requirements->training_context && requirements->training_context < plan->context_tokens)
         plan->context_tokens = requirements->training_context;
@@ -552,36 +563,68 @@ forge_status forge_hardware_plan(const forge_hardware *hardware,
         snprintf(plan->assumptions, sizeof(plan->assumptions),
                  "Model or KV geometry is unknown; automatic offload is disabled and context "
                  "is capped at 4096 where the output reserve permits. File size may omit "
-                 "split parts and is not resident memory. f16 KV, no draft model; no fit "
-                 "guarantee. CPU threads are capped at 8. OS measurements may exclude "
-                 "container/process memory limits.");
+                 "split parts and is not resident memory. Selected KV type is %s; no payload "
+                 "estimate, no draft model and no fit guarantee. CPU threads are capped at 8. "
+                 "OS measurements may exclude container/process memory limits.",
+                 plan->kv_format);
         hardware_clear_error(e);
         return FORGE_OK;
     }
     plan->kv_estimate_available = true;
     uint64_t weights = with_margin(requirements->model_bytes);
-    uint64_t kv = 0, total = 0;
+    /* The measured payload is f16 (two bytes per element). Scale it to the
+     * selected cache type by the pinned ggml block layout so the context search
+     * is sized against what the load will actually allocate. */
+    uint64_t kv_per_token = requirements->kv_bytes_per_token;
+    if (requirements->kv_type != FORGE_KV_F16) {
+        uint32_t numerator = 0, denominator = 0;
+        if (!forge_kv_type_bytes_ratio(requirements->kv_type, &numerator, &denominator))
+            return fg_error(e, FORGE_ERR_ARGUMENT, "Unsupported KV cache type for planning");
+        kv_per_token = saturating_multiply(kv_per_token, numerator) / (2u * (uint64_t)denominator);
+    }
+    uint64_t total = 0;
     /* Full GPU residency still needs host memory for vocabulary, mappings and
      * staging. This is a deliberately coarse floor, not a loader peak estimate. */
     uint64_t staging = GIB + requirements->model_bytes / 16;
     bool gpu_host_ready = host_known && hardware->ram_available_bytes > staging;
-    for (;;) {
-        uint64_t payload =
-            saturating_multiply(requirements->kv_bytes_per_token, (uint64_t)plan->context_tokens);
-        kv = with_margin(payload);
-        total = saturating_add(weights, kv);
-        bool host_fits = host_known && total != UINT64_MAX && total <= host_budget;
-        bool gpu_fits = gpu_known && gpu_host_ready && total != UINT64_MAX && total <= gpu_budget;
-        if (host_fits || gpu_fits || plan->context_tokens <= minimum_context ||
-            (!host_known && !gpu_known))
-            break;
-        plan->context_tokens = next_context(plan->context_tokens, minimum_context);
+    if (host_known || gpu_known) {
+        if (!context_fits(weights, kv_per_token, plan->context_tokens, host_budget, host_known,
+                          gpu_budget, gpu_known, gpu_host_ready, &total)) {
+            /* Search the whole interval between the minimum valid context and the
+             * requested one for the largest fitting 128-token step. The previous
+             * halving walk stopped at the first fit below the request and left
+             * usable memory unused; the result never exceeds the configured
+             * context. The minimum is the floor when nothing fits. */
+            size_t best = 0;
+            bool found = false;
+            size_t aligned = ((minimum_context + 127) / 128) * 128;
+            if (aligned <= plan->context_tokens) {
+                size_t low = aligned / 128, high = plan->context_tokens / 128;
+                while (low <= high) {
+                    size_t middle = low + (high - low) / 2;
+                    if (context_fits(weights, kv_per_token, middle * 128, host_budget, host_known,
+                                     gpu_budget, gpu_known, gpu_host_ready, NULL)) {
+                        best = middle * 128;
+                        found = true;
+                        low = middle + 1;
+                    } else {
+                        if (!middle)
+                            break;
+                        high = middle - 1;
+                    }
+                }
+            }
+            plan->context_tokens = found ? best : minimum_context;
+            context_fits(weights, kv_per_token, plan->context_tokens, host_budget, host_known,
+                         gpu_budget, gpu_known, gpu_host_ready, &total);
+        }
     }
     plan->estimated_kv_bytes =
-        saturating_multiply(requirements->kv_bytes_per_token, (uint64_t)plan->context_tokens);
+        saturating_multiply(kv_per_token, (uint64_t)plan->context_tokens);
     plan->context_reduced = plan->context_tokens < requested_context;
     bool host_fits = host_known && total != UINT64_MAX && total <= host_budget;
     bool gpu_fits = gpu_known && gpu_host_ready && total != UINT64_MAX && total <= gpu_budget;
+    uint64_t kv = with_margin(saturating_multiply(kv_per_token, (uint64_t)plan->context_tokens));
     if (gpu_fits) {
         plan->gpu_layers = -1;
         plan->gpu_index = 0;
@@ -617,11 +660,12 @@ forge_status forge_hardware_plan(const forge_hardware *hardware,
         plan->fit = host_known ? FORGE_FIT_INSUFFICIENT : FORGE_FIT_UNKNOWN;
     }
     snprintf(plan->assumptions, sizeof(plan->assumptions),
-             "One sequence, f16 KV payload; model/KV each receive a 12.5%% margin plus "
+             "One sequence, %s KV payload; model/KV each receive a 12.5%% margin plus "
              "max(1 GiB,10%% available) reserve. GPU 0 only; unified memory is not added "
              "to RAM. Partial layers use 2x average layer bytes. Host staging floor is "
              "1 GiB + model/16. No draft. Fit remains an estimate: batch/allocator/backend "
-             "buffers and process/container limits are not modeled.");
+             "buffers and process/container limits are not modeled.",
+             plan->kv_format);
     hardware_clear_error(e);
     return FORGE_OK;
 }

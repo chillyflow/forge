@@ -64,6 +64,10 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `inference` | `reuse_prefix` | Boolean; enables existing prompt-prefix reuse. |
 | `inference` | `grammar_fast_path` | Boolean; enables existing greedy grammar fast path. |
 | `inference` | `speculative` | Only `false`; `true` is rejected because speculative decoding is not implemented. |
+| `inference` | `cache_type_k` | KV cache K element type: `"f16"` (default), `"q8_0"`, `"q4_0"` or `"q5_0"`. |
+| `inference` | `cache_type_v` | KV cache V element type; same values as `cache_type_k`. |
+| `inference` | `flash_attn` | `"auto"` (default), `"on"`, `"off"`, or a boolean (`true` = on). |
+| `inference` | `offload_kqv` | Boolean, default `true`; offloads KQV operations (including the KV cache) to the GPU. |
 | `inference.checkpoints` | `enabled` | Boolean, default `false`; enables the bounded physical prefix cache on supported backends. |
 | `inference.checkpoints` | `max_bytes` | Integer 4,096–1,073,741,824; aggregate manager allocation cap, default 268,435,456. Not RSS/VRAM. |
 | `inference.checkpoints` | `max_entries` | Integer 1–64; default 8 retained prefixes. |
@@ -88,6 +92,18 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `judge` | `timeout_ms` | Integer 100–30,000 milliseconds per attempt; default 2,000. |
 | `judge` | `max_candidates` | Integer 1–256 candidates per rerank request; default 32. |
 
+KV cache element types are the ggml type names `f16`, `q8_0`, `q4_0` and `q5_0`.
+The defaults (`f16`/`f16`, `flash_attn = "auto"`, `offload_kqv = true`) are the
+pinned llama.cpp defaults, so an unconfigured load is unchanged. llama.cpp only
+honors quantized KV cache types together with flash attention; selecting a
+non-f16 type without `flash_attn = "on"` is refused with an explicit error and a
+nonzero exit instead of being silently ignored. The CLI equivalents are
+`--cache-type-k`, `--cache-type-v`, `--flash-attn auto|on|off`, `--offload-kqv`
+and `--no-offload-kqv`. Validation runs per file before CLI overrides are
+merged, so a profile that selects a non-f16 type must also set
+`inference.flash_attn = "on"` itself; a `--flash-attn on` on the command line
+cannot repair the file's own state.
+
 See `forge.toml.example` and `profiles/*.toml`. The `judge` table configures an
 optional hosted judgment service (TypeSafe "System One"/Jev) and never grants
 its use: the CLI `--judge` flag does. When granted, `forge retrieve` and the
@@ -97,7 +113,7 @@ service failure keeps the deterministic order and is reported in the output's
 exception — read from the named variable at call time because no vault is
 built in. There are deliberately no config
 keys for tool permission grants, script fixtures, draft models, the
-reasoning-channel wire policy, KV quantization, network sandbox backends or
+reasoning-channel wire policy, network sandbox backends or
 unsupported index languages. The model-level `enable_thinking` key controls
 template rendering; it does not enable routed reasoning by itself.
 
@@ -189,17 +205,25 @@ Sliding-window layers use a full-context upper estimate. The reported payload is
 not the total allocation: padding, batches, compute buffers, allocator behavior,
 backend workspaces and peak load memory are not included.
 
+The planner scales that measured f16 payload to the selected
+`cache_type_k`/`cache_type_v` by the pinned ggml block layout (`q8_0` packs 32
+elements into 34 bytes, `q4_0` into 18, `q5_0` into 22); when K and V differ it
+sizes against the larger-cost type, so the estimate is never optimistic. The
+reported `kv_format` is the type that was used.
+
 The planner adds a 12.5% model/KV margin and reserves at least 1 GiB or 10% of
 available memory. Full GPU placement also requires a coarse host staging floor
 of 1 GiB plus model bytes/16. Partial offload is suggested only when the entire
 model/context also fits host RAM, and each layer is budgeted at twice the average
 layer size. Layers can differ significantly; this remains a heuristic.
 
-If needed, context recommendations shrink until estimated fit or the minimum
-valid output reserve is reached. They never exceed the recorded training context.
-Unknown model/KV information disables automatic offload and caps the context
-recommendation at 4,096 when the output reserve permits. No draft model is enabled;
-the only reported KV format is the backend's f16 default. `estimated` fit is not
+If needed, the recommended context is the largest fitting 128-token step between
+the minimum valid context (the larger of 128 tokens and the output reserve plus
+one) and the requested context, searched against measured free memory and the
+selected KV type. The recommendation never exceeds the requested context. Unknown model/KV information
+disables automatic offload and caps the context recommendation at 4,096 when the
+output reserve permits. No draft model is enabled; the reported KV format is the
+selected cache type (`f16` by default). `estimated` fit is not
 proof of successful loading. OS memory measurements may exclude process/container
 limits and may change immediately after sampling.
 

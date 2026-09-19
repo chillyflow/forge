@@ -264,7 +264,9 @@ typedef enum {
     CFG_SPECULATIVE,
     CFG_LANGUAGES,
     CFG_THINKING,
-    CFG_JUDGE_STRING
+    CFG_JUDGE_STRING,
+    CFG_KV_TYPE,
+    CFG_FLASH_ATTN
 } config_kind;
 
 typedef struct {
@@ -292,6 +294,10 @@ static const config_field fields[] = {
     {"inference", "reuse_prefix", CFG_BOOL, MODEL_OFFSET(reuse_prefix), 0, 0},
     {"inference", "grammar_fast_path", CFG_BOOL, MODEL_OFFSET(grammar_fast_path), 0, 0},
     {"inference", "speculative", CFG_SPECULATIVE, 0, 0, 0},
+    {"inference", "cache_type_k", CFG_KV_TYPE, MODEL_OFFSET(cache_type_k), 0, 0},
+    {"inference", "cache_type_v", CFG_KV_TYPE, MODEL_OFFSET(cache_type_v), 0, 0},
+    {"inference", "flash_attn", CFG_FLASH_ATTN, MODEL_OFFSET(flash_attn), 0, 0},
+    {"inference", "offload_kqv", CFG_BOOL, MODEL_OFFSET(offload_kqv), 0, 0},
     {"inference.checkpoints", "enabled", CFG_BOOL, offsetof(forge_config, checkpoint_cache_enabled),
      0, 0},
     {"inference.checkpoints", "max_bytes", CFG_SIZE, CACHE_OFFSET(max_bytes), 4096,
@@ -326,6 +332,88 @@ static const config_field fields[] = {
 #undef MODEL_OFFSET
 #undef LIMIT_OFFSET
 #undef CACHE_OFFSET
+
+const char *forge_kv_type_name(forge_kv_type type) {
+    switch (type) {
+    case FORGE_KV_F16:
+        return "f16";
+    case FORGE_KV_Q8_0:
+        return "q8_0";
+    case FORGE_KV_Q4_0:
+        return "q4_0";
+    case FORGE_KV_Q5_0:
+        return "q5_0";
+    }
+    return "";
+}
+
+bool forge_kv_type_from_name(const char *name, forge_kv_type *out) {
+    static const struct {
+        const char *name;
+        forge_kv_type type;
+    } types[] = {{"f16", FORGE_KV_F16},
+                 {"q8_0", FORGE_KV_Q8_0},
+                 {"q4_0", FORGE_KV_Q4_0},
+                 {"q5_0", FORGE_KV_Q5_0}};
+    if (!name || !out)
+        return false;
+    for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++)
+        if (!strcmp(types[i].name, name)) {
+            *out = types[i].type;
+            return true;
+        }
+    return false;
+}
+
+bool forge_kv_type_bytes_ratio(forge_kv_type type, uint32_t *numerator, uint32_t *denominator) {
+    if (!numerator || !denominator)
+        return false;
+    /* Block layouts from the pinned ggml-common.h (ggml_type_size /
+     * ggml_blck_size): f16 is two bytes per element; each quantized type packs
+     * 32 elements into one block with a two-byte f16 scale. */
+    switch (type) {
+    case FORGE_KV_F16: /* 2 bytes / 1 element */
+        *numerator = 2;
+        *denominator = 1;
+        return true;
+    case FORGE_KV_Q8_0: /* 2-byte scale + 32 int8 quants */
+        *numerator = 34;
+        *denominator = 32;
+        return true;
+    case FORGE_KV_Q4_0: /* 2-byte scale + 16 nibble bytes */
+        *numerator = 18;
+        *denominator = 32;
+        return true;
+    case FORGE_KV_Q5_0: /* 2-byte scale + 4 high-bit bytes + 16 nibble bytes */
+        *numerator = 22;
+        *denominator = 32;
+        return true;
+    }
+    return false;
+}
+
+forge_kv_type forge_kv_type_max(forge_kv_type a, forge_kv_type b) {
+    uint32_t an = 0, ad = 0, bn = 0, bd = 0;
+    if (!forge_kv_type_bytes_ratio(a, &an, &ad))
+        return b;
+    if (!forge_kv_type_bytes_ratio(b, &bn, &bd))
+        return a;
+    return (uint64_t)an * bd >= (uint64_t)bn * ad ? a : b;
+}
+
+bool forge_flash_attn_from_name(const char *name, forge_flash_attn *out) {
+    if (!name || !out)
+        return false;
+    if (!strcmp(name, "auto"))
+        *out = FORGE_FLASH_ATTN_AUTO;
+    else if (!strcmp(name, "on"))
+        *out = FORGE_FLASH_ATTN_ENABLED;
+    else if (!strcmp(name, "off"))
+        *out = FORGE_FLASH_ATTN_DISABLED;
+    else
+        return false;
+    return true;
+}
 
 static forge_status apply_field(forge_config *config, const config_field *field, toml_datum_t value,
                                 const char *source, forge_error *e) {
@@ -435,6 +523,27 @@ static forge_status apply_field(forge_config *config, const config_field *field,
             return schema_error(e, value, key, "expected \"auto\" or an integer in [-1, 65535]");
         config->model.gpu_layers = (int)value.u.int64;
         return FORGE_OK;
+    case CFG_KV_TYPE: {
+        forge_kv_type type;
+        if (!string_valid(value, 8) || !forge_kv_type_from_name(value.u.str.ptr, &type))
+            return schema_error(e, value, key, "expected \"f16\", \"q8_0\", \"q4_0\" or \"q5_0\"");
+        *(forge_kv_type *)dest = type;
+        return FORGE_OK;
+    }
+    case CFG_FLASH_ATTN:
+        if (value.type == TOML_BOOLEAN) {
+            *(forge_flash_attn *)dest = value.u.boolean ? FORGE_FLASH_ATTN_ENABLED
+                                                         : FORGE_FLASH_ATTN_DISABLED;
+            return FORGE_OK;
+        }
+        if (string_valid(value, 8)) {
+            forge_flash_attn mode;
+            if (!forge_flash_attn_from_name(value.u.str.ptr, &mode))
+                return schema_error(e, value, key, "expected \"auto\", \"on\" or \"off\"");
+            *(forge_flash_attn *)dest = mode;
+            return FORGE_OK;
+        }
+        return schema_error(e, value, key, "expected \"auto\", \"on\" or \"off\"");
     case CFG_FLOAT: {
         double number;
         if (value.type == TOML_FP64)
@@ -719,6 +828,21 @@ forge_status forge_config_validate(const forge_config *config, forge_error *e) {
                         "inference.gpu_layers must be auto, -1, or [0, 65535]");
     if (model->threads < 0 || model->threads > 1024)
         return fg_error(e, FORGE_ERR_ARGUMENT, "inference.threads must be in [0, 1024]");
+    if ((unsigned)model->cache_type_k > FORGE_KV_Q5_0 ||
+        (unsigned)model->cache_type_v > FORGE_KV_Q5_0)
+        return fg_error(e, FORGE_ERR_ARGUMENT,
+                        "Invalid inference.cache_type_k/cache_type_v cache type");
+    if ((unsigned)model->flash_attn > FORGE_FLASH_ATTN_DISABLED)
+        return fg_error(e, FORGE_ERR_ARGUMENT, "Invalid inference.flash_attn mode");
+    /* Enforce, do not document, the llama.cpp dependency: quantized KV cache
+     * types are ignored (or rejected) unless flash attention is enabled, and a
+     * silently ignored flag would be measured as "no effect". */
+    if ((model->cache_type_k != FORGE_KV_F16 || model->cache_type_v != FORGE_KV_F16) &&
+        model->flash_attn != FORGE_FLASH_ATTN_ENABLED)
+        return fg_error(e, FORGE_ERR_ARGUMENT,
+                        "inference.cache_type_k/cache_type_v: non-f16 KV cache types require "
+                        "inference.flash_attn = on; llama.cpp ignores quantized KV cache types "
+                        "without flash attention");
     if (!isfinite(model->temperature) || model->temperature < 0 || model->temperature > 2)
         return fg_error(e, FORGE_ERR_ARGUMENT,
                         "inference.temperature must be finite and in [0, 2]");
