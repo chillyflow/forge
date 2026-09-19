@@ -1,0 +1,665 @@
+{
+  "arms": {
+    "loop-repair": {
+      "flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair"
+      ]
+    },
+    "loop-repair-judge-campaign": {
+      "flags": [
+        "--minimal-agent",
+        "--thought-history",
+        "--candidate-checkpoint",
+        "--bounded-repair",
+        "--judge",
+        "--config",
+        "C:/Users/flowc/dev/forge/benchmark/results/2026-09-19-typesafe-repair-feedback-campaign/judge.toml"
+      ]
+    }
+  },
+  "commands": {
+    "campaign": [
+      "python",
+      "benchmark/run.py",
+      "--forge",
+      "C:/Users/flowc/dev/forge/build-gpu/Release/forge.exe",
+      "--model",
+      "C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "--output",
+      "C:/Users/flowc/dev/forge/benchmark/results/2026-09-19-typesafe-repair-feedback-campaign",
+      "--suite",
+      "all",
+      "--tasks",
+      "ceil_div",
+      "go_api_pagination",
+      "go_multifile_registry",
+      "reasoning_dependency_order",
+      "reasoning_interval_union",
+      "reasoning_route_specificity",
+      "range_sum",
+      "prefix",
+      "--variants",
+      "loop-repair",
+      "loop-repair-judge-campaign",
+      "--repetitions",
+      "4",
+      "--order-seed",
+      "20260919",
+      "--max-turns",
+      "32",
+      "--timeout",
+      "600",
+      "--verification-timeout",
+      "120",
+      "--retain-terminal",
+      "--skip-existing"
+    ],
+    "preflight": [
+      "python",
+      "benchmark/run.py",
+      "--forge",
+      "C:/Users/flowc/dev/forge/build-gpu/Release/forge.exe",
+      "--model",
+      "C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "--output",
+      "C:/Users/flowc/dev/forge/benchmark/results/2026-09-19-typesafe-repair-feedback-campaign/preflight-engagement",
+      "--suite",
+      "all",
+      "--tasks",
+      "reasoning_dependency_order",
+      "--variants",
+      "loop-repair-judge-campaign",
+      "--repetitions",
+      "1",
+      "--order-seed",
+      "20260919",
+      "--max-turns",
+      "32",
+      "--timeout",
+      "600",
+      "--verification-timeout",
+      "120",
+      "--retain-terminal"
+    ]
+  },
+  "decision_rule": {
+    "engagement_precondition": "At least one judge_feedback event in at least 4 of the 6 engaged tasks' treatment cells; otherwise the campaign is reported as inconclusive (mechanism did not fire).",
+    "inconclusive": "Engagement precondition unmet, or missing/interrupted cells, or a difference within the schedule resolution: reported as inconclusive; no promotion and no refutation, with the resolution limit stated.",
+    "power_statement": "With 6 engaged clusters and 4 repetitions only a large effect is detectable; an inconclusive result is never reported as evidence of absence.",
+    "primary": "Independent task completion (harness passed) per scheduled cell; every scheduled cell counts in the denominator, including failures, aborts, timeouts and protected-file violations. Report per-arm counts overall and per task cluster (8 tasks); no per-run p-values; cluster-level comparisons only.",
+    "promotion": "Treatment overall pass_count > control overall pass_count AND no engaged cluster regresses by 2 or more cells (of 4) AND paired mean end-to-end seconds on cells both arms passed is not worse than control by more than 20 percent. Recorded as a bounded positive result for this population only.",
+    "refutation": "Engagement precondition met AND treatment overall pass_count <= control pass_count with no paired latency advantage: recorded as a refutation of the hypothesis for this population (a mechanism that activates without moving the outcome).",
+    "secondary": [
+      "turns",
+      "generated_tokens",
+      "input_tokens",
+      "end_to_end_seconds (paired)",
+      "judge calls/latency/tokens per treatment cell (metrics.json + raw records)",
+      "protected-file integrity (must hold in every cell)",
+      "harness errors (must be zero for a gate record)"
+    ],
+    "stop_condition": "If the engagement preflight shows zero judge feedback, do not launch. No re-runs for better repetitions; interrupted cells are recovered only via --skip-existing with the interrupted directory retained."
+  },
+  "experiment": "typesafe-repair-feedback-campaign",
+  "frozen_utc": "2026-09-19T21:38:00+00:00",
+  "hypothesis": "Advisory TypeSafe feedback after failed bounded-repair candidate validation improves independent task completion, or materially reduces complete-task latency at equal completion, on the frozen engaged population, without changing deterministic validation authority.",
+  "identity": {
+    "forge_sha256": "a50dc51cf8265559eefab2479df905b6c48ffccda9b998b3d918c868b76eae86",
+    "harness_common_py_sha256": "bb646ded4567a04601e40dc8b790d1a1bad80b5540f9cd643333c57e6c8aed4d",
+    "harness_run_py_sha256": "1e95b1b6908bf30d02e748fde4e09e7fb0216bad6f7a42988e7dcfd852eb2b57",
+    "judge_config_sha256": "f35fa3993897fc722ea57aed840213a75da1f23cdbc3e64ddb13f74425717bd7",
+    "model_sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+    "source_head": "61694349161c67e53d9592938709351215b27a8b",
+    "source_status_short": "",
+    "typesafe_key_present_source": "verified in the launching terminal shell; execute_code kernel does not inherit Hermes secrets"
+  },
+  "non_goals": [
+    "No promotion claim beyond this population and profile.",
+    "No hard-gating tools from TypeSafe feedback.",
+    "No publication of service measurements without checking MCA 2.3(f)."
+  ],
+  "population": {
+    "manifest": "benchmark/results/2026-09-18-typesafe-repair-feedback/population-manifest.json",
+    "manifest_sha256_without_self": "f0661378f8a0732a985bd7280f0035ef1852f87037fc2aae9b789b5dd26962c9",
+    "tasks": [
+      {
+        "role": "engaged",
+        "task": "ceil_div",
+        "task_sha256": "35c523585c9a68053d5e64f5d08fb8ca89202231c009aecc27ef867d79d21c03"
+      },
+      {
+        "role": "engaged",
+        "task": "go_api_pagination",
+        "task_sha256": "93bedc92229fc6ee76bf2cc78eb788b223bf486b808de730f32b5bc2b6f19ff5"
+      },
+      {
+        "role": "engaged",
+        "task": "go_multifile_registry",
+        "task_sha256": "e3e3bbb636ca5025bf05562a0c2803595079b49656c5c0b58fbda75810813793"
+      },
+      {
+        "role": "engaged",
+        "task": "reasoning_dependency_order",
+        "task_sha256": "9774306369a534a5d16438ddc0f0c8d2358d9b52e41c0ae0afc2c3734e5b4f3e"
+      },
+      {
+        "role": "engaged",
+        "task": "reasoning_interval_union",
+        "task_sha256": "b810b1aa10251bb40f2787342a6e4a3a410679600e969a57ba145ce030cf0eac"
+      },
+      {
+        "role": "engaged",
+        "task": "reasoning_route_specificity",
+        "task_sha256": "eb27d2325491ba2831dcf10ba4d61b0b826ff039f03b47b77f782a20aa518fbb"
+      },
+      {
+        "role": "inert-control",
+        "task": "range_sum",
+        "task_sha256": "87ca535c245ac4d2523fc3ca6a030a860e60bc6fbfd5c302b302b2a64b4ae4a0"
+      },
+      {
+        "role": "inert-control",
+        "task": "prefix",
+        "task_sha256": "d6e6f65ad3b9e8f334c276ad30fd1b53d670883178c233e96c603f1e788d0733"
+      }
+    ]
+  },
+  "preflight_engagement": {
+    "materiality_bar": "At least one judge_feedback session event, one retained raw record, and judge counters present in metrics.json before the campaign is read as evidence.",
+    "output": "C:/Users/flowc/dev/forge/benchmark/results/2026-09-19-typesafe-repair-feedback-campaign/preflight-engagement",
+    "task": "reasoning_dependency_order",
+    "variant": "loop-repair-judge-campaign"
+  },
+  "protocol_sha256_without_self": "e9ac146677df36309ebbab402d65e4fc2b8bb42df93f66c13cedd9606e0f8520",
+  "schedule": [
+    {
+      "order_index": 1,
+      "repetition": 4,
+      "run_id": "reasoning_route_specificity-loop-repair-r004",
+      "task": "reasoning_route_specificity",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 2,
+      "repetition": 2,
+      "run_id": "go_api_pagination-loop-repair-judge-campaign-r002",
+      "task": "go_api_pagination",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 3,
+      "repetition": 1,
+      "run_id": "prefix-loop-repair-judge-campaign-r001",
+      "task": "prefix",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 4,
+      "repetition": 4,
+      "run_id": "range_sum-loop-repair-r004",
+      "task": "range_sum",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 5,
+      "repetition": 3,
+      "run_id": "reasoning_dependency_order-loop-repair-judge-campaign-r003",
+      "task": "reasoning_dependency_order",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 6,
+      "repetition": 3,
+      "run_id": "go_multifile_registry-loop-repair-r003",
+      "task": "go_multifile_registry",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 7,
+      "repetition": 2,
+      "run_id": "go_api_pagination-loop-repair-r002",
+      "task": "go_api_pagination",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 8,
+      "repetition": 2,
+      "run_id": "reasoning_dependency_order-loop-repair-r002",
+      "task": "reasoning_dependency_order",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 9,
+      "repetition": 2,
+      "run_id": "ceil_div-loop-repair-r002",
+      "task": "ceil_div",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 10,
+      "repetition": 1,
+      "run_id": "range_sum-loop-repair-judge-campaign-r001",
+      "task": "range_sum",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 11,
+      "repetition": 1,
+      "run_id": "reasoning_interval_union-loop-repair-judge-campaign-r001",
+      "task": "reasoning_interval_union",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 12,
+      "repetition": 4,
+      "run_id": "reasoning_route_specificity-loop-repair-judge-campaign-r004",
+      "task": "reasoning_route_specificity",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 13,
+      "repetition": 2,
+      "run_id": "reasoning_route_specificity-loop-repair-r002",
+      "task": "reasoning_route_specificity",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 14,
+      "repetition": 4,
+      "run_id": "reasoning_interval_union-loop-repair-judge-campaign-r004",
+      "task": "reasoning_interval_union",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 15,
+      "repetition": 3,
+      "run_id": "ceil_div-loop-repair-judge-campaign-r003",
+      "task": "ceil_div",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 16,
+      "repetition": 2,
+      "run_id": "prefix-loop-repair-judge-campaign-r002",
+      "task": "prefix",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 17,
+      "repetition": 4,
+      "run_id": "prefix-loop-repair-r004",
+      "task": "prefix",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 18,
+      "repetition": 1,
+      "run_id": "reasoning_dependency_order-loop-repair-judge-campaign-r001",
+      "task": "reasoning_dependency_order",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 19,
+      "repetition": 2,
+      "run_id": "reasoning_interval_union-loop-repair-judge-campaign-r002",
+      "task": "reasoning_interval_union",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 20,
+      "repetition": 4,
+      "run_id": "range_sum-loop-repair-judge-campaign-r004",
+      "task": "range_sum",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 21,
+      "repetition": 4,
+      "run_id": "ceil_div-loop-repair-r004",
+      "task": "ceil_div",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 22,
+      "repetition": 3,
+      "run_id": "reasoning_dependency_order-loop-repair-r003",
+      "task": "reasoning_dependency_order",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 23,
+      "repetition": 1,
+      "run_id": "prefix-loop-repair-r001",
+      "task": "prefix",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 24,
+      "repetition": 3,
+      "run_id": "range_sum-loop-repair-r003",
+      "task": "range_sum",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 25,
+      "repetition": 3,
+      "run_id": "prefix-loop-repair-judge-campaign-r003",
+      "task": "prefix",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 26,
+      "repetition": 3,
+      "run_id": "prefix-loop-repair-r003",
+      "task": "prefix",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 27,
+      "repetition": 2,
+      "run_id": "reasoning_interval_union-loop-repair-r002",
+      "task": "reasoning_interval_union",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 28,
+      "repetition": 4,
+      "run_id": "go_multifile_registry-loop-repair-judge-campaign-r004",
+      "task": "go_multifile_registry",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 29,
+      "repetition": 4,
+      "run_id": "prefix-loop-repair-judge-campaign-r004",
+      "task": "prefix",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 30,
+      "repetition": 1,
+      "run_id": "reasoning_route_specificity-loop-repair-judge-campaign-r001",
+      "task": "reasoning_route_specificity",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 31,
+      "repetition": 3,
+      "run_id": "ceil_div-loop-repair-r003",
+      "task": "ceil_div",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 32,
+      "repetition": 4,
+      "run_id": "reasoning_interval_union-loop-repair-r004",
+      "task": "reasoning_interval_union",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 33,
+      "repetition": 1,
+      "run_id": "reasoning_dependency_order-loop-repair-r001",
+      "task": "reasoning_dependency_order",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 34,
+      "repetition": 4,
+      "run_id": "reasoning_dependency_order-loop-repair-judge-campaign-r004",
+      "task": "reasoning_dependency_order",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 35,
+      "repetition": 4,
+      "run_id": "reasoning_dependency_order-loop-repair-r004",
+      "task": "reasoning_dependency_order",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 36,
+      "repetition": 3,
+      "run_id": "reasoning_interval_union-loop-repair-judge-campaign-r003",
+      "task": "reasoning_interval_union",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 37,
+      "repetition": 1,
+      "run_id": "reasoning_route_specificity-loop-repair-r001",
+      "task": "reasoning_route_specificity",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 38,
+      "repetition": 2,
+      "run_id": "reasoning_route_specificity-loop-repair-judge-campaign-r002",
+      "task": "reasoning_route_specificity",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 39,
+      "repetition": 1,
+      "run_id": "go_api_pagination-loop-repair-r001",
+      "task": "go_api_pagination",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 40,
+      "repetition": 1,
+      "run_id": "ceil_div-loop-repair-r001",
+      "task": "ceil_div",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 41,
+      "repetition": 2,
+      "run_id": "range_sum-loop-repair-r002",
+      "task": "range_sum",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 42,
+      "repetition": 3,
+      "run_id": "reasoning_interval_union-loop-repair-r003",
+      "task": "reasoning_interval_union",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 43,
+      "repetition": 3,
+      "run_id": "go_multifile_registry-loop-repair-judge-campaign-r003",
+      "task": "go_multifile_registry",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 44,
+      "repetition": 2,
+      "run_id": "go_multifile_registry-loop-repair-r002",
+      "task": "go_multifile_registry",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 45,
+      "repetition": 1,
+      "run_id": "ceil_div-loop-repair-judge-campaign-r001",
+      "task": "ceil_div",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 46,
+      "repetition": 3,
+      "run_id": "go_api_pagination-loop-repair-r003",
+      "task": "go_api_pagination",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 47,
+      "repetition": 1,
+      "run_id": "go_multifile_registry-loop-repair-judge-campaign-r001",
+      "task": "go_multifile_registry",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 48,
+      "repetition": 2,
+      "run_id": "reasoning_dependency_order-loop-repair-judge-campaign-r002",
+      "task": "reasoning_dependency_order",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 49,
+      "repetition": 1,
+      "run_id": "go_multifile_registry-loop-repair-r001",
+      "task": "go_multifile_registry",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 50,
+      "repetition": 1,
+      "run_id": "go_api_pagination-loop-repair-judge-campaign-r001",
+      "task": "go_api_pagination",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 51,
+      "repetition": 2,
+      "run_id": "ceil_div-loop-repair-judge-campaign-r002",
+      "task": "ceil_div",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 52,
+      "repetition": 3,
+      "run_id": "go_api_pagination-loop-repair-judge-campaign-r003",
+      "task": "go_api_pagination",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 53,
+      "repetition": 3,
+      "run_id": "reasoning_route_specificity-loop-repair-r003",
+      "task": "reasoning_route_specificity",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 54,
+      "repetition": 2,
+      "run_id": "range_sum-loop-repair-judge-campaign-r002",
+      "task": "range_sum",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 55,
+      "repetition": 2,
+      "run_id": "go_multifile_registry-loop-repair-judge-campaign-r002",
+      "task": "go_multifile_registry",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 56,
+      "repetition": 4,
+      "run_id": "ceil_div-loop-repair-judge-campaign-r004",
+      "task": "ceil_div",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 57,
+      "repetition": 4,
+      "run_id": "go_multifile_registry-loop-repair-r004",
+      "task": "go_multifile_registry",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 58,
+      "repetition": 3,
+      "run_id": "reasoning_route_specificity-loop-repair-judge-campaign-r003",
+      "task": "reasoning_route_specificity",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 59,
+      "repetition": 3,
+      "run_id": "range_sum-loop-repair-judge-campaign-r003",
+      "task": "range_sum",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 60,
+      "repetition": 4,
+      "run_id": "go_api_pagination-loop-repair-r004",
+      "task": "go_api_pagination",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 61,
+      "repetition": 1,
+      "run_id": "range_sum-loop-repair-r001",
+      "task": "range_sum",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 62,
+      "repetition": 2,
+      "run_id": "prefix-loop-repair-r002",
+      "task": "prefix",
+      "variant": "loop-repair"
+    },
+    {
+      "order_index": 63,
+      "repetition": 4,
+      "run_id": "go_api_pagination-loop-repair-judge-campaign-r004",
+      "task": "go_api_pagination",
+      "variant": "loop-repair-judge-campaign"
+    },
+    {
+      "order_index": 64,
+      "repetition": 1,
+      "run_id": "reasoning_interval_union-loop-repair-r001",
+      "task": "reasoning_interval_union",
+      "variant": "loop-repair"
+    }
+  ],
+  "schema_version": 1,
+  "settings": {
+    "context": 16384,
+    "forge": "C:/Users/flowc/dev/forge/build-gpu/Release/forge.exe",
+    "gpu_layers": "-1",
+    "max_turns": 32,
+    "model": "C:/Users/flowc/models/forge/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+    "order_seed": 20260919,
+    "output_reserve": 2048,
+    "prompt_protocol": "native",
+    "repetitions": 4,
+    "retain_terminal": true,
+    "seed": 42,
+    "suite": "all",
+    "task_dir": "benchmark/tasks",
+    "tasks": [
+      "ceil_div",
+      "go_api_pagination",
+      "go_multifile_registry",
+      "reasoning_dependency_order",
+      "reasoning_interval_union",
+      "reasoning_route_specificity",
+      "range_sum",
+      "prefix"
+    ],
+    "temperature": 0.0,
+    "timeout_seconds_per_run": 600,
+    "variants": [
+      "loop-repair",
+      "loop-repair-judge-campaign"
+    ],
+    "verification_timeout_seconds": 120
+  },
+  "shadow_replay": {
+    "artifact": "benchmark/results/2026-09-18-judge-shadow-replay/README.md",
+    "finding": "Jev answers are stochastic at N=4 (0/15 episodes reproduced; 5/15 with a choice flip; sample-vs-shipped agreement 57/60 failure_family, 52/60 next_action); the shipped consumption thresholds are saturated (uncertain in 60/60 replays, so the rendered guidance is the constant inspect branch). The campaign tests the arm as shipped: a stochastic advisory inspect-hint plus evidence-gap signal.",
+    "implication": "Judge output is a per-cell stochastic advisory input; no cell is stratified by judge answers; mechanism accounting uses judge_feedback events and metrics.json judge counters only."
+  }
+}
