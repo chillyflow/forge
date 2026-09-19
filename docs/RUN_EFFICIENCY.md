@@ -227,12 +227,26 @@ resume-safe runner, so a closed terminal is not an experiment outcome.
 
 ### 1.16 Measurements taken while other work was running
 
-**What happened.** Not confirmed in the retained record — recorded as a standing
-hazard rather than a known failure.
+**What happened.** Recorded as a standing hazard until 2026-09-19, when a
+preflight and two probes ran 9–18x slower than the same task the day before.
+The cause was not Forge: Unreal Editor held 4,647 MB of the 24.4 GB GPU, so
+model (17.5 GB) + 16k KV cache (1.5 GB) + desktop oversubscribed VRAM, the
+driver paged the KV cache to system memory, and every token streamed it over
+PCIe. One command on the same binary proved it: `.tools/llama-cuda/llama-bench.exe
+-m <model> -ngl 99 -d 8192 -n 128` read 13.4 tok/s under pressure vs 238.6 tok/s
+at depth 0, and 185.1 tok/s once the editor was closed; the forge probe went
+113.7s → 21.2s e2e with no source change. A full bisect of a non-regression was
+spent before the environment was measured.
 
 **Rule.** Never build, index or run other GPU or CPU-heavy work during a timed
 batch. The campaigns record cold latency and end-to-end wall time; a parallel
 compile silently corrupts those numbers while every outcome still looks valid.
+**VRAM is part of idle**: check free VRAM immediately before launch and again
+after the model loads (desktop applications can grow after your load-time
+check). A large KV cache under VRAM pressure does not error — it silently
+collapses throughput ~18x via sysmem paging, which reads as a code regression in
+every metric except the GPU's own benchmark. When throughput drops without a
+source change, benchmark the GPU before bisecting the code.
 
 ## 2. Preflight checklist
 
@@ -251,7 +265,9 @@ Run before launching any model batch. If any line is "no", do not launch.
 7. **Protected files** — hashed per run, with the violation policy preregistered?
 8. **Verifier** — does it have a known-failing control that must fail?
 9. **Extractor** — validated against a hand-checked table before publication?
-10. **Exclusivity** — is the machine otherwise idle for the duration?
+10. **Exclusivity** — is the machine otherwise idle for the duration, including
+    free VRAM for the model plus its KV cache (check before launch *and* after
+    load; see 1.16)?
 11. **Bar** — written and frozen before the first run, with the stopping rule?
 
 ## 3. When a batch fails
