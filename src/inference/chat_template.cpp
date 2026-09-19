@@ -16,6 +16,12 @@ struct fg_chat_templates {
     common_chat_templates_ptr value;
     bool supports_thinking;
     bool rejects_user_after_tool;
+    /* Capabilities are a property of the template source, which cannot change
+     * after create; the native renderer reads them from here instead of
+     * re-deriving the capability map on every render. */
+    bool supports_system_role;
+    bool supports_tools;
+    bool supports_tool_calls;
 };
 
 struct fg_chat_render {
@@ -212,6 +218,14 @@ extern "C" fg_chat_templates *fg_chat_templates_create(const struct llama_model 
             source.find("enable_thinking") != std::string::npos ||
             common_chat_templates_support_enable_thinking(result->value.get());
         result->rejects_user_after_tool = probe_rejects_user_after_tool(result->value.get());
+        const auto capabilities = common_chat_templates_get_caps(result->value.get());
+        auto supports = [&](const char *name) {
+            auto found = capabilities.find(name);
+            return found != capabilities.end() && found->second;
+        };
+        result->supports_system_role = supports("supports_system_role");
+        result->supports_tools = supports("supports_tools");
+        result->supports_tool_calls = supports("supports_tool_calls");
         return result.release();
     } catch (const std::exception &exception) {
         set_error(error, error_size, exception.what());
@@ -296,13 +310,8 @@ extern "C" fg_chat_render *fg_chat_templates_apply_native(const fg_chat_template
         validate_native_history(request.at("messages"), anchor_count);
         validate_native_tools(request.at("tools"));
 
-        const auto capabilities = common_chat_templates_get_caps(templates->value.get());
-        auto supported = [&](const char *name) {
-            auto found = capabilities.find(name);
-            return found != capabilities.end() && found->second;
-        };
-        if (!supported("supports_system_role") || !supported("supports_tools") ||
-            !supported("supports_tool_calls"))
+        if (!templates->supports_system_role || !templates->supports_tools ||
+            !templates->supports_tool_calls)
             throw std::invalid_argument(
                 "Selected chat template does not support native system roles and tool calls");
 

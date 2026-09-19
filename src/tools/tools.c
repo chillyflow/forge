@@ -727,11 +727,10 @@ bool fg_tool_validate(const char *name, yyjson_val *args, forge_error *e) {
     }
     return true;
 }
-uint64_t fg_tool_signature(const char *name, yyjson_val *args, uint64_t generation,
-                           uint64_t diagnostic_hash) {
-    fg_buf canonical = {0};
-    fg_buf_printf(&canonical, "%s:%llu:%llu", name, (unsigned long long)generation,
-                  (unsigned long long)diagnostic_hash);
+/* Append the registry-ordered "|key=value" field text. Callers that need more
+ * than one signature variant of the same action serialize the arguments once
+ * here and hash the same canonical text under different prefixes. */
+static void signature_fields(fg_buf *canonical, const char *name, yyjson_val *args) {
     /* Registry field order makes JSON whitespace/key order irrelevant to loops. */
     for (size_t i = 0; i < sizeof(definitions) / sizeof(*definitions); i++) {
         if (strcmp(name, definitions[i].name))
@@ -749,15 +748,45 @@ uint64_t fg_tool_signature(const char *name, yyjson_val *args, uint64_t generati
                 field++;
             char *value = yyjson_val_write(yyjson_obj_get(args, key), 0, NULL);
             if (!value)
-                canonical.failed = true;
-            fg_buf_printf(&canonical, "|%s=%s", key, value ? value : "null");
+                canonical->failed = true;
+            fg_buf_printf(canonical, "|%s=%s", key, value ? value : "null");
             free(value);
         }
         break;
     }
+}
+uint64_t fg_tool_signature(const char *name, yyjson_val *args, uint64_t generation,
+                           uint64_t diagnostic_hash) {
+    fg_buf canonical = {0};
+    fg_buf_printf(&canonical, "%s:%llu:%llu", name, (unsigned long long)generation,
+                  (unsigned long long)diagnostic_hash);
+    signature_fields(&canonical, name, args);
     uint64_t hash = canonical.failed ? 0 : fg_hash(canonical.data, canonical.len);
     fg_buf_clear(&canonical);
     return hash;
+}
+void fg_tool_signatures(const char *name, yyjson_val *args, uint64_t generation,
+                        uint64_t diagnostic_hash, uint64_t *signature, uint64_t *strategy) {
+    fg_buf fields = {0};
+    signature_fields(&fields, name, args);
+    fg_buf full = {0}, strategy_only = {0};
+    fg_buf_printf(&full, "%s:%llu:%llu", name, (unsigned long long)generation,
+                  (unsigned long long)diagnostic_hash);
+    fg_buf_printf(&strategy_only, "%s:0:0", name);
+    if (fields.failed) {
+        full.failed = true;
+        strategy_only.failed = true;
+    } else if (fields.len) {
+        fg_buf_add(&full, fields.data, fields.len);
+        fg_buf_add(&strategy_only, fields.data, fields.len);
+    }
+    if (signature)
+        *signature = full.failed ? 0 : fg_hash(full.data, full.len);
+    if (strategy)
+        *strategy = strategy_only.failed ? 0 : fg_hash(strategy_only.data, strategy_only.len);
+    fg_buf_clear(&full);
+    fg_buf_clear(&strategy_only);
+    fg_buf_clear(&fields);
 }
 static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
     char full[FG_PATH_MAX];

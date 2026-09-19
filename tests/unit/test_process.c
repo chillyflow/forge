@@ -333,6 +333,45 @@ static void test_invalid_requests(void) {
     fg_process_free(&result);
 }
 
+#ifdef _WIN32
+/* CommandLineToArgvW quoting, byte for byte: a run of backslashes before a
+ * quote doubles and escapes the quote, a run at the end of the argument doubles
+ * before the closing quote, and an empty argument is two quotes. Each call
+ * fills exactly the capacity command_line reserves, and never a byte more. */
+static void test_quote_arguments(void) {
+    const struct {
+        const char *argument, *expected;
+    } cases[] = {
+        {"", "\"\""},
+        {"plain", "\"plain\""},
+        {"a\"b", "\"a\\\"b\""},
+        {"say \"hi\"", "\"say \\\"hi\\\"\""},
+        {"C:\\path\\to\\file.exe", "\"C:\\path\\to\\file.exe\""},
+        {"trail\\", "\"trail\\\\\""},
+        {"trail\\\\\\", "\"trail\\\\\\\\\\\\\""},
+        {"\\\\\\\\", "\"\\\\\\\\\\\\\\\\\""},
+        {"mid\\\\\"end", "\"mid\\\\\\\\\\\"end\""},
+        {"\"", "\"\\\"\""},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(*cases); i++) {
+        size_t bound = strlen(cases[i].argument) * 2 + 3;
+        const size_t guard = 32;
+        char *block = malloc(bound + guard);
+        assert(block);
+        memset(block + bound, 0xab, guard);
+        fg_buf quoted = {block, 0, bound, false};
+        fg_process_quote_arg(&quoted, cases[i].argument);
+        if (quoted.failed || strcmp(quoted.data, cases[i].expected))
+            fprintf(stderr, "quote_arg [%s]: expected [%s], got [%s]\n", cases[i].argument,
+                    cases[i].expected, quoted.failed ? "(failed)" : quoted.data);
+        assert(!quoted.failed && !strcmp(quoted.data, cases[i].expected));
+        assert(quoted.len == strlen(cases[i].expected) && quoted.data[quoted.len] == 0);
+        for (size_t j = 0; j < guard; j++)
+            assert((unsigned char)block[bound + j] == 0xab);
+        free(block);
+    }
+}
+#endif
 int main(int argc, char **argv) {
 #ifdef _WIN32
     /* Keep assertion failures in test output instead of opening a CRT dialog. */
@@ -357,6 +396,9 @@ int main(int argc, char **argv) {
     test_explicit_paths();
     test_prelaunch_cancellation();
     test_invalid_requests();
+#ifdef _WIN32
+    test_quote_arguments();
+#endif
     set_path(original_path);
     free(original_path);
     expect_no_marker();

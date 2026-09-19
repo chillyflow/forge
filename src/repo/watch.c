@@ -1508,7 +1508,8 @@ static int watch_event_compare(const void *left, const void *right) {
 static char *watch_json(forge_watch *watch, bool timed_out, bool more_pending, forge_error *error) {
     for (size_t i = 0; i < watch->event_count; i++)
         watch->ordered[i] = &watch->events[i];
-    qsort(watch->ordered, watch->event_count, sizeof(*watch->ordered), watch_event_compare);
+    if (watch->event_count)
+        qsort(watch->ordered, watch->event_count, sizeof(*watch->ordered), watch_event_compare);
     fg_buf json = {0};
     unsigned reasons = watch->reasons | (watch->initial ? FORGE_WATCH_RESCAN_INITIAL : 0u);
     bool ok = fg_buf_printf(&json, "{\"schema_version\":1,\"backend\":\"%s\",\"events\":[",
@@ -1547,11 +1548,15 @@ static char *watch_json(forge_watch *watch, bool timed_out, bool more_pending, f
         fg_error(error, FORGE_ERR_MEMORY, "Cannot finalize filesystem watch batch");
         return NULL;
     }
-    for (size_t i = 0; i < watch->event_count; i++) {
-        free(watch->events[i].path);
-        watch->events[i] = (watch_event){0};
+    /* An empty batch has nothing to release and its event map is already empty,
+     * because map entries are only added alongside events. */
+    if (watch->event_count) {
+        for (size_t i = 0; i < watch->event_count; i++) {
+            free(watch->events[i].path);
+            watch->events[i] = (watch_event){0};
+        }
+        memset(watch->event_map, 0, watch->event_map_size * sizeof(*watch->event_map));
     }
-    memset(watch->event_map, 0, watch->event_map_size * sizeof(*watch->event_map));
     watch->event_count = watch->event_bytes = 0;
     watch->initial = false;
     if (!watch->reopen)

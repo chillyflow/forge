@@ -2,8 +2,11 @@
 #include "forge/judge.h"
 #include <time.h>
 #ifdef _WIN32
+#include <process.h>
 #include <windows.h>
 #include <winhttp.h>
+#else
+#include <unistd.h>
 #endif
 
 #define JUDGE_PATH "/v1/systemone"
@@ -55,6 +58,16 @@ static void utc_stamp(char out[24]) {
     struct tm *g = gmtime(&now);
     if (!g || !strftime(out, 24, "%Y%m%dT%H%M%SZ", g))
         snprintf(out, 24, "%s", "unknown-utc");
+}
+
+/* Raw records are written per process and their sequence restarts at zero, so
+ * the pid keeps concurrent processes from overwriting each other's files. */
+static unsigned long process_id(void) {
+#ifdef _WIN32
+    return (unsigned long)_getpid();
+#else
+    return (unsigned long)getpid();
+#endif
 }
 
 static char *copy_or_default(const char *value, const char *fallback) {
@@ -530,7 +543,8 @@ static void record_run(forge_judge *j, const char *request, const char *response
     (void)fg_mkdir(j->record_dir, &ignored);
     char utc[24], path[FG_PATH_MAX];
     utc_stamp(utc);
-    snprintf(path, sizeof(path), "%s/judge-%s-%04u.json", j->record_dir, utc, j->record_seq);
+    snprintf(path, sizeof(path), "%s/judge-%s-%lu-%04u.json", j->record_dir, utc, process_id(),
+             j->record_seq);
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = doc ? yyjson_mut_obj(doc) : NULL;
     bool ok = root != NULL;

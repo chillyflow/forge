@@ -2766,7 +2766,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                         free(response);
                         break;
                     }
-                    uint64_t failure = fg_diagnostic_hash(verification.summary) ^ generation;
+                    uint64_t failure_hash = fg_diagnostic_hash(verification.summary);
+                    uint64_t failure = failure_hash ^ generation;
                     bool repeated_failure =
                         previous_validation_failure && failure == previous_validation_failure;
                     previous_validation_failure = failure;
@@ -2814,7 +2815,7 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                         free(response);
                         break;
                     }
-                    diagnostic_hash = fg_diagnostic_hash(verification.summary);
+                    diagnostic_hash = failure_hash;
                     forge_context_pin(ctx, latest_result, false);
                     char *action_text = action_history_text(a->config.thought_in_history, o, e);
                     uint64_t action = forge_context_add(ctx, FORGE_SEG_ACTION,
@@ -3014,9 +3015,9 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
             status = FORGE_ERR_IO;
             break;
         }
-        uint64_t signature =
-            fg_tool_signature(tool, args, forge_repo_generation(repo), diagnostic_hash);
-        uint64_t strategy_signature = fg_tool_signature(tool, args, 0, 0);
+        uint64_t signature = 0, strategy_signature = 0;
+        fg_tool_signatures(tool, args, forge_repo_generation(repo), diagnostic_hash, &signature,
+                           &strategy_signature);
         if (!signature || !strategy_signature) {
             yyjson_doc_free(d);
             free(response);
@@ -3623,7 +3624,8 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
         }
         size_t raw_len = strlen(raw);
         a->metrics.raw_tool_bytes += raw_len;
-        a->metrics.raw_tool_tokens += fg_model_count(raw, a->config.model);
+        size_t raw_tokens = fg_model_count(raw, a->config.model);
+        a->metrics.raw_tool_tokens += raw_tokens;
         if (!strcmp(tool, "read_file") && !tool_error.code && hits < 2)
             a->metrics.files_opened++;
         if (!strcmp(tool, "run_command") && tools.process_ran) {
@@ -3650,6 +3652,11 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 fg_buf_puts(&b, "\n[truncated; use expand_output]\n");
             visible = fg_buf_take(&b);
         }
+        /* The default view is a byte-identical copy of the raw capture; its
+         * token count is known, so the budget loop below need not re-count the
+         * same bytes. */
+        bool visible_is_raw =
+            visible && strlen(visible) == raw_len && !memcmp(visible, raw, raw_len);
         free(raw);
         if (!visible) {
             yyjson_doc_free(d);
@@ -3661,12 +3668,15 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
          * byte count. A truncation marker points back to the preserved raw data. */
         size_t visible_budget = a->config.limits.context_tokens / 4;
         bool reduced = false;
-        while (strlen(visible) > 128 && fg_model_count(visible, a->config.model) > visible_budget) {
+        size_t visible_tokens =
+            visible_is_raw ? raw_tokens : fg_model_count(visible, a->config.model);
+        while (strlen(visible) > 128 && visible_tokens > visible_budget) {
             size_t cut = strlen(visible) * 3 / 4;
             while (cut && ((unsigned char)visible[cut] & 0xc0) == 0x80)
                 cut--;
             visible[cut] = 0;
             reduced = true;
+            visible_tokens = fg_model_count(visible, a->config.model);
         }
         if (reduced) {
             fg_buf bounded = {0};
@@ -3681,9 +3691,10 @@ forge_status forge_agent_run(forge_agent *a, const char *request, forge_event_fn
                 status = FORGE_ERR_MEMORY;
                 break;
             }
+            visible_tokens = fg_model_count(visible, a->config.model);
         }
         a->metrics.visible_tool_bytes += strlen(visible);
-        a->metrics.visible_tool_tokens += fg_model_count(visible, a->config.model);
+        a->metrics.visible_tool_tokens += visible_tokens;
         yyjson_mut_doc *ed = yyjson_mut_doc_new(NULL);
         yyjson_mut_val *eo = yyjson_mut_obj(ed);
         yyjson_mut_doc_set_root(ed, eo);

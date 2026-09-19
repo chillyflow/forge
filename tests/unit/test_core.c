@@ -97,6 +97,33 @@ static void test_workspace_path_normalization(void) {
         root, "C:\\work\\tmp\\forge-bench-ab12cd\\a C:\\work\\tmp\\forge-bench-ab12cd\\b");
     assert(twice && !strcmp(twice, ".\\a .\\b"));
     free(twice);
+    /* A dotless root with no backslash: escaped and literal spellings are one
+     * pattern, so the second pass is skipped. Byte-identical expectations pin
+     * that the skip still replaces every spelling. */
+    const char *flat = "C:/work/tmp/forge-bench-ab12cd";
+    char *flat_plain = fg_normalize_workspace_paths(
+        flat, "Traceback: File \"C:/work/tmp/forge-bench-ab12cd/test.py\", line 3");
+    assert(flat_plain && !strcmp(flat_plain, "Traceback: File \"./test.py\", line 3"));
+    free(flat_plain);
+    /* The escaped replica: command output reaches the model inside an escaped
+     * JSON string. This root has no backslash to double, so its escaped
+     * spelling is the literal bytes; the skipped second pass must still leave
+     * every replica replaced. */
+    char *flat_escaped = fg_normalize_workspace_paths(
+        flat, "File \\\"C:/work/tmp/forge-bench-ab12cd/test.py\\\" and "
+              "\\\"C:/work/tmp/forge-bench-ab12cd/other.py\\\"");
+    assert(flat_escaped && !strcmp(flat_escaped, "File \\\"./test.py\\\" and \\\"./other.py\\\""));
+    free(flat_escaped);
+    /* A root containing '.': the second pass is retained, because pass one can
+     * re-form the root at a replacement junction (the replacement '.' plus the
+     * trailing "c" re-creates "/a/b.c"). Skipping it would leak the root. */
+    char *dotted = fg_normalize_workspace_paths("/a/b.c", "/a/b/a/b.cc");
+    assert(dotted && !strcmp(dotted, "."));
+    free(dotted);
+    /* The same re-formation with a relative root beginning in '.'. */
+    char *relative = fg_normalize_workspace_paths("./proj", "./proj/proj");
+    assert(relative && !strcmp(relative, "."));
+    free(relative);
     /* Text without the root is returned unchanged: this is not a rewriter. */
     char *other = fg_normalize_workspace_paths(root, "no paths here at all");
     assert(other && !strcmp(other, "no paths here at all"));
@@ -421,6 +448,12 @@ int main(void) {
     yyjson_doc *d = yyjson_read(j, strlen(j), 0);
     assert(d && fg_tool_validate("read_file", yyjson_doc_get_root(d), &e));
     uint64_t signature = fg_tool_signature("read_file", yyjson_doc_get_root(d), 4, 7);
+    /* The paired variant must equal the two single-variant hashes exactly: the
+     * full form, and the generation/diagnostic-zeroed strategy form. */
+    uint64_t paired = 0, strategy = 0;
+    fg_tool_signatures("read_file", yyjson_doc_get_root(d), 4, 7, &paired, &strategy);
+    assert(paired == signature);
+    assert(strategy == fg_tool_signature("read_file", yyjson_doc_get_root(d), 0, 0));
     yyjson_doc_free(d);
     j = "{ \"end\": 2, \"path\": \"x\", \"start\": 1 }";
     d = yyjson_read(j, strlen(j), 0);

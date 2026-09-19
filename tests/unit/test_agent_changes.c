@@ -57,8 +57,9 @@ struct fixture {
     uint64_t read_id, read_generation, refreshed_generation;
     size_t watches_created, watches_destroyed, watch_polls;
     size_t plans, outputs, results, accepted;
+    size_t visible_tokens_sum, visible_bytes_sum, raw_tokens_sum, raw_bytes_sum;
     bool live_read_checked, stale_read_checked, cancel_after_refresh, cancelled;
-    bool retrieve;
+    bool retrieve, marker_seen;
     edit_case edit_mode;
     size_t prepared, finished;
 };
@@ -273,6 +274,25 @@ static void check_context(fixture *f, yyjson_val *event_data) {
     }
     yyjson_doc_free(doc);
 }
+/* Fresh counts of the exact bytes the model sees: the tool_result event carries
+ * the final visible text, and the session artifact the raw capture. The token
+ * metrics must equal these sums on both the byte-identical and the truncated
+ * marker path. */
+static void accumulate_tool_output(fixture *f, yyjson_val *data) {
+    const char *visible = fg_json_str(data, "output");
+    assert(visible);
+    f->visible_tokens_sum += fg_model_count(visible, f->model);
+    f->visible_bytes_sum += strlen(visible);
+    char relative[64], path[FG_PATH_MAX];
+    snprintf(relative, sizeof(relative), "tool/%06zu.raw", (size_t)number(data, "id"));
+    edit_artifact(f, relative, path);
+    size_t length = 0;
+    char *raw = fg_read_file(path, FG_MAX_JSON, &length, NULL);
+    assert(raw);
+    f->raw_tokens_sum += fg_model_count(raw, f->model);
+    f->raw_bytes_sum += length;
+    free(raw);
+}
 static void on_event(const forge_event *event, void *user) {
     fixture *f = user;
     yyjson_doc *doc = yyjson_read(event->json, strlen(event->json), 0);
@@ -294,6 +314,7 @@ static void on_event(const forge_event *event, void *user) {
             f->retrieved_text = fg_strdup(text);
             assert(f->retrieved_text);
         }
+        accumulate_tool_output(f, data);
         f->results++;
     } else if (!strcmp(event->type, "message")) {
         assert(f->stale_read_checked && !f->cancelled);
@@ -475,6 +496,14 @@ static void run_case(bool indexed, bool read_backslashes, bool patch_backslashes
     assert(f.prepared == 1 && f.finished == 1);
     const forge_metrics *metrics = forge_agent_metrics(f.agent);
     assert(metrics->simulated && metrics->tool_calls == 2 && metrics->files_modified == 1);
+    /* The recorded tool-output tokens must equal fresh counts of the bytes the
+     * model saw: the visible view (byte-identical to the raw capture here) and
+     * the raw artifacts. */
+    assert(metrics->visible_tool_tokens == f.visible_tokens_sum &&
+           metrics->visible_tool_bytes == f.visible_bytes_sum);
+    assert(metrics->raw_tool_tokens == f.raw_tokens_sum &&
+           metrics->raw_tool_bytes == f.raw_bytes_sum);
+    assert(metrics->visible_tool_tokens == metrics->raw_tool_tokens);
     assert(metrics->filesystem_events == 0 && metrics->watch_reopens == 0);
     assert(metrics->stale_generations == 0 && metrics->validation_commands == 0);
     assert(f.watch_polls >= 5);
@@ -880,6 +909,72 @@ static void run_thought_rejected(const char *script) {
     assert_file(f.source, "original data\n");
     destroy_fixture(&f);
 }
+/* The bounded view is what the model sees: with a tool output larger than the
+ * capture limit, the visible text is a truncated prefix plus an expand marker,
+ * and the token metric must count those final bytes, not the raw capture. */
+static void metrics_events(const forge_event *event, void *user) {
+    fixture *f = user;
+    yyjson_doc *doc = yyjson_read(event->json, strlen(event->json), 0);
+    assert(doc);
+    yyjson_val *data = yyjson_obj_get(yyjson_doc_get_root(doc), "data");
+    if (!strcmp(event->type, "tool_result")) {
+        const char *output = fg_json_str(data, "output");
+        assert(output && strstr(output, "[truncated; use expand_output]"));
+        f->marker_seen = true;
+        f->results++;
+        accumulate_tool_output(f, data);
+    }
+    yyjson_doc_free(doc);
+}
+static void run_tool_token_metrics_truncated(void) {
+    fixture f;
+    create_fixture(&f, false, false, false, false);
+    const char *line = "alpha bravo charlie delta echo foxtrot golf hotel\n";
+    fg_buf content = {0};
+    for (size_t i = 0; i < 3; i++)
+        fg_buf_puts(&content, line);
+    assert(!content.failed && fg_write_file(f.source, content.data, content.len, NULL));
+    fg_buf_clear(&content);
+    char *path_json = fg_json_string(f.relative);
+    assert(path_json);
+    fg_buf script = {0};
+    fg_buf_printf(&script,
+                  "[{\"tool\":\"read_file\",\"args\":{\"path\":%s,\"start\":1,\"end\":5}},"
+                  "{\"final\":\"Done.\"}]",
+                  path_json);
+    free(path_json);
+    assert(!script.failed && fg_write_file(f.script, script.data, script.len, NULL));
+    fg_buf_clear(&script);
+    forge_error error = {0};
+    forge_model_config mc = forge_default_model_config();
+    mc.prompt_protocol = FORGE_PROMPT_FLATTENED;
+    mc.script_path = f.script;
+    f.model = forge_model_load(&mc, &error);
+    assert(f.model);
+    forge_agent_config ac = {0};
+    ac.workspace = f.root;
+    ac.model = f.model;
+    ac.limits = forge_default_limits();
+    ac.limits.max_turns = 2;
+    ac.limits.max_tool_bytes = 64; /* Below the read output: forces the marker. */
+    ac.limits.wall_timeout_ms = 15000;
+    f.agent = forge_agent_create(&ac, &error);
+    assert(f.agent);
+    forge_status status = forge_agent_run(f.agent, "Read the note.", metrics_events, &f, &error);
+    assert(status == FORGE_OK);
+    const forge_metrics *metrics = forge_agent_metrics(f.agent);
+    assert(metrics->tool_calls == 1 && f.results == 1 && f.marker_seen);
+    assert(metrics->visible_tool_tokens == f.visible_tokens_sum &&
+           metrics->visible_tool_bytes == f.visible_bytes_sum);
+    assert(metrics->raw_tool_tokens == f.raw_tokens_sum &&
+           metrics->raw_tool_bytes == f.raw_bytes_sum);
+    /* The marker path must actually reduce: the raw capture is the longer text. */
+    assert(metrics->visible_tool_tokens < metrics->raw_tool_tokens);
+    assert_file(f.source, "alpha bravo charlie delta echo foxtrot golf hotel\n"
+                          "alpha bravo charlie delta echo foxtrot golf hotel\n"
+                          "alpha bravo charlie delta echo foxtrot golf hotel\n");
+    destroy_fixture(&f);
+}
 int main(void) {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -919,6 +1014,9 @@ int main(void) {
         run_thought_rejected(big.data);
         fg_buf_clear(&big);
     }
+    /* Tool-output token metrics: a fresh count of the final visible bytes and
+     * of the raw capture, on the byte-identical and the truncated marker path. */
+    run_tool_token_metrics_truncated();
     puts("Agent known-change and edit-evidence tests passed (no watch delivery)");
     return 0;
 }

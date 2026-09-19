@@ -160,26 +160,62 @@ bool fg_process_executable_available(const char *workspace_root, const char *cwd
            executable_path(canonical_root, canonical_cwd, name, executable);
 }
 #ifdef _WIN32
-static void quote_arg(fg_buf *b, const char *s) {
-    fg_buf_puts(b, "\"");
+/* Escape one argument per the CommandLineToArgvW rules the CRT also applies.
+ * Runs of backslashes are written with memset rather than one append per byte;
+ * a byte never expands beyond two output bytes, so the reservation made by
+ * command_line below always holds and the capacity check never trips. */
+void fg_process_quote_arg(fg_buf *b, const char *s) {
+    size_t length = strlen(s);
+    if (b->failed || length > (SIZE_MAX - b->len - 3) / 2 ||
+        b->len + length * 2 + 3 > b->cap) {
+        b->failed = true;
+        return;
+    }
+    char *out = b->data + b->len;
+    *out++ = '"';
     size_t slashes = 0;
     for (; *s; s++) {
         if (*s == '\\') {
             slashes++;
             continue;
         }
-        if (*s == '"') {
-            for (size_t j = 0; j < slashes * 2 + 1; j++)
-                fg_buf_puts(b, "\\");
-        } else
-            for (size_t j = 0; j < slashes; j++)
-                fg_buf_puts(b, "\\");
-        fg_buf_add(b, s, 1);
+        size_t run = *s == '"' ? slashes * 2 + 1 : slashes;
+        memset(out, '\\', run);
+        out += run;
+        *out++ = *s;
         slashes = 0;
     }
-    for (size_t j = 0; j < slashes * 2; j++)
-        fg_buf_puts(b, "\\");
-    fg_buf_puts(b, "\"");
+    memset(out, '\\', slashes * 2);
+    out += slashes * 2;
+    *out++ = '"';
+    b->len = (size_t)(out - b->data);
+    b->data[b->len] = 0;
+}
+/* Build the CreateProcessA command line into one buffer reserved up front from
+ * the summed worst case (escaping doubles a byte at most, plus quotes and
+ * separators) instead of growing the buffer as each argument is appended. */
+static void command_line(fg_buf *b, const char *const *argv) {
+    size_t bound = 1; /* NUL */
+    for (size_t i = 0; argv[i]; i++) {
+        size_t length = strlen(argv[i]);
+        if (length > (SIZE_MAX - bound - 4) / 2) {
+            b->failed = true;
+            return;
+        }
+        bound += length * 2 + 3 + (i ? 1 : 0);
+    }
+    b->data = malloc(bound);
+    if (!b->data) {
+        b->failed = true;
+        return;
+    }
+    b->cap = bound;
+    b->data[0] = 0;
+    for (size_t i = 0; argv[i]; i++) {
+        if (i)
+            fg_buf_puts(b, " ");
+        fg_process_quote_arg(b, argv[i]);
+    }
 }
 static void drain(HANDLE h, fg_buf *b, size_t cap, bool *trunc) {
     DWORD avail = 0, n = 0;
@@ -287,11 +323,7 @@ forge_status fg_process_at(const char *workspace_root, const char *cwd, const ch
         null_in = NULL;
         goto win_fail;
     }
-    for (size_t i = 0; argv[i]; i++) {
-        if (i)
-            fg_buf_puts(&command, " ");
-        quote_arg(&command, argv[i]);
-    }
+    command_line(&command, argv);
     /* Child processes receive a small allowlist, not API keys or the parent's full environment. */
     const char *keys[] = {"PATH",        "SystemRoot",   "TEMP",    "TMP",
                           "USERPROFILE", "LOCALAPPDATA", "APPDATA", NULL};

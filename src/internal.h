@@ -66,6 +66,11 @@ forge_status fg_process_at(const char *workspace_root, const char *cwd, const ch
                            uint64_t timeout, size_t max_bytes, forge_cancel_fn, void *,
                            fg_process_result *, forge_error *);
 bool fg_process_executable_available(const char *workspace_root, const char *cwd, const char *name);
+#ifdef _WIN32
+/* Win32 argv quoting under the CommandLineToArgvW rules the CRT also applies.
+ * Non-static so its exact output bytes are unit-testable. */
+void fg_process_quote_arg(fg_buf *b, const char *s);
+#endif
 
 typedef struct {
     char dir[FG_PATH_MAX];
@@ -289,6 +294,10 @@ forge_status fg_native_action_normalize(const char *, bool include_thought, char
 bool fg_tool_validate(const char *, yyjson_val *, forge_error *);
 uint64_t fg_tool_signature(const char *, yyjson_val *, uint64_t generation,
                            uint64_t diagnostic_hash);
+/* Both signature variants of one action (full, and the generation/diagnostic
+ * zeroed strategy form) from a single argument serialization. */
+void fg_tool_signatures(const char *, yyjson_val *, uint64_t generation,
+                        uint64_t diagnostic_hash, uint64_t *signature, uint64_t *strategy);
 /* Single-slot verdict cache for repeated identical commands. Agent-owned;
  * tools.c reads and replaces it through the borrowed slot pointer, which is
  * NULL unless the host opted in. A stored verdict is served only while no

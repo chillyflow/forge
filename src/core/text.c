@@ -165,10 +165,18 @@ char *fg_normalize_workspace_paths(const char *root, const char *text) {
     char *pattern = fg_buf_take(&escaped);
     if (!pattern)
         return NULL;
+    /* The escaped and the literal spelling are the same pattern when root has
+     * no backslash, so the first pass already replaced every occurrence. The
+     * second pass can only differ by matching text that a replacement "."
+     * itself re-formed, which needs a '.' inside root; with none, skipping it
+     * is byte-identical. (Roots that do contain a '.' keep both passes.) */
+    bool shared = strcmp(pattern, root) == 0 && strchr(root, '.') == NULL;
     char *first = replace_all(text, pattern, ".");
     free(pattern);
     if (!first)
         return NULL;
+    if (shared)
+        return first;
     char *second = replace_all(first, root, ".");
     free(first);
     return second;
