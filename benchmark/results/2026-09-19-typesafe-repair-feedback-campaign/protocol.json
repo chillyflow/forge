@@ -109,7 +109,7 @@
   "identity": {
     "forge_sha256": "f977c623137aa92a70d61002e4ae28e651fbefe4b670b2114ca5c0a35576e1f6",
     "harness_common_py_sha256": "bb646ded4567a04601e40dc8b790d1a1bad80b5540f9cd643333c57e6c8aed4d",
-    "harness_run_py_sha256": "1e95b1b6908bf30d02e748fde4e09e7fb0216bad6f7a42988e7dcfd852eb2b57",
+    "harness_run_py_sha256": "8a0c08c080b522c070724e6f808c10c2537dfbbfb271471ed5c40ea2a9ed3451",
     "judge_config_sha256": "f35fa3993897fc722ea57aed840213a75da1f23cdbc3e64ddb13f74425717bd7",
     "model_sha256": "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
     "source_head": "61694349161c67e53d9592938709351215b27a8b",
@@ -174,7 +174,7 @@
     "task": "reasoning_dependency_order",
     "variant": "loop-repair-judge-campaign"
   },
-  "protocol_sha256_without_self": "6c5ce3880dce487af341eff17a15ed20c0eb0970340c55e6118537d456b1f7c3",
+  "protocol_sha256_without_self": "60fb08ce337c2b5eefb65ac8f1bd65e21f0bea85699b2f9595da1992ccf9ea91",
   "schedule": [
     {
       "order_index": 1,
@@ -663,5 +663,14 @@
     "finding": "Jev answers are stochastic at N=4 (0/15 episodes reproduced; 5/15 with a choice flip; sample-vs-shipped agreement 57/60 failure_family, 52/60 next_action); the shipped consumption thresholds are saturated (uncertain in 60/60 replays, so the rendered guidance is the constant inspect branch). The campaign tests the arm as shipped: a stochastic advisory inspect-hint plus evidence-gap signal.",
     "implication": "Judge output is a per-cell stochastic advisory input; no cell is stratified by judge answers; mechanism accounting uses judge_feedback events and metrics.json judge counters only."
   },
-  "amended_utc": "2026-09-19T22:30:00Z"
+  "amended_utc": "2026-09-19T22:30:00Z",
+  "corrections": [
+    {
+      "field": "identity.harness_run_py_sha256",
+      "old_value": "1e95b1b6908bf30d02e748fde4e09e7fb0216bad6f7a42988e7dcfd852eb2b57",
+      "new_value": "8a0c08c080b522c070724e6f808c10c2537dfbbfb271471ed5c40ea2a9ed3451",
+      "why": "The protocol was frozen before the rename-retry hardening commit 8e920922; the campaign executed with the hardened run.py (resume branch never taken; no interrupted cells). Corrected in place after the fable-judge pass. No bar, population, schedule, profile or outcome field changed."
+    }
+  ],
+  "corrections_utc": "2026-09-19T23:45:00Z"
 }

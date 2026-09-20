@@ -15,7 +15,8 @@ independent task completion on the frozen engaged population?
   `6c5ce3880dce487af341eff17a15ed20c0eb0970340c55e6118537d456b1f7c3`
   (frozen 2026-09-19T21:38Z; amended 22:30Z — binary identity only, after the
   VRAM diagnostic rebuild; bar, population, schedule and profile fields were
-  not changed).
+  not changed. See Corrections: the self-hash below is the as-run value; the
+  post-errata value is recorded in `protocol.json`).
 - Binary: `build-gpu/Release/forge.exe` sha256 `f977c623...`; source `61694349`
   (G01), working tree clean at freeze.
 - Model: Qwen3-Coder-30B-A3B-Instruct-Q4_K_M sha256 `fadc3e5f...`.
@@ -52,19 +53,20 @@ Engaged clusters: control 18/24, treatment 17/24.
 
 ## Engagement
 
-6 of 6 engaged tasks fired (preregistered bar: ≥4). 24 judge calls across the
-32 treatment cells (1 call per cell normally; 2 on the cap-death cells that
-produced two failed candidate validations). The 2 inert control tasks fired
+6 of 6 engaged tasks fired (preregistered bar: ≥4). 31 judge calls across 24 of the
+32 treatment cells (17 cells ×1 call; 7 cap-death cells ×2, from two failed
+candidate validations each). The 2 inert control tasks fired
 0 calls in all 8 of their treatment cells. Per-call latency mean 521 ms,
-max 781 ms. Raw request/response records retained in `raw/` (26 files: 2 from
-the engagement preflight, 24 from the campaign).
+max 781 ms. Raw request/response records retained in `raw/` (36 files: 2 from the
+engagement preflight, 3 from the pre-campaign VRAM-diagnostic probes, 31 from
+the campaign).
 
 ## Latency (secondary)
 
 - Overall e2e: control mean 52.4 s / median 25.0 s; treatment mean 53.0 s /
-  median 24.5 s (both arms carry the same four cap-death cells on the two
-  reasoning fixtures, which dominate the means).
-- Paired e2e on the 26 cells passed by both arms (same task + repetition):
+  median 24.5 s (13 cap-death cells in total — 6 control, 7 treatment — on the two reasoning
+  fixtures, which dominate the means).
+- Paired e2e on the 24 cells passed by both arms (same task + repetition):
   control 24.5 s vs treatment 24.0 s (−0.5 s, ≈2%, noise-level; the judge call
   itself adds ≈0.5 s where it fires).
 
@@ -109,8 +111,31 @@ population.**
 ## Artifacts
 
 - `protocol.json` (self-hash above), `judge.toml`, `results.json`,
-  `raw/` (26 judge records), 64 run directories with retained sessions and
+  `raw/` (36 judge records), 64 run directories with retained sessions and
   terminals, `preflight-engagement/`.
+
+## Corrections (2026-09-19, after the fable-judge pass)
+
+An adversarial verification pass recomputed every claim in this report from the
+raw artifacts (verdict: the campaign data fully verified, zero frauds; five
+reporting errors found and corrected here; no campaign re-run needed):
+
+| field | as first written | corrected |
+|---|---|---|
+| judge calls | 24 | 31 (17 cells ×1 + 7 cells ×2) |
+| `raw/` files | 26 | 36 (2 preflight + 3 VRAM-diagnostic probes + 31 campaign) |
+| paired cells | 26 | 24 |
+| cap-death cells | 4 | 13 (6 control, 7 treatment) |
+| `protocol.json` harness hash | freeze-time `1e95b1b6` | as-run `8a0c08c0` (commit 8e920922; resume-retry hardening; the resume branch was never taken) |
+
+The protocol was corrected in place with a `corrections` field naming the old
+value; its self-hash changed from the as-run `6c5ce388...` to the post-errata
+value recorded in `protocol.json`. No bar, population, schedule, profile or
+outcome field changed, and the REFUTED classification is unaffected.
+
+Interpretive note: the preregistered rule does not threshold the paired-latency
+"advantage"; the observed −0.5 s (≈2%) is treated as noise, and the
+classification stands under any reading.
 
 ## Follow-ups
 
