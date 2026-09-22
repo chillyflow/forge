@@ -92,7 +92,8 @@ class MinimalAgentTests(unittest.TestCase):
                                if message["role"] == "tool"])
         self.assertNotIn("next_action_guidance", json.dumps(final))
         self.assertEqual({tool["function"]["name"] for tool in final["tools"]},
-                         {"read_file", "apply_patch", "run_command", "list_directory", "final"})
+                         {"read_file", "apply_patch", "run_command", "list_directory",
+                          "suggest_paths", "final"})
 
     def test_multiple_files_allow_intermediate_invalid_syntax_and_no_final_validation(self):
         (self.root / "a.go").write_text("package sample\nfunc Value() int { return 1 }\n")

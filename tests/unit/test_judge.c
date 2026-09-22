@@ -34,7 +34,7 @@
 
 static void test_permutation(void) {
     const double scores[] = {0.1, 0.9, 0.5};
-    size_t order[3];
+    size_t order[5];
     fg_rerank_permutation(scores, 3, order);
     assert(order[0] == 1 && order[1] == 2 && order[2] == 0);
     /* Ties keep the earlier index; invalid values sort last. */
@@ -130,7 +130,7 @@ static void test_payload_and_scores(void) {
     yyjson_doc *doc = yyjson_read(stub.request, stub.request_len, 0);
     assert(doc);
     yyjson_val *root = yyjson_doc_get_root(doc);
-    assert(!strcmp(yyjson_get_str(yyjson_obj_get(root, "model")), "jev-latest"));
+    assert(!strcmp(yyjson_get_str(yyjson_obj_get(root, "model")), "jev-1.13.0"));
     yyjson_val *state = yyjson_obj_get(root, "state");
     assert(!strcmp(yyjson_get_str(yyjson_obj_get(state, "query")), "find alpha"));
     yyjson_val *candidates = yyjson_obj_get(state, "candidates");
@@ -294,7 +294,7 @@ static void test_feedback_payload_and_result(void) {
     yyjson_doc *doc = yyjson_read(stub.request, stub.request_len, 0);
     assert(doc);
     yyjson_val *root = yyjson_doc_get_root(doc);
-    assert(!strcmp(yyjson_get_str(yyjson_obj_get(root, "model")), "jev-latest"));
+    assert(!strcmp(yyjson_get_str(yyjson_obj_get(root, "model")), "jev-1.13.0"));
     yyjson_val *state = yyjson_obj_get(root, "state");
     assert(!strcmp(yyjson_get_str(yyjson_obj_get(state, "task")), request.task));
     assert(!strcmp(fg_json_str(yyjson_obj_get(state, "validation"), "summary"),
@@ -480,7 +480,12 @@ static void test_config_table(void) {
                            "model = \"jev-pinned\"\n"
                            "api_key_env = \"MY_JUDGE_KEY\"\n"
                            "timeout_ms = 3000\n"
-                           "max_candidates = 8\n";
+                           "max_candidates = 8\n"
+                           "confidence_threshold = 0.5\n"
+                           "feedback_next_action_threshold = 0.6\n"
+                           "feedback_failure_confidence_threshold = 0.5\n"
+                           "feedback_repair_readiness_threshold = 0.5\n"
+                           "feedback_evidence_gap_threshold = 0.7\n";
     forge_error error = {0};
     assert(forge_config_parse(&config, document, strlen(document), "test.toml", &error) ==
            FORGE_OK);
@@ -488,6 +493,11 @@ static void test_config_table(void) {
     assert(!strcmp(config.judge_model, "jev-pinned"));
     assert(!strcmp(config.judge_api_key_env, "MY_JUDGE_KEY"));
     assert(config.judge_timeout_ms == 3000 && config.judge_max_candidates == 8);
+    assert(config.judge_confidence_threshold == 0.5);
+    assert(config.judge_feedback_next_action_threshold == 0.6);
+    assert(config.judge_feedback_failure_confidence_threshold == 0.5);
+    assert(config.judge_feedback_repair_readiness_threshold == 0.5);
+    assert(config.judge_feedback_evidence_gap_threshold == 0.7);
     forge_config_destroy(&config);
     /* Unknown keys and out-of-range values are rejected like any other table. */
     forge_config_init(&config);

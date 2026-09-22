@@ -1045,6 +1045,12 @@ static void emit_judge_feedback(forge_agent *a, const forge_judge_feedback_resul
     bool ok = root != NULL;
     if (ok) {
         yyjson_mut_doc_set_root(doc, root);
+        const forge_judge *j = a->config.judge;
+        double na_thresh = forge_judge_feedback_next_action_threshold(j);
+        double fc_thresh = forge_judge_feedback_failure_confidence_threshold(j);
+        double rr_thresh = forge_judge_feedback_repair_readiness_threshold(j);
+        double eg_thresh = forge_judge_feedback_evidence_gap_threshold(j);
+        const char *request_id = forge_judge_last_request_id(j);
         ok = yyjson_mut_obj_add_str(doc, root, "model", r->model) &&
              yyjson_mut_obj_add_str(doc, root, "failure_family", r->failure_family) &&
              yyjson_mut_obj_add_real(doc, root, "failure_confidence", r->failure_confidence) &&
@@ -1058,6 +1064,16 @@ static void emit_judge_feedback(forge_agent *a, const forge_judge_feedback_resul
              yyjson_mut_obj_add_uint(doc, root, "input_tokens", r->input_tokens) &&
              yyjson_mut_obj_add_uint(doc, root, "output_tokens", r->output_tokens) &&
              yyjson_mut_obj_add_real(doc, root, "latency_ms", r->latency_ms) &&
+             /* Decision thresholds used for this call, recorded so the event can
+              * be re-calibrated later without re-running the entire run. Zero
+              * means the built-in conservative default was in effect. */
+             yyjson_mut_obj_add_real(doc, root, "threshold_next_action", na_thresh) &&
+             yyjson_mut_obj_add_real(doc, root, "threshold_failure_confidence", fc_thresh) &&
+             yyjson_mut_obj_add_real(doc, root, "threshold_repair_readiness", rr_thresh) &&
+             yyjson_mut_obj_add_real(doc, root, "threshold_evidence_gap", eg_thresh) &&
+             /* Server-issued request id from the response headers; empty when the
+              * transport did not provide one (stub transport, transient failures). */
+             yyjson_mut_obj_add_str(doc, root, "request_id", request_id) &&
              /* Episode linkage, appended after the existing fields: the turn
               * that produced the advisory, the candidate attempt it assessed
               * and the validation attempt in scope. */
@@ -1111,10 +1127,18 @@ static void append_judge_feedback(forge_agent *a, candidate_checkpoint *cp,
                   result.failure_family, result.failure_confidence, result.evidence_gap,
                   result.repair_readiness, result.repair_readiness_confidence, result.next_action,
                   result.next_action_confidence);
-    bool uncertain = result.next_action_confidence < 0.55 || result.failure_confidence < 0.45 ||
-                     result.repair_readiness_confidence < 0.45;
-    bool inspect = uncertain || result.evidence_gap >= 0.60 || !strcmp(result.failure_family, "missing_evidence") ||
-                   !strcmp(result.next_action, "inspect_source") || !strcmp(result.next_action, "defer");
+    const forge_judge *j = a->config.judge;
+    double na_thresh = forge_judge_feedback_next_action_threshold(j);
+    double fc_thresh = forge_judge_feedback_failure_confidence_threshold(j);
+    double rr_thresh = forge_judge_feedback_repair_readiness_threshold(j);
+    double eg_thresh = forge_judge_feedback_evidence_gap_threshold(j);
+    bool uncertain = result.next_action_confidence < na_thresh ||
+                     result.failure_confidence < fc_thresh ||
+                     result.repair_readiness_confidence < rr_thresh;
+    bool inspect = uncertain || result.evidence_gap >= eg_thresh ||
+                   !strcmp(result.failure_family, "missing_evidence") ||
+                   !strcmp(result.next_action, "inspect_source") ||
+                   !strcmp(result.next_action, "defer");
     if (inspect) {
         fg_buf_puts(feedback,
                     "JUDGE_FEEDBACK_GUIDANCE: advisory only; inspect source or validation "
@@ -1586,7 +1610,7 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
             goto finish;
         }
     }
-    if (a->config.symbol_impact) {
+    if (a->config.symbol_impact || a->config.judge) {
         tools.repo = agent_repo_open(a, e);
         if (!tools.repo ||
             fg_repo_index_until(tools.repo, NULL, 0, true, deadline, a->config.cancelled,
@@ -2011,7 +2035,8 @@ static forge_status minimal_run(forge_agent *a, const char *request, forge_event
             if (a->config.stop_loss)
                 stop_loss_streak = 0;
         } else if (!name || (strcmp(name, "read_file") && strcmp(name, "apply_patch") &&
-                             strcmp(name, "run_command") && strcmp(name, "list_directory")))
+                             strcmp(name, "run_command") && strcmp(name, "list_directory") &&
+                             strcmp(name, "suggest_paths")))
             status = fg_error(e, FORGE_ERR_UNSUPPORTED, "Tool is not available in minimal agent");
         else {
             tools.call_id = ++a->metrics.tool_calls;

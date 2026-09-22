@@ -85,6 +85,18 @@ forge_retrieval_options forge_default_retrieval_options(void);
 char *forge_repo_retrieve(forge_repo *, const char *query, const forge_retrieval_options *,
                           forge_retrieval_stats *, forge_error *);
 
+/* Structured search hit from the literal-indexed source scan. */
+typedef struct {
+    char path[2048];
+    char *snippet;  /* malloc-owned, caller frees */
+    size_t line, start, end;
+    bool truncated;
+} fg_repo_search_hit;
+
+/* Fill hits[0..count) with structured literal search results. Returns hit count. */
+size_t fg_repo_search_hits(forge_repo *, const char *query, size_t limit,
+                           fg_repo_search_hit *, size_t *truncated, forge_error *);
+
 #ifdef __cplusplus
 }
 #endif

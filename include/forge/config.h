@@ -38,6 +38,11 @@ typedef struct {
      * default" (endpoint, model alias, key environment variable name). */
     const char *judge_endpoint, *judge_model, *judge_api_key_env, *judge_record_dir;
     size_t judge_timeout_ms, judge_max_candidates;
+    double judge_confidence_threshold;
+    double judge_feedback_next_action_threshold;
+    double judge_feedback_failure_confidence_threshold;
+    double judge_feedback_repair_readiness_threshold;
+    double judge_feedback_evidence_gap_threshold;
     /* Private storage. Do not free, assign, or copy these pointers. The public
      * model strings may be replaced by borrowed CLI strings; destroy only frees
      * the storage allocated by this configuration object. */

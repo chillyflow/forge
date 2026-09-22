@@ -137,20 +137,22 @@ static void validate_native_tools(const json &tools) {
     /* Keep the ordinary registry contract and its final-only terminal subset.
      * The diagnostic control has exactly these five tools and no memory tool. */
     bool minimal =
-        names.size() == 5 && std::all_of(names.begin(), names.end(), [](const std::string &name) {
-            return name == "read_file" || name == "apply_patch" || name == "run_command" ||
-                   name == "list_directory" || name == "final";
-        });
-    bool candidate =
         names.size() == 6 && std::all_of(names.begin(), names.end(), [](const std::string &name) {
             return name == "read_file" || name == "apply_patch" || name == "run_command" ||
-                   name == "list_directory" || name == "final" || name == "validate_candidate";
+                   name == "list_directory" || name == "suggest_paths" || name == "final";
+        });
+    bool candidate =
+        names.size() == 7 && std::all_of(names.begin(), names.end(), [](const std::string &name) {
+            return name == "read_file" || name == "apply_patch" || name == "run_command" ||
+                   name == "list_directory" || name == "suggest_paths" || name == "final" ||
+                   name == "validate_candidate";
         });
     /* One-turn no-edit gate registry: the candidate surface without apply_patch. */
     bool noedit =
-        names.size() == 5 && std::all_of(names.begin(), names.end(), [](const std::string &name) {
+        names.size() == 6 && std::all_of(names.begin(), names.end(), [](const std::string &name) {
             return name == "read_file" || name == "run_command" ||
-                   name == "list_directory" || name == "validate_candidate" || name == "final";
+                   name == "list_directory" || name == "suggest_paths" ||
+                   name == "validate_candidate" || name == "final";
         });
     bool validation_only = names.size() == 1 && names.front() == "validate_candidate";
     if (!validation_only && !reflection_only &&

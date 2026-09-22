@@ -1896,6 +1896,82 @@ char *forge_repo_summary(forge_repo *r, forge_error *e) {
     sqlite3_finalize(s);
     return fg_buf_take(&b);
 }
+
+typedef struct {
+    char path[FG_PATH_MAX];
+    char *snippet;  /* malloc-owned, caller frees */
+    size_t line, start, end;
+    bool truncated;
+} fg_repo_search_hit;
+
+size_t fg_repo_search_hits(forge_repo *r, const char *query, size_t limit,
+                           fg_repo_search_hit *hits, size_t *truncated, forge_error *e) {
+    if (!query || !*query) {
+        if (e)
+            fg_error(e, FORGE_ERR_ARGUMENT, "Search query is empty");
+        return 0;
+    }
+    if (!hits || !limit)
+        return 0;
+    r->error = e;
+    sqlite3_stmt *s =
+        prepare(r, "SELECT path,content FROM chunks WHERE instr(content,?)>0 ORDER BY path");
+    if (!s)
+        return 0;
+    sqlite3_bind_text(s, 1, query, -1, SQLITE_TRANSIENT);
+    size_t count = 0;
+    if (truncated)
+        *truncated = 0;
+    while (count < limit && sqlite3_step(s) == SQLITE_ROW) {
+        const char *path = (const char *)sqlite3_column_text(s, 0);
+        const char *text = (const char *)sqlite3_column_text(s, 1);
+        size_t path_len = strlen(path);
+        if (path_len >= FG_PATH_MAX) {
+            if (!e)
+                break;
+            fg_error(e, FORGE_ERR_LIMIT, "Search hit path exceeds FG_PATH_MAX");
+            break;
+        }
+        const char *p = text;
+        size_t line = 1;
+        size_t start = 0;
+        while (*p && count < limit) {
+            const char *end = strchr(p, '\n');
+            size_t n = end ? (size_t)(end - p) : strlen(p);
+            const char *match = strstr(p, query);
+            if (match && match < p + n) {
+                size_t match_offset = (size_t)(match - p);
+                /* Tighter context window: the match line ± 2 lines. */
+                size_t ctx_start = match_offset > 128 ? match_offset - 128 : 0;
+                size_t ctx_end = n - match_offset > 128 ? match_offset + 128 : n;
+                size_t take = ctx_end - ctx_start;
+                hits[count].snippet = malloc(take + 1);
+                if (!hits[count].snippet) {
+                    fg_error(e, FORGE_ERR_MEMORY, "Cannot allocate search hit snippet");
+                    sqlite3_finalize(s);
+                    return count;
+                }
+                memcpy(hits[count].snippet, p + ctx_start, take);
+                hits[count].snippet[take] = 0;
+                memcpy(hits[count].path, path, path_len + 1);
+                hits[count].line = line + (ctx_start == 0 ? 0 : 0);  /* line is start-of-line */
+                hits[count].start = ctx_start;
+                hits[count].end = ctx_end;
+                hits[count].truncated = (ctx_start > 0 || ctx_end < n);
+                count++;
+            }
+            if (!end)
+                break;
+            p = end + 1;
+            line++;
+        }
+    }
+    if (sqlite3_step(s) == SQLITE_ROW && truncated)
+        *truncated = 1;
+    sqlite3_finalize(s);
+    return count;
+}
+
 char *fg_repo_search(forge_repo *r, const char *query, size_t limit, forge_error *e) {
     if (!query || !*query) {
         fg_error(e, FORGE_ERR_ARGUMENT, "Search query is empty");

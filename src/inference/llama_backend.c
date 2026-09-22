@@ -170,6 +170,8 @@ static bool sample_reduced_greedy(llama_state *s, struct llama_sampler *sampler,
     return false;
 }
 
+static char *convert_qwen_xml_to_json(const char *response);
+
 static llama_token sample_token(llama_state *s, struct llama_sampler *sampler,
                                 struct llama_sampler *grammar, bool fast, bool reduced_ok,
                                 forge_metrics *stats) {
@@ -1240,8 +1242,20 @@ static forge_status llama_generate(forge_model *m, const char *prompt, const cha
     if (status == FORGE_OK && active_grammar && !ended) {
         if (native) {
             char detail[256] = {0};
-            char *parsed = fg_chat_render_parse(native_render, out.data ? out.data : "", detail,
-                                                sizeof(detail));
+            char *raw = out.data ? out.data : "";
+            char *converted = convert_qwen_xml_to_json(raw);
+            char *to_parse = converted ? converted : raw;
+            char *parsed = fg_chat_render_parse(native_render, to_parse, detail, sizeof(detail));
+            if (!parsed && !converted) {
+                /* Try Qwen3-Coder XML conversion now */
+                char *xml_converted = convert_qwen_xml_to_json(raw);
+                if (xml_converted) {
+                    parsed = fg_chat_render_parse(native_render, xml_converted, detail, sizeof(detail));
+                    free(xml_converted);
+                }
+            }
+            if (converted)
+                free(converted);
             if (!parsed)
                 status = fg_error(e, FORGE_ERR_LIMIT,
                                   "Generation limit reached before one complete native call: %s",
@@ -1462,6 +1476,79 @@ static bool native_protocol_probe(forge_model *m, llama_state *s, forge_error *e
     return true;
 }
 
+/* Qwen3-Coder emits XML-style tool calls (<tool_call><function=...>) instead of
+ * the JSON the native parser expects. Detect and convert. Returns a malloc-owned
+ * JSON string, or NULL when the input is not XML. */
+static char *convert_qwen_xml_to_json(const char *response) {
+    if (!response || !strstr(response, "<tool_call>"))
+        return NULL;
+    const char *func_tag = strstr(response, "<function=");
+    if (!func_tag)
+        return NULL;
+    func_tag += strlen("<function=");
+    const char *func_end = strchr(func_tag, '>');
+    if (!func_end)
+        return NULL;
+    size_t func_len = (size_t)(func_end - func_tag);
+    char func_name[256] = {0};
+    if (func_len >= sizeof(func_name))
+        return NULL;
+    memcpy(func_name, func_tag, func_len);
+    /* Collect parameters: <parameter=KEY>VALUE</parameter> */
+    fg_buf args = {0};
+    const char *p = func_end;
+    bool first = true;
+    while ((p = strstr(p, "<parameter="))) {
+        p += strlen("<parameter=");
+        const char *key_end = strchr(p, '>');
+        if (!key_end)
+            break;
+        size_t key_len = (size_t)(key_end - p);
+        char key[128] = {0};
+        if (key_len >= sizeof(key))
+            break;
+        memcpy(key, p, key_len);
+        const char *val_start = key_end + 1;
+        char close_tag[128];
+        snprintf(close_tag, sizeof(close_tag), "</parameter>");
+        const char *val_end = strstr(val_start, close_tag);
+        if (!val_end)
+            break;
+        size_t val_len = (size_t)(val_end - val_start);
+        char escaped[512] = {0};
+        size_t ei = 0;
+        for (size_t i = 0; i < val_len && ei < sizeof(escaped) - 8; i++) {
+            unsigned char c = (unsigned char)val_start[i];
+            if (c == '"' || c == '\\') {
+                escaped[ei++] = '\\';
+                escaped[ei++] = c;
+            } else if (c == '\n') {
+                escaped[ei++] = '\\';
+                escaped[ei++] = 'n';
+            } else if (c == '\t') {
+                escaped[ei++] = '\\';
+                escaped[ei++] = 't';
+            } else if (c < 0x20) {
+                continue;
+            } else {
+                escaped[ei++] = c;
+            }
+        }
+        escaped[ei] = 0;
+        fg_buf_printf(&args, "%s\"%s\":\"%s\"", first ? "" : ",", key, escaped);
+        first = false;
+        p = val_end + strlen(close_tag);
+    }
+    char *json = NULL;
+    if (!args.failed) {
+        fg_buf out = {0};
+        if (fg_buf_printf(&out, "{\"tool\":\"%s\",\"args\":{%s}}", func_name, args.data ? args.data : ""))
+            json = fg_buf_take(&out);
+    }
+    fg_buf_clear(&args);
+    return json;
+}
+
 static forge_status llama_parse_native(forge_model *m, const char *response, char **message,
                                        forge_error *error) {
     if (!m || !response || !message)
@@ -1472,7 +1559,15 @@ static forge_status llama_parse_native(forge_model *m, const char *response, cha
         return fg_error(error, FORGE_ERR_CONFLICT,
                         "Native response parser has no matching rendered prompt");
     char detail[256] = {0};
+    /* Try native JSON first; fall back to Qwen3-Coder XML conversion. */
     *message = fg_chat_render_parse(s->last_native_render, response, detail, sizeof(detail));
+    if (!*message) {
+        char *converted = convert_qwen_xml_to_json(response);
+        if (converted) {
+            *message = fg_chat_render_parse(s->last_native_render, converted, detail, sizeof(detail));
+            free(converted);
+        }
+    }
     if (!*message)
         return fg_error(error, FORGE_ERR_PARSE, "Cannot parse native tool call: %s",
                         *detail ? detail : "chat-template parser rejected the response");

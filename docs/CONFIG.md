@@ -85,12 +85,17 @@ All fields are optional. Integer fields reject floats, strings and booleans.
 | `tools.shell` | `timeout` | Integer 1–86,400 **seconds**; CLI `--timeout-ms` is in milliseconds. |
 | `tools.shell` | `network` | Boolean restriction described below; never grants execution permission. |
 | `index` | `languages` | Exactly `["go"]`; other/empty/duplicate language lists fail. |
-| `judge` | `endpoint` | Nonempty `http(s)` base URL; default `https://api.typesafe.ai`. |
-| `judge` | `model` | Nonempty model alias or pinned id (e.g. `jev-1.13.0`); default `jev-latest`. The response's versioned id is recorded per call. |
-| `judge` | `api_key_env` | Nonempty environment variable name holding the API key; default `TYPESAFE_API_KEY`. The key is read at call time and never stored in configuration or artifacts. |
-| `judge` | `record_dir` | Optional directory for raw request/response artifacts; resolved relative to the file defining it. |
-| `judge` | `timeout_ms` | Integer 100–30,000 milliseconds per attempt; default 2,000. |
-| `judge` | `max_candidates` | Integer 1–256 candidates per rerank request; default 32. |
+|| `judge` | `endpoint` | Nonempty `http(s)` base URL; default `https://api.typesafe.ai`. |
+|| `judge` | `model` | Nonempty model alias or pinned id (e.g. `jev-1.13.0`); default `jev-1.13.0`. The response's versioned id is recorded per call. |
+|| `judge` | `api_key_env` | Nonempty environment variable name holding the API key; default `TYPESAFE_API_KEY`. The key is read at call time and never stored in configuration or artifacts. |
+|| `judge` | `record_dir` | Optional directory for raw request/response artifacts; resolved relative to the file defining it. |
+|| `judge` | `timeout_ms` | Integer 100–30,000 milliseconds per attempt; default 2,000. |
+|| `judge` | `max_candidates` | Integer 1–256 candidates per rerank request; default 32. |
+|| `judge` | `confidence_threshold` | Float 0–1; minimum top rerank score to accept a reordering. 0 disables the confidence gate and preserves the original order on every success. Default 0. |
+|| `judge` | `feedback_next_action_threshold` | Float 0–1; next-action confidence below which the agent treats the guidance as uncertain and inspects source. Default 0.55. |
+|| `judge` | `feedback_failure_confidence_threshold` | Float 0–1; failure-family confidence below which the agent treats the guidance as uncertain. Default 0.45. |
+|| `judge` | `feedback_repair_readiness_threshold` | Float 0–1; repair-readiness confidence below which the agent treats the guidance as uncertain. Default 0.45. |
+|| `judge` | `feedback_evidence_gap_threshold` | Float 0–1; evidence-gap at or above which the agent inspects source before editing. Default 0.60. |
 
 KV cache element types are the ggml type names `f16`, `q8_0`, `q4_0` and `q5_0`.
 The defaults (`f16`/`f16`, `flash_attn = "auto"`, `offload_kqv = true`) are the

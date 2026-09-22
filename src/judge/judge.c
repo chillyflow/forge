@@ -13,6 +13,10 @@
 #define JUDGE_MAX_URL 2048
 #define JUDGE_MAX_KEY 512
 #define JUDGE_RETRY_BACKOFF_MS 500u
+#define FORGE_JUDGE_FEEDBACK_NEXT_ACTION_THRESHOLD_DEFAULT 0.55
+#define FORGE_JUDGE_FEEDBACK_FAILURE_CONFIDENCE_THRESHOLD_DEFAULT 0.45
+#define FORGE_JUDGE_FEEDBACK_REPAIR_READINESS_THRESHOLD_DEFAULT 0.45
+#define FORGE_JUDGE_FEEDBACK_EVIDENCE_GAP_THRESHOLD_DEFAULT 0.60
 
 /* Frozen rerank question text. One narrow judgment per candidate; the bad case
  * is described explicitly so a merely topically-related excerpt is not scored
@@ -31,6 +35,11 @@ struct forge_judge {
     forge_judge_options options;
     char *endpoint, *model, *key_env, *record_dir; /* Owned copies; NULL record_dir disables. */
     size_t timeout_ms, max_candidates;
+    double confidence_threshold;
+    double feedback_next_action_threshold;
+    double feedback_failure_confidence_threshold;
+    double feedback_repair_readiness_threshold;
+    double feedback_evidence_gap_threshold;
     size_t calls, failures, candidates_scored, input_tokens, output_tokens;
     size_t last_input_tokens, last_output_tokens;
     double last_latency_ms, total_latency_ms;
@@ -92,6 +101,8 @@ forge_judge *forge_judge_create(const forge_judge_options *o, forge_error *e) {
                  FORGE_JUDGE_MAX_CANDIDATES);
         return NULL;
     }
+    double threshold = o->confidence_threshold > 0.0 ? o->confidence_threshold
+                                                     : FORGE_JUDGE_CONFIDENCE_THRESHOLD_DEFAULT;
     forge_judge *j = calloc(1, sizeof(*j));
     if (!j) {
         fg_error(e, FORGE_ERR_MEMORY, "Cannot allocate judge");
@@ -100,6 +111,19 @@ forge_judge *forge_judge_create(const forge_judge_options *o, forge_error *e) {
     j->options = *o;
     j->timeout_ms = timeout;
     j->max_candidates = cap;
+    j->confidence_threshold = threshold;
+    j->feedback_next_action_threshold =
+        o->feedback_next_action_threshold > 0.0 ? o->feedback_next_action_threshold
+                                                  : FORGE_JUDGE_FEEDBACK_NEXT_ACTION_THRESHOLD_DEFAULT;
+    j->feedback_failure_confidence_threshold =
+        o->feedback_failure_confidence_threshold > 0.0 ? o->feedback_failure_confidence_threshold
+                                                        : FORGE_JUDGE_FEEDBACK_FAILURE_CONFIDENCE_THRESHOLD_DEFAULT;
+    j->feedback_repair_readiness_threshold =
+        o->feedback_repair_readiness_threshold > 0.0 ? o->feedback_repair_readiness_threshold
+                                                      : FORGE_JUDGE_FEEDBACK_REPAIR_READINESS_THRESHOLD_DEFAULT;
+    j->feedback_evidence_gap_threshold =
+        o->feedback_evidence_gap_threshold > 0.0 ? o->feedback_evidence_gap_threshold
+                                                  : FORGE_JUDGE_FEEDBACK_EVIDENCE_GAP_THRESHOLD_DEFAULT;
     j->endpoint = copy_or_default(o->endpoint, FORGE_JUDGE_DEFAULT_ENDPOINT);
     j->model = copy_or_default(o->model, FORGE_JUDGE_DEFAULT_MODEL);
     j->key_env = copy_or_default(o->api_key_env, FORGE_JUDGE_DEFAULT_KEY_ENV);
@@ -346,24 +370,26 @@ static char *build_feedback_request(const forge_judge *j,
              yyjson_mut_obj_add_bool(doc, loop, "bounded_repair", request->bounded_repair);
         static const char *const families[] = {"code_defect", "test_or_requirement_mismatch",
                                                "environment_or_dependency", "missing_evidence",
-                                               "unknown"};
+                                               "unknown", "other"};
         static const char *const family_desc[] = {
             "The failure most likely comes from incorrect implementation logic in `current.source` or related code.",
             "The observed tests, task, or inferred requirement appear inconsistent or incomplete.",
             "The failure most likely comes from missing dependencies, filesystem state, interpreter/toolchain differences, or another environment condition.",
             "The state does not yet contain enough inspected source or validation evidence to choose a safe repair.",
-            "None of the supplied categories is clearly supported by the state."};
+            "None of the supplied categories is clearly supported by the state.",
+            "An explicit decline: the model declines to classify the failure into any supplied category rather than force a wrong label."};
         static const char *const readiness[] = {
             "No actionable signal; the next step should not edit code.",
             "Needs more inspection before a repair can be selected.",
             "A concrete suspect is visible, but the exact repair may still need confirmation.",
             "An actionable repair is likely from the supplied validation, source, and delta."};
-        static const char *const actions[] = {"inspect_source", "patch_code", "run_validation", "defer"};
+        static const char *const actions[] = {"inspect_source", "patch_code", "run_validation", "defer", "other"};
         static const char *const action_desc[] = {
             "Inspect current or related source before editing.",
             "Patch implementation code; enough evidence identifies a likely fix.",
             "Run host validation; the current candidate may already satisfy the observed failure.",
-            "Do not act on this judgment because the evidence is missing, contradictory, unsafe, or low confidence."};
+            "Do not act on this judgment because the evidence is missing, contradictory, unsafe, or low confidence.",
+            "An explicit decline: the model declines to recommend any listed action rather than force a wrong label."};
         ok = ok && add_feedback_choice_question(
                        doc, questions, "failure_family",
                        "Classify the primary cause of the failed validation in `validation.summary` given `task`, `current.source`, `last_delta`, and `loop`.",
@@ -861,4 +887,36 @@ forge_status forge_judge_rerank_retrieval(void *userdata, const char *query, siz
         info->reported = true;
     }
     return status;
+}
+
+size_t forge_judge_max_candidates(const forge_judge *j) {
+    return j ? j->max_candidates : 0;
+}
+
+double forge_judge_confidence_threshold(const forge_judge *j) {
+    return j ? j->confidence_threshold : 0;
+}
+
+const char *forge_judge_model(const forge_judge *j) {
+    return j && j->last_model[0] ? j->last_model : "";
+}
+
+double forge_judge_feedback_next_action_threshold(const forge_judge *j) {
+    return j ? j->feedback_next_action_threshold : 0;
+}
+
+double forge_judge_feedback_failure_confidence_threshold(const forge_judge *j) {
+    return j ? j->feedback_failure_confidence_threshold : 0;
+}
+
+double forge_judge_feedback_repair_readiness_threshold(const forge_judge *j) {
+    return j ? j->feedback_repair_readiness_threshold : 0;
+}
+
+double forge_judge_feedback_evidence_gap_threshold(const forge_judge *j) {
+    return j ? j->feedback_evidence_gap_threshold : 0;
+}
+
+const char *forge_judge_last_request_id(const forge_judge *j) {
+    return j && j->record_request_id[0] ? j->record_request_id : "";
 }

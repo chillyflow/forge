@@ -46,6 +46,11 @@ void forge_config_init(forge_config *config) {
     config->compact_context = true;
     config->judge_timeout_ms = FORGE_JUDGE_DEFAULT_TIMEOUT_MS;
     config->judge_max_candidates = FORGE_JUDGE_DEFAULT_MAX_CANDIDATES;
+    config->judge_confidence_threshold = 0;
+    config->judge_feedback_next_action_threshold = 0;
+    config->judge_feedback_failure_confidence_threshold = 0;
+    config->judge_feedback_repair_readiness_threshold = 0;
+    config->judge_feedback_evidence_gap_threshold = 0;
 }
 
 void forge_config_destroy(forge_config *config) {
@@ -254,6 +259,7 @@ typedef enum {
     CFG_U32,
     CFG_BOOL,
     CFG_FLOAT,
+    CFG_DOUBLE,
     CFG_REPEAT,
     CFG_CONTEXT,
     CFG_PATH,
@@ -328,6 +334,16 @@ static const config_field fields[] = {
      FORGE_JUDGE_MIN_TIMEOUT_MS, FORGE_JUDGE_MAX_TIMEOUT_MS},
     {"judge", "max_candidates", CFG_SIZE, offsetof(forge_config, judge_max_candidates), 1,
      FORGE_JUDGE_MAX_CANDIDATES},
+    {"judge", "confidence_threshold", CFG_DOUBLE, offsetof(forge_config, judge_confidence_threshold),
+     0.0, 1.0},
+    {"judge", "feedback_next_action_threshold", CFG_DOUBLE,
+     offsetof(forge_config, judge_feedback_next_action_threshold), 0.0, 1.0},
+    {"judge", "feedback_failure_confidence_threshold", CFG_DOUBLE,
+     offsetof(forge_config, judge_feedback_failure_confidence_threshold), 0.0, 1.0},
+    {"judge", "feedback_repair_readiness_threshold", CFG_DOUBLE,
+     offsetof(forge_config, judge_feedback_repair_readiness_threshold), 0.0, 1.0},
+    {"judge", "feedback_evidence_gap_threshold", CFG_DOUBLE,
+     offsetof(forge_config, judge_feedback_evidence_gap_threshold), 0.0, 1.0},
 };
 #undef MODEL_OFFSET
 #undef LIMIT_OFFSET
@@ -555,6 +571,19 @@ static forge_status apply_field(forge_config *config, const config_field *field,
         if (!isfinite(number) || number < 0 || number > 2)
             return schema_error(e, value, key, "expected a finite number in [0, 2]");
         *(float *)dest = (float)number;
+        return FORGE_OK;
+    }
+    case CFG_DOUBLE: {
+        double number;
+        if (value.type == TOML_FP64)
+            number = value.u.fp64;
+        else if (value.type == TOML_INT64)
+            number = (double)value.u.int64;
+        else
+            return schema_error(e, value, key, "expected a finite number in [0, 1]");
+        if (!isfinite(number) || number < field->minimum || number > field->maximum)
+            return schema_error(e, value, key, "expected a finite number in [0, 1]");
+        *(double *)dest = number;
         return FORGE_OK;
     }
     case CFG_REPEAT: {

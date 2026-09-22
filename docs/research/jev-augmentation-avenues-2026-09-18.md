@@ -83,13 +83,18 @@ refute files in the run directory carry the full 13-field entries.
 - **A2 repair feedback** - keep shipped; run the larger campaign on the frozen
   population manifest. No code change required.
 - **G01 advisory accept/abstain calibration and decision record** - the
-  thresholds are hardcoded (`src/core/agent.c:1107-1110`), `judge_feedback`
-  events carry no threshold values and no turn/validation id
-  (`src/core/agent.c:1047-1059`), and `metrics.json` has no judge counters
-  (`src/core/session.c:89-147`); `forge_judge_metrics` has no production
-  caller. Record-only instrumentation: counters in `metrics.json` plus event
-  linkage, no behavior change. This is the prerequisite for calibrating any
-  threshold later.
+  thresholds were hardcoded (`src/core/agent.c:1114-1117`); feedback events
+  carried no threshold values, no server request id, and no turn/validation id
+  linkage. The `metrics.json` judge counters and `forge_judge_metrics`
+  production caller already existed via `fg_session_attach_judge` and
+  `metrics_json`. **Implemented 2026-09-21**: made all four feedback thresholds
+  configurable through `forge_judge_options` and `[judge]` TOML keys, recorded
+  the effective threshold values, server request id, and episode linkage in
+  every `judge_feedback` event, and pinned the default model to `jev-1.13.0`.
+  Added explicit `other` catch-all options to both `failure_family` and
+  `next_action` Choice questions per the Jev best-practice guidance. This is
+  the prerequisite for calibrating any threshold later; the recorded events now
+  carry everything needed to re-fit thresholds offline without re-running runs.
 
 ### 3.2 experiment (10, all replay/shadow first, offline-safe)
 

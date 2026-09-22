@@ -52,8 +52,13 @@ languages = ["go"] # Other languages are rejected by the current Go index.
 # excerpts (paths and source snippets) to the configured endpoint.
 [judge]
 # endpoint = "https://api.typesafe.ai"
-# model = "jev-latest"      # pin a versioned id (e.g. jev-1.13.0) for experiments
+# model = "jev-1.13.0"         # pin a versioned id for reproducible experiments
 # api_key_env = "TYPESAFE_API_KEY"
-# timeout_ms = 2000         # per attempt, 100..30000
-# max_candidates = 32       # 1..256 candidates per rerank request
-# record_dir = ".forge/judge-raw"  # optional raw request/response archive
+# timeout_ms = 2000            # per attempt, 100..30000
+# max_candidates = 32          # 1..256 candidates per rerank request
+# confidence_threshold = 0.5   # minimum top score to accept a rerank (0 disables)
+# feedback_next_action_threshold = 0.55   # next-action confidence below which guidance is uncertain
+# feedback_failure_confidence_threshold = 0.45  # failure-family confidence below which guidance is uncertain
+# feedback_repair_readiness_threshold = 0.45   # repair-readiness confidence below which guidance is uncertain
+# feedback_evidence_gap_threshold = 0.60     # evidence-gap above which the agent inspects source
+# record_dir = ".forge/judge-raw"           # optional raw request/response archive

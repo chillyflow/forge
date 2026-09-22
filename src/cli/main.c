@@ -671,6 +671,11 @@ static forge_judge *create_judge(const forge_config *config, forge_error *error)
     options.record_dir = config->judge_record_dir;
     options.timeout_ms = config->judge_timeout_ms;
     options.max_candidates = config->judge_max_candidates;
+    options.confidence_threshold = config->judge_confidence_threshold;
+    options.feedback_next_action_threshold = config->judge_feedback_next_action_threshold;
+    options.feedback_failure_confidence_threshold = config->judge_feedback_failure_confidence_threshold;
+    options.feedback_repair_readiness_threshold = config->judge_feedback_repair_readiness_threshold;
+    options.feedback_evidence_gap_threshold = config->judge_feedback_evidence_gap_threshold;
     options.cancelled = cancelled;
     return forge_judge_create(&options, error);
 }

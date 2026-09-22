@@ -23,7 +23,7 @@ extern "C" {
  * fail-open outcome. */
 
 #define FORGE_JUDGE_DEFAULT_ENDPOINT "https://api.typesafe.ai"
-#define FORGE_JUDGE_DEFAULT_MODEL "jev-latest"
+#define FORGE_JUDGE_DEFAULT_MODEL "jev-1.13.0"
 #define FORGE_JUDGE_DEFAULT_KEY_ENV "TYPESAFE_API_KEY"
 #define FORGE_JUDGE_DEFAULT_TIMEOUT_MS ((size_t)2000)
 #define FORGE_JUDGE_DEFAULT_MAX_CANDIDATES ((size_t)32)
@@ -38,6 +38,19 @@ typedef struct {
     const char *record_dir;  /* Optional directory for raw request/response artifacts. */
     size_t timeout_ms;       /* Per attempt; 0 selects the default. */
     size_t max_candidates;   /* Cap per rerank request; 0 selects the default. */
+    double confidence_threshold; /* Minimum top score to accept a rerank. 0 disables. */
+    double feedback_next_action_threshold;    /* Next-action confidence below which the
+                                                agent treats the guidance as uncertain.
+                                                0 selects the built-in default 0.55. */
+    double feedback_failure_confidence_threshold; /* Failure-family confidence below which
+                                                    the agent treats the guidance as uncertain.
+                                                    0 selects the built-in default 0.45. */
+    double feedback_repair_readiness_threshold;  /* Repair-readiness confidence below which
+                                                    the agent treats the guidance as uncertain.
+                                                    0 selects the built-in default 0.45. */
+    double feedback_evidence_gap_threshold;      /* Evidence-gap above which the agent
+                                                    inspects source before editing.
+                                                    0 selects the built-in default 0.60. */
     forge_cancel_fn cancelled;
     void *userdata;
     /* Deterministic testing seam: when set, replaces the network transport.
@@ -83,6 +96,8 @@ typedef struct forge_judge forge_judge;
 forge_judge *forge_judge_create(const forge_judge_options *, forge_error *);
 void forge_judge_destroy(forge_judge *);
 
+#define FORGE_JUDGE_CONFIDENCE_THRESHOLD_DEFAULT 0.5
+
 /* One batched request; one Noul question per candidate. On FORGE_OK every
  * scores[i] holds the probability in [0,1] that candidate i is a strong match
  * for the query. Any error means "no judgment"; callers keep their own order.
@@ -109,6 +124,27 @@ forge_status forge_judge_rerank_retrieval(void *userdata, const char *query, siz
  * timeout plus the retry backoff. Callers pass this as the retrieval options'
  * rerank_budget_ms so callback latency cannot consume the snapshot timeout. */
 size_t forge_judge_budget_ms(const forge_judge *);
+
+/* Accessor for the judge's configured candidate cap. Returns 0 when j is NULL. */
+size_t forge_judge_max_candidates(const forge_judge *);
+double forge_judge_confidence_threshold(const forge_judge *j);
+
+/* Feedback thresholds (agent.c append_judge_feedback). These mirror the
+ * forge_judge_options fields, normalized to the built-in defaults when the
+ * caller passed zero. */
+double forge_judge_feedback_next_action_threshold(const forge_judge *j);
+double forge_judge_feedback_failure_confidence_threshold(const forge_judge *j);
+double forge_judge_feedback_repair_readiness_threshold(const forge_judge *j);
+double forge_judge_feedback_evidence_gap_threshold(const forge_judge *j);
+
+/* Accessor for the model id reported by the most recent successful response.
+ * Returns an empty string when no response has been received yet. Valid for
+ * the lifetime of j. */
+const char *forge_judge_model(const forge_judge *);
+
+/* Server-issued request id from the most recent response headers, empty when
+ * the transport did not provide one (stub, failures) or no call has completed. */
+const char *forge_judge_last_request_id(const forge_judge *j);
 
 typedef struct {
     size_t calls, failures, candidates_scored, input_tokens, output_tokens;

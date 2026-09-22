@@ -53,7 +53,11 @@ static const fg_tool_def definitions[] = {
     {"run_command", "Run an argv array without a shell. Requires explicit process authorization.",
      "argv:strings", NULL, FORGE_CAP_PROCESS},
     {"search_text", "Literal text search across indexed source files.", "query:string", NULL,
-     FORGE_CAP_READ}};
+     FORGE_CAP_READ},
+    {"suggest_paths",
+     "Find source files relevant to a query. Returns candidate paths with snippets, "
+     "optionally reranked by a semantic judge. Read a result with read_file.",
+     "query:string", NULL, FORGE_CAP_READ}};
 const fg_tool_def *fg_tools(size_t *n) {
     if (n)
         *n = sizeof(definitions) / sizeof(*definitions);
@@ -292,6 +296,11 @@ char *fg_tool_minimal_native_schema(void) {
                                      "List workspace files recursively, excluding hidden, build, "
                                      "vendor and dependency directories.",
                                      "", true) &&
+              native_schema_function(&out, "suggest_paths",
+                                     "Find source files relevant to a query. Returns candidate paths "
+                                     "with snippets, optionally reranked by a semantic judge. Read "
+                                     "a result with read_file.",
+                                     "query:string", true) &&
               native_schema_function(&out, "final", "Finish and report the result.",
                                      "answer:string", true) &&
               fg_buf_puts(&out, "]");
@@ -335,6 +344,11 @@ char *fg_tool_noedit_schema(void) {
                                      "List workspace files recursively, excluding hidden, build, "
                                      "vendor and dependency directories.",
                                      "", true) &&
+              native_schema_function(&out, "suggest_paths",
+                                     "Find source files relevant to a query. Returns candidate paths "
+                                     "with snippets, optionally reranked by a semantic judge. Read "
+                                     "a result with read_file.",
+                                     "query:string", true) &&
               native_schema_function(&out, "validate_candidate",
                                      "Assess the changed workspace with host Go/Python tests. "
                                      "Use after completing a repair across files. A passing "
@@ -788,6 +802,129 @@ void fg_tool_signatures(const char *name, yyjson_val *args, uint64_t generation,
     fg_buf_clear(&strategy_only);
     fg_buf_clear(&fields);
 }
+#define SUGGEST_PATHS_DEFAULT_LIMIT 32
+
+static char *suggest_paths(fg_tool_context *c, yyjson_val *args, forge_error *e) {
+    const char *query = fg_json_str(args, "query");
+    if (!query || !*query) {
+        fg_error(e, FORGE_ERR_ARGUMENT, "suggest_paths requires a non-empty query");
+        return NULL;
+    }
+    size_t query_len = strlen(query);
+    if (query_len > FORGE_RETRIEVAL_MAX_QUERY_BYTES) {
+        fg_error(e, FORGE_ERR_ARGUMENT, "suggest_paths query exceeds maximum length");
+        return NULL;
+    }
+    size_t limit = SUGGEST_PATHS_DEFAULT_LIMIT;
+    if (c->config.judge && forge_judge_max_candidates(c->config.judge) > 0 &&
+        forge_judge_max_candidates(c->config.judge) < limit)
+        limit = forge_judge_max_candidates(c->config.judge);
+    fg_repo_search_hit *hits = calloc(limit, sizeof(*hits));
+    if (!hits) {
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot allocate suggest_paths hits");
+        return NULL;
+    }
+    size_t truncated = 0;
+    forge_error search_error = {0};
+    size_t count = fg_repo_search_hits(c->repo, query, limit, hits, &truncated, &search_error);
+    if (count == 0 && search_error.code) {
+        if (e)
+            *e = search_error;
+        for (size_t i = 0; i < count; i++)
+            free(hits[i].snippet);
+        free(hits);
+        return NULL;
+    }
+    bool reranked = false;
+    char model[64] = {0};
+    if (c->config.judge && count > 0) {
+        size_t judge_cap = forge_judge_max_candidates(c->config.judge) > 0
+                               ? forge_judge_max_candidates(c->config.judge)
+                               : limit;
+        size_t score_count = count > judge_cap ? judge_cap : count;
+        double *scores = calloc(score_count, sizeof(double));
+        const char **paths = calloc(score_count, sizeof(char *));
+        const char **snippets = calloc(score_count, sizeof(char *));
+        const char **stages = calloc(score_count, sizeof(char *));
+        if (scores && paths && snippets && stages) {
+            for (size_t i = 0; i < score_count; i++) {
+                paths[i] = hits[i].path;
+                snippets[i] = hits[i].snippet;
+                stages[i] = "literal";
+            }
+            forge_error rerank_error = {0};
+            forge_status status = forge_judge_rerank(c->config.judge, query, score_count,
+                                                     paths, snippets, stages, scores, &rerank_error);
+            if (status == FORGE_OK) {
+                /* Confidence gate: only reorder when the top score meets the threshold. */
+                double threshold = forge_judge_confidence_threshold(c->config.judge);
+                if (scores[0] >= threshold) {
+                    size_t *order = malloc(score_count * sizeof(size_t));
+                    if (order) {
+                        fg_rerank_permutation(scores, score_count, order);
+                        fg_repo_search_hit *ordered = malloc(score_count * sizeof(*hits));
+                        if (ordered) {
+                            for (size_t i = 0; i < score_count; i++)
+                                ordered[i] = hits[order[i]];
+                            memcpy(hits, ordered, score_count * sizeof(*hits));
+                            free(ordered);
+                            reranked = true;
+                            snprintf(model, sizeof(model), "%s", forge_judge_model(c->config.judge));
+                        }
+                        free(order);
+                    }
+                }
+            }
+        }
+        free(scores);
+        free(paths);
+        free(snippets);
+        free(stages);
+    }
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc ? yyjson_mut_obj(doc) : NULL;
+    bool ok = root != NULL;
+    if (ok) {
+        yyjson_mut_doc_set_root(doc, root);
+        ok = yyjson_mut_obj_add_strcpy(doc, root, "query", query) &&
+             yyjson_mut_obj_add_uint(doc, root, "count", count) &&
+             yyjson_mut_obj_add_bool(doc, root, "truncated", truncated) &&
+             yyjson_mut_obj_add_bool(doc, root, "reranked", reranked);
+        if (reranked)
+            ok = ok && yyjson_mut_obj_add_strcpy(doc, root, "model", model);
+        yyjson_mut_val *candidates = count > 0 ? yyjson_mut_arr(doc) : NULL;
+        if (candidates) {
+            for (size_t i = 0; ok && i < count; i++) {
+                yyjson_mut_val *hit = yyjson_mut_obj(doc);
+                ok = hit &&
+                     yyjson_mut_obj_add_strcpy(doc, hit, "path", hits[i].path) &&
+                     yyjson_mut_obj_add_uint(doc, hit, "line", hits[i].line) &&
+                     yyjson_mut_obj_add_strncpy(doc, hit, "snippet", hits[i].snippet,
+                                                 strlen(hits[i].snippet)) &&
+                     yyjson_mut_obj_add_bool(doc, hit, "snippet_truncated", hits[i].truncated);
+                ok = ok && yyjson_mut_arr_add_val(candidates, hit);
+            }
+        }
+        if (ok && candidates)
+            ok = yyjson_mut_obj_add_val(doc, root, "candidates", candidates);
+        else if (count > 0 && !candidates)
+            ok = false;
+    }
+    char *json = NULL;
+    if (ok) {
+        json = yyjson_mut_write(doc, 0, NULL);
+        if (!json)
+            fg_error(e, FORGE_ERR_MEMORY, "Cannot serialize suggest_paths output");
+    } else if (!e || !e->code) {
+        fg_error(e, FORGE_ERR_MEMORY, "Cannot build suggest_paths JSON");
+    }
+    yyjson_mut_doc_free(doc);
+    for (size_t i = 0; i < count; i++)
+        free(hits[i].snippet);
+    free(hits);
+    return json;
+}
+
 static char *read_lines(fg_tool_context *c, yyjson_val *args, forge_error *e) {
     char full[FG_PATH_MAX];
     const char *path = fg_json_str(args, "path");
@@ -1835,6 +1972,8 @@ char *fg_tool_execute(fg_tool_context *c, const char *name, yyjson_val *args, bo
     }
     if (!strcmp(name, "get_references"))
         return forge_repo_references(c->repo, fg_json_str(args, "name"), e);
+    if (!strcmp(name, "suggest_paths"))
+        return suggest_paths(c, args, e);
     if (!strcmp(name, "search_text"))
         return fg_repo_search(c->repo, fg_json_str(args, "query"), 50, e);
     if (!strcmp(name, "retrieve_context")) {
